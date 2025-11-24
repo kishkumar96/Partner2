@@ -5,6 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Event, Hazard, FilterState } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
+import { hazardLayers } from "@/data/mockData";
 
 // Users must provide their own Mapbox token via environment variable
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -191,41 +192,12 @@ export default function MapView({
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    const hazardZones = [
-      {
-        id: "flood-zone",
-        hazardId: "flood",
-        coordinates: [
-          [55.1, 25.0],
-          [55.4, 25.0],
-          [55.4, 25.3],
-          [55.1, 25.3],
-          [55.1, 25.0],
-        ],
-      },
-      {
-        id: "drought-zone",
-        hazardId: "drought",
-        coordinates: [
-          [54.2, 24.3],
-          [54.6, 24.3],
-          [54.6, 24.6],
-          [54.2, 24.6],
-          [54.2, 24.3],
-        ],
-      },
-      {
-        id: "cyclone-zone",
-        hazardId: "cyclone",
-        coordinates: [
-          [55.3, 25.2],
-          [55.7, 25.2],
-          [55.7, 25.6],
-          [55.3, 25.6],
-          [55.3, 25.2],
-        ],
-      },
-    ];
+    // Transform hazardLayers from mockData to map zones with closed polygons
+    const hazardZones = hazardLayers.map((layer) => ({
+      id: `${layer.hazardId}-zone`,
+      hazardId: layer.hazardId,
+      coordinates: [...layer.coordinates, layer.coordinates[0]], // Close the polygon
+    }));
 
     // Remove existing hazard layers
     hazardZones.forEach((zone) => {

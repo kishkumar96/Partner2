@@ -25,6 +25,23 @@ const PDF_COL_WIDTHS_ARRAY = [
   PDF_COL_WIDTHS.DAMAGE,
 ];
 
+// Exposure table column widths configuration (in mm)
+const EXPOSURE_COL_WIDTHS = {
+  HAZARD: 35,
+  SECTOR: 35,
+  POPULATION: 30,
+  ASSETS: 40,
+  INFRASTRUCTURE: 30,
+} as const;
+
+const EXPOSURE_COL_WIDTHS_ARRAY = [
+  EXPOSURE_COL_WIDTHS.HAZARD,
+  EXPOSURE_COL_WIDTHS.SECTOR,
+  EXPOSURE_COL_WIDTHS.POPULATION,
+  EXPOSURE_COL_WIDTHS.ASSETS,
+  EXPOSURE_COL_WIDTHS.INFRASTRUCTURE,
+];
+
 interface ExportButtonsProps {
   events: Event[];
   exposureData: ExposureData[];
@@ -180,12 +197,11 @@ export default function ExportButtons({
     doc.setTextColor(107, 114, 128);
 
     const expHeaders = ["Hazard", "Sector", "Population", "Assets", "Infrastructure"];
-    const expColWidths = [35, 35, 30, 40, 30];
     xPos = 15;
 
     expHeaders.forEach((header, i) => {
       doc.text(header, xPos, yPos);
-      xPos += expColWidths[i];
+      xPos += EXPOSURE_COL_WIDTHS_ARRAY[i];
     });
 
     yPos += 5;
@@ -205,7 +221,7 @@ export default function ExportButtons({
 
       row.forEach((cell, i) => {
         doc.text(cell, xPos, yPos);
-        xPos += expColWidths[i];
+        xPos += EXPOSURE_COL_WIDTHS_ARRAY[i];
       });
       yPos += 6;
     });
