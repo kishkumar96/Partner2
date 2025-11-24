@@ -195,13 +195,16 @@ export default function MapView({
 
     // Remove existing hazard layers
     hazardZones.forEach((zone) => {
-      if (map.current!.getLayer(zone.id)) {
+      const layer = map.current!.getLayer(zone.id);
+      if (layer !== undefined) {
         map.current!.removeLayer(zone.id);
       }
-      if (map.current!.getLayer(`${zone.id}-outline`)) {
+      const outlineLayer = map.current!.getLayer(`${zone.id}-outline`);
+      if (outlineLayer !== undefined) {
         map.current!.removeLayer(`${zone.id}-outline`);
       }
-      if (map.current!.getSource(zone.id)) {
+      const source = map.current!.getSource(zone.id);
+      if (source !== undefined) {
         map.current!.removeSource(zone.id);
       }
     });
