@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Event, Hazard, FilterState } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 
-// Demo token - users should replace with their own
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw";
+// Users must provide their own Mapbox token via environment variable
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 interface MapViewProps {
   events: Event[];
@@ -24,11 +24,16 @@ export default function MapView({
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
+  
+  // Check for missing token at component level
+  const mapError = !MAPBOX_TOKEN 
+    ? "Mapbox token not configured. Please set NEXT_PUBLIC_MAPBOX_TOKEN environment variable." 
+    : null;
 
   // Filter events based on current filters
-  const filteredEvents = events.filter((event) => {
+  const filteredEvents = useMemo(() => events.filter((event) => {
     if (
       filters.selectedHazards.length > 0 &&
       !filters.selectedHazards.includes(event.hazardId)
@@ -48,7 +53,7 @@ export default function MapView({
       return false;
     }
     return true;
-  });
+  }), [events, filters]);
 
   const getHazardInfo = useCallback((hazardId: string) => {
     return hazards.find((h) => h.id === hazardId);
@@ -57,6 +62,10 @@ export default function MapView({
   // Initialize map
   useEffect(() => {
     if (map.current) return;
+    
+    if (!MAPBOX_TOKEN) {
+      return;
+    }
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
@@ -73,6 +82,10 @@ export default function MapView({
     map.current.on("load", () => {
       setMapLoaded(true);
     });
+    
+    map.current.on("error", (e) => {
+      console.error("Map error:", e);
+    });
 
     return () => {
       if (map.current) {
@@ -82,16 +95,28 @@ export default function MapView({
     };
   }, []);
 
-  // Update markers when filtered events change
+  // Update markers when filtered events change - optimized to only add/remove changed markers
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Remove existing markers
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
+    const currentEventIds = new Set(filteredEvents.map(e => e.id));
+    const existingEventIds = new Set(markersRef.current.keys());
 
-    // Add new markers for filtered events
+    // Remove markers that are no longer in filtered events
+    for (const eventId of existingEventIds) {
+      if (!currentEventIds.has(eventId)) {
+        const marker = markersRef.current.get(eventId);
+        if (marker) {
+          marker.remove();
+          markersRef.current.delete(eventId);
+        }
+      }
+    }
+
+    // Add new markers for events that don't have markers yet
     filteredEvents.forEach((event) => {
+      if (markersRef.current.has(event.id)) return; // Skip if marker already exists
+      
       const hazard = getHazardInfo(event.hazardId);
       const color = hazard?.color || "#6B7280";
 
@@ -112,11 +137,17 @@ export default function MapView({
       // Accessibility attributes for custom marker
       el.setAttribute("role", "button");
       el.setAttribute("aria-label", event.name);
+      el.setAttribute("tabindex", "0");
       el.addEventListener("mouseenter", () => {
         el.style.transform = "scale(1.2)";
       });
       el.addEventListener("mouseleave", () => {
         el.style.transform = "scale(1)";
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          onEventSelect(event);
+        }
       });
 
       // Create popup
@@ -143,7 +174,7 @@ export default function MapView({
         onEventSelect(event);
       });
 
-      markersRef.current.push(marker);
+      markersRef.current.set(event.id, marker);
     });
 
     // Fit bounds to show all markers
@@ -259,6 +290,16 @@ export default function MapView({
   return (
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
+      
+      {/* Map Error Message */}
+      {mapError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+          <div className="text-center p-4">
+            <p className="text-red-600 dark:text-red-400 mb-2">{mapError}</p>
+            <p className="text-sm text-gray-500">Set NEXT_PUBLIC_MAPBOX_TOKEN in your .env.local file</p>
+          </div>
+        </div>
+      )}
       
       {/* Map Legend */}
       <div className="absolute bottom-8 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 max-w-[180px]">

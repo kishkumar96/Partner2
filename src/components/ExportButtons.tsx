@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { jsPDF } from "jspdf";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
@@ -20,6 +21,8 @@ export default function ExportButtons({
   hazards,
   sectors,
 }: ExportButtonsProps) {
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const getHazardName = (hazardId: string) =>
     hazards.find((h) => h.id === hazardId)?.name || hazardId;
 
@@ -27,6 +30,8 @@ export default function ExportButtons({
     sectors.find((s) => s.id === sectorId)?.name || sectorId;
 
   const downloadPDF = () => {
+    try {
+      setExportError(null);
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -116,9 +121,31 @@ export default function ExportButtons({
     doc.line(15, yPos, 185, yPos);
     yPos += 5;
 
-    // Table rows
+    // Table rows - include all events with pagination
     doc.setTextColor(55, 65, 81);
-    events.slice(0, 10).forEach((event) => {
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    events.forEach((event) => {
+      // Check if we need a new page
+      if (yPos > pageHeight - 30) {
+        doc.addPage();
+        yPos = 20;
+        doc.setFontSize(14);
+        doc.setTextColor(31, 41, 55);
+        doc.text("Event History (continued)", 15, yPos);
+        yPos += 10;
+        doc.setFontSize(8);
+        doc.setTextColor(107, 114, 128);
+        let headerXPos = 15;
+        headers.forEach((header, i) => {
+          doc.text(header, headerXPos, yPos);
+          headerXPos += colWidths[i];
+        });
+        yPos += 5;
+        doc.line(15, yPos, 185, yPos);
+        yPos += 5;
+        doc.setTextColor(55, 65, 81);
+      }
       xPos = 15;
       const row = [
         event.name.substring(0, 20),
@@ -194,12 +221,19 @@ export default function ExportButtons({
     }
 
     doc.save("climate-risk-report.pdf");
+    } catch (error) {
+      console.error("PDF export failed:", error);
+      setExportError("Failed to export PDF. Please try again.");
+      setTimeout(() => setExportError(null), 5000);
+    }
   };
 
   const downloadExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Climate Risk Dashboard";
-    workbook.created = new Date();
+    try {
+      setExportError(null);
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Climate Risk Dashboard";
+      workbook.created = new Date();
 
     // Events Sheet
     const eventsSheet = workbook.addWorksheet("Events", {
@@ -315,12 +349,21 @@ export default function ExportButtons({
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     saveAs(blob, "climate-risk-data.xlsx");
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      setExportError("Failed to export Excel. Please try again.");
+      setTimeout(() => setExportError(null), 5000);
+    }
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-center">
+      {exportError && (
+        <span className="text-sm text-red-600 mr-2">{exportError}</span>
+      )}
       <button
         onClick={downloadPDF}
+        aria-label="Export data as PDF report"
         className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors"
       >
         <svg
@@ -340,6 +383,7 @@ export default function ExportButtons({
       </button>
       <button
         onClick={downloadExcel}
+        aria-label="Export data as Excel spreadsheet"
         className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors"
       >
         <svg

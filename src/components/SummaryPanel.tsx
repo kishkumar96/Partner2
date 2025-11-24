@@ -224,7 +224,11 @@ export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Events by Hazard Type
         </h3>
-        <div className="h-40">
+        <div 
+          className="h-40"
+          role="img"
+          aria-label={`Doughnut chart showing distribution of ${stats.totalEvents} events by hazard type: ${hazardCounts.map(h => `${h.name}: ${h.count}`).join(', ')}`}
+        >
           <Doughnut
             data={pieChartData}
             options={{
@@ -250,7 +254,11 @@ export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Economic Damage by Hazard
         </h3>
-        <div className="h-40">
+        <div 
+          className="h-40"
+          role="img"
+          aria-label={`Bar chart showing economic damage by hazard type: ${damageByHazard.map(h => `${h.name}: $${(h.damage / 1000000).toFixed(1)}M`).join(', ')}`}
+        >
           <Bar data={barChartData} options={chartOptions} />
         </div>
       </div>
@@ -260,7 +268,11 @@ export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Monthly Damage Trend
         </h3>
-        <div className="h-48">
+        <div 
+          className="h-48"
+          role="img"
+          aria-label="Line chart showing monthly damage trends for flood, drought, and cyclone hazards throughout the year"
+        >
           <Line data={lineChartData} options={lineChartOptions} />
         </div>
       </div>

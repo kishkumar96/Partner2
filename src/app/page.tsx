@@ -107,6 +107,7 @@ export default function Home() {
                   <button
                     onClick={() => setSelectedEvent(null)}
                     className="text-gray-400 hover:text-gray-600"
+                    aria-label="Close event details"
                   >
                     ✕
                   </button>

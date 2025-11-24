@@ -57,6 +57,7 @@ export default function FilterPanel({
           <button
             onClick={clearAllFilters}
             className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400"
+            aria-label="Clear all filters"
           >
             Clear All
           </button>
