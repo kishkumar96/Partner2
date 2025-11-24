@@ -6,6 +6,25 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from "@/types";
 
+// PDF table column widths configuration (in mm)
+const PDF_COL_WIDTHS = {
+  EVENT: 45,
+  DATE: 25,
+  HAZARD: 25,
+  SEVERITY: 20,
+  POPULATION: 25,
+  DAMAGE: 30,
+} as const;
+
+const PDF_COL_WIDTHS_ARRAY = [
+  PDF_COL_WIDTHS.EVENT,
+  PDF_COL_WIDTHS.DATE,
+  PDF_COL_WIDTHS.HAZARD,
+  PDF_COL_WIDTHS.SEVERITY,
+  PDF_COL_WIDTHS.POPULATION,
+  PDF_COL_WIDTHS.DAMAGE,
+];
+
 interface ExportButtonsProps {
   events: Event[];
   exposureData: ExposureData[];
@@ -94,26 +113,11 @@ export default function ExportButtons({
 
     // Table headers
     const headers = ["Event", "Date", "Hazard", "Severity", "Population", "Damage"];
-    // Define column widths for each header for clarity and maintainability
-    const EVENT_COL_WIDTH = 45;      // "Event"
-    const DATE_COL_WIDTH = 25;       // "Date"
-    const HAZARD_COL_WIDTH = 25;     // "Hazard"
-    const SEVERITY_COL_WIDTH = 20;   // "Severity"
-    const POPULATION_COL_WIDTH = 25; // "Population"
-    const DAMAGE_COL_WIDTH = 30;     // "Damage"
-    const colWidths = [
-      EVENT_COL_WIDTH,
-      DATE_COL_WIDTH,
-      HAZARD_COL_WIDTH,
-      SEVERITY_COL_WIDTH,
-      POPULATION_COL_WIDTH,
-      DAMAGE_COL_WIDTH,
-    ];
     let xPos = 15;
 
     headers.forEach((header, i) => {
       doc.text(header, xPos, yPos);
-      xPos += colWidths[i];
+      xPos += PDF_COL_WIDTHS_ARRAY[i];
     });
 
     yPos += 5;
@@ -139,7 +143,7 @@ export default function ExportButtons({
         let headerXPos = 15;
         headers.forEach((header, i) => {
           doc.text(header, headerXPos, yPos);
-          headerXPos += colWidths[i];
+          headerXPos += PDF_COL_WIDTHS_ARRAY[i];
         });
         yPos += 5;
         doc.line(15, yPos, 185, yPos);
@@ -158,7 +162,7 @@ export default function ExportButtons({
 
       row.forEach((cell, i) => {
         doc.text(cell, xPos, yPos);
-        xPos += colWidths[i];
+        xPos += PDF_COL_WIDTHS_ARRAY[i];
       });
       yPos += 6;
     });
