@@ -46,6 +46,7 @@ Create a `.env.local` file with your Mapbox token:
 NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
 ```
 
+> **Note:** The Mapbox token is optional for development and testing. If you do not provide a token, the map will display an error message, but the rest of the application will continue to function.
 ## Tech Stack
 
 - **Framework**: Next.js 16 with App Router
