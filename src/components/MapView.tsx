@@ -109,6 +109,9 @@ export default function MapView({
         transition: transform 0.2s ease;
       `;
 
+      // Accessibility attributes for custom marker
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", event.name);
       el.addEventListener("mouseenter", () => {
         el.style.transform = "scale(1.2)";
       });
