@@ -89,7 +89,21 @@ export default function ExportButtons({
 
     // Table headers
     const headers = ["Event", "Date", "Hazard", "Severity", "Population", "Damage"];
-    const colWidths = [45, 25, 25, 20, 25, 30];
+    // Define column widths for each header for clarity and maintainability
+    const EVENT_COL_WIDTH = 45;      // "Event"
+    const DATE_COL_WIDTH = 25;       // "Date"
+    const HAZARD_COL_WIDTH = 25;     // "Hazard"
+    const SEVERITY_COL_WIDTH = 20;   // "Severity"
+    const POPULATION_COL_WIDTH = 25; // "Population"
+    const DAMAGE_COL_WIDTH = 30;     // "Damage"
+    const colWidths = [
+      EVENT_COL_WIDTH,
+      DATE_COL_WIDTH,
+      HAZARD_COL_WIDTH,
+      SEVERITY_COL_WIDTH,
+      POPULATION_COL_WIDTH,
+      DAMAGE_COL_WIDTH,
+    ];
     let xPos = 15;
 
     headers.forEach((header, i) => {
