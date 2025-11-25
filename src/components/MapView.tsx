@@ -18,6 +18,13 @@ const DISTRICTS_FILL_LAYER_ID = "districts-fill";
 const DISTRICTS_OUTLINE_LAYER_ID = "districts-outline";
 const DISTRICTS_HOVER_LAYER_ID = "districts-hover";
 
+// Hazard zone layer configuration
+const HAZARD_ZONE_OPACITY_VISIBLE = 0.25;
+const HAZARD_ZONE_OPACITY_HIDDEN = 0;
+const HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE = 0.8;
+const HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN = 0;
+const HAZARD_ZONE_TRANSITION_DURATION = 300; // ms
+
 /**
  * Shared mapping between hazard IDs and their exposure property names.
  * Used in both popup HTML generation and filter sync logic.
@@ -513,9 +520,12 @@ export default function MapView({
     }
   }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect]);
 
-  // Add hazard zone layers when filters change
+  // Create hazard zone layers and toggle visibility based on filters
+  // Combined into single effect to guarantee layer creation before visibility toggling
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
 
     // Transform hazardLayers from mockData to map zones with closed polygons
     const hazardZones = hazardLayers.map((layer) => ({
@@ -524,83 +534,119 @@ export default function MapView({
       coordinates: [...layer.coordinates, layer.coordinates[0]], // Close the polygon
     }));
 
-    // Remove existing hazard layers
+    // Add all hazard zone layers once with smooth transition support
     hazardZones.forEach((zone) => {
-      const layer = map.current!.getLayer(zone.id);
-      if (layer !== undefined) {
-        map.current!.removeLayer(zone.id);
-      }
-      const outlineLayer = map.current!.getLayer(`${zone.id}-outline`);
-      if (outlineLayer !== undefined) {
-        map.current!.removeLayer(`${zone.id}-outline`);
-      }
-      const source = map.current!.getSource(zone.id);
-      if (source !== undefined) {
-        map.current!.removeSource(zone.id);
-      }
+      // Skip if source already exists (layers already created)
+      if (m.getSource(zone.id)) return;
+
+      const color = getHazardColor(zone.hazardId);
+
+      m.addSource(zone.id, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: { hazardId: zone.hazardId },
+          geometry: {
+            type: "Polygon",
+            coordinates: [zone.coordinates],
+          },
+        },
+      });
+
+      // Add fill layer with opacity transition
+      m.addLayer({
+        id: zone.id,
+        type: "fill",
+        source: zone.id,
+        paint: {
+          "fill-color": color,
+          "fill-opacity": HAZARD_ZONE_OPACITY_HIDDEN, // Start hidden
+          "fill-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
+        },
+      });
+
+      // Add outline layer with opacity transition
+      m.addLayer({
+        id: `${zone.id}-outline`,
+        type: "line",
+        source: zone.id,
+        paint: {
+          "line-color": color,
+          "line-width": 2,
+          "line-opacity": HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN, // Start hidden
+          "line-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
+        },
+      });
     });
 
-    // Add filtered hazard zones
-    hazardZones.forEach((zone) => {
+    // Toggle hazard zone visibility with smooth opacity transitions based on filters
+    const hazardZoneIds = hazardLayers.map((layer) => `${layer.hazardId}-zone`);
+
+    hazardZoneIds.forEach((zoneId) => {
+      // Extract hazardId from zoneId (e.g., "flood-zone" -> "flood")
+      const hazardId = zoneId.replace("-zone", "");
+      
+      // Determine if this layer should be visible
       const shouldShow =
         filters.selectedHazards.length === 0 ||
-        filters.selectedHazards.includes(zone.hazardId);
+        filters.selectedHazards.includes(hazardId);
 
-      if (shouldShow) {
-        const color = getHazardColor(zone.hazardId);
+      // Set fill opacity (animated via fill-opacity-transition)
+      if (m.getLayer(zoneId)) {
+        m.setPaintProperty(
+          zoneId,
+          "fill-opacity",
+          shouldShow ? HAZARD_ZONE_OPACITY_VISIBLE : HAZARD_ZONE_OPACITY_HIDDEN
+        );
+      }
 
-        map.current!.addSource(zone.id, {
-          type: "geojson",
-          data: {
-            type: "Feature",
-            properties: {},
-            geometry: {
-              type: "Polygon",
-              coordinates: [zone.coordinates],
-            },
-          },
-        });
-
-        map.current!.addLayer({
-          id: zone.id,
-          type: "fill",
-          source: zone.id,
-          paint: {
-            "fill-color": color,
-            "fill-opacity": 0.2,
-          },
-        });
-
-        map.current!.addLayer({
-          id: `${zone.id}-outline`,
-          type: "line",
-          source: zone.id,
-          paint: {
-            "line-color": color,
-            "line-width": 2,
-          },
-        });
+      // Set outline opacity (animated via line-opacity-transition)
+      const outlineId = `${zoneId}-outline`;
+      if (m.getLayer(outlineId)) {
+        m.setPaintProperty(
+          outlineId,
+          "line-opacity",
+          shouldShow ? HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE : HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN
+        );
       }
     });
   }, [filters.selectedHazards, mapLoaded]);
+
+  // Compute which hazards to show in legend based on filter state
+  const visibleHazards = useMemo(() => {
+    // When no hazards are selected, show all hazards in the legend
+    if (filters.selectedHazards.length === 0) {
+      return hazards;
+    }
+    // Otherwise, show only selected hazards
+    return hazards.filter((h) => filters.selectedHazards.includes(h.id));
+  }, [hazards, filters.selectedHazards]);
 
   return (
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
       
-      {/* Map Legend */}
-      <div className="absolute bottom-8 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 max-w-[180px]">
-        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-          Legend
+      {/* Map Legend - styled to match SummaryPanel cards */}
+      <div 
+        className="absolute bottom-8 right-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-900/80 rounded-xl shadow-lg p-4 min-w-[160px] backdrop-blur-sm"
+        role="region"
+        aria-label="Map legend showing hazard types"
+      >
+        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-3 uppercase tracking-wide">
+          Hazard Legend
         </h4>
-        <div className="space-y-1">
-          {hazards.map((hazard) => (
-            <div key={hazard.id} className="flex items-center gap-2">
+        <div className="space-y-2">
+          {visibleHazards.map((hazard) => (
+            <div 
+              key={hazard.id} 
+              className="flex items-center gap-2.5 transition-opacity duration-300"
+            >
               <span
-                className="w-3 h-3 rounded-full"
+                className="w-3.5 h-3.5 rounded-full ring-2 ring-white dark:ring-slate-700 shadow-sm flex-shrink-0"
                 style={{ backgroundColor: hazard.color }}
+                aria-hidden="true"
               />
-              <span className="text-xs text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">
                 {hazard.icon} {hazard.name}
               </span>
             </div>
