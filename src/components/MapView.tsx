@@ -372,8 +372,8 @@ export default function MapView({
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.4);
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-opacity", 0.8);
     } else {
-      // Build match expression for selected hazards
-      // Use "case" expression to check if primaryHazard is in selected list
+      // Build case expression for selected hazards
+      // TypeScript assertions needed due to MapLibre's complex expression types
       const caseArgs: (maplibregl.ExpressionSpecification | string)[] = [];
       for (const hazard of filters.selectedHazards) {
         caseArgs.push(["==", ["get", "primaryHazard"], hazard] as maplibregl.ExpressionSpecification);
@@ -381,7 +381,8 @@ export default function MapView({
       }
       caseArgs.push("#9CA3AF"); // fallback for non-matching
 
-      const colorExpression: maplibregl.ExpressionSpecification = ["case", ...caseArgs] as maplibregl.ExpressionSpecification;
+      // Type assertion required for dynamic case expression construction
+      const colorExpression = ["case", ...caseArgs] as maplibregl.ExpressionSpecification;
 
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", colorExpression);
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", colorExpression);
@@ -402,10 +403,11 @@ export default function MapView({
         .map((h) => ["get", exposureFields[h]] as maplibregl.ExpressionSpecification);
 
       if (exposureExpressions.length > 0) {
+        // Type assertion required for dynamic max expression construction
         const maxExposure: maplibregl.ExpressionSpecification =
           exposureExpressions.length === 1
             ? exposureExpressions[0]
-            : ["max", ...exposureExpressions] as maplibregl.ExpressionSpecification;
+            : (["max", ...exposureExpressions] as maplibregl.ExpressionSpecification);
 
         // Opacity based on exposure level
         const opacityExpression: maplibregl.ExpressionSpecification = [
