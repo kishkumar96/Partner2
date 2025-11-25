@@ -5,7 +5,24 @@ import {
   HazardLayer,
   ExposureData,
   EconomicDamageData,
+  District,
+  Province,
 } from "@/types";
+
+export const provinces: Province[] = [
+  { id: "prov-001", name: "Northern Province" },
+  { id: "prov-002", name: "Central Province" },
+  { id: "prov-003", name: "Southern Province" },
+];
+
+export const districts: District[] = [
+  { id: "dist-001", name: "North District A", provinceId: "prov-001" },
+  { id: "dist-002", name: "North District B", provinceId: "prov-001" },
+  { id: "dist-003", name: "Central District A", provinceId: "prov-002" },
+  { id: "dist-004", name: "Central District B", provinceId: "prov-002" },
+  { id: "dist-005", name: "South District A", provinceId: "prov-003" },
+  { id: "dist-006", name: "South District B", provinceId: "prov-003" },
+];
 
 export const hazards: Hazard[] = [
   { id: "flood", name: "Flood", color: "#3B82F6", icon: "🌊" },
@@ -30,6 +47,8 @@ export const events: Event[] = [
     date: "2024-03-15",
     hazardId: "flood",
     sectorId: "residential",
+    districtId: "dist-001",
+    provinceId: "prov-001",
     location: { lat: 25.2048, lng: 55.2708 },
     severity: "high",
     affectedPopulation: 125000,
@@ -41,6 +60,8 @@ export const events: Event[] = [
     date: "2024-06-20",
     hazardId: "drought",
     sectorId: "agriculture",
+    districtId: "dist-003",
+    provinceId: "prov-002",
     location: { lat: 24.4539, lng: 54.3773 },
     severity: "medium",
     affectedPopulation: 85000,
@@ -52,6 +73,8 @@ export const events: Event[] = [
     date: "2024-08-10",
     hazardId: "cyclone",
     sectorId: "infrastructure",
+    districtId: "dist-002",
+    provinceId: "prov-001",
     location: { lat: 25.4052, lng: 55.5136 },
     severity: "critical",
     affectedPopulation: 250000,
@@ -63,6 +86,8 @@ export const events: Event[] = [
     date: "2024-02-28",
     hazardId: "earthquake",
     sectorId: "commercial",
+    districtId: "dist-005",
+    provinceId: "prov-003",
     location: { lat: 24.2155, lng: 55.7382 },
     severity: "low",
     affectedPopulation: 12000,
@@ -74,6 +99,8 @@ export const events: Event[] = [
     date: "2024-04-05",
     hazardId: "flood",
     sectorId: "infrastructure",
+    districtId: "dist-004",
+    provinceId: "prov-002",
     location: { lat: 25.0657, lng: 55.1713 },
     severity: "medium",
     affectedPopulation: 45000,
@@ -85,6 +112,8 @@ export const events: Event[] = [
     date: "2024-07-15",
     hazardId: "wildfire",
     sectorId: "healthcare",
+    districtId: "dist-006",
+    provinceId: "prov-003",
     location: { lat: 25.3419, lng: 55.4083 },
     severity: "high",
     affectedPopulation: 8500,

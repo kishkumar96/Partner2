@@ -15,7 +15,7 @@ import {
   LineElement,
   Filler,
 } from "chart.js";
-import { Event, Hazard, SummaryStats, FilterState } from "@/types";
+import { Event, Hazard, SummaryStats, FilterState, District, Province } from "@/types";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
@@ -37,29 +37,84 @@ interface SummaryPanelProps {
   events: Event[];
   hazards: Hazard[];
   filters: FilterState;
+  districts: District[];
+  provinces: Province[];
 }
 
-export default function SummaryPanel({ events, hazards, filters }: SummaryPanelProps) {
+interface AggregatedData {
+  id: string;
+  name: string;
+  totalEvents: number;
+  totalAffectedPopulation: number;
+  totalEconomicDamage: number;
+  highRiskAreas: number;
+}
+
+export default function SummaryPanel({
+  events,
+  hazards,
+  filters,
+  districts,
+  provinces,
+}: SummaryPanelProps) {
   // Apply filters to events using shared utility
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters]
   );
 
-  // Calculate summary statistics from filtered events
+  // Calculate aggregated data based on aggregation level
+  const aggregatedData: AggregatedData[] = useMemo(() => {
+    const { aggregationLevel } = filters;
+    
+    if (aggregationLevel === "national") {
+      // National level: single aggregated row
+      return [{
+        id: "national",
+        name: "National",
+        totalEvents: filteredEvents.length,
+        totalAffectedPopulation: filteredEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
+        totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+        highRiskAreas: filteredEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
+      }];
+    } else if (aggregationLevel === "province") {
+      // Province level: aggregate by provinceId
+      return provinces.map((province) => {
+        const provinceEvents = filteredEvents.filter((e) => e.provinceId === province.id);
+        return {
+          id: province.id,
+          name: province.name,
+          totalEvents: provinceEvents.length,
+          totalAffectedPopulation: provinceEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
+          totalEconomicDamage: provinceEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+          highRiskAreas: provinceEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
+        };
+      });
+    } else {
+      // District level: aggregate by districtId
+      return districts.map((district) => {
+        const districtEvents = filteredEvents.filter((e) => e.districtId === district.id);
+        return {
+          id: district.id,
+          name: district.name,
+          totalEvents: districtEvents.length,
+          totalAffectedPopulation: districtEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
+          totalEconomicDamage: districtEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+          highRiskAreas: districtEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
+        };
+      });
+    }
+  }, [filteredEvents, filters, districts, provinces]);
+
+  // Calculate summary statistics from aggregated data (totals)
   const stats: SummaryStats = useMemo(
     () => ({
-      totalEvents: filteredEvents.length,
-      totalAffectedPopulation: filteredEvents.reduce(
-        (sum, e) => sum + e.affectedPopulation,
-        0
-      ),
-      totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-      highRiskAreas: filteredEvents.filter(
-        (e) => e.severity === "high" || e.severity === "critical"
-      ).length,
+      totalEvents: aggregatedData.reduce((sum, d) => sum + d.totalEvents, 0),
+      totalAffectedPopulation: aggregatedData.reduce((sum, d) => sum + d.totalAffectedPopulation, 0),
+      totalEconomicDamage: aggregatedData.reduce((sum, d) => sum + d.totalEconomicDamage, 0),
+      highRiskAreas: aggregatedData.reduce((sum, d) => sum + d.highRiskAreas, 0),
     }),
-    [filteredEvents]
+    [aggregatedData]
   );
 
   // Data for hazard distribution pie chart based on filtered events

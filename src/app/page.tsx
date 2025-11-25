@@ -14,6 +14,8 @@ import {
   events,
   exposureData,
   economicDamageData,
+  districts,
+  provinces,
 } from "@/data/mockData";
 
 // Dynamic import for MapView to avoid SSR issues with Mapbox
@@ -35,6 +37,7 @@ export default function Home() {
     selectedSectors: [],
     selectedEvents: [],
     dateRange: { start: "", end: "" },
+    aggregationLevel: "district",
   });
 
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -125,11 +128,19 @@ export default function Home() {
             exposureData={exposureData}
             economicDamageData={economicDamageData}
             filters={filters}
+            districts={districts}
+            provinces={provinces}
           />
         </div>
 
         {/* Right Summary Panel */}
-        <SummaryPanel events={events} hazards={hazards} filters={filters} />
+        <SummaryPanel
+          events={events}
+          hazards={hazards}
+          filters={filters}
+          districts={districts}
+          provinces={provinces}
+        />
       </div>
     </div>
   );

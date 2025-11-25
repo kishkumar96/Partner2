@@ -11,12 +11,25 @@ export interface Sector {
   icon: string;
 }
 
+export interface District {
+  id: string;
+  name: string;
+  provinceId: string;
+}
+
+export interface Province {
+  id: string;
+  name: string;
+}
+
 export interface Event {
   id: string;
   name: string;
   date: string;
   hazardId: string;
   sectorId: string;
+  districtId: string;
+  provinceId: string;
   location: {
     lat: number;
     lng: number;
@@ -60,6 +73,8 @@ export interface SummaryStats {
   highRiskAreas: number;
 }
 
+export type AggregationLevel = 'district' | 'province' | 'national';
+
 export interface FilterState {
   selectedHazards: string[];
   selectedSectors: string[];
@@ -68,4 +83,5 @@ export interface FilterState {
     start: string;
     end: string;
   };
+  aggregationLevel: AggregationLevel;
 }
