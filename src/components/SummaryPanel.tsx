@@ -1,0 +1,281 @@
+"use client";
+
+import { Bar, Doughnut, Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler,
+} from "chart.js";
+import { Event, Hazard, SummaryStats } from "@/types";
+import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
+import { monthlyDamageData } from "@/data/mockData";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler
+);
+
+interface SummaryPanelProps {
+  events: Event[];
+  hazards: Hazard[];
+}
+
+export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
+  // Calculate summary statistics
+  const stats: SummaryStats = {
+    totalEvents: events.length,
+    totalAffectedPopulation: events.reduce(
+      (sum, e) => sum + e.affectedPopulation,
+      0
+    ),
+    totalEconomicDamage: events.reduce((sum, e) => sum + e.economicDamage, 0),
+    highRiskAreas: events.filter(
+      (e) => e.severity === "high" || e.severity === "critical"
+    ).length,
+  };
+
+  // Data for hazard distribution pie chart
+  const hazardCounts = hazards.map((hazard) => ({
+    name: hazard.name,
+    count: events.filter((e) => e.hazardId === hazard.id).length,
+    color: hazard.color,
+  }));
+
+  const pieChartData = {
+    labels: hazardCounts.map((h) => h.name),
+    datasets: [
+      {
+        data: hazardCounts.map((h) => h.count),
+        backgroundColor: hazardCounts.map((h) => h.color),
+        borderWidth: 2,
+        borderColor: "#fff",
+      },
+    ],
+  };
+
+  // Data for monthly damage trend chart
+  const lineChartData = {
+    labels: monthlyDamageData.map((d) => d.month),
+    datasets: [
+      {
+        label: "Flood",
+        data: monthlyDamageData.map((d) => d.flood),
+        borderColor: getHazardColor("flood"),
+        backgroundColor: `${getHazardColor("flood")}20`,
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: "Drought",
+        data: monthlyDamageData.map((d) => d.drought),
+        borderColor: getHazardColor("drought"),
+        backgroundColor: `${getHazardColor("drought")}20`,
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: "Cyclone",
+        data: monthlyDamageData.map((d) => d.cyclone),
+        borderColor: getHazardColor("cyclone"),
+        backgroundColor: `${getHazardColor("cyclone")}20`,
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  // Data for damage by hazard bar chart
+  const damageByHazard = hazards.map((hazard) => ({
+    name: hazard.name,
+    damage: events
+      .filter((e) => e.hazardId === hazard.id)
+      .reduce((sum, e) => sum + e.economicDamage, 0),
+    color: hazard.color,
+  }));
+
+  const barChartData = {
+    labels: damageByHazard.map((h) => h.name),
+    datasets: [
+      {
+        label: "Economic Damage (Millions)",
+        data: damageByHazard.map((h) => h.damage / 1000000),
+        backgroundColor: damageByHazard.map((h) => h.color),
+        borderRadius: 4,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: "rgba(0,0,0,0.05)",
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+      },
+    },
+  };
+
+  const lineChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom" as const,
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: "rgba(0,0,0,0.05)",
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Summary Dashboard
+        </h2>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="p-4 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4">
+            <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+              Total Events
+            </p>
+            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mt-1">
+              {stats.totalEvents}
+            </p>
+          </div>
+          <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/30 rounded-xl p-4">
+            <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">
+              High Risk
+            </p>
+            <p className="text-2xl font-bold text-red-900 dark:text-red-100 mt-1">
+              {stats.highRiskAreas}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4">
+          <p className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wide">
+            Affected Population
+          </p>
+          <p className="text-2xl font-bold text-purple-900 dark:text-purple-100 mt-1">
+            {formatNumber(stats.totalAffectedPopulation)}
+          </p>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/30 rounded-xl p-4">
+          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+            Total Economic Damage
+          </p>
+          <p className="text-2xl font-bold text-amber-900 dark:text-amber-100 mt-1">
+            {formatCurrency(stats.totalEconomicDamage)}
+          </p>
+        </div>
+      </div>
+
+      {/* Hazard Distribution Chart */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Events by Hazard Type
+        </h3>
+        <div 
+          className="h-40"
+          role="img"
+          aria-label={`Doughnut chart showing distribution of ${stats.totalEvents} events by hazard type: ${hazardCounts.map(h => `${h.name}: ${h.count}`).join(', ')}`}
+        >
+          <Doughnut
+            data={pieChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "right",
+                  labels: {
+                    usePointStyle: true,
+                    padding: 10,
+                    font: { size: 10 },
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Damage by Hazard Bar Chart */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Economic Damage by Hazard
+        </h3>
+        <div 
+          className="h-40"
+          role="img"
+          aria-label={`Bar chart showing economic damage by hazard type: ${damageByHazard.map(h => `${h.name}: $${(h.damage / 1000000).toFixed(1)}M`).join(', ')}`}
+        >
+          <Bar data={barChartData} options={chartOptions} />
+        </div>
+      </div>
+
+      {/* Monthly Trend Chart */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Monthly Damage Trend
+        </h3>
+        <div 
+          className="h-48"
+          role="img"
+          aria-label="Line chart showing monthly damage trends for flood, drought, and cyclone hazards throughout the year"
+        >
+          <Line data={lineChartData} options={lineChartOptions} />
+        </div>
+      </div>
+    </div>
+  );
+}
