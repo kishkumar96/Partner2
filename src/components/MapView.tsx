@@ -417,6 +417,9 @@ export default function MapView({
       } else {
         // No valid exposure fields for selected hazards, use low opacity
         m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.15);
+      } else {
+        // No valid exposure fields for selected hazards, use low opacity
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.15);
       }
     }
   }, [filters.selectedHazards, mapLoaded]);
