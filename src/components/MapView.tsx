@@ -577,7 +577,7 @@ export default function MapView({
         },
       });
     });
-  }, [mapLoaded]);
+  }, [mapLoaded, hazardLayers, getHazardColor]);
 
   // Toggle hazard zone visibility with smooth opacity transitions based on filters
   useEffect(() => {
