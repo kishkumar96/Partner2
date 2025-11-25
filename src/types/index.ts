@@ -85,3 +85,43 @@ export interface FilterState {
   };
   aggregationLevel: AggregationLevel;
 }
+
+/**
+ * District GeoJSON feature properties for hazard visualization
+ */
+export interface DistrictGeoProperties {
+  id: string;
+  name: string;
+  provinceId: string;
+  population: number;
+  buildingCount: number;
+  infrastructureCount: number;
+  economicDamageUSD: number;
+  // Hazard exposure values (0-1 scale for intensity)
+  floodExposure: number;
+  droughtExposure: number;
+  cycloneExposure: number;
+  earthquakeExposure: number;
+  wildfireExposure: number;
+  primaryHazard: string;
+}
+
+/**
+ * GeoJSON Feature for a district polygon
+ */
+export interface DistrictGeoFeature {
+  type: "Feature";
+  properties: DistrictGeoProperties;
+  geometry: {
+    type: "Polygon" | "MultiPolygon";
+    coordinates: number[][][] | number[][][][];
+  };
+}
+
+/**
+ * GeoJSON FeatureCollection for all districts
+ */
+export interface DistrictsGeoJSON {
+  type: "FeatureCollection";
+  features: DistrictGeoFeature[];
+}

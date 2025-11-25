@@ -18,7 +18,7 @@ import {
   provinces,
 } from "@/data/mockData";
 
-// Dynamic import for MapView to avoid SSR issues with Mapbox
+// Dynamic import for MapView to avoid SSR issues with MapLibre GL
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => (
