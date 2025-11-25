@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Event, Hazard, FilterState } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
+import { filterEvents } from "@/utils/filterUtils";
 import { hazardLayers } from "@/data/mockData";
 
 // Free OpenStreetMap-based tile style (no API key required)
@@ -28,34 +29,11 @@ export default function MapView({
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Filter events based on current filters
-  const filteredEvents = useMemo(() => events.filter((event) => {
-    if (
-      filters.selectedHazards.length > 0 &&
-      !filters.selectedHazards.includes(event.hazardId)
-    ) {
-      return false;
-    }
-    if (
-      filters.selectedSectors.length > 0 &&
-      !filters.selectedSectors.includes(event.sectorId)
-    ) {
-      return false;
-    }
-    if (
-      filters.selectedEvents.length > 0 &&
-      !filters.selectedEvents.includes(event.id)
-    ) {
-      return false;
-    }
-    if (filters.dateRange.start && event.date < filters.dateRange.start) {
-      return false;
-    }
-    if (filters.dateRange.end && event.date > filters.dateRange.end) {
-      return false;
-    }
-    return true;
-  }), [events, filters]);
+  // Filter events based on current filters using shared utility
+  const filteredEvents = useMemo(
+    () => filterEvents(events, filters),
+    [events, filters]
+  );
 
   const getHazardInfo = useCallback((hazardId: string) => {
     return hazards.find((h) => h.id === hazardId);

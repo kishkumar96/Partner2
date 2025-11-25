@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Event,
   Hazard,
   Sector,
   ExposureData,
   EconomicDamageData,
+  FilterState,
 } from "@/types";
 import { formatCurrency, formatNumber, getSeverityColor } from "@/utils/formatters";
+import {
+  filterEvents,
+  filterExposureData,
+  filterEconomicDamageData,
+} from "@/utils/filterUtils";
 
 interface BottomTabsProps {
   events: Event[];
@@ -16,6 +22,7 @@ interface BottomTabsProps {
   sectors: Sector[];
   exposureData: ExposureData[];
   economicDamageData: EconomicDamageData[];
+  filters: FilterState;
 }
 
 type TabType = "exposure" | "economic" | "events";
@@ -26,8 +33,25 @@ export default function BottomTabs({
   sectors,
   exposureData,
   economicDamageData,
+  filters,
 }: BottomTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("events");
+
+  // Apply filters to all data using shared utility functions
+  const filteredEvents = useMemo(
+    () => filterEvents(events, filters),
+    [events, filters]
+  );
+
+  const filteredExposureData = useMemo(
+    () => filterExposureData(exposureData, filters),
+    [exposureData, filters]
+  );
+
+  const filteredEconomicDamageData = useMemo(
+    () => filterEconomicDamageData(economicDamageData, filters),
+    [economicDamageData, filters]
+  );
 
   const getHazardName = (hazardId: string) =>
     hazards.find((h) => h.id === hazardId)?.name || hazardId;
@@ -39,9 +63,9 @@ export default function BottomTabs({
     hazards.find((h) => h.id === hazardId)?.icon || "";
 
   const tabs: { id: TabType; label: string }[] = [
-    { id: "events", label: "Event History" },
-    { id: "exposure", label: "Exposure Analysis" },
-    { id: "economic", label: "Economic Damage" },
+    { id: "events", label: `Event History (${filteredEvents.length}/${events.length})` },
+    { id: "exposure", label: `Exposure Analysis (${filteredExposureData.length}/${exposureData.length})` },
+    { id: "economic", label: `Economic Damage (${filteredEconomicDamageData.length}/${economicDamageData.length})` },
   ];
 
   return (
@@ -91,7 +115,7 @@ export default function BottomTabs({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {events.map((event) => (
+                {filteredEvents.map((event) => (
                   <tr
                     key={event.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -150,7 +174,7 @@ export default function BottomTabs({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {exposureData.map((exposure) => (
+                {filteredExposureData.map((exposure) => (
                   <tr
                     key={exposure.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -204,7 +228,7 @@ export default function BottomTabs({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {economicDamageData.map((damage) => (
+                {filteredEconomicDamageData.map((damage) => (
                   <tr
                     key={damage.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800"

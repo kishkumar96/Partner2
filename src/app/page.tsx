@@ -124,11 +124,12 @@ export default function Home() {
             sectors={sectors}
             exposureData={exposureData}
             economicDamageData={economicDamageData}
+            filters={filters}
           />
         </div>
 
         {/* Right Summary Panel */}
-        <SummaryPanel events={events} hazards={hazards} />
+        <SummaryPanel events={events} hazards={hazards} filters={filters} />
       </div>
     </div>
   );
