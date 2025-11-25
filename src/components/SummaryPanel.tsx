@@ -16,7 +16,7 @@ import {
   Filler,
 } from "chart.js";
 import { Event, Hazard, SummaryStats, FilterState } from "@/types";
-import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
+import { formatCurrency, formatNumber } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
 
@@ -99,49 +99,34 @@ export default function SummaryPanel({ events, hazards, filters }: SummaryPanelP
   };
 
   // Data for monthly damage trend chart - filter based on selected hazards
+  // Uses hazard IDs as keys in monthlyDamageData (e.g., flood, drought, cyclone)
   const lineChartData = useMemo(() => {
-    const datasets = [];
+    // Define which hazards have monthly data available
+    const hazardsWithMonthlyData = ["flood", "drought", "cyclone"];
     
-    const floodSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("flood");
-    const droughtSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("drought");
-    const cycloneSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("cyclone");
-    
-    if (floodSelected) {
-      datasets.push({
-        label: "Flood",
-        data: monthlyDamageData.map((d) => d.flood),
-        borderColor: getHazardColor("flood"),
-        backgroundColor: `${getHazardColor("flood")}20`,
+    const datasets = hazards
+      .filter((hazard) => hazardsWithMonthlyData.includes(hazard.id))
+      .filter(
+        (hazard) =>
+          filters.selectedHazards.length === 0 ||
+          filters.selectedHazards.includes(hazard.id)
+      )
+      .map((hazard) => ({
+        label: hazard.name,
+        data: monthlyDamageData.map(
+          (d) => d[hazard.id as keyof typeof d] as number
+        ),
+        borderColor: hazard.color,
+        backgroundColor: `${hazard.color}20`,
         fill: true,
         tension: 0.4,
-      });
-    }
-    if (droughtSelected) {
-      datasets.push({
-        label: "Drought",
-        data: monthlyDamageData.map((d) => d.drought),
-        borderColor: getHazardColor("drought"),
-        backgroundColor: `${getHazardColor("drought")}20`,
-        fill: true,
-        tension: 0.4,
-      });
-    }
-    if (cycloneSelected) {
-      datasets.push({
-        label: "Cyclone",
-        data: monthlyDamageData.map((d) => d.cyclone),
-        borderColor: getHazardColor("cyclone"),
-        backgroundColor: `${getHazardColor("cyclone")}20`,
-        fill: true,
-        tension: 0.4,
-      });
-    }
-    
+      }));
+
     return {
       labels: monthlyDamageData.map((d) => d.month),
       datasets,
     };
-  }, [filters.selectedHazards]);
+  }, [filters.selectedHazards, hazards]);
 
   const barChartData = {
     labels: damageByHazard.map((h) => h.name),

@@ -1,6 +1,22 @@
 import { Event, ExposureData, EconomicDamageData, FilterState } from "@/types";
 
 /**
+ * Checks if an item matches the selected hazards filter.
+ * Returns true if no hazards are selected (show all) or if the item's hazardId is in the selection.
+ */
+function matchesHazardFilter(hazardId: string, selectedHazards: string[]): boolean {
+  return selectedHazards.length === 0 || selectedHazards.includes(hazardId);
+}
+
+/**
+ * Checks if an item matches the selected sectors filter.
+ * Returns true if no sectors are selected (show all) or if the item's sectorId is in the selection.
+ */
+function matchesSectorFilter(sectorId: string, selectedSectors: string[]): boolean {
+  return selectedSectors.length === 0 || selectedSectors.includes(sectorId);
+}
+
+/**
  * Filters events based on the current filter state.
  * @param events - Array of events to filter
  * @param filters - Current filter state
@@ -8,18 +24,11 @@ import { Event, ExposureData, EconomicDamageData, FilterState } from "@/types";
  */
 export function filterEvents(events: Event[], filters: FilterState): Event[] {
   return events.filter((event) => {
-    // Filter by hazards
-    if (
-      filters.selectedHazards.length > 0 &&
-      !filters.selectedHazards.includes(event.hazardId)
-    ) {
+    // Filter by hazards and sectors using shared helpers
+    if (!matchesHazardFilter(event.hazardId, filters.selectedHazards)) {
       return false;
     }
-    // Filter by sectors
-    if (
-      filters.selectedSectors.length > 0 &&
-      !filters.selectedSectors.includes(event.sectorId)
-    ) {
+    if (!matchesSectorFilter(event.sectorId, filters.selectedSectors)) {
       return false;
     }
     // Filter by specific events
@@ -51,21 +60,10 @@ export function filterExposureData(
   filters: FilterState
 ): ExposureData[] {
   return exposureData.filter((exposure) => {
-    // Filter by hazards
-    if (
-      filters.selectedHazards.length > 0 &&
-      !filters.selectedHazards.includes(exposure.hazardId)
-    ) {
-      return false;
-    }
-    // Filter by sectors
-    if (
-      filters.selectedSectors.length > 0 &&
-      !filters.selectedSectors.includes(exposure.sectorId)
-    ) {
-      return false;
-    }
-    return true;
+    return (
+      matchesHazardFilter(exposure.hazardId, filters.selectedHazards) &&
+      matchesSectorFilter(exposure.sectorId, filters.selectedSectors)
+    );
   });
 }
 
@@ -80,20 +78,9 @@ export function filterEconomicDamageData(
   filters: FilterState
 ): EconomicDamageData[] {
   return economicDamageData.filter((damage) => {
-    // Filter by hazards
-    if (
-      filters.selectedHazards.length > 0 &&
-      !filters.selectedHazards.includes(damage.hazardId)
-    ) {
-      return false;
-    }
-    // Filter by sectors
-    if (
-      filters.selectedSectors.length > 0 &&
-      !filters.selectedSectors.includes(damage.sectorId)
-    ) {
-      return false;
-    }
-    return true;
+    return (
+      matchesHazardFilter(damage.hazardId, filters.selectedHazards) &&
+      matchesSectorFilter(damage.sectorId, filters.selectedSectors)
+    );
   });
 }
