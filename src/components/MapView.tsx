@@ -520,7 +520,8 @@ export default function MapView({
     }
   }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect]);
 
-  // Create all hazard zone layers once when map loads (with initial hidden opacity)
+  // Create hazard zone layers and toggle visibility based on filters
+  // Combined into single effect to guarantee layer creation before visibility toggling
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -535,7 +536,7 @@ export default function MapView({
 
     // Add all hazard zone layers once with smooth transition support
     hazardZones.forEach((zone) => {
-      // Skip if source already exists
+      // Skip if source already exists (layers already created)
       if (m.getSource(zone.id)) return;
 
       const color = getHazardColor(zone.hazardId);
@@ -559,7 +560,7 @@ export default function MapView({
         source: zone.id,
         paint: {
           "fill-color": color,
-          "fill-opacity": HAZARD_ZONE_OPACITY_HIDDEN, // Start hidden, filter effect will set visibility
+          "fill-opacity": HAZARD_ZONE_OPACITY_HIDDEN, // Start hidden
           "fill-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
         },
       });
@@ -572,20 +573,13 @@ export default function MapView({
         paint: {
           "line-color": color,
           "line-width": 2,
-          "line-opacity": HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN, // Start hidden, filter effect will set visibility
+          "line-opacity": HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN, // Start hidden
           "line-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
         },
       });
     });
-  }, [mapLoaded, hazardLayers, getHazardColor]);
 
-  // Toggle hazard zone visibility with smooth opacity transitions based on filters
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    const m = map.current;
-
-    // Get all hazard zone IDs from mockData
+    // Toggle hazard zone visibility with smooth opacity transitions based on filters
     const hazardZoneIds = hazardLayers.map((layer) => `${layer.hazardId}-zone`);
 
     hazardZoneIds.forEach((zoneId) => {
@@ -616,7 +610,7 @@ export default function MapView({
         );
       }
     });
-  }, [filters.selectedHazards, mapLoaded, hazardLayers]);
+  }, [filters.selectedHazards, mapLoaded]);
 
   // Compute which hazards to show in legend based on filter state
   const visibleHazards = useMemo(() => {
