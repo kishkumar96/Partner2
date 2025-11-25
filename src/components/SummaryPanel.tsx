@@ -17,7 +17,7 @@ import {
 } from "chart.js";
 import { Event, Hazard, SummaryStats, FilterState, District, Province } from "@/types";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
-import { filterEvents } from "@/utils/filterUtils";
+import { filterEvents, aggregateEventsByLevel } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
 
 ChartJS.register(
@@ -41,15 +41,6 @@ interface SummaryPanelProps {
   provinces: Province[];
 }
 
-interface AggregatedData {
-  id: string;
-  name: string;
-  totalEvents: number;
-  totalAffectedPopulation: number;
-  totalEconomicDamage: number;
-  highRiskAreas: number;
-}
-
 export default function SummaryPanel({
   events,
   hazards,
@@ -63,48 +54,11 @@ export default function SummaryPanel({
     [events, filters]
   );
 
-  // Calculate aggregated data based on aggregation level
-  const aggregatedData: AggregatedData[] = useMemo(() => {
-    const { aggregationLevel } = filters;
-    
-    if (aggregationLevel === "national") {
-      // National level: single aggregated row
-      return [{
-        id: "national",
-        name: "National",
-        totalEvents: filteredEvents.length,
-        totalAffectedPopulation: filteredEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-        totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-        highRiskAreas: filteredEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
-      }];
-    } else if (aggregationLevel === "province") {
-      // Province level: aggregate by provinceId
-      return provinces.map((province) => {
-        const provinceEvents = filteredEvents.filter((e) => e.provinceId === province.id);
-        return {
-          id: province.id,
-          name: province.name,
-          totalEvents: provinceEvents.length,
-          totalAffectedPopulation: provinceEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-          totalEconomicDamage: provinceEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-          highRiskAreas: provinceEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
-        };
-      });
-    } else {
-      // District level: aggregate by districtId
-      return districts.map((district) => {
-        const districtEvents = filteredEvents.filter((e) => e.districtId === district.id);
-        return {
-          id: district.id,
-          name: district.name,
-          totalEvents: districtEvents.length,
-          totalAffectedPopulation: districtEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-          totalEconomicDamage: districtEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-          highRiskAreas: districtEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
-        };
-      });
-    }
-  }, [filteredEvents, filters, districts, provinces]);
+  // Calculate aggregated data based on aggregation level using shared utility
+  const aggregatedData = useMemo(
+    () => aggregateEventsByLevel(filteredEvents, filters.aggregationLevel, districts, provinces),
+    [filteredEvents, filters.aggregationLevel, districts, provinces]
+  );
 
   // Calculate summary statistics from aggregated data (totals)
   const stats: SummaryStats = useMemo(
