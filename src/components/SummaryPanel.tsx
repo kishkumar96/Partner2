@@ -15,9 +15,9 @@ import {
   LineElement,
   Filler,
 } from "chart.js";
-import { Event, Hazard, SummaryStats, FilterState } from "@/types";
+import { Event, Hazard, SummaryStats, FilterState, District, Province } from "@/types";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
-import { filterEvents } from "@/utils/filterUtils";
+import { filterEvents, aggregateEventsByLevel } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
 
 ChartJS.register(
@@ -37,29 +37,38 @@ interface SummaryPanelProps {
   events: Event[];
   hazards: Hazard[];
   filters: FilterState;
+  districts: District[];
+  provinces: Province[];
 }
 
-export default function SummaryPanel({ events, hazards, filters }: SummaryPanelProps) {
+export default function SummaryPanel({
+  events,
+  hazards,
+  filters,
+  districts,
+  provinces,
+}: SummaryPanelProps) {
   // Apply filters to events using shared utility
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters]
   );
 
-  // Calculate summary statistics from filtered events
+  // Calculate aggregated data based on aggregation level using shared utility
+  const aggregatedData = useMemo(
+    () => aggregateEventsByLevel(filteredEvents, filters.aggregationLevel, districts, provinces),
+    [filteredEvents, filters.aggregationLevel, districts, provinces]
+  );
+
+  // Calculate summary statistics from aggregated data (totals)
   const stats: SummaryStats = useMemo(
     () => ({
-      totalEvents: filteredEvents.length,
-      totalAffectedPopulation: filteredEvents.reduce(
-        (sum, e) => sum + e.affectedPopulation,
-        0
-      ),
-      totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-      highRiskAreas: filteredEvents.filter(
-        (e) => e.severity === "high" || e.severity === "critical"
-      ).length,
+      totalEvents: aggregatedData.reduce((sum, d) => sum + d.totalEvents, 0),
+      totalAffectedPopulation: aggregatedData.reduce((sum, d) => sum + d.totalAffectedPopulation, 0),
+      totalEconomicDamage: aggregatedData.reduce((sum, d) => sum + d.totalEconomicDamage, 0),
+      highRiskAreas: aggregatedData.reduce((sum, d) => sum + d.highRiskAreas, 0),
     }),
-    [filteredEvents]
+    [aggregatedData]
   );
 
   // Data for hazard distribution pie chart based on filtered events

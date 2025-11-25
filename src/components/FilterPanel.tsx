@@ -1,6 +1,6 @@
 "use client";
 
-import { FilterState, Hazard, Sector, Event } from "@/types";
+import { FilterState, Hazard, Sector, Event, AggregationLevel } from "@/types";
 
 interface FilterPanelProps {
   hazards: Hazard[];
@@ -38,14 +38,25 @@ export default function FilterPanel({
     onFilterChange({ ...filters, selectedEvents: newEvents });
   };
 
+  const setAggregationLevel = (level: AggregationLevel) => {
+    onFilterChange({ ...filters, aggregationLevel: level });
+  };
+
   const clearAllFilters = () => {
     onFilterChange({
       selectedHazards: [],
       selectedSectors: [],
       selectedEvents: [],
       dateRange: { start: "", end: "" },
+      aggregationLevel: "district",
     });
   };
+
+  const aggregationOptions: { value: AggregationLevel; label: string }[] = [
+    { value: "district", label: "Districts" },
+    { value: "province", label: "Province" },
+    { value: "national", label: "National" },
+  ];
 
   return (
     <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
@@ -61,6 +72,32 @@ export default function FilterPanel({
           >
             Clear All
           </button>
+        </div>
+      </div>
+
+      {/* Aggregation Section */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          Aggregation
+        </h3>
+        <div className="space-y-2">
+          {aggregationOptions.map((option) => (
+            <label
+              key={option.value}
+              className="flex items-center gap-3 cursor-pointer group"
+            >
+              <input
+                type="radio"
+                name="aggregation"
+                checked={filters.aggregationLevel === option.value}
+                onChange={() => setAggregationLevel(option.value)}
+                className="w-4 h-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white">
+                {option.label}
+              </span>
+            </label>
+          ))}
         </div>
       </div>
 

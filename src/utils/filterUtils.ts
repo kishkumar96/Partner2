@@ -1,4 +1,16 @@
-import { Event, ExposureData, EconomicDamageData, FilterState } from "@/types";
+import { Event, ExposureData, EconomicDamageData, FilterState, District, Province, AggregationLevel } from "@/types";
+
+/**
+ * Aggregated data structure for events grouped by region
+ */
+export interface AggregatedEventData {
+  id: string;
+  name: string;
+  totalEvents: number;
+  totalAffectedPopulation: number;
+  totalEconomicDamage: number;
+  highRiskAreas: number;
+}
 
 /**
  * Checks if an item matches the selected hazards filter.
@@ -83,4 +95,72 @@ export function filterEconomicDamageData(
       matchesSectorFilter(damage.sectorId, filters.selectedSectors)
     );
   });
+}
+
+/**
+ * Computes aggregated metrics from a list of events in a single pass.
+ * @param events - Array of events to aggregate
+ * @returns Aggregated metrics object
+ */
+function computeAggregatedMetrics(events: Event[]): Omit<AggregatedEventData, 'id' | 'name'> {
+  return events.reduce(
+    (acc, e) => {
+      acc.totalEvents += 1;
+      acc.totalAffectedPopulation += e.affectedPopulation;
+      acc.totalEconomicDamage += e.economicDamage;
+      if (e.severity === "high" || e.severity === "critical") {
+        acc.highRiskAreas += 1;
+      }
+      return acc;
+    },
+    { totalEvents: 0, totalAffectedPopulation: 0, totalEconomicDamage: 0, highRiskAreas: 0 }
+  );
+}
+
+/**
+ * Aggregates events by the specified aggregation level (district, province, or national).
+ * @param events - Array of filtered events to aggregate
+ * @param aggregationLevel - The level at which to aggregate
+ * @param districts - Array of district reference data
+ * @param provinces - Array of province reference data
+ * @param includeEmpty - Whether to include regions with zero events (default: false)
+ * @returns Array of aggregated event data
+ */
+export function aggregateEventsByLevel(
+  events: Event[],
+  aggregationLevel: AggregationLevel,
+  districts: District[],
+  provinces: Province[],
+  includeEmpty: boolean = false
+): AggregatedEventData[] {
+  if (aggregationLevel === "national") {
+    const metrics = computeAggregatedMetrics(events);
+    return [{
+      id: "national",
+      name: "National",
+      ...metrics,
+    }];
+  } else if (aggregationLevel === "province") {
+    const result = provinces.map((province) => {
+      const provinceEvents = events.filter((e) => e.provinceId === province.id);
+      const metrics = computeAggregatedMetrics(provinceEvents);
+      return {
+        id: province.id,
+        name: province.name,
+        ...metrics,
+      };
+    });
+    return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+  } else {
+    const result = districts.map((district) => {
+      const districtEvents = events.filter((e) => e.districtId === district.id);
+      const metrics = computeAggregatedMetrics(districtEvents);
+      return {
+        id: district.id,
+        name: district.name,
+        ...metrics,
+      };
+    });
+    return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+  }
 }

@@ -8,12 +8,15 @@ import {
   ExposureData,
   EconomicDamageData,
   FilterState,
+  District,
+  Province,
 } from "@/types";
-import { formatCurrency, formatNumber, getSeverityColor } from "@/utils/formatters";
+import { formatCurrency, formatNumber } from "@/utils/formatters";
 import {
   filterEvents,
   filterExposureData,
   filterEconomicDamageData,
+  aggregateEventsByLevel,
 } from "@/utils/filterUtils";
 
 interface BottomTabsProps {
@@ -23,6 +26,8 @@ interface BottomTabsProps {
   exposureData: ExposureData[];
   economicDamageData: EconomicDamageData[];
   filters: FilterState;
+  districts: District[];
+  provinces: Province[];
 }
 
 type TabType = "exposure" | "economic" | "events";
@@ -34,6 +39,8 @@ export default function BottomTabs({
   exposureData,
   economicDamageData,
   filters,
+  districts,
+  provinces,
 }: BottomTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("events");
 
@@ -53,6 +60,12 @@ export default function BottomTabs({
     [economicDamageData, filters]
   );
 
+  // Calculate aggregated event data based on aggregation level using shared utility
+  const aggregatedEventData = useMemo(
+    () => aggregateEventsByLevel(filteredEvents, filters.aggregationLevel, districts, provinces),
+    [filteredEvents, filters.aggregationLevel, districts, provinces]
+  );
+
   const getHazardName = (hazardId: string) =>
     hazards.find((h) => h.id === hazardId)?.name || hazardId;
 
@@ -61,6 +74,13 @@ export default function BottomTabs({
 
   const getHazardIcon = (hazardId: string) =>
     hazards.find((h) => h.id === hazardId)?.icon || "";
+
+  const getAggregationLabel = () => {
+    const { aggregationLevel } = filters;
+    if (aggregationLevel === "national") return "National";
+    if (aggregationLevel === "province") return "Province";
+    return "District";
+  };
 
   const tabs: { id: TabType; label: string }[] = [
     { id: "events", label: `Event History (${filteredEvents.length}/${events.length})` },
@@ -95,16 +115,13 @@ export default function BottomTabs({
               <thead>
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Event
+                    {getAggregationLabel()}
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Date
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Total Events
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Hazard
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Severity
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    High Risk
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Affected Pop.
@@ -115,34 +132,25 @@ export default function BottomTabs({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredEvents.map((event) => (
+                {aggregatedEventData.map((data) => (
                   <tr
-                    key={event.id}
+                    key={data.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      {event.name}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {event.date}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {getHazardIcon(event.hazardId)} {getHazardName(event.hazardId)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full capitalize ${getSeverityColor(
-                          event.severity
-                        )}`}
-                      >
-                        {event.severity}
-                      </span>
+                      {data.name}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
-                      {formatNumber(event.affectedPopulation)}
+                      {data.totalEvents}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                      {data.highRiskAreas}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                      {formatNumber(data.totalAffectedPopulation)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-medium">
-                      {formatCurrency(event.economicDamage)}
+                      {formatCurrency(data.totalEconomicDamage)}
                     </td>
                   </tr>
                 ))}
