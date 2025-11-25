@@ -1,12 +1,12 @@
 # Climate Risk Dashboard
 
-A modern WebGIS dashboard for climate risk assessment built with Next.js, Tailwind CSS, Mapbox, and Chart.js.
+A modern WebGIS dashboard for climate risk assessment built with Next.js, Tailwind CSS, MapLibre GL JS, and Chart.js.
 
 ![Climate Risk Dashboard](https://github.com/user-attachments/assets/a20538a4-b75e-479e-aa7a-7dbe3290c6d0)
 
 ## Features
 
-- **Interactive Map**: Mapbox GL map with hazard layers, event markers, and popups
+- **Interactive Map**: MapLibre GL map with hazard layers, event markers, and popups (no API key required)
 - **Filter Panel**: Filter by hazard types, sectors, events, and date range
 - **Summary Dashboard**: View key metrics with beautiful gradient cards
 - **Charts**: Doughnut, bar, and line charts powered by Chart.js
@@ -38,20 +38,13 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-### Environment Variables
+> **Note:** This application uses MapLibre GL JS with free OpenStreetMap-based tiles, so no API key is required!
 
-Create a `.env.local` file with your Mapbox token:
-
-```
-NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
-```
-
-> **Note:** The Mapbox token is optional for development and testing. If you do not provide a token, the map will display an error message, but the rest of the application will continue to function.
 ## Tech Stack
 
 - **Framework**: Next.js 16 with App Router
 - **Styling**: Tailwind CSS 4
-- **Map**: Mapbox GL JS
+- **Map**: MapLibre GL JS (open-source, no API key required)
 - **Charts**: Chart.js with react-chartjs-2
 - **PDF Export**: jsPDF
 - **Excel Export**: ExcelJS
@@ -84,7 +77,7 @@ To learn more about the technologies used:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Tailwind CSS](https://tailwindcss.com/docs) - utility-first CSS framework.
-- [Mapbox GL JS](https://docs.mapbox.com/mapbox-gl-js/) - interactive maps.
+- [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/docs/) - open-source interactive maps.
 - [Chart.js](https://www.chartjs.org/docs/) - flexible charting library.
 
 ## Deploy on Vercel

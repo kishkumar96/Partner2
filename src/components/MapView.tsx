@@ -1,14 +1,14 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { Event, Hazard, FilterState } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 import { hazardLayers } from "@/data/mockData";
 
-// Users must provide their own Mapbox token via environment variable
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+// Free OpenStreetMap-based tile style (no API key required)
+const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 interface MapViewProps {
   events: Event[];
@@ -24,14 +24,9 @@ export default function MapView({
   onEventSelect,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const map = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
-  
-  // Check for missing token at component level
-  const mapError = !MAPBOX_TOKEN 
-    ? "Mapbox token not configured. Please set NEXT_PUBLIC_MAPBOX_TOKEN environment variable." 
-    : null;
 
   // Filter events based on current filters
   const filteredEvents = useMemo(() => events.filter((event) => {
@@ -63,22 +58,16 @@ export default function MapView({
   // Initialize map
   useEffect(() => {
     if (map.current) return;
-    
-    if (!MAPBOX_TOKEN) {
-      return;
-    }
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-
-    map.current = new mapboxgl.Map({
+    map.current = new maplibregl.Map({
       container: mapContainer.current!,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: MAP_STYLE,
       center: [55.2, 25.0],
       zoom: 8,
     });
 
-    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-    map.current.addControl(new mapboxgl.ScaleControl(), "bottom-left");
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.current.addControl(new maplibregl.ScaleControl(), "bottom-left");
 
     map.current.on("load", () => {
       setMapLoaded(true);
@@ -152,7 +141,7 @@ export default function MapView({
       });
 
       // Create popup
-      const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px; min-width: 200px;">
           <h3 style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #1f2937;">
             ${hazard?.icon || ""} ${event.name}
@@ -166,7 +155,7 @@ export default function MapView({
         </div>
       `);
 
-      const marker = new mapboxgl.Marker(el)
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([event.location.lng, event.location.lat])
         .setPopup(popup)
         .addTo(map.current!);
@@ -180,7 +169,7 @@ export default function MapView({
 
     // Fit bounds to show all markers
     if (filteredEvents.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
+      const bounds = new maplibregl.LngLatBounds();
       filteredEvents.forEach((event) => {
         bounds.extend([event.location.lng, event.location.lat]);
       });
@@ -262,16 +251,6 @@ export default function MapView({
   return (
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
-      
-      {/* Map Error Message */}
-      {mapError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
-          <div className="text-center p-4">
-            <p className="text-red-600 dark:text-red-400 mb-2">{mapError}</p>
-            <p className="text-sm text-gray-500">Set NEXT_PUBLIC_MAPBOX_TOKEN in your .env.local file</p>
-          </div>
-        </div>
-      )}
       
       {/* Map Legend */}
       <div className="absolute bottom-8 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 max-w-[180px]">
