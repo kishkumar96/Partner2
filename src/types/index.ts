@@ -16,6 +16,7 @@ export interface Event {
   name: string;
   date: string;
   hazardId: string;
+  sectorId: string;
   location: {
     lat: number;
     lng: number;

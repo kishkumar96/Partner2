@@ -37,6 +37,12 @@ export default function MapView({
       return false;
     }
     if (
+      filters.selectedSectors.length > 0 &&
+      !filters.selectedSectors.includes(event.sectorId)
+    ) {
+      return false;
+    }
+    if (
       filters.selectedEvents.length > 0 &&
       !filters.selectedEvents.includes(event.id)
     ) {

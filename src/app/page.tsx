@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import { Globe, X } from "lucide-react";
 import FilterPanel from "@/components/FilterPanel";
 import SummaryPanel from "@/components/SummaryPanel";
 import BottomTabs from "@/components/BottomTabs";
@@ -46,7 +47,7 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center">
-                <span className="text-white text-xl">🌍</span>
+                <Globe className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -109,7 +110,7 @@ export default function Home() {
                     className="text-gray-400 hover:text-gray-600"
                     aria-label="Close event details"
                   >
-                    ✕
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
