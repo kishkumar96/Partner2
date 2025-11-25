@@ -101,8 +101,8 @@ export default function SummaryPanel({ events, hazards, filters }: SummaryPanelP
   // Data for monthly damage trend chart - filter based on selected hazards
   // Uses hazard IDs as keys in monthlyDamageData (e.g., flood, drought, cyclone)
   const lineChartData = useMemo(() => {
-    // Define which hazards have monthly data available
-    const hazardsWithMonthlyData = ["flood", "drought", "cyclone"];
+    // Dynamically determine which hazards have monthly data by checking the keys of monthlyDamageData[0]
+    const hazardsWithMonthlyData = Object.keys(monthlyDamageData[0]).filter((key) => key !== "month");
     
     const datasets = hazards
       .filter((hazard) => hazardsWithMonthlyData.includes(hazard.id))
@@ -113,9 +113,10 @@ export default function SummaryPanel({ events, hazards, filters }: SummaryPanelP
       )
       .map((hazard) => ({
         label: hazard.name,
-        data: monthlyDamageData.map(
-          (d) => d[hazard.id as keyof typeof d] as number
-        ),
+        data: monthlyDamageData.map((d) => {
+          const value = d[hazard.id as keyof typeof d];
+          return typeof value === 'number' ? value : 0;
+        }),
         borderColor: hazard.color,
         backgroundColor: `${hazard.color}20`,
         fill: true,
