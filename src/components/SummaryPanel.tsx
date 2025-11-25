@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -14,8 +15,9 @@ import {
   LineElement,
   Filler,
 } from "chart.js";
-import { Event, Hazard, SummaryStats } from "@/types";
+import { Event, Hazard, SummaryStats, FilterState } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
+import { filterEvents } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
 
 ChartJS.register(
@@ -34,28 +36,55 @@ ChartJS.register(
 interface SummaryPanelProps {
   events: Event[];
   hazards: Hazard[];
+  filters: FilterState;
 }
 
-export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
-  // Calculate summary statistics
-  const stats: SummaryStats = {
-    totalEvents: events.length,
-    totalAffectedPopulation: events.reduce(
-      (sum, e) => sum + e.affectedPopulation,
-      0
-    ),
-    totalEconomicDamage: events.reduce((sum, e) => sum + e.economicDamage, 0),
-    highRiskAreas: events.filter(
-      (e) => e.severity === "high" || e.severity === "critical"
-    ).length,
-  };
+export default function SummaryPanel({ events, hazards, filters }: SummaryPanelProps) {
+  // Apply filters to events using shared utility
+  const filteredEvents = useMemo(
+    () => filterEvents(events, filters),
+    [events, filters]
+  );
 
-  // Data for hazard distribution pie chart
-  const hazardCounts = hazards.map((hazard) => ({
-    name: hazard.name,
-    count: events.filter((e) => e.hazardId === hazard.id).length,
-    color: hazard.color,
-  }));
+  // Calculate summary statistics from filtered events
+  const stats: SummaryStats = useMemo(
+    () => ({
+      totalEvents: filteredEvents.length,
+      totalAffectedPopulation: filteredEvents.reduce(
+        (sum, e) => sum + e.affectedPopulation,
+        0
+      ),
+      totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+      highRiskAreas: filteredEvents.filter(
+        (e) => e.severity === "high" || e.severity === "critical"
+      ).length,
+    }),
+    [filteredEvents]
+  );
+
+  // Data for hazard distribution pie chart based on filtered events
+  const hazardCounts = useMemo(
+    () =>
+      hazards.map((hazard) => ({
+        name: hazard.name,
+        count: filteredEvents.filter((e) => e.hazardId === hazard.id).length,
+        color: hazard.color,
+      })),
+    [hazards, filteredEvents]
+  );
+
+  // Data for damage by hazard bar chart based on filtered events
+  const damageByHazard = useMemo(
+    () =>
+      hazards.map((hazard) => ({
+        name: hazard.name,
+        damage: filteredEvents
+          .filter((e) => e.hazardId === hazard.id)
+          .reduce((sum, e) => sum + e.economicDamage, 0),
+        color: hazard.color,
+      })),
+    [hazards, filteredEvents]
+  );
 
   const pieChartData = {
     labels: hazardCounts.map((h) => h.name),
@@ -69,45 +98,50 @@ export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
     ],
   };
 
-  // Data for monthly damage trend chart
-  const lineChartData = {
-    labels: monthlyDamageData.map((d) => d.month),
-    datasets: [
-      {
+  // Data for monthly damage trend chart - filter based on selected hazards
+  const lineChartData = useMemo(() => {
+    const datasets = [];
+    
+    const floodSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("flood");
+    const droughtSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("drought");
+    const cycloneSelected = filters.selectedHazards.length === 0 || filters.selectedHazards.includes("cyclone");
+    
+    if (floodSelected) {
+      datasets.push({
         label: "Flood",
         data: monthlyDamageData.map((d) => d.flood),
         borderColor: getHazardColor("flood"),
         backgroundColor: `${getHazardColor("flood")}20`,
         fill: true,
         tension: 0.4,
-      },
-      {
+      });
+    }
+    if (droughtSelected) {
+      datasets.push({
         label: "Drought",
         data: monthlyDamageData.map((d) => d.drought),
         borderColor: getHazardColor("drought"),
         backgroundColor: `${getHazardColor("drought")}20`,
         fill: true,
         tension: 0.4,
-      },
-      {
+      });
+    }
+    if (cycloneSelected) {
+      datasets.push({
         label: "Cyclone",
         data: monthlyDamageData.map((d) => d.cyclone),
         borderColor: getHazardColor("cyclone"),
         backgroundColor: `${getHazardColor("cyclone")}20`,
         fill: true,
         tension: 0.4,
-      },
-    ],
-  };
-
-  // Data for damage by hazard bar chart
-  const damageByHazard = hazards.map((hazard) => ({
-    name: hazard.name,
-    damage: events
-      .filter((e) => e.hazardId === hazard.id)
-      .reduce((sum, e) => sum + e.economicDamage, 0),
-    color: hazard.color,
-  }));
+      });
+    }
+    
+    return {
+      labels: monthlyDamageData.map((d) => d.month),
+      datasets,
+    };
+  }, [filters.selectedHazards]);
 
   const barChartData = {
     labels: damageByHazard.map((h) => h.name),
@@ -177,6 +211,9 @@ export default function SummaryPanel({ events, hazards }: SummaryPanelProps) {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Summary Dashboard
         </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Showing {filteredEvents.length} of {events.length} events
+        </p>
       </div>
 
       {/* Summary Cards */}
