@@ -19,6 +19,35 @@ const DISTRICTS_OUTLINE_LAYER_ID = "districts-outline";
 const DISTRICTS_HOVER_LAYER_ID = "districts-hover";
 
 /**
+ * Shared mapping between hazard IDs and their exposure property names.
+ * Used in both popup HTML generation and filter sync logic.
+ */
+const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
+  flood: "floodExposure",
+  drought: "droughtExposure",
+  cyclone: "cycloneExposure",
+  earthquake: "earthquakeExposure",
+  wildfire: "wildfireExposure",
+};
+
+/**
+ * Creates a MapLibre expression for hazard-based color matching.
+ * Reused for fill layer, outline layer, and default expression.
+ */
+function createHazardColorExpression(): maplibregl.ExpressionSpecification {
+  return [
+    "match",
+    ["get", "primaryHazard"],
+    "flood", getHazardColor("flood"),
+    "drought", getHazardColor("drought"),
+    "cyclone", getHazardColor("cyclone"),
+    "earthquake", getHazardColor("earthquake"),
+    "wildfire", getHazardColor("wildfire"),
+    "#6B7280", // default gray
+  ];
+}
+
+/**
  * Creates styled HTML for the district popup.
  */
 function createDistrictPopupHTML(
@@ -29,14 +58,14 @@ function createDistrictPopupHTML(
   const hazardIcon = hazard?.icon || "";
   const hazardName = hazard?.name || props.primaryHazard;
 
-  // Get relevant exposure info
-  const exposureMap: Record<string, { label: string; value: number }> = {
-    flood: { label: "Flood", value: props.floodExposure },
-    drought: { label: "Drought", value: props.droughtExposure },
-    cyclone: { label: "Cyclone", value: props.cycloneExposure },
-    earthquake: { label: "Earthquake", value: props.earthquakeExposure },
-    wildfire: { label: "Wildfire", value: props.wildfireExposure },
-  };
+  // Build exposure info using shared HAZARD_EXPOSURE_FIELDS mapping
+  const exposureMap: Record<string, { label: string; value: number }> = {};
+  for (const [hazardId, fieldName] of Object.entries(HAZARD_EXPOSURE_FIELDS)) {
+    exposureMap[hazardId] = {
+      label: hazardId.charAt(0).toUpperCase() + hazardId.slice(1),
+      value: props[fieldName] as number,
+    };
+  }
 
   // Determine which hazards to show (filtered or all)
   const hazardsToShow =
@@ -143,6 +172,7 @@ export default function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   // Filter events based on current filters using shared utility
@@ -190,6 +220,7 @@ export default function MapView({
     if (!map.current || !mapLoaded) return;
 
     const m = map.current;
+    const hazardColorExpression = createHazardColorExpression();
 
     // Add source for district polygons if not exists
     if (!m.getSource(DISTRICTS_SOURCE_ID)) {
@@ -205,16 +236,7 @@ export default function MapView({
         type: "fill",
         source: DISTRICTS_SOURCE_ID,
         paint: {
-          "fill-color": [
-            "match",
-            ["get", "primaryHazard"],
-            "flood", getHazardColor("flood"),
-            "drought", getHazardColor("drought"),
-            "cyclone", getHazardColor("cyclone"),
-            "earthquake", getHazardColor("earthquake"),
-            "wildfire", getHazardColor("wildfire"),
-            "#6B7280", // default gray
-          ],
+          "fill-color": hazardColorExpression,
           "fill-opacity": 0.4,
           "fill-opacity-transition": { duration: 300 },
         },
@@ -226,16 +248,7 @@ export default function MapView({
         type: "line",
         source: DISTRICTS_SOURCE_ID,
         paint: {
-          "line-color": [
-            "match",
-            ["get", "primaryHazard"],
-            "flood", getHazardColor("flood"),
-            "drought", getHazardColor("drought"),
-            "cyclone", getHazardColor("cyclone"),
-            "earthquake", getHazardColor("earthquake"),
-            "wildfire", getHazardColor("wildfire"),
-            "#6B7280",
-          ],
+          "line-color": hazardColorExpression,
           "line-width": 2,
           "line-opacity": 0.8,
         },
@@ -265,7 +278,6 @@ export default function MapView({
 
     const m = map.current;
     let hoveredDistrictId: string | null = null;
-    let popup: maplibregl.Popup | null = null;
 
     // Change cursor on hover
     const handleMouseEnter = () => {
@@ -310,13 +322,13 @@ export default function MapView({
         const feature = e.features[0];
         const props = feature.properties as unknown as DistrictGeoProperties;
 
-        // Close existing popup
-        if (popup) {
-          popup.remove();
+        // Close existing popup using ref
+        if (popupRef.current) {
+          popupRef.current.remove();
         }
 
-        // Create styled popup
-        popup = new maplibregl.Popup({
+        // Create styled popup and store in ref
+        popupRef.current = new maplibregl.Popup({
           closeButton: true,
           closeOnClick: true,
           maxWidth: "280px",
@@ -339,8 +351,9 @@ export default function MapView({
       m.off("mouseleave", DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
       m.off("mousemove", DISTRICTS_FILL_LAYER_ID, handleMouseMove);
       m.off("click", DISTRICTS_FILL_LAYER_ID, handleClick);
-      if (popup) {
-        popup.remove();
+      if (popupRef.current) {
+        popupRef.current.remove();
+        popupRef.current = null;
       }
     };
   }, [mapLoaded, filters.selectedHazards]);
@@ -353,17 +366,8 @@ export default function MapView({
 
     if (!m.getLayer(DISTRICTS_FILL_LAYER_ID)) return;
 
-    // Default color expression for all hazards
-    const defaultColorExpression: maplibregl.ExpressionSpecification = [
-      "match",
-      ["get", "primaryHazard"],
-      "flood", getHazardColor("flood"),
-      "drought", getHazardColor("drought"),
-      "cyclone", getHazardColor("cyclone"),
-      "earthquake", getHazardColor("earthquake"),
-      "wildfire", getHazardColor("wildfire"),
-      "#6B7280", // default gray
-    ];
+    // Use shared color expression for default styling
+    const defaultColorExpression = createHazardColorExpression();
 
     if (filters.selectedHazards.length === 0) {
       // Show all districts with default styling
@@ -387,20 +391,10 @@ export default function MapView({
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", colorExpression);
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", colorExpression);
 
-      // Create opacity expression based on whether district has significant exposure
-      // to any of the selected hazards
-      const exposureFields: Record<string, string> = {
-        flood: "floodExposure",
-        drought: "droughtExposure",
-        cyclone: "cycloneExposure",
-        earthquake: "earthquakeExposure",
-        wildfire: "wildfireExposure",
-      };
-
-      // Build max exposure expression for selected hazards
+      // Build max exposure expression for selected hazards using shared mapping
       const exposureExpressions = filters.selectedHazards
-        .filter((h) => exposureFields[h])
-        .map((h) => ["get", exposureFields[h]] as maplibregl.ExpressionSpecification);
+        .filter((h) => HAZARD_EXPOSURE_FIELDS[h])
+        .map((h) => ["get", HAZARD_EXPOSURE_FIELDS[h]] as maplibregl.ExpressionSpecification);
 
       if (exposureExpressions.length > 0) {
         // Type assertion required for dynamic max expression construction
@@ -420,6 +414,9 @@ export default function MapView({
         ];
 
         m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", opacityExpression);
+      } else {
+        // No valid exposure fields for selected hazards, use low opacity
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.15);
       }
     }
   }, [filters.selectedHazards, mapLoaded]);
