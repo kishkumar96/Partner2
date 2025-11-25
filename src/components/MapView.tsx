@@ -3,13 +3,158 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Event, Hazard, FilterState } from "@/types";
+import { Event, Hazard, FilterState, DistrictGeoProperties } from "@/types";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
-import { hazardLayers } from "@/data/mockData";
+import { hazardLayers, hazards as allHazards } from "@/data/mockData";
+import { districtsGeoJSON } from "@/data/districtsGeo";
 
 // Free OpenStreetMap-based tile style (no API key required)
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+
+// Layer IDs for district polygons
+const DISTRICTS_SOURCE_ID = "districts-source";
+const DISTRICTS_FILL_LAYER_ID = "districts-fill";
+const DISTRICTS_OUTLINE_LAYER_ID = "districts-outline";
+const DISTRICTS_HOVER_LAYER_ID = "districts-hover";
+
+/**
+ * Shared mapping between hazard IDs and their exposure property names.
+ * Used in both popup HTML generation and filter sync logic.
+ */
+const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
+  flood: "floodExposure",
+  drought: "droughtExposure",
+  cyclone: "cycloneExposure",
+  earthquake: "earthquakeExposure",
+  wildfire: "wildfireExposure",
+};
+
+/**
+ * Creates a MapLibre expression for hazard-based color matching.
+ * Reused for fill layer, outline layer, and default expression.
+ */
+function createHazardColorExpression(): maplibregl.ExpressionSpecification {
+  return [
+    "match",
+    ["get", "primaryHazard"],
+    "flood", getHazardColor("flood"),
+    "drought", getHazardColor("drought"),
+    "cyclone", getHazardColor("cyclone"),
+    "earthquake", getHazardColor("earthquake"),
+    "wildfire", getHazardColor("wildfire"),
+    "#6B7280", // default gray
+  ];
+}
+
+/**
+ * Creates styled HTML for the district popup.
+ */
+function createDistrictPopupHTML(
+  props: DistrictGeoProperties,
+  selectedHazards: string[]
+): string {
+  const hazard = allHazards.find((h) => h.id === props.primaryHazard);
+  const hazardIcon = hazard?.icon || "";
+  const hazardName = hazard?.name || props.primaryHazard;
+
+  // Build exposure info using shared HAZARD_EXPOSURE_FIELDS mapping
+  const exposureMap: Record<string, { label: string; value: number }> = {};
+  for (const [hazardId, fieldName] of Object.entries(HAZARD_EXPOSURE_FIELDS)) {
+    exposureMap[hazardId] = {
+      label: hazardId.charAt(0).toUpperCase() + hazardId.slice(1),
+      value: props[fieldName] as number,
+    };
+  }
+
+  // Determine which hazards to show (filtered or all)
+  const hazardsToShow =
+    selectedHazards.length > 0 ? selectedHazards : Object.keys(exposureMap);
+
+  const exposureBars = hazardsToShow
+    .map((hazardId) => {
+      const exp = exposureMap[hazardId];
+      if (!exp) return "";
+      const color = getHazardColor(hazardId);
+      const pct = Math.round(exp.value * 100);
+      return `
+        <div style="margin-bottom: 4px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6b7280;">
+            <span>${exp.label}</span>
+            <span>${pct}%</span>
+          </div>
+          <div style="height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
+            <div style="height: 100%; width: ${pct}%; background: ${color}; transition: width 0.3s;"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="
+      padding: 12px;
+      min-width: 220px;
+      font-family: system-ui, -apple-system, sans-serif;
+    ">
+      <h3 style="
+        font-weight: 600;
+        font-size: 15px;
+        margin: 0 0 8px 0;
+        color: #1f2937;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 8px;
+      ">
+        ${props.name}
+      </h3>
+      <div style="font-size: 12px; color: #374151; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+          <span style="font-weight: 500;">Primary Hazard:</span>
+          <span style="
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: ${getHazardColor(props.primaryHazard)}20;
+            color: ${getHazardColor(props.primaryHazard)};
+            border-radius: 12px;
+            font-weight: 500;
+          ">
+            ${hazardIcon} ${hazardName}
+          </span>
+        </div>
+      </div>
+      <div style="
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 12px;
+      ">
+        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
+          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Population</div>
+          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.population)}</div>
+        </div>
+        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
+          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Economic Damage</div>
+          <div style="font-weight: 600; color: #1f2937;">${formatCurrency(props.economicDamageUSD)}</div>
+        </div>
+        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
+          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Buildings</div>
+          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.buildingCount)}</div>
+        </div>
+        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
+          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Infrastructure</div>
+          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.infrastructureCount)}</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size: 11px; font-weight: 500; color: #374151; margin-bottom: 6px;">Hazard Exposure</div>
+        ${exposureBars}
+      </div>
+    </div>
+  `;
+}
 
 interface MapViewProps {
   events: Event[];
@@ -27,6 +172,7 @@ export default function MapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   // Filter events based on current filters using shared utility
@@ -68,6 +214,212 @@ export default function MapView({
       }
     };
   }, []);
+
+  // Add district polygon layers after map loads
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+    const hazardColorExpression = createHazardColorExpression();
+
+    // Add source for district polygons if not exists
+    if (!m.getSource(DISTRICTS_SOURCE_ID)) {
+      m.addSource(DISTRICTS_SOURCE_ID, {
+        type: "geojson",
+        data: districtsGeoJSON as GeoJSON.FeatureCollection,
+        promoteId: "id", // Required for feature state
+      });
+
+      // Add fill layer for districts with semi-transparent colors
+      m.addLayer({
+        id: DISTRICTS_FILL_LAYER_ID,
+        type: "fill",
+        source: DISTRICTS_SOURCE_ID,
+        paint: {
+          "fill-color": hazardColorExpression,
+          "fill-opacity": 0.4,
+          "fill-opacity-transition": { duration: 300 },
+        },
+      });
+
+      // Add outline layer for clean borders
+      m.addLayer({
+        id: DISTRICTS_OUTLINE_LAYER_ID,
+        type: "line",
+        source: DISTRICTS_SOURCE_ID,
+        paint: {
+          "line-color": hazardColorExpression,
+          "line-width": 2,
+          "line-opacity": 0.8,
+        },
+      });
+
+      // Add hover highlight layer (initially invisible)
+      m.addLayer({
+        id: DISTRICTS_HOVER_LAYER_ID,
+        type: "fill",
+        source: DISTRICTS_SOURCE_ID,
+        paint: {
+          "fill-color": "#ffffff",
+          "fill-opacity": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            0.3,
+            0,
+          ],
+        },
+      });
+    }
+  }, [mapLoaded]);
+
+  // Handle district hover and click interactions
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+    let hoveredDistrictId: string | null = null;
+
+    // Change cursor on hover
+    const handleMouseEnter = () => {
+      m.getCanvas().style.cursor = "pointer";
+    };
+
+    const handleMouseLeave = () => {
+      m.getCanvas().style.cursor = "";
+      if (hoveredDistrictId !== null) {
+        m.setFeatureState(
+          { source: DISTRICTS_SOURCE_ID, id: hoveredDistrictId },
+          { hover: false }
+        );
+        hoveredDistrictId = null;
+      }
+    };
+
+    const handleMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
+      if (e.features && e.features.length > 0) {
+        const feature = e.features[0];
+        const featureId = feature.properties?.id;
+
+        if (hoveredDistrictId !== null && hoveredDistrictId !== featureId) {
+          m.setFeatureState(
+            { source: DISTRICTS_SOURCE_ID, id: hoveredDistrictId },
+            { hover: false }
+          );
+        }
+
+        if (featureId) {
+          hoveredDistrictId = featureId;
+          m.setFeatureState(
+            { source: DISTRICTS_SOURCE_ID, id: featureId },
+            { hover: true }
+          );
+        }
+      }
+    };
+
+    const handleClick = (e: maplibregl.MapLayerMouseEvent) => {
+      if (e.features && e.features.length > 0) {
+        const feature = e.features[0];
+        const props = feature.properties as unknown as DistrictGeoProperties;
+
+        // Close existing popup using ref
+        if (popupRef.current) {
+          popupRef.current.remove();
+        }
+
+        // Create styled popup and store in ref
+        popupRef.current = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: "280px",
+          className: "district-popup",
+        })
+          .setLngLat(e.lngLat)
+          .setHTML(createDistrictPopupHTML(props, filters.selectedHazards))
+          .addTo(m);
+      }
+    };
+
+    // Register event handlers
+    m.on("mouseenter", DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
+    m.on("mouseleave", DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
+    m.on("mousemove", DISTRICTS_FILL_LAYER_ID, handleMouseMove);
+    m.on("click", DISTRICTS_FILL_LAYER_ID, handleClick);
+
+    return () => {
+      m.off("mouseenter", DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
+      m.off("mouseleave", DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
+      m.off("mousemove", DISTRICTS_FILL_LAYER_ID, handleMouseMove);
+      m.off("click", DISTRICTS_FILL_LAYER_ID, handleClick);
+      if (popupRef.current) {
+        popupRef.current.remove();
+        popupRef.current = null;
+      }
+    };
+  }, [mapLoaded, filters.selectedHazards]);
+
+  // Update district layer visibility/opacity based on selected hazards
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+
+    if (!m.getLayer(DISTRICTS_FILL_LAYER_ID)) return;
+
+    // Use shared color expression for default styling
+    const defaultColorExpression = createHazardColorExpression();
+
+    if (filters.selectedHazards.length === 0) {
+      // Show all districts with default styling
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", defaultColorExpression);
+      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", defaultColorExpression);
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.4);
+      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-opacity", 0.8);
+    } else {
+      // Build case expression for selected hazards
+      // TypeScript assertions needed due to MapLibre's complex expression types
+      const caseArgs: (maplibregl.ExpressionSpecification | string)[] = [];
+      for (const hazard of filters.selectedHazards) {
+        caseArgs.push(["==", ["get", "primaryHazard"], hazard] as maplibregl.ExpressionSpecification);
+        caseArgs.push(getHazardColor(hazard));
+      }
+      caseArgs.push("#9CA3AF"); // fallback for non-matching
+
+      // Type assertion required for dynamic case expression construction
+      const colorExpression = ["case", ...caseArgs] as maplibregl.ExpressionSpecification;
+
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", colorExpression);
+      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", colorExpression);
+
+      // Build max exposure expression for selected hazards using shared mapping
+      const exposureExpressions = filters.selectedHazards
+        .filter((h) => HAZARD_EXPOSURE_FIELDS[h])
+        .map((h) => ["get", HAZARD_EXPOSURE_FIELDS[h]] as maplibregl.ExpressionSpecification);
+
+      if (exposureExpressions.length > 0) {
+        // Type assertion required for dynamic max expression construction
+        const maxExposure: maplibregl.ExpressionSpecification =
+          exposureExpressions.length === 1
+            ? exposureExpressions[0]
+            : (["max", ...exposureExpressions] as maplibregl.ExpressionSpecification);
+
+        // Opacity based on exposure level
+        const opacityExpression: maplibregl.ExpressionSpecification = [
+          "interpolate",
+          ["linear"],
+          maxExposure,
+          0, 0.15,
+          0.5, 0.4,
+          1, 0.6,
+        ];
+
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", opacityExpression);
+      } else {
+        // No valid exposure fields for selected hazards, use low opacity
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.15);
+      }
+    }
+  }, [filters.selectedHazards, mapLoaded]);
 
   // Update markers when filtered events change - optimized to only add/remove changed markers
   useEffect(() => {

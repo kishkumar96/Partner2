@@ -24,3 +24,28 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* Custom MapLibre popup styling for districts */
+.district-popup .maplibregl-popup-content {
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.district-popup .maplibregl-popup-close-button {
+  font-size: 18px;
+  padding: 4px 8px;
+  color: #6b7280;
+  right: 4px;
+  top: 4px;
+}
+
+.district-popup .maplibregl-popup-close-button:hover {
+  color: #1f2937;
+  background: transparent;
+}
+
+.district-popup .maplibregl-popup-tip {
+  border-top-color: #ffffff;
+}
