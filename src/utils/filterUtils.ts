@@ -98,6 +98,26 @@ export function filterEconomicDamageData(
 }
 
 /**
+ * Computes aggregated metrics from a list of events in a single pass.
+ * @param events - Array of events to aggregate
+ * @returns Aggregated metrics object
+ */
+function computeAggregatedMetrics(events: Event[]): Omit<AggregatedEventData, 'id' | 'name'> {
+  return events.reduce(
+    (acc, e) => {
+      acc.totalEvents += 1;
+      acc.totalAffectedPopulation += e.affectedPopulation;
+      acc.totalEconomicDamage += e.economicDamage;
+      if (e.severity === "high" || e.severity === "critical") {
+        acc.highRiskAreas += 1;
+      }
+      return acc;
+    },
+    { totalEvents: 0, totalAffectedPopulation: 0, totalEconomicDamage: 0, highRiskAreas: 0 }
+  );
+}
+
+/**
  * Aggregates events by the specified aggregation level (district, province, or national).
  * @param events - Array of filtered events to aggregate
  * @param aggregationLevel - The level at which to aggregate
@@ -114,37 +134,31 @@ export function aggregateEventsByLevel(
   includeEmpty: boolean = false
 ): AggregatedEventData[] {
   if (aggregationLevel === "national") {
+    const metrics = computeAggregatedMetrics(events);
     return [{
       id: "national",
       name: "National",
-      totalEvents: events.length,
-      totalAffectedPopulation: events.reduce((sum, e) => sum + e.affectedPopulation, 0),
-      totalEconomicDamage: events.reduce((sum, e) => sum + e.economicDamage, 0),
-      highRiskAreas: events.filter(e => e.severity === "high" || e.severity === "critical").length,
+      ...metrics,
     }];
   } else if (aggregationLevel === "province") {
     const result = provinces.map((province) => {
       const provinceEvents = events.filter((e) => e.provinceId === province.id);
+      const metrics = computeAggregatedMetrics(provinceEvents);
       return {
         id: province.id,
         name: province.name,
-        totalEvents: provinceEvents.length,
-        totalAffectedPopulation: provinceEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-        totalEconomicDamage: provinceEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-        highRiskAreas: provinceEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
+        ...metrics,
       };
     });
     return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
   } else {
     const result = districts.map((district) => {
       const districtEvents = events.filter((e) => e.districtId === district.id);
+      const metrics = computeAggregatedMetrics(districtEvents);
       return {
         id: district.id,
         name: district.name,
-        totalEvents: districtEvents.length,
-        totalAffectedPopulation: districtEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-        totalEconomicDamage: districtEvents.reduce((sum, e) => sum + e.economicDamage, 0),
-        highRiskAreas: districtEvents.filter(e => e.severity === "high" || e.severity === "critical").length,
+        ...metrics,
       };
     });
     return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
