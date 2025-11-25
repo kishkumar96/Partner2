@@ -616,7 +616,7 @@ export default function MapView({
         );
       }
     });
-  }, [filters.selectedHazards, mapLoaded]);
+  }, [filters.selectedHazards, mapLoaded, hazardLayers]);
 
   // Compute which hazards to show in legend based on filter state
   const visibleHazards = useMemo(() => {
