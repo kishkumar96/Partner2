@@ -25,11 +25,9 @@ export const districts: District[] = [
 ];
 
 export const hazards: Hazard[] = [
-  { id: "flood", name: "Flood", color: "#3B82F6", icon: "🌊" },
-  { id: "drought", name: "Drought", color: "#F59E0B", icon: "☀️" },
-  { id: "cyclone", name: "Cyclone", color: "#8B5CF6", icon: "🌀" },
-  { id: "earthquake", name: "Earthquake", color: "#EF4444", icon: "🔴" },
-  { id: "wildfire", name: "Wildfire", color: "#F97316", icon: "🔥" },
+  { id: "wind", name: "Wind", color: "#3B82F6", icon: "💨" },
+  { id: "cyclone_track", name: "Cyclone Track", color: "#8B5CF6", icon: "🌀" },
+  { id: "inundation", name: "Inundation", color: "#06B6D4", icon: "🌊" },
 ];
 
 export const sectors: Sector[] = [
@@ -43,9 +41,9 @@ export const sectors: Sector[] = [
 export const events: Event[] = [
   {
     id: "evt-001",
-    name: "Coastal Flood 2024",
+    name: "Coastal Storm 2024",
     date: "2024-03-15",
-    hazardId: "flood",
+    hazardId: "wind",
     sectorId: "residential",
     districtId: "dist-001",
     provinceId: "prov-001",
@@ -56,9 +54,9 @@ export const events: Event[] = [
   },
   {
     id: "evt-002",
-    name: "Summer Drought 2024",
+    name: "Cyclone Path Event 2024",
     date: "2024-06-20",
-    hazardId: "drought",
+    hazardId: "cyclone_track",
     sectorId: "agriculture",
     districtId: "dist-003",
     provinceId: "prov-002",
@@ -71,7 +69,7 @@ export const events: Event[] = [
     id: "evt-003",
     name: "Tropical Cyclone Mira",
     date: "2024-08-10",
-    hazardId: "cyclone",
+    hazardId: "cyclone_track",
     sectorId: "infrastructure",
     districtId: "dist-002",
     provinceId: "prov-001",
@@ -82,9 +80,9 @@ export const events: Event[] = [
   },
   {
     id: "evt-004",
-    name: "Minor Earthquake",
+    name: "Coastal Inundation Event",
     date: "2024-02-28",
-    hazardId: "earthquake",
+    hazardId: "inundation",
     sectorId: "commercial",
     districtId: "dist-005",
     provinceId: "prov-003",
@@ -95,9 +93,9 @@ export const events: Event[] = [
   },
   {
     id: "evt-005",
-    name: "Urban Flood Event",
+    name: "Urban Flooding Event",
     date: "2024-04-05",
-    hazardId: "flood",
+    hazardId: "inundation",
     sectorId: "infrastructure",
     districtId: "dist-004",
     provinceId: "prov-002",
@@ -108,9 +106,9 @@ export const events: Event[] = [
   },
   {
     id: "evt-006",
-    name: "Forest Fire Outbreak",
+    name: "Severe Wind Storm",
     date: "2024-07-15",
-    hazardId: "wildfire",
+    hazardId: "wind",
     sectorId: "healthcare",
     districtId: "dist-006",
     provinceId: "prov-003",
@@ -124,8 +122,8 @@ export const events: Event[] = [
 export const hazardLayers: HazardLayer[] = [
   {
     id: "layer-001",
-    hazardId: "flood",
-    name: "Coastal Flood Zone",
+    hazardId: "wind",
+    name: "High Wind Zone",
     coordinates: [
       [55.1, 25.0],
       [55.4, 25.0],
@@ -136,8 +134,8 @@ export const hazardLayers: HazardLayer[] = [
   },
   {
     id: "layer-002",
-    hazardId: "drought",
-    name: "Drought Affected Area",
+    hazardId: "cyclone_track",
+    name: "Cyclone Track Zone",
     coordinates: [
       [54.2, 24.3],
       [54.6, 24.3],
@@ -148,8 +146,8 @@ export const hazardLayers: HazardLayer[] = [
   },
   {
     id: "layer-003",
-    hazardId: "cyclone",
-    name: "Cyclone Risk Zone",
+    hazardId: "inundation",
+    name: "Inundation Risk Zone",
     coordinates: [
       [55.3, 25.2],
       [55.7, 25.2],
@@ -163,7 +161,7 @@ export const hazardLayers: HazardLayer[] = [
 export const exposureData: ExposureData[] = [
   {
     id: "exp-001",
-    hazardId: "flood",
+    hazardId: "wind",
     sectorId: "agriculture",
     population: 45000,
     assets: 2500000000,
@@ -171,7 +169,7 @@ export const exposureData: ExposureData[] = [
   },
   {
     id: "exp-002",
-    hazardId: "flood",
+    hazardId: "wind",
     sectorId: "residential",
     population: 125000,
     assets: 8500000000,
@@ -179,7 +177,7 @@ export const exposureData: ExposureData[] = [
   },
   {
     id: "exp-003",
-    hazardId: "drought",
+    hazardId: "cyclone_track",
     sectorId: "agriculture",
     population: 85000,
     assets: 1200000000,
@@ -187,7 +185,7 @@ export const exposureData: ExposureData[] = [
   },
   {
     id: "exp-004",
-    hazardId: "cyclone",
+    hazardId: "cyclone_track",
     sectorId: "infrastructure",
     population: 180000,
     assets: 12000000000,
@@ -195,7 +193,7 @@ export const exposureData: ExposureData[] = [
   },
   {
     id: "exp-005",
-    hazardId: "earthquake",
+    hazardId: "inundation",
     sectorId: "commercial",
     population: 65000,
     assets: 5500000000,
@@ -203,7 +201,7 @@ export const exposureData: ExposureData[] = [
   },
   {
     id: "exp-006",
-    hazardId: "wildfire",
+    hazardId: "inundation",
     sectorId: "residential",
     population: 28000,
     assets: 1800000000,
@@ -214,7 +212,7 @@ export const exposureData: ExposureData[] = [
 export const economicDamageData: EconomicDamageData[] = [
   {
     id: "econ-001",
-    hazardId: "flood",
+    hazardId: "wind",
     sectorId: "agriculture",
     directLoss: 120000000,
     indirectLoss: 45000000,
@@ -223,7 +221,7 @@ export const economicDamageData: EconomicDamageData[] = [
   },
   {
     id: "econ-002",
-    hazardId: "flood",
+    hazardId: "wind",
     sectorId: "residential",
     directLoss: 280000000,
     indirectLoss: 95000000,
@@ -232,7 +230,7 @@ export const economicDamageData: EconomicDamageData[] = [
   },
   {
     id: "econ-003",
-    hazardId: "drought",
+    hazardId: "cyclone_track",
     sectorId: "agriculture",
     directLoss: 180000000,
     indirectLoss: 75000000,
@@ -241,7 +239,7 @@ export const economicDamageData: EconomicDamageData[] = [
   },
   {
     id: "econ-004",
-    hazardId: "cyclone",
+    hazardId: "cyclone_track",
     sectorId: "infrastructure",
     directLoss: 450000000,
     indirectLoss: 180000000,
@@ -250,7 +248,7 @@ export const economicDamageData: EconomicDamageData[] = [
   },
   {
     id: "econ-005",
-    hazardId: "earthquake",
+    hazardId: "inundation",
     sectorId: "commercial",
     directLoss: 85000000,
     indirectLoss: 35000000,
@@ -259,7 +257,7 @@ export const economicDamageData: EconomicDamageData[] = [
   },
   {
     id: "econ-006",
-    hazardId: "wildfire",
+    hazardId: "inundation",
     sectorId: "residential",
     directLoss: 65000000,
     indirectLoss: 28000000,
@@ -269,16 +267,16 @@ export const economicDamageData: EconomicDamageData[] = [
 ];
 
 export const monthlyDamageData = [
-  { month: "Jan", flood: 25, drought: 8, cyclone: 0, earthquake: 5, wildfire: 2 },
-  { month: "Feb", flood: 18, drought: 12, cyclone: 0, earthquake: 15, wildfire: 3 },
-  { month: "Mar", flood: 85, drought: 15, cyclone: 0, earthquake: 3, wildfire: 5 },
-  { month: "Apr", flood: 45, drought: 22, cyclone: 5, earthquake: 2, wildfire: 8 },
-  { month: "May", flood: 32, drought: 35, cyclone: 12, earthquake: 4, wildfire: 15 },
-  { month: "Jun", flood: 28, drought: 65, cyclone: 25, earthquake: 3, wildfire: 22 },
-  { month: "Jul", flood: 15, drought: 72, cyclone: 45, earthquake: 2, wildfire: 35 },
-  { month: "Aug", flood: 22, drought: 58, cyclone: 85, earthquake: 4, wildfire: 28 },
-  { month: "Sep", flood: 35, drought: 45, cyclone: 42, earthquake: 6, wildfire: 18 },
-  { month: "Oct", flood: 42, drought: 28, cyclone: 18, earthquake: 5, wildfire: 12 },
-  { month: "Nov", flood: 38, drought: 18, cyclone: 8, earthquake: 3, wildfire: 6 },
-  { month: "Dec", flood: 28, drought: 10, cyclone: 2, earthquake: 4, wildfire: 4 },
+  { month: "Jan", wind: 25, cyclone_track: 8, inundation: 15 },
+  { month: "Feb", wind: 18, cyclone_track: 12, inundation: 22 },
+  { month: "Mar", wind: 85, cyclone_track: 15, inundation: 45 },
+  { month: "Apr", wind: 45, cyclone_track: 22, inundation: 38 },
+  { month: "May", wind: 32, cyclone_track: 35, inundation: 28 },
+  { month: "Jun", wind: 28, cyclone_track: 65, inundation: 42 },
+  { month: "Jul", wind: 15, cyclone_track: 72, inundation: 55 },
+  { month: "Aug", wind: 22, cyclone_track: 58, inundation: 68 },
+  { month: "Sep", wind: 35, cyclone_track: 45, inundation: 52 },
+  { month: "Oct", wind: 42, cyclone_track: 28, inundation: 35 },
+  { month: "Nov", wind: 38, cyclone_track: 18, inundation: 28 },
+  { month: "Dec", wind: 28, cyclone_track: 10, inundation: 18 },
 ];

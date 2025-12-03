@@ -98,11 +98,9 @@ export interface DistrictGeoProperties {
   infrastructureCount: number;
   economicDamageUSD: number;
   // Hazard exposure values (0-1 scale for intensity)
-  floodExposure: number;
-  droughtExposure: number;
-  cycloneExposure: number;
-  earthquakeExposure: number;
-  wildfireExposure: number;
+  windExposure: number;
+  cycloneTrackExposure: number;
+  inundationExposure: number;
   primaryHazard: string;
 }
 
