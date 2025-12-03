@@ -30,11 +30,9 @@ const HAZARD_ZONE_TRANSITION_DURATION = 300; // ms
  * Used in both popup HTML generation and filter sync logic.
  */
 const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
-  flood: "floodExposure",
-  drought: "droughtExposure",
-  cyclone: "cycloneExposure",
-  earthquake: "earthquakeExposure",
-  wildfire: "wildfireExposure",
+  wind: "windExposure",
+  cyclone_track: "cycloneTrackExposure",
+  inundation: "inundationExposure",
 };
 
 /**
@@ -45,11 +43,9 @@ function createHazardColorExpression(): maplibregl.ExpressionSpecification {
   return [
     "match",
     ["get", "primaryHazard"],
-    "flood", getHazardColor("flood"),
-    "drought", getHazardColor("drought"),
-    "cyclone", getHazardColor("cyclone"),
-    "earthquake", getHazardColor("earthquake"),
-    "wildfire", getHazardColor("wildfire"),
+    "wind", getHazardColor("wind"),
+    "cyclone_track", getHazardColor("cyclone_track"),
+    "inundation", getHazardColor("inundation"),
     "#6B7280", // default gray
   ];
 }

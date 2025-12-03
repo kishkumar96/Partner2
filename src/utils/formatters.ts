@@ -33,11 +33,9 @@ export function getSeverityColor(severity: string): string {
 
 export function getHazardColor(hazardId: string): string {
   const colors: Record<string, string> = {
-    flood: "#3B82F6",
-    drought: "#F59E0B",
-    cyclone: "#8B5CF6",
-    earthquake: "#EF4444",
-    wildfire: "#F97316",
+    wind: "#3B82F6",
+    cyclone_track: "#8B5CF6",
+    inundation: "#06B6D4",
   };
   return colors[hazardId] || "#6B7280";
 }
