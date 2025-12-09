@@ -36,8 +36,9 @@ export function calculateAggregateStats(
   eventImpacts: EventImpact[],
   sectorData: SectorImpact[]
 ): Partial<RiskScapeStats> {
-  // Get latest year data
-  const latestSLR = slrData.length > 0 ? slrData[0] : null;
+  // Get latest year data (sort by year descending to ensure we get the most recent)
+  const sortedSLR = [...slrData].sort((a, b) => b.year - a.year);
+  const latestSLR = sortedSLR.length > 0 ? sortedSLR[0] : null;
   
   // Sum sector impacts
   const totalSectorDamage = sectorData.reduce((sum, sector) => sum + sector.damage, 0);
@@ -45,13 +46,6 @@ export function calculateAggregateStats(
     (sum, sector) => sum + (sector.buildingsAffected || 0),
     0
   );
-  
-  // Get worst case event impact
-  const worstCaseEvent = eventImpacts.length > 0
-    ? eventImpacts.reduce((max, event) => 
-        event.totalLoss > max.totalLoss ? event : max
-      )
-    : null;
 
   return {
     totalExposedPopulation: latestSLR?.populationExposed || 0,
@@ -180,10 +174,19 @@ export function calculateTotalSectorExposure(sectorData: SectorImpact[]): number
 }
 
 /**
- * Parse CSV string to array of objects (basic implementation)
- * Note: For production use, integrate with papaparse library
+ * Parse CSV string to array of objects
+ * Note: This is a placeholder function. For production use with actual CSV files,
+ * use the papaparse library which is already added as a dependency.
+ * 
+ * Example usage with papaparse:
+ * import Papa from 'papaparse';
+ * const result = Papa.parse(csvString, { header: true, skipEmptyLines: true });
+ * return result.data;
  */
 export function parseCSV(csvString: string): Record<string, string>[] {
+  // This simplified implementation is for demonstration purposes only
+  // It does not handle quoted fields, escaped commas, or multiline values
+  // Use papaparse for robust CSV parsing in production
   const lines = csvString.trim().split('\n');
   if (lines.length < 2) return [];
   
@@ -208,15 +211,23 @@ export function parseCSV(csvString: string): Record<string, string>[] {
  * Convert parsed CSV data to SLRAverageLoss objects
  */
 export function csvToSLRData(csvData: Record<string, string>[]): SLRAverageLoss[] {
-  return csvData.map((row) => ({
-    year: parseInt(row.year || '0', 10),
-    totalAAL: parseFloat(row.totalAAL || '0'),
-    buildingAAL: parseFloat(row.buildingAAL || '0'),
-    infrastructureAAL: parseFloat(row.infrastructureAAL || '0'),
-    populationExposed: parseInt(row.populationExposed || '0', 10),
-    seaLevelRise: parseFloat(row.seaLevelRise || '0'),
-    scenario: (row.scenario as 'SSP245' | 'SSP585') || undefined,
-  }));
+  return csvData.map((row) => {
+    // Validate scenario value before casting
+    const scenario = row.scenario;
+    const validScenario = scenario === 'SSP245' || scenario === 'SSP585' 
+      ? scenario 
+      : undefined;
+    
+    return {
+      year: parseInt(row.year || '0', 10),
+      totalAAL: parseFloat(row.totalAAL || '0'),
+      buildingAAL: parseFloat(row.buildingAAL || '0'),
+      infrastructureAAL: parseFloat(row.infrastructureAAL || '0'),
+      populationExposed: parseInt(row.populationExposed || '0', 10),
+      seaLevelRise: parseFloat(row.seaLevelRise || '0'),
+      scenario: validScenario,
+    };
+  });
 }
 
 /**

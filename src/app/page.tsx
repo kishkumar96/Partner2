@@ -57,7 +57,8 @@ export default function Home() {
     [selectedCountry.id]
   );
   
-  // Convert SLR data to time series for charts
+  // Convert SLR data to time series for charts (prepared for future chart integration)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const slrTimeSeries = useMemo(() => {
     if (!riskProfile || riskProfile.slrProjections.length === 0) return [];
     return convertSLRToTimeSeries(riskProfile.slrProjections, 'totalAAL');
