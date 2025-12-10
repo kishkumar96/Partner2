@@ -177,6 +177,8 @@ export default function Home() {
               hazards={hazards}
               filters={filters}
               onEventSelect={setSelectedEvent}
+              center={[selectedCountry.coordinates.lng, selectedCountry.coordinates.lat]}
+              zoom={selectedCountry.coordinates.zoom}
             />
 
             {/* Selected Event Info Card */}
