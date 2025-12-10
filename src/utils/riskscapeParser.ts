@@ -29,7 +29,12 @@ export function convertSLRToTimeSeries(
 }
 
 /**
- * Calculate aggregate statistics from multiple data sources
+ * Calculate aggregate statistics from multiple data sources.
+ * 
+ * @param slrData - Array of SLRAverageLoss data (will be sorted by year descending to find latest)
+ * @param eventImpacts - Array of EventImpact data
+ * @param sectorData - Array of SectorImpact data
+ * @returns Partial RiskScapeStats with aggregated values
  */
 export function calculateAggregateStats(
   slrData: SLRAverageLoss[],
@@ -174,37 +179,29 @@ export function calculateTotalSectorExposure(sectorData: SectorImpact[]): number
 }
 
 /**
- * Parse CSV string to array of objects
- * Note: This is a placeholder function. For production use with actual CSV files,
- * use the papaparse library which is already added as a dependency.
+ * Parse CSV string to array of objects.
+ * 
+ * WARNING: This function is NOT implemented. Do NOT use this for any CSV parsing.
+ * For production or development use, you MUST use the papaparse library, which is already added as a dependency.
  * 
  * Example usage with papaparse:
+ * ```typescript
  * import Papa from 'papaparse';
  * const result = Papa.parse(csvString, { header: true, skipEmptyLines: true });
  * return result.data;
+ * ```
+ * 
+ * @param csvString - The CSV string to parse
+ * @returns Array of objects representing parsed CSV rows
+ * @throws Error indicating this function is not implemented
+ * @warning This is a simplified implementation. Use papaparse for production.
  */
-export function parseCSV(csvString: string): Record<string, string>[] {
-  // This simplified implementation is for demonstration purposes only
-  // It does not handle quoted fields, escaped commas, or multiline values
-  // Use papaparse for robust CSV parsing in production
-  const lines = csvString.trim().split('\n');
-  if (lines.length < 2) return [];
-  
-  const headers = lines[0].split(',').map(h => h.trim());
-  const result: Record<string, string>[] = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim());
-    const row: Record<string, string> = {};
-    
-    headers.forEach((header, index) => {
-      row[header] = values[index] || '';
-    });
-    
-    result.push(row);
-  }
-  
-  return result;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function parseCSV(_csvString: string): Record<string, string>[] {
+  throw new Error(
+    "parseCSV is not implemented. For robust CSV parsing, use the papaparse library. " +
+    "See the comments in riskscapeParser.ts for example usage."
+  );
 }
 
 /**
@@ -214,8 +211,8 @@ export function csvToSLRData(csvData: Record<string, string>[]): SLRAverageLoss[
   return csvData.map((row) => {
     // Validate scenario value before casting
     const scenario = row.scenario;
-    const validScenario = scenario === 'SSP245' || scenario === 'SSP585' 
-      ? scenario 
+    const validScenario: 'SSP245' | 'SSP585' | undefined = (scenario === 'SSP245' || scenario === 'SSP585')
+      ? scenario
       : undefined;
     
     return {

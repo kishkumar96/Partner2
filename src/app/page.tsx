@@ -20,7 +20,7 @@ import {
 } from "@/data/mockData";
 import { countries } from "@/data/countries";
 import { getCountryRiskProfile } from "@/data/riskscapeData";
-import { convertSLRToTimeSeries } from "@/utils/riskscapeParser";
+// import { convertSLRToTimeSeries } from "@/utils/riskscapeParser"; // TODO: Use when chart integration is ready
 import { CountryDataset } from "@/types/riskscape";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
 
@@ -57,12 +57,13 @@ export default function Home() {
     [selectedCountry.id]
   );
   
-  // Convert SLR data to time series for charts (prepared for future chart integration)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const slrTimeSeries = useMemo(() => {
-    if (!riskProfile || riskProfile.slrProjections.length === 0) return [];
-    return convertSLRToTimeSeries(riskProfile.slrProjections, 'totalAAL');
-  }, [riskProfile]);
+  // TODO: Integrate SLR time series data for future chart components.
+  // When SummaryPanel or BottomTabs are updated to display SLR projection charts,
+  // uncomment and pass this data to those components.
+  // const slrTimeSeries = useMemo(() => {
+  //   if (!riskProfile || riskProfile.slrProjections.length === 0) return [];
+  //   return convertSLRToTimeSeries(riskProfile.slrProjections, 'totalAAL');
+  // }, [riskProfile]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
@@ -103,7 +104,7 @@ export default function Home() {
         </div>
         
         {/* Country Info Bar with RiskScape Statistics */}
-        {riskProfile && (
+        {riskProfile ? (
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-lg">
               <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
@@ -146,6 +147,12 @@ export default function Home() {
                 </p>
               </div>
             </div>
+          </div>
+        ) : (
+          <div className="mt-4 px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Climate risk data is not available for the selected country. Please select a different country or check back later.
+            </p>
           </div>
         )}
       </header>

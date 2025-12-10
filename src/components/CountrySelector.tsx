@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronDown, MapPin, CheckCircle2 } from "lucide-react";
 import { CountryDataset } from "@/types/riskscape";
 
@@ -16,7 +16,14 @@ export default function CountrySelector({
   onCountryChange,
 }: CountrySelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleCountrySelect = useCallback((country: CountryDataset) => {
+    onCountryChange(country);
+    setIsOpen(false);
+    setFocusedIndex(-1);
+  }, [onCountryChange]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -32,10 +39,40 @@ export default function CountrySelector({
     }
   }, [isOpen]);
 
-  const handleCountrySelect = (country: CountryDataset) => {
-    onCountryChange(country);
-    setIsOpen(false);
-  };
+  // Keyboard navigation
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      switch (event.key) {
+        case "Escape":
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev + 1) % countries.length);
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          setFocusedIndex((prev) => (prev - 1 + countries.length) % countries.length);
+          break;
+        case "Enter":
+          event.preventDefault();
+          if (focusedIndex >= 0 && focusedIndex < countries.length) {
+            handleCountrySelect(countries[focusedIndex]);
+          }
+          break;
+        case "Tab":
+          setIsOpen(false);
+          setFocusedIndex(-1);
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, focusedIndex, countries, handleCountrySelect]);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -68,18 +105,23 @@ export default function CountrySelector({
             </div>
             
             <div className="space-y-1 max-h-96 overflow-y-auto">
-              {countries.map((country) => {
+              {countries.map((country, index) => {
                 const isSelected = country.id === selectedCountry.id;
+                const isFocused = index === focusedIndex;
                 
                 return (
                   <button
                     key={country.id}
                     onClick={() => handleCountrySelect(country)}
+                    onMouseEnter={() => setFocusedIndex(index)}
                     className={`w-full text-left px-3 py-3 rounded-lg transition-colors ${
                       isSelected
                         ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
+                        : isFocused
+                        ? "bg-gray-100 dark:bg-gray-700"
                         : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                     }`}
+                    aria-label={`Select ${country.name} to view climate risk data`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">

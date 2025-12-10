@@ -397,6 +397,10 @@ export function getCountryRiskProfile(countryId: Country): CountryRiskProfile | 
     
     case 'vanuatu-slr':
     case 'vanuatu':
+      // Note: Both 'vanuatu' and 'vanuatu-slr' currently use the same SLR projection data.
+      // The 'vanuatu-slr' dataset is focused specifically on sea level rise analysis
+      // while 'vanuatu' includes broader multi-hazard assessment.
+      // Future updates may provide distinct datasets from their respective CSV sources.
       return {
         country: countryConfig,
         stats,

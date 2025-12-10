@@ -18,13 +18,20 @@ export type Country =
  * Sea Level Rise (SLR) average loss data - year-by-year projections
  */
 export interface SLRAverageLoss {
+  /** Calendar year (e.g., 2020, 2030, 2050) */
   year: number;
-  totalAAL: number; // Annual Average Loss in USD
+  /** Total Annual Average Loss in USD. Typically ranges from thousands to millions depending on country size. */
+  totalAAL: number;
+  /** Building-specific Annual Average Loss in USD */
   buildingAAL: number;
+  /** Infrastructure-specific Annual Average Loss in USD (roads, utilities, public facilities) */
   infrastructureAAL: number;
+  /** Number of people exposed to sea level rise impacts */
   populationExposed: number;
-  seaLevelRise: number; // in meters
-  scenario?: 'SSP245' | 'SSP585'; // Climate scenario
+  /** Sea level rise in meters above baseline (typically 0.05 to 2.0m by 2100) */
+  seaLevelRise: number;
+  /** Climate scenario following IPCC nomenclature (SSP245 = moderate, SSP585 = high emissions) */
+  scenario?: 'SSP245' | 'SSP585';
 }
 
 /**
