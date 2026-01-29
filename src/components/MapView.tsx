@@ -164,6 +164,8 @@ interface MapViewProps {
   hazards: Hazard[];
   filters: FilterState;
   onEventSelect: (event: Event | null) => void;
+  center?: [number, number]; // [lng, lat] for map center
+  zoom?: number; // zoom level
 }
 
 export default function MapView({
@@ -171,6 +173,8 @@ export default function MapView({
   hazards,
   filters,
   onEventSelect,
+  center,
+  zoom,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -195,8 +199,8 @@ export default function MapView({
     map.current = new maplibregl.Map({
       container: mapContainer.current!,
       style: MAP_STYLE,
-      center: [55.2, 25.0],
-      zoom: 8,
+      center: center || [55.2, 25.0],
+      zoom: zoom || 8,
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -216,7 +220,21 @@ export default function MapView({
         map.current = null;
       }
     };
-  }, []);
+  }, [center, zoom]);
+
+  // Update map center and zoom when props change
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    if (!center && !zoom) return;
+
+    // Fly to new location with smooth animation
+    map.current.flyTo({
+      center: center || map.current.getCenter().toArray() as [number, number],
+      zoom: zoom !== undefined ? zoom : map.current.getZoom(),
+      duration: 1500, // 1.5 seconds animation
+      essential: true, // This animation is considered essential with respect to prefers-reduced-motion
+    });
+  }, [center, zoom, mapLoaded]);
 
   // Add district polygon layers after map loads
   useEffect(() => {
