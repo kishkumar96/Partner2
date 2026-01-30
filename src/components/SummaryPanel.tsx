@@ -15,10 +15,20 @@ import {
   LineElement,
   Filler,
 } from "chart.js";
-import { Event, Hazard, SummaryStats, FilterState, District, Province } from "@/types";
+import { Event, Hazard, SummaryStats, FilterState, District, Province, Sector } from "@/types";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
 import { filterEvents, aggregateEventsByLevel } from "@/utils/filterUtils";
 import { monthlyDamageData } from "@/data/mockData";
+
+// Interface for sector data with statistics
+interface SectorStats {
+  id: string;
+  name: string;
+  icon: string;
+  eventCount: number;
+  affectedPopulation: number;
+  economicDamage: number;
+}
 
 ChartJS.register(
   CategoryScale,
@@ -36,6 +46,7 @@ ChartJS.register(
 interface SummaryPanelProps {
   events: Event[];
   hazards: Hazard[];
+  sectors: Sector[];
   filters: FilterState;
   districts: District[];
   provinces: Province[];
@@ -44,6 +55,7 @@ interface SummaryPanelProps {
 export default function SummaryPanel({
   events,
   hazards,
+  sectors,
   filters,
   districts,
   provinces,
@@ -95,6 +107,21 @@ export default function SummaryPanel({
     [hazards, filteredEvents]
   );
 
+  // Data for per-sector visualization using sectors from props
+  const sectorData: SectorStats[] = useMemo(() => {
+    return sectors.map((sector): SectorStats => {
+      const sectorEvents = filteredEvents.filter((e) => e.sectorId === sector.id);
+      return {
+        id: sector.id,
+        name: sector.name,
+        icon: sector.icon,
+        eventCount: sectorEvents.length,
+        affectedPopulation: sectorEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
+        economicDamage: sectorEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+      };
+    });
+  }, [sectors, filteredEvents]);
+
   const pieChartData = {
     labels: hazardCounts.map((h) => h.name),
     datasets: [
@@ -103,6 +130,18 @@ export default function SummaryPanel({
         backgroundColor: hazardCounts.map((h) => h.color),
         borderWidth: 2,
         borderColor: "#fff",
+      },
+    ],
+  };
+
+  const sectorBarChartData = {
+    labels: sectorData.map((s) => s.name),
+    datasets: [
+      {
+        label: "Economic Damage (Millions)",
+        data: sectorData.map((s) => s.economicDamage / 1000000),
+        backgroundColor: sectors.map((s) => s.color),
+        borderRadius: 6,
       },
     ],
   };
@@ -206,7 +245,7 @@ export default function SummaryPanel({
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Summary Dashboard
         </h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
           Showing {filteredEvents.length} of {events.length} events
         </p>
       </div>
@@ -249,6 +288,72 @@ export default function SummaryPanel({
             {formatCurrency(stats.totalEconomicDamage)}
           </p>
         </div>
+      </div>
+
+      {/* Per-Sector Analysis - Top of Visualization Section */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Impact by Sector
+        </h3>
+        
+        {sectorData.length === 0 || sectorData.every(s => s.eventCount === 0) ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">📊</div>
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              No sector data available for current filters
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Sector Cards Grid */}
+            <div className="space-y-2 mb-4">
+              {sectorData.filter(s => s.eventCount > 0).map((sector) => (
+                <div
+                  key={sector.id}
+                  className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg" aria-hidden="true">{sector.icon}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {sector.name}
+                      </span>
+                    </div>
+                    <span 
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded"
+                      aria-label={`${sector.eventCount} events in ${sector.name} sector`}
+                    >
+                      {sector.eventCount} event{sector.eventCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-gray-700 dark:text-gray-300">Affected Pop.</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatNumber(sector.affectedPopulation)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-700 dark:text-gray-300">Damage</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatCurrency(sector.economicDamage)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sector Bar Chart */}
+            <div 
+              className="h-48"
+              role="img"
+              aria-label={`Bar chart showing economic damage by sector: ${sectorData.filter(s => s.eventCount > 0).map(s => `${s.name}: $${(s.economicDamage / 1000000).toFixed(1)}M`).join(', ')}`}
+            >
+              <Bar data={sectorBarChartData} options={chartOptions} />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Hazard Distribution Chart */}

@@ -18,6 +18,7 @@ import {
   filterEconomicDamageData,
   aggregateEventsByLevel,
 } from "@/utils/filterUtils";
+import PDIEImpactSummary from "./PDIEImpactSummary";
 
 interface BottomTabsProps {
   events: Event[];
@@ -30,7 +31,7 @@ interface BottomTabsProps {
   provinces: Province[];
 }
 
-type TabType = "exposure" | "economic" | "events";
+type TabType = "exposure" | "economic" | "events" | "pdie";
 
 export default function BottomTabs({
   events,
@@ -86,6 +87,7 @@ export default function BottomTabs({
     { id: "events", label: `Event History (${filteredEvents.length}/${events.length})` },
     { id: "exposure", label: `Exposure Analysis (${filteredExposureData.length}/${exposureData.length})` },
     { id: "economic", label: `Economic Damage (${filteredEconomicDamageData.length}/${economicDamageData.length})` },
+    { id: "pdie", label: "Real PDIE Model Output" },
   ];
 
   return (
@@ -191,7 +193,7 @@ export default function BottomTabs({
                       {getHazardIcon(exposure.hazardId)}{" "}
                       {getHazardName(exposure.hazardId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                       {getSectorName(exposure.sectorId)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
@@ -245,7 +247,7 @@ export default function BottomTabs({
                       {getHazardIcon(damage.hazardId)}{" "}
                       {getHazardName(damage.hazardId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                       {getSectorName(damage.sectorId)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
@@ -257,13 +259,20 @@ export default function BottomTabs({
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-bold">
                       {formatCurrency(damage.totalLoss)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 text-center">
                       {damage.year}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* PDIE Model Output Tab */}
+        {activeTab === "pdie" && (
+          <div className="p-4">
+            <PDIEImpactSummary countryCode="VU" />
           </div>
         )}
       </div>

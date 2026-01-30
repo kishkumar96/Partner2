@@ -9,6 +9,7 @@ export interface Sector {
   id: string;
   name: string;
   icon: string;
+  color: string;
 }
 
 export interface District {

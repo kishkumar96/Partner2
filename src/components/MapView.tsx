@@ -4,10 +4,12 @@ import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Event, Hazard, FilterState, DistrictGeoProperties } from "@/types";
+import { CountryCode, COUNTRIES } from "@/types/thredds";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
-import { hazardLayers, hazards as allHazards } from "@/data/mockData";
 import { districtsGeoJSON } from "@/data/districtsGeo";
+import RealDataLayers from "./RealDataLayers";
+import PDIEDataLayers from "./PDIEDataLayers";
 
 // Free OpenStreetMap-based tile style (no API key required)
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
@@ -18,12 +20,7 @@ const DISTRICTS_FILL_LAYER_ID = "districts-fill";
 const DISTRICTS_OUTLINE_LAYER_ID = "districts-outline";
 const DISTRICTS_HOVER_LAYER_ID = "districts-hover";
 
-// Hazard zone layer configuration
-const HAZARD_ZONE_OPACITY_VISIBLE = 0.25;
-const HAZARD_ZONE_OPACITY_HIDDEN = 0;
-const HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE = 0.8;
-const HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN = 0;
-const HAZARD_ZONE_TRANSITION_DURATION = 300; // ms
+// Hazard zone layer configuration (unused - removed to avoid linter/TS warnings)
 
 /**
  * Shared mapping between hazard IDs and their exposure property names.
@@ -55,9 +52,10 @@ function createHazardColorExpression(): maplibregl.ExpressionSpecification {
  */
 function createDistrictPopupHTML(
   props: DistrictGeoProperties,
-  selectedHazards: string[]
+  selectedHazards: string[],
+  hazards: Hazard[]
 ): string {
-  const hazard = allHazards.find((h) => h.id === props.primaryHazard);
+  const hazard = hazards.find((h) => h.id === props.primaryHazard);
   const hazardIcon = hazard?.icon || "";
   const hazardName = hazard?.name || props.primaryHazard;
 
@@ -164,6 +162,8 @@ interface MapViewProps {
   hazards: Hazard[];
   filters: FilterState;
   onEventSelect: (event: Event | null) => void;
+  useRealData?: boolean;
+  selectedCountry?: CountryCode | null;
 }
 
 export default function MapView({
@@ -171,6 +171,8 @@ export default function MapView({
   hazards,
   filters,
   onEventSelect,
+  useRealData = false,
+  selectedCountry = null,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -192,11 +194,19 @@ export default function MapView({
   useEffect(() => {
     if (map.current) return;
 
+    // Use selected country's center if available, otherwise show Pacific region view
+    const initialCenter: [number, number] = selectedCountry 
+      ? COUNTRIES[selectedCountry].center 
+      : [175.0, -18.0]; // Central Pacific - shows all island nations
+    const initialZoom = selectedCountry 
+      ? COUNTRIES[selectedCountry].zoom 
+      : 5; // Zoomed out to see all countries
+
     map.current = new maplibregl.Map({
       container: mapContainer.current!,
       style: MAP_STYLE,
-      center: [55.2, 25.0],
-      zoom: 8,
+      center: initialCenter,
+      zoom: initialZoom,
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -206,8 +216,22 @@ export default function MapView({
       setMapLoaded(true);
     });
     
-    map.current.on("error", (e) => {
-      console.error("Map error:", e);
+    map.current.on("error", (e: any) => {
+      // Log detailed error information
+      if (e?.error) {
+        console.error("Map error:", e.error.message || e.error);
+      } else if (e && typeof e === "object" && "sourceId" in e) {
+        console.error(`Map source error (${(e as any).sourceId}):`, e);
+      } else {
+        console.warn("Map warning:", e);
+      }
+    });
+    
+    // Handle tile loading errors gracefully
+    map.current.on("sourcedataloading", (e) => {
+      if (e.sourceId && e.sourceId.includes("riskscape")) {
+        console.log(`Loading RiskScape layer: ${e.sourceId}`);
+      }
     });
 
     return () => {
@@ -216,7 +240,22 @@ export default function MapView({
         map.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle country-based map positioning when real data is enabled
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !useRealData || !selectedCountry) return;
+
+    const country = COUNTRIES[selectedCountry];
+    if (country) {
+      map.current.flyTo({
+        center: country.center,
+        zoom: country.zoom,
+        duration: 2000,
+      });
+    }
+  }, [useRealData, selectedCountry, mapLoaded]);
 
   // Add district polygon layers after map loads
   useEffect(() => {
@@ -225,53 +264,62 @@ export default function MapView({
     const m = map.current;
     const hazardColorExpression = createHazardColorExpression();
 
-    // Add source for district polygons if not exists
-    if (!m.getSource(DISTRICTS_SOURCE_ID)) {
-      m.addSource(DISTRICTS_SOURCE_ID, {
-        type: "geojson",
-        data: districtsGeoJSON as GeoJSON.FeatureCollection,
-        promoteId: "id", // Required for feature state
-      });
+    const addDistrictLayers = () => {
+      // Add source for district polygons if not exists
+      if (!m.getSource(DISTRICTS_SOURCE_ID)) {
+        m.addSource(DISTRICTS_SOURCE_ID, {
+          type: "geojson",
+          data: districtsGeoJSON as GeoJSON.FeatureCollection,
+          promoteId: "id", // Required for feature state
+        });
 
-      // Add fill layer for districts with semi-transparent colors
-      m.addLayer({
-        id: DISTRICTS_FILL_LAYER_ID,
-        type: "fill",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "fill-color": hazardColorExpression,
-          "fill-opacity": 0.4,
-          "fill-opacity-transition": { duration: 300 },
-        },
-      });
+        // Add fill layer for districts with semi-transparent colors
+        m.addLayer({
+          id: DISTRICTS_FILL_LAYER_ID,
+          type: "fill",
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            "fill-color": hazardColorExpression,
+            "fill-opacity": 0.4,
+            "fill-opacity-transition": { duration: 300 },
+          },
+        });
 
-      // Add outline layer for clean borders
-      m.addLayer({
-        id: DISTRICTS_OUTLINE_LAYER_ID,
-        type: "line",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "line-color": hazardColorExpression,
-          "line-width": 2,
-          "line-opacity": 0.8,
-        },
-      });
+        // Add outline layer for clean borders
+        m.addLayer({
+          id: DISTRICTS_OUTLINE_LAYER_ID,
+          type: "line",
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            "line-color": hazardColorExpression,
+            "line-width": 2,
+            "line-opacity": 0.8,
+          },
+        });
 
-      // Add hover highlight layer (initially invisible)
-      m.addLayer({
-        id: DISTRICTS_HOVER_LAYER_ID,
-        type: "fill",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "fill-color": "#ffffff",
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "hover"], false],
-            0.3,
-            0,
-          ],
-        },
-      });
+        // Add hover highlight layer (initially invisible)
+        m.addLayer({
+          id: DISTRICTS_HOVER_LAYER_ID,
+          type: "fill",
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            "fill-color": "#ffffff",
+            "fill-opacity": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
+              0.3,
+              0,
+            ],
+          },
+        });
+      }
+    };
+
+    // If style already loaded, add layers immediately, otherwise wait for styledata
+    if (m.isStyleLoaded && m.isStyleLoaded()) {
+      addDistrictLayers();
+    } else {
+      m.once("styledata", addDistrictLayers);
     }
   }, [mapLoaded]);
 
@@ -338,7 +386,7 @@ export default function MapView({
           className: "district-popup",
         })
           .setLngLat(e.lngLat)
-          .setHTML(createDistrictPopupHTML(props, filters.selectedHazards))
+          .setHTML(createDistrictPopupHTML(props, filters.selectedHazards, hazards))
           .addTo(m);
       }
     };
@@ -424,9 +472,16 @@ export default function MapView({
     }
   }, [filters.selectedHazards, mapLoaded]);
 
-  // Update markers when filtered events change - optimized to only add/remove changed markers
+  // Update markers when filtered events change - only shown when NOT using real data
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
+
+    // If using real data, remove all markers
+    if (useRealData) {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current.clear();
+      return;
+    }
 
     const currentEventIds = new Set(filteredEvents.map(e => e.id));
     const existingEventIds = new Set(markersRef.current.keys());
@@ -514,99 +569,9 @@ export default function MapView({
       });
       map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
     }
-  }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect]);
+  }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect, useRealData]);
 
-  // Create hazard zone layers and toggle visibility based on filters
-  // Combined into single effect to guarantee layer creation before visibility toggling
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    const m = map.current;
-
-    // Transform hazardLayers from mockData to map zones with closed polygons
-    const hazardZones = hazardLayers.map((layer) => ({
-      id: `${layer.hazardId}-zone`,
-      hazardId: layer.hazardId,
-      coordinates: [...layer.coordinates, layer.coordinates[0]], // Close the polygon
-    }));
-
-    // Add all hazard zone layers once with smooth transition support
-    hazardZones.forEach((zone) => {
-      // Skip if source already exists (layers already created)
-      if (m.getSource(zone.id)) return;
-
-      const color = getHazardColor(zone.hazardId);
-
-      m.addSource(zone.id, {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: { hazardId: zone.hazardId },
-          geometry: {
-            type: "Polygon",
-            coordinates: [zone.coordinates],
-          },
-        },
-      });
-
-      // Add fill layer with opacity transition
-      m.addLayer({
-        id: zone.id,
-        type: "fill",
-        source: zone.id,
-        paint: {
-          "fill-color": color,
-          "fill-opacity": HAZARD_ZONE_OPACITY_HIDDEN, // Start hidden
-          "fill-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
-        },
-      });
-
-      // Add outline layer with opacity transition
-      m.addLayer({
-        id: `${zone.id}-outline`,
-        type: "line",
-        source: zone.id,
-        paint: {
-          "line-color": color,
-          "line-width": 2,
-          "line-opacity": HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN, // Start hidden
-          "line-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
-        },
-      });
-    });
-
-    // Toggle hazard zone visibility with smooth opacity transitions based on filters
-    const hazardZoneIds = hazardLayers.map((layer) => `${layer.hazardId}-zone`);
-
-    hazardZoneIds.forEach((zoneId) => {
-      // Extract hazardId from zoneId (e.g., "flood-zone" -> "flood")
-      const hazardId = zoneId.replace("-zone", "");
-      
-      // Determine if this layer should be visible
-      const shouldShow =
-        filters.selectedHazards.length === 0 ||
-        filters.selectedHazards.includes(hazardId);
-
-      // Set fill opacity (animated via fill-opacity-transition)
-      if (m.getLayer(zoneId)) {
-        m.setPaintProperty(
-          zoneId,
-          "fill-opacity",
-          shouldShow ? HAZARD_ZONE_OPACITY_VISIBLE : HAZARD_ZONE_OPACITY_HIDDEN
-        );
-      }
-
-      // Set outline opacity (animated via line-opacity-transition)
-      const outlineId = `${zoneId}-outline`;
-      if (m.getLayer(outlineId)) {
-        m.setPaintProperty(
-          outlineId,
-          "line-opacity",
-          shouldShow ? HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE : HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN
-        );
-      }
-    });
-  }, [filters.selectedHazards, mapLoaded]);
+  // Note: Mock hazard zones removed - now using real data from THREDDS server via RealDataLayers
 
   // Compute which hazards to show in legend based on filter state
   const visibleHazards = useMemo(() => {
@@ -650,16 +615,34 @@ export default function MapView({
         </div>
       </div>
 
-      {/* Event count indicator */}
-      <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          Showing{" "}
-          <span className="font-semibold text-gray-900 dark:text-white">
-            {filteredEvents.length}
-          </span>{" "}
-          of {events.length} events
-        </span>
-      </div>
+      {/* Event count indicator - Only show when NOT using real data */}
+      {!useRealData && (
+        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            Showing{" "}
+            <span className="font-semibold text-gray-900 dark:text-white">
+              {filteredEvents.length}
+            </span>{" "}
+            of {events.length} events
+          </span>
+        </div>
+      )}
+
+      {/* Real Data Layers - Load all countries' data when real data is enabled */}
+      {useRealData && (
+        <>
+          <RealDataLayers
+            map={map.current}
+            countryCode={null}
+            visible={useRealData}
+          />
+          <PDIEDataLayers
+            map={map.current}
+            countryCode="VU"
+            visible={useRealData}
+          />
+        </>
+      )}
     </div>
   );
 }
