@@ -1,4 +1,7 @@
-export function formatCurrency(value: number): string {
+export function formatCurrency(value: number | undefined | null): string {
+  if (value == null || isNaN(value)) {
+    return '$0';
+  }
   if (value >= 1000000000) {
     return `$${(value / 1000000000).toFixed(1)}B`;
   }
@@ -11,7 +14,10 @@ export function formatCurrency(value: number): string {
   return `$${value}`;
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number | undefined | null): string {
+  if (value == null || isNaN(value)) {
+    return '0';
+  }
   if (value >= 1000000) {
     return `${(value / 1000000).toFixed(1)}M`;
   }

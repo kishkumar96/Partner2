@@ -51,41 +51,50 @@ export default function PDIEDataLayers({
           } catch (e) { /* ignore */ }
 
           // Add exposure points
-          map.addSource(sourceId, {
-            type: "geojson",
-            data: exposureData,
-          });
+          const addExposureLayer = () => {
+            map.addSource(sourceId, {
+              type: "geojson",
+              data: exposureData,
+            });
 
-          map.addLayer({
-            id: layerId,
-            type: "circle",
-            source: sourceId,
-            paint: {
-              "circle-radius": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                8, 2,
-                12, 4,
-                16, 8
-              ],
-              "circle-color": [
-                "match",
-                ["get", "Asset"],
-                "Evacuation Centre", "#10b981",
-                "Health Facility", "#ef4444",
-                "School", "#3b82f6",
-                "Building", "#f59e0b",
-                "Road", "#6b7280",
-                "#8b5cf6" // default
-              ],
-              "circle-stroke-width": 1,
-              "circle-stroke-color": "#ffffff",
-              "circle-opacity": 0.8,
-            },
-          });
+            map.addLayer({
+              id: layerId,
+              type: "circle",
+              source: sourceId,
+              paint: {
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  8, 2,
+                  12, 4,
+                  16, 8
+                ],
+                "circle-color": [
+                  "match",
+                  ["get", "Asset"],
+                  "Evacuation Centre", "#10b981",
+                  "Health Facility", "#ef4444",
+                  "School", "#3b82f6",
+                  "Building", "#f59e0b",
+                  "Road", "#6b7280",
+                  "#8b5cf6" // default
+                ],
+                "circle-stroke-width": 1,
+                "circle-stroke-color": "#ffffff",
+                "circle-opacity": 0.8,
+              },
+            });
 
-          console.log(`✅ Added PDIE exposure layer with ${exposureData.features?.length || 0} points`);
+            console.log(`✅ Added PDIE exposure layer with ${exposureData.features?.length || 0} points`);
+          };
+
+          // Check if style is loaded before adding layer
+          if (map.isStyleLoaded()) {
+            addExposureLayer();
+          } else {
+            map.once('load', addExposureLayer);
+          }
         }
 
         // Load regional impacts
@@ -103,42 +112,51 @@ export default function PDIEDataLayers({
           } catch (e) { /* ignore */ }
 
           // Add regional impact polygons
-          map.addSource(sourceId, {
-            type: "geojson",
-            data: impactsData,
-          });
+          const addImpactsLayer = () => {
+            map.addSource(sourceId, {
+              type: "geojson",
+              data: impactsData,
+            });
 
-          // Fill layer
-          map.addLayer({
-            id: fillLayerId,
-            type: "fill",
-            source: sourceId,
-            paint: {
-              "fill-color": [
-                "interpolate",
-                ["linear"],
-                ["get", "Total_Loss"],
-                0, "#fef3c7",
-                100000, "#fbbf24",
-                1000000, "#f59e0b",
-                10000000, "#dc2626"
-              ],
-              "fill-opacity": 0.5,
-            },
-          });
+            // Fill layer
+            map.addLayer({
+              id: fillLayerId,
+              type: "fill",
+              source: sourceId,
+              paint: {
+                "fill-color": [
+                  "interpolate",
+                  ["linear"],
+                  ["get", "Total_Loss"],
+                  0, "#fef3c7",
+                  100000, "#fbbf24",
+                  1000000, "#f59e0b",
+                  10000000, "#dc2626"
+                ],
+                "fill-opacity": 0.5,
+              },
+            });
 
-          // Outline layer
-          map.addLayer({
-            id: lineLayerId,
-            type: "line",
-            source: sourceId,
-            paint: {
-              "line-color": "#64748b",
-              "line-width": 1,
-            },
-          });
+            // Outline layer
+            map.addLayer({
+              id: lineLayerId,
+              type: "line",
+              source: sourceId,
+              paint: {
+                "line-color": "#64748b",
+                "line-width": 1,
+              },
+            });
 
-          console.log(`✅ Added PDIE regional impacts layer with ${impactsData.features?.length || 0} regions`);
+            console.log(`✅ Added PDIE regional impacts layer with ${impactsData.features?.length || 0} regions`);
+          };
+
+          // Check if style is loaded before adding layer
+          if (map.isStyleLoaded()) {
+            addImpactsLayer();
+          } else {
+            map.once('load', addImpactsLayer);
+          }
         }
 
         console.log(`✅ PDIE output layers loaded successfully`);

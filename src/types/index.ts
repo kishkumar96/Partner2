@@ -38,6 +38,7 @@ export interface Event {
   severity: "low" | "medium" | "high" | "critical";
   affectedPopulation: number;
   economicDamage: number;
+  countryCode?: string; // Country code for multi-country support
 }
 
 export interface HazardLayer {

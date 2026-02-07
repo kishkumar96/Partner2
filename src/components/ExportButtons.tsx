@@ -49,6 +49,7 @@ interface ExportButtonsProps {
   economicDamageData: EconomicDamageData[];
   hazards: Hazard[];
   sectors: Sector[];
+  disabled?: boolean;
 }
 
 export default function ExportButtons({
@@ -57,6 +58,7 @@ export default function ExportButtons({
   economicDamageData,
   hazards,
   sectors,
+  disabled = false,
 }: ExportButtonsProps) {
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -67,6 +69,11 @@ export default function ExportButtons({
     sectors.find((s) => s.id === sectorId)?.name || sectorId;
 
   const downloadPDF = () => {
+    if (disabled) {
+      setExportError("No data available to export");
+      setTimeout(() => setExportError(null), 3000);
+      return;
+    }
     try {
       setExportError(null);
     const doc = new jsPDF();
@@ -250,6 +257,11 @@ export default function ExportButtons({
   };
 
   const downloadExcel = async () => {
+    if (disabled) {
+      setExportError("No data available to export");
+      setTimeout(() => setExportError(null), 3000);
+      return;
+    }
     try {
       setExportError(null);
       const workbook = new ExcelJS.Workbook();
@@ -380,20 +392,32 @@ export default function ExportButtons({
   return (
     <div className="flex gap-2 items-center">
       {exportError && (
-        <span className="text-sm text-red-600 mr-2">{exportError}</span>
+        <span className="text-sm text-red-600 dark:text-red-400 mr-2">{exportError}</span>
       )}
       <button
         onClick={downloadPDF}
+        disabled={disabled}
         aria-label="Export data as PDF report"
-        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors"
+        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${
+          disabled 
+            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-50' 
+            : 'bg-red-600 hover:bg-red-700'
+        }`}
+        title={disabled ? "No data available to export" : "Export as PDF"}
       >
         <FileDown className="w-4 h-4" />
         Export PDF
       </button>
       <button
         onClick={downloadExcel}
+        disabled={disabled}
         aria-label="Export data as Excel spreadsheet"
-        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg shadow-sm transition-colors"
+        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${
+          disabled 
+            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-50' 
+            : 'bg-green-600 hover:bg-green-700'
+        }`}
+        title={disabled ? "No data available to export" : "Export as Excel"}
       >
         <FileSpreadsheet className="w-4 h-4" />
         Export Excel

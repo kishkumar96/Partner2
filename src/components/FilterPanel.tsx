@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { FilterState, Hazard, Sector, Event, AggregationLevel } from "@/types";
-import { ChevronDown } from "lucide-react";
+import { AlertTriangle, Calendar, ChevronDown, Globe2 } from "lucide-react";
 
 interface FilterPanelProps {
   hazards: Hazard[];
@@ -84,9 +84,9 @@ export default function FilterPanel({
   ];
 
   const filterPresets = [
-    { id: "all", label: "All Data", icon: "🌍" },
-    { id: "high-risk", label: "High Risk", icon: "⚠️" },
-    { id: "recent", label: "Recent (2024)", icon: "📅" },
+    { id: "all", label: "All Data", icon: Globe2 },
+    { id: "high-risk", label: "High Risk", icon: AlertTriangle },
+    { id: "recent", label: "Recent (2024)", icon: Calendar },
   ];
 
   const applyPreset = (presetId: string) => {
@@ -117,6 +117,12 @@ export default function FilterPanel({
   const allEventsSelected = selectedEventCount === events.length;
   const someEventsSelected = selectedEventCount > 0 && selectedEventCount < events.length;
 
+  // Filter hazards and sectors to only show those present in actual events
+  const activeHazardIds = new Set(events.map(e => e.hazardId));
+  const activeSectorIds = new Set(events.map(e => e.sectorId));
+  const visibleHazards = hazards.filter(h => activeHazardIds.has(h.id));
+  const visibleSectors = sectors.filter(s => activeSectorIds.has(s.id));
+
   return (
     <div className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -144,9 +150,10 @@ export default function FilterPanel({
             <button
               key={preset.id}
               onClick={() => applyPreset(preset.id)}
-              className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-gray-700 dark:text-gray-300 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 text-gray-700 dark:text-gray-300 rounded-lg transition-colors border border-gray-200 dark:border-gray-700 flex items-center gap-1.5"
             >
-              {preset.icon} {preset.label}
+              <preset.icon className="w-3.5 h-3.5" />
+              {preset.label}
             </button>
           ))}
         </div>
@@ -294,32 +301,36 @@ export default function FilterPanel({
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
           Hazard Types
         </h3>
-        <div className="space-y-2">
-          {hazards.map((hazard) => (
-            <label
-              key={hazard.id}
-              htmlFor={`hazard-${hazard.id}`}
-              className="flex items-center gap-3 cursor-pointer group"
-            >
-              <input
-                id={`hazard-${hazard.id}`}
-                type="checkbox"
-                name="hazards"
-                value={hazard.id}
-                checked={filters.selectedHazards.includes(hazard.id)}
-                onChange={() => toggleHazard(hazard.id)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: hazard.color }}
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
-                {hazard.icon} {hazard.name}
-              </span>
-            </label>
-          ))}
-        </div>
+        {visibleHazards.length === 0 ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400 italic">No hazard data available</p>
+        ) : (
+          <div className="space-y-2">
+            {visibleHazards.map((hazard) => (
+              <label
+                key={hazard.id}
+                htmlFor={`hazard-${hazard.id}`}
+                className="flex items-center gap-3 cursor-pointer group"
+              >
+                <input
+                  id={`hazard-${hazard.id}`}
+                  type="checkbox"
+                  name="hazards"
+                  value={hazard.id}
+                  checked={filters.selectedHazards.includes(hazard.id)}
+                  onChange={() => toggleHazard(hazard.id)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: hazard.color }}
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                  {hazard.name}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Sectors Section */}
@@ -327,28 +338,36 @@ export default function FilterPanel({
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
           Sectors
         </h3>
-        <div className="space-y-2">
-          {sectors.map((sector) => (
-            <label
-              key={sector.id}
-              htmlFor={`sector-${sector.id}`}
-              className="flex items-center gap-3 cursor-pointer group"
-            >
-              <input
-                id={`sector-${sector.id}`}
-                type="checkbox"
-                name="sectors"
-                value={sector.id}
-                checked={filters.selectedSectors.includes(sector.id)}
-                onChange={() => toggleSector(sector.id)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
-                {sector.icon} {sector.name}
-              </span>
-            </label>
-          ))}
-        </div>
+        {visibleSectors.length === 0 ? (
+          <p className="text-xs text-gray-500 dark:text-gray-400 italic">No sector data available</p>
+        ) : (
+          <div className="space-y-2">
+            {visibleSectors.map((sector) => (
+              <label
+                key={sector.id}
+                htmlFor={`sector-${sector.id}`}
+                className="flex items-center gap-3 cursor-pointer group"
+              >
+                <input
+                  id={`sector-${sector.id}`}
+                  type="checkbox"
+                  name="sectors"
+                  value={sector.id}
+                  checked={filters.selectedSectors.includes(sector.id)}
+                  onChange={() => toggleSector(sector.id)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: sector.color }}
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+                  {sector.name}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

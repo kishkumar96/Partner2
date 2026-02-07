@@ -10,6 +10,13 @@ import { filterEvents } from "@/utils/filterUtils";
 import { districtsGeoJSON } from "@/data/districtsGeo";
 import RealDataLayers from "./RealDataLayers";
 import PDIEDataLayers from "./PDIEDataLayers";
+import RegionalImpactsLayer from "./RegionalImpactsLayer";
+import IntensityHeatmapLayer from "./IntensityHeatmapLayer";
+import DamagedBuildingsLayer from "./DamagedBuildingsLayer";
+import DamagedRoadsLayer from "./DamagedRoadsLayer";
+import CycloneAnimationLayer from "./CycloneAnimationLayer";
+import { CycloneAnimationToggle } from "./CycloneAnimationToggle";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 // Free OpenStreetMap-based tile style (no API key required)
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
@@ -56,7 +63,6 @@ function createDistrictPopupHTML(
   hazards: Hazard[]
 ): string {
   const hazard = hazards.find((h) => h.id === props.primaryHazard);
-  const hazardIcon = hazard?.icon || "";
   const hazardName = hazard?.name || props.primaryHazard;
 
   // Build exposure info using shared HAZARD_EXPOSURE_FIELDS mapping
@@ -114,14 +120,15 @@ function createDistrictPopupHTML(
           <span style="
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             padding: 2px 8px;
             background: ${getHazardColor(props.primaryHazard)}20;
             color: ${getHazardColor(props.primaryHazard)};
             border-radius: 12px;
             font-weight: 500;
           ">
-            ${hazardIcon} ${hazardName}
+            <span style="width: 8px; height: 8px; border-radius: 999px; background: ${getHazardColor(props.primaryHazard)};"></span>
+            ${hazardName}
           </span>
         </div>
       </div>
@@ -162,8 +169,15 @@ interface MapViewProps {
   hazards: Hazard[];
   filters: FilterState;
   onEventSelect: (event: Event | null) => void;
+  selectedRegion?: string | null;
+  onRegionSelect?: (regionId: string | null) => void;
   useRealData?: boolean;
   selectedCountry?: CountryCode | null;
+  mapStyle?: "loss" | "wind";
+  basemapStyle?: string;
+  damagedBuildings?: any;
+  damagedRoads?: any;
+  cycloneForecast?: any;
 }
 
 export default function MapView({
@@ -171,20 +185,41 @@ export default function MapView({
   hazards,
   filters,
   onEventSelect,
+  selectedRegion = null,
+  onRegionSelect,
   useRealData = false,
   selectedCountry = null,
+  mapStyle = "loss",
+  basemapStyle = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  damagedBuildings,
+  damagedRoads,
+  cycloneForecast,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [showCycloneAnimation, setShowCycloneAnimation] = useState(true);
+  const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
 
   // Filter events based on current filters using shared utility
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters]
   );
+
+  useEffect(() => {
+    const handleResize = () => {
+      const shouldCollapse = window.innerWidth < 768;
+      setLegendCollapsed(shouldCollapse);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const getHazardInfo = useCallback((hazardId: string) => {
     return hazards.find((h) => h.id === hazardId);
@@ -204,7 +239,7 @@ export default function MapView({
 
     map.current = new maplibregl.Map({
       container: mapContainer.current!,
-      style: MAP_STYLE,
+      style: basemapStyle,
       center: initialCenter,
       zoom: initialZoom,
     });
@@ -217,7 +252,17 @@ export default function MapView({
     });
     
     map.current.on("error", (e: any) => {
-      // Log detailed error information
+      // Suppress expected WMS/THREDDS network errors (external server issues are common)
+      const errorMessage = e?.error?.message || String(e?.error || e);
+      const isWMSError = errorMessage.includes('thredds') || errorMessage.includes('WMS') || errorMessage.includes('Failed to fetch');
+      
+      if (isWMSError) {
+        // Silently ignore WMS tile loading failures - these are expected when THREDDS server is unreachable
+        // The map will continue to function with other data layers
+        return;
+      }
+      
+      // Log other critical errors
       if (e?.error) {
         console.error("Map error:", e.error.message || e.error);
       } else if (e && typeof e === "object" && "sourceId" in e) {
@@ -256,6 +301,17 @@ export default function MapView({
       });
     }
   }, [useRealData, selectedCountry, mapLoaded]);
+
+  // Handle basemap style changes
+  useEffect(() => {
+    if (!map.current) return;
+    
+    try {
+      map.current.setStyle(basemapStyle);
+    } catch (e) {
+      console.warn("Error changing basemap style:", e);
+    }
+  }, [basemapStyle]);
 
   // Add district polygon layers after map loads
   useEffect(() => {
@@ -503,6 +559,15 @@ export default function MapView({
       
       const hazard = getHazardInfo(event.hazardId);
       const color = hazard?.color || "#6B7280";
+      
+      // Calculate intensity for glow effect (0-1 scale based on severity)
+      const intensityMap = { low: 0.3, medium: 0.6, high: 0.9, critical: 1.0 };
+      const intensity = intensityMap[event.severity] || 0.5;
+      
+      // Calculate animation speed based on severity (faster = more severe)
+      const pulseSpeed = event.severity === "critical" ? "1.5s" : 
+                         event.severity === "high" ? "2s" : 
+                         event.severity === "medium" ? "2.5s" : "3s";
 
       // Create custom marker element
       const el = document.createElement("div");
@@ -511,12 +576,17 @@ export default function MapView({
         width: 24px;
         height: 24px;
         background-color: ${color};
+        color: ${color};
         border: 3px solid white;
         border-radius: 50%;
         cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         transition: transform 0.2s ease;
+        --pulse-speed: ${pulseSpeed};
+        filter: drop-shadow(0 0 ${intensity * 20}px ${color});
       `;
+      
+      // Add intensity-specific animation class
+      el.style.setProperty("--glow-intensity", intensity.toString());
 
       // Accessibility attributes for custom marker
       el.setAttribute("role", "button");
@@ -587,40 +657,58 @@ export default function MapView({
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
       
-      {/* Map Legend - styled to match SummaryPanel cards */}
-      <div 
-        className="absolute bottom-8 right-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-900/80 rounded-xl shadow-lg p-4 min-w-[160px] backdrop-blur-sm"
-        role="region"
-        aria-label="Map legend showing hazard types"
-      >
-        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-3 uppercase tracking-wide">
-          Hazard Legend
-        </h4>
-        <div className="space-y-2">
-          {visibleHazards.map((hazard) => (
-            <div 
-              key={hazard.id} 
-              className="flex items-center gap-2.5 transition-opacity duration-300"
+      {/* Map Legend - styled to match SummaryPanel cards - Only show for mock data */}
+      {!useRealData && (
+        <div 
+          className="absolute bottom-8 right-4 glass-panel rounded-xl p-4 min-w-[180px] z-[100]"
+          role="region"
+          aria-label="Map legend showing hazard types"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[11px] font-semibold text-slate-200 uppercase tracking-wide">
+              Hazard Legend
+            </h4>
+            <button
+              onClick={() => setLegendCollapsed(!legendCollapsed)}
+              className="text-slate-400 hover:text-slate-200"
+              aria-expanded={!legendCollapsed}
+              aria-controls="hazard-legend-items"
             >
-              <span
-                className="w-3.5 h-3.5 rounded-full ring-2 ring-white dark:ring-slate-700 shadow-sm flex-shrink-0"
-                style={{ backgroundColor: hazard.color }}
-                aria-hidden="true"
-              />
-              <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                {hazard.icon} {hazard.name}
-              </span>
+              {legendCollapsed ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronUp className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          {!legendCollapsed && (
+            <div id="hazard-legend-items" className="space-y-2">
+              {visibleHazards.map((hazard) => (
+                <div 
+                  key={hazard.id} 
+                  className="flex items-center gap-2.5 transition-opacity duration-300"
+                >
+                  <span
+                    className="w-3.5 h-3.5 rounded-full ring-2 ring-white dark:ring-slate-700 shadow-sm flex-shrink-0"
+                    style={{ backgroundColor: hazard.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-sm text-slate-200 font-medium">
+                    {hazard.name}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      </div>
+      )}
 
       {/* Event count indicator - Only show when NOT using real data */}
       {!useRealData && (
-        <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
-          <span className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="absolute top-4 left-4 glass-panel rounded-lg px-3 py-2 z-[100]">
+          <span className="text-sm text-slate-300">
             Showing{" "}
-            <span className="font-semibold text-gray-900 dark:text-white">
+            <span className="font-semibold text-slate-100">
               {filteredEvents.length}
             </span>{" "}
             of {events.length} events
@@ -628,20 +716,59 @@ export default function MapView({
         </div>
       )}
 
-      {/* Real Data Layers - Load all countries' data when real data is enabled */}
+      {/* Real Data Layers - Load selected country's data when real data is enabled */}
       {useRealData && (
         <>
           <RealDataLayers
             map={map.current}
-            countryCode={null}
+            countryCode={selectedCountry}
             visible={useRealData}
           />
-          <PDIEDataLayers
+          <RegionalImpactsLayer
+            map={map.current}
+            visible={useRealData}
+            mapStyle={mapStyle}
+            selectedRegion={selectedRegion}
+            onRegionSelect={onRegionSelect}
+          />
+          <IntensityHeatmapLayer
+            map={map.current}
+            events={filteredEvents}
+            visible={useRealData}
+          />
+          <DamagedBuildingsLayer
+            map={map.current}
+            data={damagedBuildings}
+            visible={useRealData && !!damagedBuildings}
+          />
+          <DamagedRoadsLayer
+            map={map.current}
+            data={damagedRoads}
+            visible={useRealData && !!damagedRoads}
+          />
+          <CycloneAnimationLayer
+            map={map.current}
+            forecastTrack={cycloneForecast}
+            isVisible={useRealData && !!cycloneForecast && showCycloneAnimation}
+            onClose={() => setShowCycloneAnimation(false)}
+            onPlayingChange={setIsAnimationPlaying}
+          />
+          {/* PDIEDataLayers disabled - using local data files instead of THREDDS PDIE output */}
+          {/* <PDIEDataLayers
             map={map.current}
             countryCode="VU"
             visible={useRealData}
-          />
+          /> */}
         </>
+      )}
+      
+      {/* Cyclone Animation Toggle Button */}
+      {useRealData && cycloneForecast && (
+        <CycloneAnimationToggle
+          isVisible={showCycloneAnimation}
+          isPlaying={isAnimationPlaying}
+          onToggle={() => setShowCycloneAnimation(!showCycloneAnimation)}
+        />
       )}
     </div>
   );

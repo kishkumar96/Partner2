@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
+/* Optional: make transitions feel premium */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -12,17 +14,108 @@
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/* Mission-control background (use on page wrapper) */
+.bg-atmosphere {
+  background:
+    radial-gradient(circle at 65% 25%, rgba(0,224,255,0.10), transparent 42%),
+    radial-gradient(circle at 20% 80%, rgba(255,59,122,0.07), transparent 55%),
+    linear-gradient(180deg, #0b1220, #070a12);
+}
+
+/* Glass panel utility */
+.glass-panel {
+  background: rgba(30, 40, 60, 0.6);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.40), inset 0 0 0 0.5px rgba(255,255,255,0.06);
+}
+
+/* Slightly stronger glass on hover */
+.glass-panel-hover:hover {
+  background: rgba(40, 50, 80, 0.45);
+  box-shadow: 0 18px 45px rgba(0,0,0,0.55), inset 0 0 0 0.5px rgba(255,255,255,0.08);
+  transform: translateY(-4px);
+}
+
+/* Map marker: glow + pulse ring */
+.event-marker {
+  position: relative;
+  will-change: transform;
+}
+
+/* Pulse ring */
+.event-marker::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  opacity: 0.6;
+  animation: pulseRing var(--pulse-speed, 2s) ease-out infinite;
+}
+
+/* Glow with intensity control */
+.event-marker {
+  box-shadow: 0 0 calc(14px * var(--glow-intensity, 1)) currentColor;
+}
+
+/* Optional hover emphasis */
+.event-marker:hover {
+  transform: translate(-50%, -50%) scale(1.15) !important;
+  box-shadow: 0 0 22px currentColor;
+}
+
+/* Keyframes for pulse animation */
+@keyframes pulseRing {
+  0% { transform: scale(0.75); opacity: 0.65; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* MapLibre popup glass styling */
+.maplibregl-popup-content {
+  background: rgba(30, 40, 60, 0.95) !important;
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(0, 224, 255, 0.25) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(0, 224, 255, 0.15), inset 0 0 0 0.5px rgba(255,255,255,0.08) !important;
+  color: #f1f5f9 !important;
+  padding: 12px 16px !important;
+  min-width: 200px;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: rgba(30, 40, 60, 0.95) !important;
+  border-bottom-color: rgba(30, 40, 60, 0.95) !important;
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: rgba(30, 40, 60, 0.95) !important;
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: rgba(30, 40, 60, 0.95) !important;
+}
+
+.maplibregl-popup-close-button {
+  color: #00e0ff !important;
+  font-size: 20px !important;
+  padding: 4px 8px !important;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.maplibregl-popup-close-button:hover {
+  opacity: 1;
+  background: rgba(0, 224, 255, 0.1) !important;
 }
 
 /* Custom MapLibre popup styling for districts */

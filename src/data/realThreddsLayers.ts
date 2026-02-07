@@ -5,6 +5,17 @@
 
 import { CountryCode } from "@/types/thredds";
 
+export interface WMSStyleConfig {
+  styles?: string;
+  colorScaleRange?: string;
+  numColorBands?: number;
+  aboveMaxColor?: string;
+  belowMinColor?: string;
+  bgColor?: string;
+  logScale?: boolean;
+  time?: string;
+}
+
 export interface RealWMSLayer {
   id: string;
   name: string;
@@ -14,12 +25,14 @@ export interface RealWMSLayer {
   description: string;
   hazardType: string;
   bbox: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
+  styleConfig?: WMSStyleConfig;
 }
 
 /**
- * Real available WMS layers from THREDDS for TC Lola - Vanuatu
+ * Real available WMS layers from THREDDS for TC Lola - Vanuatu and TC Gita - Western Samoa
  */
 export const REAL_WMS_LAYERS: RealWMSLayer[] = [
+  // Vanuatu - TC Lola
   {
     id: "vu-tc-lola-flood-depth",
     name: "TC Lola Flood Depth (South Santo)",
@@ -35,20 +48,69 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     name: "TC Lola Wind Impact",
     countryCode: "VU",
     ncFile: "local_wind.nc",
-    layerName: "Depth", // local_wind.nc uses "Depth" as layer name
-    description: "Wind impact/depth data from TC Lola",
+    layerName: "Depth",
+    description: "Wind impact/depth data from TC Lola - Category 4+ Cyclone",
     hazardType: "wind",
     bbox: [166.0, -20.5, 170.5, -13.0], // Full Vanuatu
+    styleConfig: {
+      styles: "default-scalar/seq-YlOrRd", // Yellow-Orange-Red sequential palette for wind intensity
+      colorScaleRange: "0,65.74",
+      numColorBands: 14,
+      aboveMaxColor: "extend",
+      belowMinColor: "transparent",
+      bgColor: "transparent",
+      logScale: false,
+    },
   },
   {
     id: "vu-tc-lola-merged-hazard",
     name: "TC Lola Merged Hazard Depth",
     countryCode: "VU",
-    ncFile: "VU_merged.nc",
-    layerName: "Depth", // VU_merged.nc uses "Depth" as layer name
+    ncFile: "_merged.nc",
+    layerName: "Depth",
     description: "Merged hazard depth data from TC Lola",
     hazardType: "cyclone",
     bbox: [166.0, -20.5, 170.5, -13.0], // Full Vanuatu
+    styleConfig: {
+      styles: "default-scalar/psu-viridis",
+      colorScaleRange: "-50,50",
+      numColorBands: 20,
+      aboveMaxColor: "extend",
+      belowMinColor: "extend",
+      bgColor: "extend",
+      logScale: false,
+    },
+  },
+  
+  // Western Samoa - TC Gita
+  {
+    id: "ws-tc-gita-merged-hazard",
+    name: "TC Gita Merged Hazard",
+    countryCode: "WS",
+    ncFile: "_merged.nc",
+    layerName: "Depth",
+    description: "Merged hazard data from TC Gita - Western Samoa",
+    hazardType: "cyclone",
+    bbox: [-173.0, -14.5, -171.0, -13.0], // Western Samoa
+  },
+  {
+    id: "ws-tc-gita-local-wind",
+    name: "TC Gita Local Wind (Savaii & Upolu)",
+    countryCode: "WS",
+    ncFile: "SA_savaii_upolu_local_wind.nc",
+    layerName: "Depth",
+    description: "Local wind impact for Savaii and Upolu islands from TC Gita",
+    hazardType: "wind",
+    bbox: [-173.0, -14.5, -171.0, -13.0], // Western Samoa
+    styleConfig: {
+      styles: "default-scalar/div-BuRd",
+      colorScaleRange: "0,50",
+      numColorBands: 5,
+      aboveMaxColor: "extend",
+      belowMinColor: "extend",
+      bgColor: "extend",
+      logScale: false,
+    },
   },
 ];
 
@@ -60,14 +122,21 @@ export function buildRealWMSUrl(
   layer: RealWMSLayer,
   width: number = 512,
   height: number = 512,
-  styles: string = "default-scalar/default"
+  styles?: string
 ): string {
   const baseUrl = "https://gemthreddshpc.spc.int/thredds/wms";
-  const datasetPath = `/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola/${layer.ncFile}`;
+  
+  // Build country-specific path
+  const countryPath = layer.countryCode === "VU" ? "vu_hazard" : "ws_hazard";
+  const cycloneName = layer.countryCode === "VU" ? "Lola" : "Gita";
+  const datasetPath = `/POP/Partner2/case_study2/hazard/${countryPath}/TC/${cycloneName}/${layer.ncFile}`;
   
   // WMS 1.3.0 with EPSG:4326 requires BBOX in lat,lon order: minLat,minLon,maxLat,maxLon
   // Our bbox is stored as [minLon, minLat, maxLon, maxLat]
   const wmsBbox = `${layer.bbox[1]},${layer.bbox[0]},${layer.bbox[3]},${layer.bbox[2]}`;
+  
+  // Use layer-specific style config or provided style, fallback to default
+  const styleToUse = styles || layer.styleConfig?.styles || "default-scalar/default";
   
   const params = new URLSearchParams({
     SERVICE: "WMS",
@@ -80,8 +149,33 @@ export function buildRealWMSUrl(
     HEIGHT: height.toString(),
     FORMAT: "image/png",
     TRANSPARENT: "true",
-    STYLES: styles,
+    STYLES: styleToUse,
   });
+  
+  // Add ncWMS-specific parameters from layer config
+  if (layer.styleConfig) {
+    if (layer.styleConfig.colorScaleRange) {
+      params.set("COLORSCALERANGE", layer.styleConfig.colorScaleRange);
+    }
+    if (layer.styleConfig.numColorBands !== undefined) {
+      params.set("NUMCOLORBANDS", layer.styleConfig.numColorBands.toString());
+    }
+    if (layer.styleConfig.aboveMaxColor) {
+      params.set("ABOVEMAXCOLOR", layer.styleConfig.aboveMaxColor);
+    }
+    if (layer.styleConfig.belowMinColor) {
+      params.set("BELOWMINCOLOR", layer.styleConfig.belowMinColor);
+    }
+    if (layer.styleConfig.bgColor) {
+      params.set("BGCOLOR", layer.styleConfig.bgColor);
+    }
+    if (layer.styleConfig.logScale !== undefined) {
+      params.set("LOGSCALE", layer.styleConfig.logScale.toString());
+    }
+    if (layer.styleConfig.time) {
+      params.set("TIME", layer.styleConfig.time);
+    }
+  }
   
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
@@ -92,7 +186,11 @@ export function buildRealWMSUrl(
  */
 export function buildWMSTileUrl(layer: RealWMSLayer, styles: string = "default-scalar/default"): string {
   const baseUrl = "https://gemthreddshpc.spc.int/thredds/wms";
-  const datasetPath = `/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola/${layer.ncFile}`;
+  
+  // Build country-specific path
+  const countryPath = layer.countryCode === "VU" ? "vu_hazard" : "ws_hazard";
+  const cycloneName = layer.countryCode === "VU" ? "Lola" : "Gita";
+  const datasetPath = `/POP/Partner2/case_study2/hazard/${countryPath}/TC/${cycloneName}/${layer.ncFile}`;
   
   // For WMS with MapLibre, we can't use standard tiling
   // Instead, return base URL and we'll use image source with bounds
@@ -109,14 +207,21 @@ export function buildWMSImageUrl(
   bbox: [number, number, number, number],
   width: number = 1024,
   height: number = 1024,
-  styles: string = "default-scalar/default"
+  styles?: string
 ): string {
   const baseUrl = "https://gemthreddshpc.spc.int/thredds/wms";
-  const datasetPath = `/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola/${layer.ncFile}`;
+  
+  // Build country-specific path
+  const countryPath = layer.countryCode === "VU" ? "vu_hazard" : "ws_hazard";
+  const cycloneName = layer.countryCode === "VU" ? "Lola" : "Gita";
+  const datasetPath = `/POP/Partner2/case_study2/hazard/${countryPath}/TC/${cycloneName}/${layer.ncFile}`;
   
   // WMS 1.3.0 with EPSG:4326 requires BBOX in lat,lon order: minLat,minLon,maxLat,maxLon
   // Our bbox is stored as [minLon, minLat, maxLon, maxLat]
   const wmsBbox = `${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}`;
+  
+  // Use layer-specific style config or provided style, fallback to default
+  const styleToUse = styles || layer.styleConfig?.styles || "default-scalar/default";
   
   const params = new URLSearchParams({
     SERVICE: "WMS",
@@ -129,8 +234,33 @@ export function buildWMSImageUrl(
     HEIGHT: height.toString(),
     FORMAT: "image/png",
     TRANSPARENT: "true",
-    STYLES: styles,
+    STYLES: styleToUse,
   });
+  
+  // Add ncWMS-specific parameters from layer config
+  if (layer.styleConfig) {
+    if (layer.styleConfig.colorScaleRange) {
+      params.set("COLORSCALERANGE", layer.styleConfig.colorScaleRange);
+    }
+    if (layer.styleConfig.numColorBands !== undefined) {
+      params.set("NUMCOLORBANDS", layer.styleConfig.numColorBands.toString());
+    }
+    if (layer.styleConfig.aboveMaxColor) {
+      params.set("ABOVEMAXCOLOR", layer.styleConfig.aboveMaxColor);
+    }
+    if (layer.styleConfig.belowMinColor) {
+      params.set("BELOWMINCOLOR", layer.styleConfig.belowMinColor);
+    }
+    if (layer.styleConfig.bgColor) {
+      params.set("BGCOLOR", layer.styleConfig.bgColor);
+    }
+    if (layer.styleConfig.logScale !== undefined) {
+      params.set("LOGSCALE", layer.styleConfig.logScale.toString());
+    }
+    if (layer.styleConfig.time) {
+      params.set("TIME", layer.styleConfig.time);
+    }
+  }
   
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
@@ -150,6 +280,19 @@ export function getLayersForCountry(countryCode: CountryCode): RealWMSLayer[] {
 export const WMS_STYLES = {
   // Default and recommended
   DEFAULT: "default-scalar/default",
+  
+  // Diverging color schemes (Blue-Red)
+  DIV_BURD: "default-scalar/div-BuRd",
+  
+  // Viridis color scheme (purple to yellow-green)
+  PSU_VIRIDIS: "default-scalar/psu-viridis",
+  
+  // Rainbow progression (violet→blue→cyan→green→yellow→orange→red)
+  RAINBOW: "default-scalar/rainbow",
+  
+  // Yellow-Orange-Red sequential scale (warm colors for intensity)
+  SEQ_YLORD: "default-scalar/seq-YlOrRd",
+  YLORD: "YlOrRd", // ColorBrewer format without prefix (more widely supported)
   
   // Alternative color schemes
   ANUJ: "anuj",

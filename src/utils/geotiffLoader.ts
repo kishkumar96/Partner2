@@ -261,7 +261,7 @@ export async function loadPDIEOutputData(countryCode: CountryCode, dataType: 'ex
   
   const outputTimestamps: Record<CountryCode, string[]> = {
     VU: ['2025-01-31T09_41_32'],
-    WS: [],
+    WS: ['2026-02-05T12_00_00'], // Mock timestamp for Western Samoa - awaiting actual PDIE output
     TO: [],
     CK: [],
   };

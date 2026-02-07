@@ -131,7 +131,7 @@ export function aggregateEventsByLevel(
   aggregationLevel: AggregationLevel,
   districts: District[],
   provinces: Province[],
-  includeEmpty: boolean = false
+  includeEmpty: boolean = true
 ): AggregatedEventData[] {
   if (aggregationLevel === "national") {
     const metrics = computeAggregatedMetrics(events);
