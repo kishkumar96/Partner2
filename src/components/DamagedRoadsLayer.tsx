@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { Map as MapLibreMap } from "maplibre-gl";
+import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
 
 interface DamagedRoadsLayerProps {
   map: MapLibreMap | null;
   data: any;
   visible?: boolean;
+  styleChangeCounter?: number;
 }
 
 /**
@@ -17,6 +18,7 @@ export default function DamagedRoadsLayer({
   map,
   data,
   visible = true,
+  styleChangeCounter = 0,
 }: DamagedRoadsLayerProps) {
   useEffect(() => {
     if (!map || !data) return;
@@ -24,6 +26,48 @@ export default function DamagedRoadsLayer({
     const sourceId = "damaged-roads";
     const layerId = "damaged-roads-layer";
     const layerIdOutline = "damaged-roads-outline";
+
+    // Define event handlers outside addLayers so we can remove them in cleanup
+    const handleClick = (e: any) => {
+      if (!e.features || e.features.length === 0) return;
+
+      const feature = e.features[0];
+      const props = feature.properties;
+
+      const html = `
+        <div class="p-2">
+          <h3 class="font-bold text-sm mb-1">Damaged Road</h3>
+          <p class="text-xs"><strong>Damage:</strong> $${Number(
+            props.Wind_Loss || 0
+          ).toLocaleString()}</p>
+          <p class="text-xs"><strong>Exposure:</strong> $${Number(
+            props.Exposure || 0
+          ).toLocaleString()}</p>
+          <p class="text-xs"><strong>Damage Ratio:</strong> ${(
+            (Number(props.Damage_Ratio) || 0) * 100
+          ).toFixed(1)}%</p>
+          <p class="text-xs"><strong>Road Type:</strong> ${
+            props.Road_Type || "Unknown"
+          }</p>
+          <p class="text-xs"><strong>Surface:</strong> ${
+            props.Surface || "Unknown"
+          }</p>
+        </div>
+      `;
+
+      new maplibregl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
+    };
+
+    const handleMouseEnter = () => {
+      map.getCanvas().style.cursor = "pointer";
+    };
+
+    const handleMouseLeave = () => {
+      map.getCanvas().style.cursor = "";
+    };
 
     // Function to add layers and sources
     const addLayers = () => {
@@ -90,43 +134,7 @@ export default function DamagedRoadsLayer({
         });
       }
 
-      // Define event handlers
-      const handleClick = (e: any) => {
-        if (!e.features || e.features.length === 0) return;
-        
-        const feature = e.features[0];
-        const props = feature.properties;
-        
-        const html = `
-          <div style="font-family: system-ui; padding: 4px;">
-            <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Damaged Road</h3>
-            <div style="font-size: 12px; line-height: 1.6;">
-              <p style="margin: 4px 0;"><strong>Type:</strong> ${props?.Type || 'N/A'}</p>
-              <p style="margin: 4px 0;"><strong>Surface:</strong> ${props?.Surface || 'N/A'}</p>
-              <p style="margin: 4px 0;"><strong>Condition:</strong> ${props?.Condition || 'N/A'}</p>
-              <p style="margin: 4px 0;"><strong>Length:</strong> ${Number(props?.Length_km || 0).toFixed(2)} km</p>
-              <p style="margin: 4px 0;"><strong>Flood Depth:</strong> ${Number(props?.Inundation_m || 0).toFixed(2)} m</p>
-              <p style="margin: 4px 0; color: #ef4444; font-weight: 600;"><strong>Total Loss:</strong> $${Number(props?.Total_Loss || 0).toLocaleString()}</p>
-              <p style="margin: 4px 0; font-size: 10px; color: #666;"><strong>Region:</strong> ${props?.Admin1_Region || 'N/A'}</p>
-            </div>
-          </div>
-        `;
-        
-        new (window as any).maplibregl.Popup()
-          .setLngLat(e.lngLat)
-          .setHTML(html)
-          .addTo(map);
-      };
-
-      const handleMouseEnter = () => {
-        map.getCanvas().style.cursor = "pointer";
-      };
-
-      const handleMouseLeave = () => {
-        map.getCanvas().style.cursor = "";
-      };
-
-      // Add event listeners
+      // Add event listeners using handlers defined in outer scope
       map.on("click", layerId, handleClick);
       map.on("mouseenter", layerId, handleMouseEnter);
       map.on("mouseleave", layerId, handleMouseLeave);
@@ -156,14 +164,21 @@ export default function DamagedRoadsLayer({
     }
 
     return () => {
-      // Cleanup on unmount - remove layers and sources
+      // Cleanup on unmount - remove event listeners, layers, and sources
       try {
+        // Remove event listeners
+        map.off("click", layerId, handleClick);
+        map.off("mouseenter", layerId, handleMouseEnter);
+        map.off("mouseleave", layerId, handleMouseLeave);
+
+        // Remove layers
         if (map.getLayer(layerId)) {
           map.removeLayer(layerId);
         }
         if (map.getLayer(layerIdOutline)) {
           map.removeLayer(layerIdOutline);
         }
+        // Remove source
         if (map.getSource(sourceId)) {
           map.removeSource(sourceId);
         }
@@ -171,7 +186,7 @@ export default function DamagedRoadsLayer({
         // Layers/sources might not exist
       }
     };
-  }, [map, data, visible]);
+  }, [map, data, visible, styleChangeCounter]);
 
   return null;
 }

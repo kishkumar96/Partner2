@@ -1,30 +1,29 @@
 "use client";
 
-import { Play, Pause } from "lucide-react";
-
 interface CycloneAnimationToggleProps {
   isVisible: boolean;
   isPlaying: boolean;
-  onToggle: () => void;
+  onToggleVisibility: () => void;
 }
 
-export function CycloneAnimationToggle({
+export default function CycloneAnimationToggle({
   isVisible,
   isPlaying,
-  onToggle,
+  onToggleVisibility,
 }: CycloneAnimationToggleProps) {
+  const toggleLabel = isVisible ? "Hide cyclone animation" : "Show cyclone animation";
   return (
     <button
-      onClick={onToggle}
-      className={`absolute bottom-32 right-4 z-[100] p-3 rounded-full transition-all duration-300 shadow-lg ${
+      type="button"
+      onClick={onToggleVisibility}
+      className={`absolute bottom-32 right-4 z-[100] p-3 rounded-full transition-all duration-300 shadow-lg backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
         isVisible
-          ? 'bg-blue-600 hover:bg-blue-500'
-          : 'bg-gray-700/90 hover:bg-gray-600'
+          ? 'bg-blue-600 hover:bg-blue-500 focus-visible:ring-blue-400'
+          : 'bg-slate-700/90 hover:bg-slate-600/70 focus-visible:ring-slate-400'
       }`}
-      title={isVisible ? 'Hide cyclone animation' : 'Show cyclone animation'}
-      style={{
-        backdropFilter: 'blur(8px)',
-      }}
+      title={toggleLabel}
+      aria-label={toggleLabel}
+      aria-pressed={isVisible}
     >
       <div className="flex items-center justify-center">
         {isVisible ? (

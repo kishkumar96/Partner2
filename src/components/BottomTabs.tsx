@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import EnhancedRegionalTable from "./EnhancedRegionalTable";
 import {
   Event,
   Hazard,
@@ -83,37 +84,37 @@ export default function BottomTabs({
     { 
       id: "events", 
       label: filteredEvents.length === events.length 
-        ? `District Impact (${filteredEvents.length})`
-        : `District Impact (${filteredEvents.length}/${events.length})`
+        ? `Impact (${filteredEvents.length})`
+        : `Impact (${filteredEvents.length}/${events.length})`
     },
     { 
       id: "exposure", 
       label: filteredExposureData.length === exposureData.length
-        ? `Exposure Analysis (${filteredExposureData.length})`
-        : `Exposure Analysis (${filteredExposureData.length}/${exposureData.length})`
+        ? `Exposure (${filteredExposureData.length})`
+        : `Exposure (${filteredExposureData.length}/${exposureData.length})`
     },
     { 
       id: "economic", 
       label: filteredEconomicDamageData.length === economicDamageData.length
-        ? `Economic Damage (${filteredEconomicDamageData.length})`
-        : `Economic Damage (${filteredEconomicDamageData.length}/${economicDamageData.length})`
+        ? `Economic (${filteredEconomicDamageData.length})`
+        : `Economic (${filteredEconomicDamageData.length}/${economicDamageData.length})`
     },
-    { id: "details", label: "Impact Details" },
-    { id: "damage", label: `Damage Assessment (${regionalSummary.length})` },
+    { id: "details", label: "Details" },
+    { id: "damage", label: `Damage (${regionalSummary.length})` },
   ];
 
   return (
-    <div className="h-64 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-col">
-      {/* Tab Headers */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 px-4">
+    <div className="h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0">
+      {/* Tab Headers - Reduced padding */}
+      <div className="flex border-b border-white/10 px-4">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
               activeTab === tab.id
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                ? "border-blue-400 text-blue-400"
+                : "border-transparent text-slate-500 hover:text-slate-300"
             }`}
           >
             {tab.label}
@@ -121,87 +122,89 @@ export default function BottomTabs({
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Tab Content - Consistent spacing */}
+      <div className="flex-1 overflow-auto p-4 space-y-4">
         {activeTab === "events" && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="space-y-4">
+            <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-700/60">
               <thead>
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     {getAggregationLabel()}
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Total Events
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     High Risk
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Affected Pop.
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Economic Damage
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-slate-700/60">
                 {aggregatedEventData.map((data) => (
                   <tr
                     key={data.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="hover:bg-white/5"
                   >
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <td className="px-4 py-3 text-sm text-slate-100">
                       {data.name}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {data.totalEvents}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {data.highRiskAreas}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {formatNumber(data.totalAffectedPopulation)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-medium">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right font-medium">
                       {formatCurrency(data.totalEconomicDamage)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
         {activeTab === "exposure" && (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <table className="min-w-full divide-y divide-slate-700/60">
               <thead>
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Hazard
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Sector
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Population
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Assets at Risk
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Infrastructure Units
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-slate-700/60">
                 {filteredExposureData.map((exposure, index) => (
                   <tr
                     key={exposure.id || `exposure-${index}`}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="hover:bg-white/5"
                   >
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <td className="px-4 py-3 text-sm text-slate-100">
                       <span
                         className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
                         style={{ backgroundColor: getHazardColor(exposure.hazardId) }}
@@ -209,16 +212,16 @@ export default function BottomTabs({
                       />
                       {getHazardName(exposure.hazardId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-3 text-sm text-slate-300">
                       {getSectorName(exposure.sectorId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {formatNumber(exposure.population)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-medium">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right font-medium">
                       {formatCurrency(exposure.assets)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {formatNumber(exposure.infrastructure)}
                     </td>
                   </tr>
@@ -230,36 +233,36 @@ export default function BottomTabs({
 
         {activeTab === "economic" && (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <table className="min-w-full divide-y divide-slate-700/60">
               <thead>
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Hazard
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Sector
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Direct Loss
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Indirect Loss
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Total Loss
                   </th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Year
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-slate-700/60">
                 {filteredEconomicDamageData.map((damage, index) => (
                   <tr
                     key={damage.id || `damage-${index}`}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="hover:bg-white/5"
                   >
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                    <td className="px-4 py-3 text-sm text-slate-100">
                       <span
                         className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
                         style={{ backgroundColor: getHazardColor(damage.hazardId) }}
@@ -267,19 +270,19 @@ export default function BottomTabs({
                       />
                       {getHazardName(damage.hazardId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-3 text-sm text-slate-300">
                       {getSectorName(damage.sectorId)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {formatCurrency(damage.directLoss)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right">
                       {formatCurrency(damage.indirectLoss)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-bold">
+                    <td className="px-4 py-3 text-sm text-slate-100 text-right font-bold">
                       {formatCurrency(damage.totalLoss)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 text-center">
+                    <td className="px-4 py-3 text-sm text-slate-300 text-center">
                       {damage.year}
                     </td>
                   </tr>
@@ -293,34 +296,34 @@ export default function BottomTabs({
           <div className="space-y-4">
             {impactByAssetType && impactByAssetType.length > 0 && (
               <div className="overflow-x-auto">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                <div className="text-sm font-semibold text-slate-200 mb-2">
                   Impact by Asset Type
                 </div>
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <table className="min-w-full divide-y divide-slate-700/60">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Asset
                       </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Loss
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {impactByAssetType
+                  <tbody className="divide-y divide-slate-700/60">
+                    {[...impactByAssetType]
                       .sort(
                         (a, b) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0)
                       )
                       .map((row, idx) => (
                         <tr
                           key={row.Asset || `asset-${idx}`}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                          className="hover:bg-white/5"
                         >
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                          <td className="px-4 py-3 text-sm text-slate-100">
                             {row.Asset || "Unknown"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-semibold">
+                          <td className="px-4 py-3 text-sm text-slate-100 text-right font-semibold">
                             {formatCurrency(Number(row.Total_Loss) || 0)}
                           </td>
                         </tr>
@@ -332,34 +335,34 @@ export default function BottomTabs({
 
             {impactBySector && impactBySector.length > 0 && (
               <div className="overflow-x-auto">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                <div className="text-sm font-semibold text-slate-200 mb-2">
                   Impact by Sector
                 </div>
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <table className="min-w-full divide-y divide-slate-700/60">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Sector
                       </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                         Loss
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {impactBySector
+                  <tbody className="divide-y divide-slate-700/60">
+                    {[...impactBySector]
                       .sort(
                         (a, b) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0)
                       )
                       .map((row, idx) => (
                         <tr
                           key={row.Sector || `sector-${idx}`}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                          className="hover:bg-white/5"
                         >
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                          <td className="px-4 py-3 text-sm text-slate-100">
                             {row.Sector || "Unknown"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 dark:text-white text-right font-semibold">
+                          <td className="px-4 py-3 text-sm text-slate-100 text-right font-semibold">
                             {formatCurrency(Number(row.Total_Loss) || 0)}
                           </td>
                         </tr>
@@ -373,46 +376,66 @@ export default function BottomTabs({
 
         {activeTab === "damage" && (
           <div className="space-y-6">
+            {/* Enhanced Regional Table with Derived Metrics */}
+            {regionalSummary && regionalSummary.length > 0 && (
+              <EnhancedRegionalTable
+                data={regionalSummary
+                  .filter((r: any) => r.Region && r.Region.trim() !== '')
+                  .map((r: any) => ({
+                    id: r.Region_ID || r.Region,
+                    name: r.Region,
+                    economicLoss: Number(r.Total_Loss) || 0,
+                    populationAffected: Number(r.Total_Population) || 0,
+                    assetsExposed: Number(r.Total_Buildings) || 0,
+                    assetsDamaged: Number(r.Damaged_Buildings) || 0,
+                    area: 100, // Placeholder - would need actual area data
+                    totalPopulation: Number(r.Total_Population) || 0,
+                  }))}
+                nationalTotal={regionalSummary.reduce((sum: number, r: any) => sum + (Number(r.Total_Loss) || 0), 0)}
+                showDerivedMetrics={true}
+              />
+            )}
+
             {/* Regional Summary Table with Normalized Metrics */}
             {regionalSummary && regionalSummary.length > 0 ? (
               <>
                 <div className="overflow-x-auto">
-                  <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-200 mb-3 flex items-center justify-between">
                     <span>Regional Damage Assessment</span>
-                    <span className="text-xs font-normal text-gray-500">
+                    <span className="text-xs font-normal text-slate-400">
                       {regionalSummary.length} regions analyzed
                     </span>
                   </div>
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
+                  <table className="min-w-full divide-y divide-slate-700/60 text-xs">
+                    <thead className="bg-slate-900/60">
                       <tr>
-                        <th className="px-3 py-2 text-left text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider sticky left-0 bg-gray-50 dark:bg-gray-800">
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider sticky left-0 bg-slate-900/60">
                           Region
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">
                           Population
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">
                           Buildings
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">
                           Damaged
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">
                           Road km
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">
                           Total Loss
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider bg-blue-500/10">
                           Loss/Capita
                         </th>
-                        <th className="px-3 py-2 text-right text-[10px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider bg-blue-500/10">
                           Damage %
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+                    <tbody className="glass-panel divide-y divide-slate-700">
                       {regionalSummary
                         .filter((r: any) => r.Region && r.Region.trim() !== '')
                         .sort((a: any, b: any) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0))
@@ -427,15 +450,15 @@ export default function BottomTabs({
                           return (
                             <tr
                               key={region.Region_ID || `region-${idx}`}
-                              className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                              className="hover:bg-white/5/50 transition-colors"
                             >
-                              <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-900">
+                              <td className="px-3 py-2 text-sm font-medium text-slate-100 sticky left-0 bg-slate-900/95 backdrop-blur-sm">
                                 {region.Region || 'Unknown'}
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 text-right tabular-nums">
+                              <td className="px-3 py-2 text-sm text-slate-300 text-right tabular-nums">
                                 {formatNumber(totalPop)}
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 text-right tabular-nums">
+                              <td className="px-3 py-2 text-sm text-slate-300 text-right tabular-nums">
                                 {formatNumber(totalBuildings)}
                               </td>
                               <td className="px-3 py-2 text-sm text-right tabular-nums">
@@ -443,7 +466,7 @@ export default function BottomTabs({
                                   {formatNumber(damagedBuildings)}
                                 </span>
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 text-right tabular-nums">
+                              <td className="px-3 py-2 text-sm text-slate-300 text-right tabular-nums">
                                 {Number(region.Damaged_Road_km || 0).toFixed(1)}
                               </td>
                               <td className="px-3 py-2 text-sm text-right tabular-nums">
@@ -451,10 +474,10 @@ export default function BottomTabs({
                                   {formatCurrency(totalLoss)}
                                 </span>
                               </td>
-                              <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 text-right tabular-nums bg-blue-50/50 dark:bg-blue-900/10">
+                              <td className="px-3 py-2 text-sm text-slate-300 text-right tabular-nums bg-blue-500/10">
                                 ${lossPerCapita.toFixed(0)}
                               </td>
-                              <td className="px-3 py-2 text-sm text-right tabular-nums bg-blue-50/50 dark:bg-blue-900/10">
+                              <td className="px-3 py-2 text-sm text-right tabular-nums bg-blue-500/10">
                                 <span className={`font-semibold ${
                                   damagePercent > 75 ? 'text-red-600 dark:text-red-400' :
                                   damagePercent > 50 ? 'text-orange-600 dark:text-orange-400' :
@@ -471,74 +494,9 @@ export default function BottomTabs({
                   </table>
                 </div>
 
-                {/* Summary Statistics Cards */}
-                <div className="grid grid-cols-4 gap-4 mt-4">
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
-                    <div className="text-xs font-semibold text-red-700 dark:text-red-300 uppercase tracking-wide mb-2">
-                      Most Impacted Region
-                    </div>
-                    <div className="text-lg font-bold text-red-900 dark:text-red-100">
-                      {regionalSummary
-                        .filter((r: any) => r.Region && r.Region.trim() !== '')
-                        .sort((a: any, b: any) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0))[0]?.Region || 'N/A'}
-                    </div>
-                    <div className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      {formatCurrency(
-                        regionalSummary
-                          .filter((r: any) => r.Region && r.Region.trim() !== '')
-                          .sort((a: any, b: any) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0))[0]?.Total_Loss || 0
-                      )} loss
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
-                    <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 uppercase tracking-wide mb-2">
-                      Avg Loss Per Capita
-                    </div>
-                    <div className="text-lg font-bold text-orange-900 dark:text-orange-100">
-                      ${(
-                        regionalSummary.reduce((sum: number, r: any) => sum + (Number(r.Total_Loss) || 0), 0) /
-                        regionalSummary.reduce((sum: number, r: any) => sum + (Number(r.Total_Population) || 1), 0)
-                      ).toFixed(0)}
-                    </div>
-                    <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                      Per person
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-800">
-                    <div className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide mb-2">
-                      Avg Damage Rate
-                    </div>
-                    <div className="text-lg font-bold text-yellow-900 dark:text-yellow-100">
-                      {(
-                        (regionalSummary.reduce((sum: number, r: any) => sum + (Number(r.Damaged_Buildings) || 0), 0) /
-                        regionalSummary.reduce((sum: number, r: any) => sum + (Number(r.Total_Buildings) || 1), 0)) *
-                        100
-                      ).toFixed(1)}%
-                    </div>
-                    <div className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                      Of all buildings
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                    <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-2">
-                      Total Roads Damaged
-                    </div>
-                    <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
-                      {regionalSummary
-                        .reduce((sum: number, r: any) => sum + (Number(r.Damaged_Road_km) || 0), 0)
-                        .toFixed(1)} km
-                    </div>
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      Across all regions
-                    </div>
-                  </div>
-                </div>
               </>
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-slate-400">
                 No regional summary data available
               </div>
             )}

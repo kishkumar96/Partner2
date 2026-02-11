@@ -212,9 +212,9 @@ export async function loadCycloneTrack(countryCode: CountryCode) {
     return loadHistoricalTCLolaTrack();
   }
   
-  // For other countries, return mock data for demonstration
-  console.log(`ℹ️ Using mock cyclone track for ${countryCode}`);
-  return getMockCycloneTrack(countryCode);
+  // For other countries, no real data available - return empty
+  console.log(`ℹ️ No cyclone track data available for ${countryCode}`);
+  return [];
 }
 
 /**
@@ -365,9 +365,9 @@ async function loadHistoricalTCLolaTrack() {
     }
   }
   
-  // If historical data not available, return mock data
-  console.log(`ℹ️ Using mock cyclone track for Vanuatu`);
-  return getMockCycloneTrack();
+  // If historical data not available, return empty array
+  console.log(`ℹ️ No cyclone track data available for Vanuatu`);
+  return [];
 }
 
 /**
@@ -439,106 +439,6 @@ function parseCSVToGeoJSON(csvText: string, name: string) {
   } catch (error) {
     return null;
   }
-}
-
-/**
- * Get mock cyclone track data for demonstration
- * Generates realistic tracks for each Pacific country
- */
-function getMockCycloneTrack(countryCode?: CountryCode) {
-  const tracks: Record<CountryCode, any> = {
-    VU: {
-      type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [168.0, -18.0],
-            [167.5, -17.0],
-            [167.0, -16.5],
-            [166.8, -16.0],
-            [166.5, -15.5],
-            [166.3, -15.0],
-            [166.0, -14.5],
-          ]
-        },
-        properties: {
-          name: "Sample Cyclone Track - Vanuatu",
-          intensity: "Category 3",
-          maxWind: 150
-        }
-      }]
-    },
-    WS: {
-      type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [-173.5, -14.5],
-            [-173.0, -14.0],
-            [-172.5, -13.8],
-            [-172.0, -13.5],
-            [-171.5, -13.3],
-            [-171.0, -13.0],
-          ]
-        },
-        properties: {
-          name: "Sample Cyclone Track - Samoa",
-          intensity: "Category 2",
-          maxWind: 130
-        }
-      }]
-    },
-    TO: {
-      type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [-176.5, -22.0],
-            [-176.0, -21.5],
-            [-175.5, -21.2],
-            [-175.0, -21.0],
-            [-174.5, -20.8],
-            [-174.0, -20.5],
-          ]
-        },
-        properties: {
-          name: "Sample Cyclone Track - Tonga",
-          intensity: "Category 3",
-          maxWind: 145
-        }
-      }]
-    },
-    CK: {
-      type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [-161.0, -22.5],
-            [-160.5, -22.0],
-            [-160.0, -21.5],
-            [-159.5, -21.2],
-            [-159.0, -21.0],
-            [-158.5, -20.8],
-          ]
-        },
-        properties: {
-          name: "Sample Cyclone Track - Cook Islands",
-          intensity: "Category 2",
-          maxWind: 125
-        }
-      }]
-    }
-  };
-  
-  return countryCode ? tracks[countryCode] : tracks.VU;
 }
 
 /**

@@ -29,6 +29,43 @@ function matchesSectorFilter(sectorId: string, selectedSectors: string[]): boole
 }
 
 /**
+ * Validates if a date string is in ISO format (YYYY-MM-DD)
+ * FIX: Prevent incorrect date filtering for non-ISO formats
+ */
+function isValidISODate(dateStr: string): boolean {
+  if (!dateStr) return false;
+  // Check format YYYY-MM-DD
+  const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!isoRegex.test(dateStr)) return false;
+  // Validate it's a real date
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
+}
+
+/**
+ * Normalizes a date string to ISO format (YYYY-MM-DD)
+ * Handles various date formats and converts them to ISO
+ * @param dateStr - Date string in any format
+ * @returns ISO formatted date string or empty string if invalid
+ */
+function normalizeDate(dateStr: string): string {
+  if (!dateStr) return "";
+  
+  // If already in ISO format, return as-is
+  if (isValidISODate(dateStr)) return dateStr;
+  
+  // Try to parse the date
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return ""; // Invalid date
+  
+  // Convert to ISO format (YYYY-MM-DD)
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Filters events based on the current filter state.
  * @param events - Array of events to filter
  * @param filters - Current filter state
@@ -50,12 +87,21 @@ export function filterEvents(events: Event[], filters: FilterState): Event[] {
     ) {
       return false;
     }
-    // Filter by date range
-    if (filters.dateRange.start && event.date < filters.dateRange.start) {
-      return false;
+    // Filter by date range with normalization
+    // FIX: Normalize dates to ISO format for proper comparison
+    if (filters.dateRange.start) {
+      const eventDate = normalizeDate(event.date);
+      const startDate = normalizeDate(filters.dateRange.start);
+      if (eventDate && startDate && eventDate < startDate) {
+        return false;
+      }
     }
-    if (filters.dateRange.end && event.date > filters.dateRange.end) {
-      return false;
+    if (filters.dateRange.end) {
+      const eventDate = normalizeDate(event.date);
+      const endDate = normalizeDate(filters.dateRange.end);
+      if (eventDate && endDate && eventDate > endDate) {
+        return false;
+      }
     }
     return true;
   });

@@ -3,14 +3,22 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Wind } from "lucide-react";
 
+// DEPRECATED: This component is replaced by UnifiedMapLegend
+// Keeping for reference only - DO NOT USE
+
 interface WindSpeedLegendProps {
   mapStyle: "loss" | "wind";
+  isPanelOpen?: boolean;
+  hasSelection?: boolean;
 }
 
-export function WindSpeedLegend({ mapStyle }: WindSpeedLegendProps) {
+export function WindSpeedLegend({ mapStyle, isPanelOpen = false, hasSelection = false }: WindSpeedLegendProps) {
+  // Component disabled - return null
+  return null;
   const [collapsed, setCollapsed] = useState(false);
   
-  if (mapStyle !== "wind") return null;
+  // Hide when not in wind mode, when a panel is open, or when something is selected
+  if (mapStyle !== "wind" || isPanelOpen || hasSelection) return null;
 
   // Actual wind speed scale from TC Lola wind layer (local_wind.nc)
   // Using THREDDS YlOrRd (Yellow-Orange-Red) scale: 0-65.74 m/s
@@ -33,7 +41,7 @@ export function WindSpeedLegend({ mapStyle }: WindSpeedLegendProps) {
   ];
 
   return (
-    <div className="absolute top-20 left-4 glass-panel p-3 max-w-xs z-[100]">
+    <div className="absolute top-32 left-4 glass-panel p-3 max-w-[min(20rem,calc(100vw-2rem))] z-[10] pointer-events-auto">
       <div 
         className="flex items-center justify-between mb-2 cursor-pointer"
         onClick={() => setCollapsed(!collapsed)}
@@ -58,13 +66,13 @@ export function WindSpeedLegend({ mapStyle }: WindSpeedLegendProps) {
                   style={{ backgroundColor: cat.color }}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-slate-200 leading-tight">
+                  <div className="text-xs font-medium text-slate-200 leading-tight">
                     {cat.category}
                   </div>
-                  <div className="text-[10px] text-slate-300">
+                  <div className="text-xs text-slate-300">
                     <span className="font-mono">{cat.speed}</span> m/s
                   </div>
-                  <div className="text-[9px] text-slate-400">
+                  <div className="text-xs text-slate-400">
                     {cat.kmh} km/h (B{cat.beaufort})
                   </div>
                 </div>
@@ -72,13 +80,13 @@ export function WindSpeedLegend({ mapStyle }: WindSpeedLegendProps) {
             ))}
           </div>
           <div className="mt-2 pt-2 border-t border-borderGlow">
-            <p className="text-[10px] text-slate-300 font-semibold">
+            <p className="text-xs text-slate-300 font-semibold">
               Actual THREDDS WMS Data
             </p>
-            <p className="text-[9px] text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               YlOrRd scale (0-65.74 m/s)
             </p>
-            <p className="text-[9px] text-slate-400">
+            <p className="text-xs text-slate-400">
               Beaufort Scale + Saffir-Simpson
             </p>
           </div>

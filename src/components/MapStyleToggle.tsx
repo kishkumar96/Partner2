@@ -9,12 +9,12 @@ interface MapStyleToggleProps {
 
 export function MapStyleToggle({ onStyleChange, currentStyle }: MapStyleToggleProps) {
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-      <div className="glass-panel rounded-xl px-1 py-1 flex gap-1">
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[15] max-w-[calc(100vw-2rem)] pointer-events-auto">
+      <div className="glass-panel rounded-xl px-1 py-1 flex gap-1 flex-wrap justify-center">
         <button
           onClick={() => onStyleChange("loss")}
           className={`
-            px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+            px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap
             ${
               currentStyle === "loss"
                 ? "bg-neon-coral/20 text-neon-coral shadow-glowCoral border border-neon-coral/40"
@@ -27,7 +27,7 @@ export function MapStyleToggle({ onStyleChange, currentStyle }: MapStyleTogglePr
         <button
           onClick={() => onStyleChange("wind")}
           className={`
-            px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
+            px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap
             ${
               currentStyle === "wind"
                 ? "bg-neon-cyan/20 text-neon-cyan shadow-glowCyan border border-neon-cyan/40"

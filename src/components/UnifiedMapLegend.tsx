@@ -1,0 +1,363 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { DollarSign, Wind, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { formatCurrency } from "@/utils/formatters";
+import { LOSS_SEQUENTIAL_COLORS, WIND_SEQUENTIAL_COLORS } from "@/utils/colorSystem";
+
+interface UnifiedMapLegendProps {
+  mode: "loss" | "wind";
+  visible?: boolean;
+  isPanelOpen?: boolean;
+  hasSelection?: boolean;
+  dataSource?: string;
+  temporalScope?: string;
+  // Data-driven legend breaks
+  dataValues?: number[];
+  // Sidebar state for responsive positioning
+  isLeftPanelOpen?: boolean;
+  isRightPanelOpen?: boolean;
+}
+
+/**
+ * Compute quantile breaks from actual data values
+ * @param values Array of numeric values from the dataset
+ * @param numClasses Number of classes to create
+ * @returns Array of break points
+ */
+function computeQuantileBreaks(values: number[], numClasses: number): number[] {
+  if (!values || values.length === 0) return [];
+  
+  const sorted = [...values].filter(v => v != null && !isNaN(v)).sort((a, b) => a - b);
+  if (sorted.length === 0) return [];
+  
+  const breaks: number[] = [];
+  for (let i = 1; i < numClasses; i++) {
+    const index = Math.floor((sorted.length * i) / numClasses);
+    breaks.push(sorted[Math.min(index, sorted.length - 1)]);
+  }
+  
+  return breaks;
+}
+
+/**
+ * Format legend label based on mode and value
+ */
+function formatLegendLabel(value: number, nextValue: number | null, mode: "loss" | "wind"): string {
+  if (mode === "loss") {
+    const formatVal = (v: number) => {
+      if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+      if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
+      return `$${v.toFixed(0)}`;
+    };
+    
+    if (nextValue === null) {
+      return `> ${formatVal(value)}`;
+    }
+    return `${formatVal(value)} - ${formatVal(nextValue)}`;
+  } else {
+    const formatVal = (v: number) => Math.round(v);
+    
+    if (nextValue === null) {
+      return `> ${formatVal(value)} km/h`;
+    }
+    return `${formatVal(value)}-${formatVal(nextValue)} km/h`;
+  }
+}
+
+/**
+ * Get color for a legend class based on index
+ * Uses unified color system for consistency
+ */
+function getLegendColor(index: number, total: number, mode: "loss" | "wind"): string {
+  const colorScale = mode === "loss" ? LOSS_SEQUENTIAL_COLORS : WIND_SEQUENTIAL_COLORS;
+  
+  // Map index to color scale
+  const scaleIndex = Math.floor((index / (total - 1)) * (colorScale.length - 1));
+  const colorHex = colorScale[Math.min(scaleIndex, colorScale.length - 1)].color;
+  
+  // Convert hex to Tailwind class (or return as inline style)
+  // For now, return as inline style for exact color matching
+  return colorHex;
+}
+
+/**
+ * Get severity label for a class
+ */
+function getSeverityLabel(index: number, total: number, mode: "loss" | "wind"): string {
+  const ratio = index / (total - 1);
+  
+  if (mode === "loss") {
+    if (ratio < 0.2) return "Minimal";
+    if (ratio < 0.4) return "Low";
+    if (ratio < 0.6) return "Moderate";
+    if (ratio < 0.8) return "High";
+    if (ratio < 0.95) return "Severe";
+    return "Catastrophic";
+  } else {
+    if (ratio < 0.14) return "Below TS";
+    if (ratio < 0.29) return "Cat 1 / TS";
+    if (ratio < 0.43) return "Cat 2";
+    if (ratio < 0.57) return "Cat 3";
+    if (ratio < 0.71) return "Cat 3 - Severe";
+    if (ratio < 0.86) return "Cat 4";
+    return "Cat 5 - Extreme";
+  }
+}
+
+export default function UnifiedMapLegend({
+  mode,
+  visible = true,
+  isPanelOpen = false,
+  hasSelection = false,
+  dataSource = "Real Data",
+  temporalScope = "Event Total",
+  dataValues = [],
+  isLeftPanelOpen = false,
+  isRightPanelOpen = false,
+}: UnifiedMapLegendProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Hide when not visible or when something is selected
+  if (!visible || hasSelection) return null;
+
+  // Compute data-driven legend breaks
+  const legendClasses = useMemo(() => {
+    // If we have real data, compute quantile breaks
+    if (dataValues && dataValues.length > 0) {
+      const numClasses = mode === "loss" ? 6 : 7;
+      const breaks = computeQuantileBreaks(dataValues, numClasses);
+      
+      if (breaks.length > 0) {
+        const min = Math.min(...dataValues);
+        const max = Math.max(...dataValues);
+        
+        return breaks.map((breakValue, index) => {
+          const nextValue = index < breaks.length - 1 ? breaks[index + 1] : null;
+          return {
+            label: formatLegendLabel(breakValue, nextValue, mode),
+            color: getLegendColor(index, breaks.length, mode),
+            textColor: "text-slate-900 dark:text-white",
+            range: getSeverityLabel(index, breaks.length, mode),
+            minValue: breakValue,
+            maxValue: nextValue || max,
+          };
+        });
+      }
+    }
+    
+    // Fallback to domain-specific thresholds from unified color system
+    const colorScale = mode === "loss" ? LOSS_SEQUENTIAL_COLORS : WIND_SEQUENTIAL_COLORS;
+    
+    return colorScale.map((item, index) => {
+      const nextItem = colorScale[index + 1];
+      const label = mode === "loss"
+        ? (nextItem 
+            ? `${formatCurrency(item.threshold)} - ${formatCurrency(nextItem.threshold)}`
+            : `> ${formatCurrency(item.threshold)}`)
+        : (nextItem
+            ? `${Math.round(item.threshold)}-${Math.round(nextItem.threshold)} km/h`
+            : `> ${Math.round(item.threshold)} km/h`);
+      
+      return {
+        label,
+        color: item.color,
+        textColor: "text-slate-900 dark:text-white",
+        range: item.label,
+        minValue: item.threshold,
+        maxValue: nextItem ? nextItem.threshold : Infinity,
+      };
+    });
+  }, [mode, dataValues]);
+
+  const config = useMemo(() => {
+    if (mode === "loss") {
+      return {
+        title: "Economic Loss (USD)",
+        subtitle: "Direct physical damage costs (USD, millions)",
+        icon: DollarSign,
+        iconColor: "text-green-600 dark:text-green-400",
+        units: "USD",
+      };
+    } else {
+      return {
+        title: "Peak Wind Speed (km/h)",
+        subtitle: "10-minute sustained wind speed per district (km/h)",
+        icon: Wind,
+        iconColor: "text-blue-600 dark:text-blue-400",
+        units: "km/h",
+      };
+    }
+  }, [mode]);
+
+  const IconComponent = config.icon;
+  
+  // Find min and max from data
+  const dataRange = useMemo(() => {
+    if (!dataValues || dataValues.length === 0) return null;
+    const validValues = dataValues.filter(v => v != null && !isNaN(v));
+    if (validValues.length === 0) return null;
+    
+    return {
+      min: Math.min(...validValues),
+      max: Math.max(...validValues),
+    };
+  }, [dataValues]);
+
+  // Smart positioning strategy:
+  // - Desktop: Position dynamically based on sidebar states
+  // - Mobile: Bottom-left with compact design
+  // - Avoid overlap with cyclone controls (bottom-right)
+  // - Higher z-index for proper stacking
+  // - Responsive width that adapts to available space
+  
+  const getResponsiveStyles = () => {
+    // Calculate available horizontal space
+    const leftOffset = isLeftPanelOpen ? 304 : 32; // 288px panel + 16px gap OR 32px margin
+    const rightReserved = isRightPanelOpen ? 340 : 120; // Reserve space for right panel + controls
+    
+    return {
+      width: isExpanded 
+        ? 'min(340px, calc(100vw - 400px))' // Adaptive width
+        : '56px',
+      maxHeight: 'calc(100vh - 180px)', // Prevent vertical overflow
+    };
+  };
+  
+  return (
+    <div 
+      className={`
+        fixed bottom-8 z-50 
+        transition-all duration-300 ease-in-out 
+        pointer-events-auto
+        ${isLeftPanelOpen ? 'left-[304px]' : 'left-8'}
+        max-md:left-4 max-md:bottom-20
+        ${isExpanded ? 'max-md:w-[calc(100vw-2rem)]' : ''}
+      `}
+      style={getResponsiveStyles()}
+      role="region"
+      aria-label="Map legend"
+    >
+      {/* Simplified glass panel - less borders, cleaner look */}
+      <div className="glass-panel rounded-lg shadow-xl overflow-hidden border border-white/10 backdrop-blur-md">
+        {/* Compact toggle button */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="
+            w-full px-3 py-2.5 flex items-center justify-between 
+            hover:bg-white/5 transition-all duration-200
+            focus:outline-none focus:ring-1 focus:ring-blue-500/50
+            group
+          "
+          aria-label={isExpanded ? "Collapse legend" : "Expand legend"}
+          aria-expanded={isExpanded}
+          title={isExpanded ? "Click to minimize" : "Click to view legend"}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded bg-white/5 group-hover:bg-white/10 transition-all">
+              <IconComponent 
+                className={`w-3.5 h-3.5 ${config.iconColor}`} 
+                aria-hidden="true" 
+              />
+            </div>
+            {isExpanded && (
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Legend
+              </span>
+            )}
+          </div>
+          {isExpanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors" aria-hidden="true" />
+          ) : (
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors" aria-hidden="true" />
+          )}
+        </button>
+
+        {/* Expanded content */}
+        {isExpanded && (
+          <div>
+            {/* Consolidated header - no borders */}
+            <div className="px-3 py-2 bg-black/10 space-y-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Info className="w-3 h-3 text-blue-400" aria-hidden="true" />
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Map Display
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                <div>
+                  <span className="text-slate-500">Source:</span>
+                  <span className="font-medium text-slate-200 ml-1">{dataSource}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Scope:</span>
+                  <span className="font-medium text-slate-200 ml-1">{temporalScope}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Title - simplified */}
+            <div className="px-3 py-2">
+              <h3 className="text-xs font-bold text-white mb-0.5">
+                {config.title}
+              </h3>
+              <p className="text-xs text-slate-400">
+                {config.subtitle}
+              </p>
+              {/* Show data range if available */}
+              {dataRange && (
+                <p className="text-xs text-slate-500 font-mono mt-1">
+                  {mode === "loss" ? formatCurrency(dataRange.min) : `${Math.round(dataRange.min)} km/h`} 
+                  {" → "} 
+                  {mode === "loss" ? formatCurrency(dataRange.max) : `${Math.round(dataRange.max)} km/h`}
+                </p>
+              )}
+            </div>
+
+            {/* Legend Items - cleaner spacing */}
+            <div className="px-2 py-2 space-y-1 max-h-[min(280px,calc(100vh-300px))] overflow-y-auto custom-scrollbar">
+                {legendClasses.map((item, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 transition-colors"
+                    role="listitem"
+                  >
+                    {/* Simplified color swatch */}
+                    <div 
+                      className="w-6 h-4 rounded flex-shrink-0"
+                      style={{ backgroundColor: typeof item.color === 'string' && item.color.startsWith('#') ? item.color : undefined }}
+                    />
+                    
+                    {/* Compact labels */}
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold font-mono text-slate-200">
+                        {item.label}
+                      </span>
+                      <span className="text-xs text-slate-500 uppercase tracking-wide">
+                        {item.range}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            {/* Compact footer */}
+            <div className="px-3 py-2 bg-black/10">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {mode === "loss" 
+                  ? "Direct physical damage costs in USD (millions)"
+                  : "10-minute sustained wind speed in km/h"
+                }
+              </p>
+              {dataValues && dataValues.length > 0 && (
+                <p className="text-xs text-blue-400 mt-1">
+                  ✓ {dataValues.length} data points
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

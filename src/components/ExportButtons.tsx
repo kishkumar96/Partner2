@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { jsPDF } from "jspdf";
-import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
 import { FileDown, FileSpreadsheet } from "lucide-react";
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from "@/types";
+
+// FIX: Lazy load heavy libraries only when export is triggered
+// This reduces initial bundle size significantly
 
 // PDF table column widths configuration (in mm)
 const PDF_COL_WIDTHS = {
@@ -68,7 +68,7 @@ export default function ExportButtons({
   const getSectorName = (sectorId: string) =>
     sectors.find((s) => s.id === sectorId)?.name || sectorId;
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (disabled) {
       setExportError("No data available to export");
       setTimeout(() => setExportError(null), 3000);
@@ -76,8 +76,10 @@ export default function ExportButtons({
     }
     try {
       setExportError(null);
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
+      // Lazy load jsPDF only when needed (no prefetch)
+      const { jsPDF } = await import(/* webpackPrefetch: false */ 'jspdf');
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
 
     // Title
     doc.setFontSize(20);
@@ -264,6 +266,9 @@ export default function ExportButtons({
     }
     try {
       setExportError(null);
+      // Lazy load ExcelJS and file-saver only when needed (no prefetch)
+      const ExcelJS = (await import(/* webpackPrefetch: false */ 'exceljs')).default;
+      const { saveAs } = await import(/* webpackPrefetch: false */ 'file-saver');
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Climate Risk Dashboard";
       workbook.created = new Date();
@@ -390,37 +395,37 @@ export default function ExportButtons({
   };
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">
       {exportError && (
-        <span className="text-sm text-red-600 dark:text-red-400 mr-2">{exportError}</span>
+        <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 hidden lg:block">{exportError}</span>
       )}
       <button
         onClick={downloadPDF}
         disabled={disabled}
         aria-label="Export data as PDF report"
-        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${
+        className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-lg shadow-lg transition-all whitespace-nowrap ${
           disabled 
-            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-50' 
-            : 'bg-red-600 hover:bg-red-700'
+            ? 'bg-slate-700/60 cursor-not-allowed opacity-50' 
+            : 'bg-red-600 hover:bg-red-700 hover:shadow-xl hover:scale-105 ring-2 ring-red-500/50'
         }`}
         title={disabled ? "No data available to export" : "Export as PDF"}
       >
-        <FileDown className="w-4 h-4" />
-        Export PDF
+        <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        <span className="hidden sm:inline">Export</span> PDF
       </button>
       <button
         onClick={downloadExcel}
         disabled={disabled}
         aria-label="Export data as Excel spreadsheet"
-        className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors ${
+        className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-lg shadow-lg transition-all whitespace-nowrap ${
           disabled 
-            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-50' 
-            : 'bg-green-600 hover:bg-green-700'
+            ? 'bg-slate-700/60 cursor-not-allowed opacity-50' 
+            : 'bg-green-600 hover:bg-green-700 hover:shadow-xl hover:scale-105 ring-2 ring-green-500/50'
         }`}
         title={disabled ? "No data available to export" : "Export as Excel"}
       >
-        <FileSpreadsheet className="w-4 h-4" />
-        Export Excel
+        <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        <span className="hidden sm:inline">Export</span> Excel
       </button>
     </div>
   );

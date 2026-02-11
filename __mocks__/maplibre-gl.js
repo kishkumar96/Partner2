@@ -1,0 +1,26 @@
+// Mock for MapLibre GL
+module.exports = {
+  Map: jest.fn().mockImplementation(() => ({
+    on: jest.fn(),
+    off: jest.fn(),
+    remove: jest.fn(),
+    addControl: jest.fn(),
+    removeControl: jest.fn(),
+    addLayer: jest.fn(),
+    removeLayer: jest.fn(),
+    addSource: jest.fn(),
+    removeSource: jest.fn(),
+    getSource: jest.fn(),
+    setStyle: jest.fn(),
+    getStyle: jest.fn(),
+    flyTo: jest.fn(),
+    fitBounds: jest.fn(),
+    getZoom: jest.fn(),
+    getCenter: jest.fn(),
+    resize: jest.fn(),
+  })),
+  NavigationControl: jest.fn(),
+  GeolocateControl: jest.fn(),
+  ScaleControl: jest.fn(),
+  FullscreenControl: jest.fn(),
+};

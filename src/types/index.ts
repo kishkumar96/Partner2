@@ -125,3 +125,62 @@ export interface DistrictsGeoJSON {
   type: "FeatureCollection";
   features: DistrictGeoFeature[];
 }
+
+/**
+ * Regional summary data structure from CSV files
+ */
+export interface RegionalSummary {
+  Region: string;
+  Total_Population?: number;
+  Population_Exposed_To_Any_Hazard?: number;
+  Total_Loss?: number;
+  Total_Exposed_Value_To_Any_Hazard?: number;
+  Exposed_Infrastructure?: number;
+  Max_Wind_Gusts?: number;
+  Number_Exposed_Buildings?: number;
+  // Wind gust ranges
+  'Wind_Gusts_kmph.range_<_83.Buildings'?: number;
+  'Wind_Gusts_kmph.range_<_83.Population'?: number;
+  'Wind_Gusts_kmph.range_<_83.Total_Loss'?: number;
+  'Wind_Gusts_kmph.range_83_125.Buildings'?: number;
+  'Wind_Gusts_kmph.range_83_125.Population'?: number;
+  'Wind_Gusts_kmph.range_83_125.Total_Loss'?: number;
+  'Wind_Gusts_kmph.range_125_164.Buildings'?: number;
+  'Wind_Gusts_kmph.range_125_164.Population'?: number;
+  'Wind_Gusts_kmph.range_125_164.Total_Loss'?: number;
+  'Wind_Gusts_kmph.range_164_224.Buildings'?: number;
+  'Wind_Gusts_kmph.range_164_224.Population'?: number;
+  'Wind_Gusts_kmph.range_164_224.Total_Loss'?: number;
+  'Wind_Gusts_kmph.range_224_280.Buildings'?: number;
+  'Wind_Gusts_kmph.range_224_280.Population'?: number;
+  'Wind_Gusts_kmph.range_224_280.Total_Loss'?: number;
+  'Wind_Gusts_kmph.range_280_+.Buildings'?: number;
+  'Wind_Gusts_kmph.range_280_+.Population'?: number;
+  'Wind_Gusts_kmph.range_280_+.Total_Loss'?: number;
+}
+
+/**
+ * Regional summary by sector data structure from CSV files
+ */
+export interface RegionalSummaryBySector {
+  Region: string;
+  Sector: string;
+  Total_Loss: number;
+  Number_Exposed_Buildings?: number;
+  Total_Wind_Loss?: number;
+  Total_Fluvial_Loss?: number;
+  Total_Coastal_Loss?: number;
+  Population_Exposed?: number;
+}
+
+/**
+ * Aggregated event data grouped by region/district/national level
+ */
+export interface AggregatedEventData {
+  id: string;
+  name: string;
+  totalEvents: number;
+  totalAffectedPopulation: number;
+  totalEconomicDamage: number;
+  highRiskAreas: number;
+}

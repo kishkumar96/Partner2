@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Event, Hazard, FilterState, DistrictGeoProperties } from "@/types";
@@ -8,18 +8,18 @@ import { CountryCode, COUNTRIES } from "@/types/thredds";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
 import { districtsGeoJSON } from "@/data/districtsGeo";
+import { LAYER_OPACITY, createScaleDependentOpacity } from "@/utils/colorSystem";
+import { debugLogger } from "@/utils/debugLogger";
+import type { CycloneForecastPoint } from "@/utils/cycloneAnimationLoader";
+import type { StoryBeat } from "@/utils/cycloneStory";
 import RealDataLayers from "./RealDataLayers";
-import PDIEDataLayers from "./PDIEDataLayers";
 import RegionalImpactsLayer from "./RegionalImpactsLayer";
 import IntensityHeatmapLayer from "./IntensityHeatmapLayer";
 import DamagedBuildingsLayer from "./DamagedBuildingsLayer";
 import DamagedRoadsLayer from "./DamagedRoadsLayer";
 import CycloneAnimationLayer from "./CycloneAnimationLayer";
-import { CycloneAnimationToggle } from "./CycloneAnimationToggle";
-import { ChevronDown, ChevronUp } from "lucide-react";
-
-// Free OpenStreetMap-based tile style (no API key required)
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+import CycloneAnimationToggle from "./CycloneAnimationToggle";
+import CycloneStoryOverlay from "./CycloneStoryOverlay";
 
 // Layer IDs for district polygons
 const DISTRICTS_SOURCE_ID = "districts-source";
@@ -40,6 +40,19 @@ const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
 };
 
 /**
+ * Maps UI hazard IDs to internal map exposure field keys.
+ * This bridges the gap between user-facing hazard names (e.g., "tropical-cyclone")
+ * and the technical exposure property names used in district data.
+ */
+const UI_HAZARD_TO_EXPOSURE_MAP: Record<string, string[]> = {
+  "tropical-cyclone": ["wind", "cyclone_track"], // Tropical cyclones generate both wind and track exposure
+  "flood": ["inundation"], // Flooding maps to inundation
+  "wind": ["wind"], // Direct mapping for legacy compatibility
+  "cyclone_track": ["cyclone_track"],
+  "inundation": ["inundation"],
+};
+
+/**
  * Creates a MapLibre expression for hazard-based color matching.
  * Reused for fill layer, outline layer, and default expression.
  */
@@ -57,173 +70,210 @@ function createHazardColorExpression(): maplibregl.ExpressionSpecification {
 /**
  * Creates styled HTML for the district popup.
  */
-function createDistrictPopupHTML(
+function createDistrictPopupNode(
   props: DistrictGeoProperties,
   selectedHazards: string[],
   hazards: Hazard[]
-): string {
+): HTMLElement {
   const hazard = hazards.find((h) => h.id === props.primaryHazard);
-  const hazardName = hazard?.name || props.primaryHazard;
+  const normalizeHazardLabel = (value: string) =>
+    value
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  const hazardName = hazard?.name || (props.primaryHazard ? normalizeHazardLabel(props.primaryHazard) : "Unknown");
+  const districtName = props.name || "Unknown";
+  const toNumber = (value: unknown, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
 
   // Build exposure info using shared HAZARD_EXPOSURE_FIELDS mapping
   const exposureMap: Record<string, { label: string; value: number }> = {};
   for (const [hazardId, fieldName] of Object.entries(HAZARD_EXPOSURE_FIELDS)) {
+    const rawValue = props[fieldName];
+    const numericValue = Number(rawValue ?? 0);
+    const clampedValue = Math.max(0, Math.min(1, numericValue));
+
     exposureMap[hazardId] = {
-      label: hazardId.charAt(0).toUpperCase() + hazardId.slice(1),
-      value: props[fieldName] as number,
+      label: normalizeHazardLabel(hazardId),
+      value: clampedValue,
     };
   }
 
   // Determine which hazards to show (filtered or all)
+  // Map UI hazard IDs to exposure field keys
+  const mappedHazards = selectedHazards.flatMap(
+    (uiHazardId) => UI_HAZARD_TO_EXPOSURE_MAP[uiHazardId] || []
+  );
+  const uniqueMappedHazards = Array.from(new Set(mappedHazards));
   const hazardsToShow =
-    selectedHazards.length > 0 ? selectedHazards : Object.keys(exposureMap);
+    uniqueMappedHazards.length > 0 ? uniqueMappedHazards : Object.keys(exposureMap);
 
-  const exposureBars = hazardsToShow
-    .map((hazardId) => {
-      const exp = exposureMap[hazardId];
-      if (!exp) return "";
-      const color = getHazardColor(hazardId);
-      const pct = Math.round(exp.value * 100);
-      return `
-        <div style="margin-bottom: 4px;">
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6b7280;">
-            <span>${exp.label}</span>
-            <span>${pct}%</span>
-          </div>
-          <div style="height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
-            <div style="height: 100%; width: ${pct}%; background: ${color}; transition: width 0.3s;"></div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  const createEl = (tag: string, className?: string) => {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    return el;
+  };
 
-  return `
-    <div style="
-      padding: 12px;
-      min-width: 220px;
-      font-family: system-ui, -apple-system, sans-serif;
-    ">
-      <h3 style="
-        font-weight: 600;
-        font-size: 15px;
-        margin: 0 0 8px 0;
-        color: #1f2937;
-        border-bottom: 1px solid #e5e7eb;
-        padding-bottom: 8px;
-      ">
-        ${props.name}
-      </h3>
-      <div style="font-size: 12px; color: #374151; margin-bottom: 8px;">
-        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-          <span style="font-weight: 500;">Primary Hazard:</span>
-          <span style="
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 2px 8px;
-            background: ${getHazardColor(props.primaryHazard)}20;
-            color: ${getHazardColor(props.primaryHazard)};
-            border-radius: 12px;
-            font-weight: 500;
-          ">
-            <span style="width: 8px; height: 8px; border-radius: 999px; background: ${getHazardColor(props.primaryHazard)};"></span>
-            ${hazardName}
-          </span>
-        </div>
-      </div>
-      <div style="
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-bottom: 10px;
-        font-size: 12px;
-      ">
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Population</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.population)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Economic Damage</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatCurrency(props.economicDamageUSD)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Buildings</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.buildingCount)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Infrastructure</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.infrastructureCount)}</div>
-        </div>
-      </div>
-      <div>
-        <div style="font-size: 11px; font-weight: 500; color: #374151; margin-bottom: 6px;">Hazard Exposure</div>
-        ${exposureBars}
-      </div>
-    </div>
-  `;
+  const root = createEl("div", "popup-content");
+  const title = createEl("h3", "popup-title");
+  title.textContent = districtName;
+  root.appendChild(title);
+
+  const body = createEl("div", "popup-body");
+  const field = createEl("div", "popup-field");
+  const label = createEl("span", "popup-label");
+  label.textContent = "Primary Hazard:";
+  field.appendChild(label);
+
+  const badge = createEl("span", "popup-badge");
+  const hazardColor = getHazardColor(props.primaryHazard);
+  badge.style.background = `${hazardColor}33`;
+  badge.style.color = hazardColor;
+
+  const badgeDot = createEl("span", "popup-badge-dot");
+  badgeDot.style.background = hazardColor;
+  badge.appendChild(badgeDot);
+  badge.appendChild(document.createTextNode(hazardName));
+  field.appendChild(badge);
+  body.appendChild(field);
+  root.appendChild(body);
+
+  const statsGrid = createEl("div", "popup-stats-grid");
+  const addStat = (labelText: string, valueText: string) => {
+    const stat = createEl("div", "popup-stat-card");
+    const statLabel = createEl("div", "popup-stat-label");
+    statLabel.textContent = labelText;
+    const statValue = createEl("div", "popup-stat-value");
+    statValue.textContent = valueText;
+    stat.appendChild(statLabel);
+    stat.appendChild(statValue);
+    statsGrid.appendChild(stat);
+  };
+
+  addStat("Population", formatNumber(toNumber(props.population)));
+  addStat("Economic Damage", formatCurrency(toNumber(props.economicDamageUSD)));
+  addStat("Buildings", formatNumber(toNumber(props.buildingCount)));
+  addStat("Infrastructure", formatNumber(toNumber(props.infrastructureCount)));
+  root.appendChild(statsGrid);
+
+  const exposureSection = createEl("div", "popup-section");
+  const exposureTitle = createEl("div", "popup-section-title");
+  exposureTitle.textContent = "Hazard Exposure";
+  exposureSection.appendChild(exposureTitle);
+
+  hazardsToShow.forEach((hazardId) => {
+    const exp = exposureMap[hazardId];
+    if (!exp) return;
+    const color = getHazardColor(hazardId);
+    const pct = Math.round(exp.value * 100);
+    const container = createEl("div", "popup-progress-container");
+    const header = createEl("div", "popup-progress-header");
+    const headerLabel = createEl("span");
+    headerLabel.textContent = exp.label;
+    const headerValue = createEl("span");
+    headerValue.textContent = `${pct}%`;
+    header.appendChild(headerLabel);
+    header.appendChild(headerValue);
+    const bar = createEl("div", "popup-progress-bar");
+    const fill = createEl("div", "popup-progress-fill");
+    fill.style.width = `${pct}%`;
+    fill.style.background = color;
+    bar.appendChild(fill);
+    container.appendChild(header);
+    container.appendChild(bar);
+    exposureSection.appendChild(container);
+  });
+
+  root.appendChild(exposureSection);
+  return root;
 }
 
 interface MapViewProps {
   events: Event[];
   hazards: Hazard[];
   filters: FilterState;
-  onEventSelect: (event: Event | null) => void;
+  onEventSelect?: (event: Event | null) => void;
   selectedRegion?: string | null;
   onRegionSelect?: (regionId: string | null) => void;
-  useRealData?: boolean;
+
   selectedCountry?: CountryCode | null;
   mapStyle?: "loss" | "wind";
   basemapStyle?: string;
-  damagedBuildings?: any;
-  damagedRoads?: any;
-  cycloneForecast?: any;
+  damagedBuildings?: GeoJSON.FeatureCollection;
+  damagedRoads?: GeoJSON.FeatureCollection;
+  cycloneForecast?: CycloneForecastPoint[] | null;
+  aggregationLevel?: string;
+  showOverlays?: boolean;
+  onCycloneTimestepChange?: (timestep: CycloneForecastPoint | null, index: number, totalSteps: number) => void;
+  showCycloneAnimation?: boolean;
+  onCycloneAnimationChange?: (visible: boolean) => void;
+  isCyclonePlaying?: boolean;
+  onCyclonePlayingChange?: (isPlaying: boolean) => void;
+  showCycloneToggle?: boolean;
+  cycloneControlsHost?: HTMLElement | null;
+  isLeftPanelOpen?: boolean;
+  isRightPanelOpen?: boolean;
+  storyMode?: boolean;
+  storyBeats?: StoryBeat[];
+  currentCycloneIndex?: number;
+  onStoryModeChange?: (enabled: boolean) => void;
+  onStoryIndexChange?: (index: number) => void;
 }
 
 export default function MapView({
   events,
   hazards,
   filters,
-  onEventSelect,
   selectedRegion = null,
   onRegionSelect,
-  useRealData = false,
   selectedCountry = null,
   mapStyle = "loss",
   basemapStyle = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
   damagedBuildings,
   damagedRoads,
   cycloneForecast,
+  showOverlays = true,
+  onCycloneTimestepChange,
+  showCycloneAnimation = true,
+  onCycloneAnimationChange,
+  isCyclonePlaying,
+  onCyclonePlayingChange,
+  showCycloneToggle = true,
+  cycloneControlsHost = null,
+  isLeftPanelOpen = false,
+  isRightPanelOpen = false,
+  storyMode = false,
+  storyBeats = [],
+  currentCycloneIndex = 0,
+  onStoryModeChange,
+  onStoryIndexChange,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [legendCollapsed, setLegendCollapsed] = useState(false);
-  const [showCycloneAnimation, setShowCycloneAnimation] = useState(true);
+  const [styleChangeCounter, setStyleChangeCounter] = useState(0); // Track style changes to trigger layer reload
   const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
+  const [windZoomHint, setWindZoomHint] = useState(false);
+  const [wmsWarning, setWmsWarning] = useState<string | null>(null);
+  const windZoomHintRef = useRef(false);
+
+  const handleStorySelect = useCallback(
+    (index: number) => {
+      if (index === currentCycloneIndex) return;
+      onStoryIndexChange?.(index);
+    },
+    [currentCycloneIndex, onStoryIndexChange]
+  );
+  const basemapRequestIdRef = useRef(0);
+  const pendingStyleLoadHandlerRef = useRef<(() => void) | null>(null);
 
   // Filter events based on current filters using shared utility
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters]
   );
-
-  useEffect(() => {
-    const handleResize = () => {
-      const shouldCollapse = window.innerWidth < 768;
-      setLegendCollapsed(shouldCollapse);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const getHazardInfo = useCallback((hazardId: string) => {
-    return hazards.find((h) => h.id === hazardId);
-  }, [hazards]);
 
   // Initialize map
   useEffect(() => {
@@ -243,7 +293,14 @@ export default function MapView({
       center: initialCenter,
       zoom: initialZoom,
     });
-
+    
+    // Log map initialization
+    debugLogger.info("Map initialized", "map-initialization", {
+      center: initialCenter,
+      zoom: initialZoom,
+      style: basemapStyle,
+    });
+    
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
     map.current.addControl(new maplibregl.ScaleControl(), "bottom-left");
 
@@ -256,9 +313,17 @@ export default function MapView({
       const errorMessage = e?.error?.message || String(e?.error || e);
       const isWMSError = errorMessage.includes('thredds') || errorMessage.includes('WMS') || errorMessage.includes('Failed to fetch');
       
+      // Suppress style diff and filesystem warnings (non-critical MapLibre internal warnings)
+      const isStyleDiffWarning = errorMessage.includes('style diff') || errorMessage.includes('setState');
+      const isFileSystemWarning = errorMessage.includes('filesystem') || errorMessage.includes('illegal path');
+      
       if (isWMSError) {
-        // Silently ignore WMS tile loading failures - these are expected when THREDDS server is unreachable
-        // The map will continue to function with other data layers
+        setWmsWarning((prev) => prev ?? "Wind hazard tiles unavailable. Check THREDDS connectivity.");
+        return;
+      }
+
+      if (isStyleDiffWarning || isFileSystemWarning) {
+        // Silently ignore - these are expected warnings that don't affect functionality
         return;
       }
       
@@ -290,7 +355,7 @@ export default function MapView({
 
   // Handle country-based map positioning when real data is enabled
   useEffect(() => {
-    if (!map.current || !mapLoaded || !useRealData || !selectedCountry) return;
+    if (!map.current || !mapLoaded || !selectedCountry) return;
 
     const country = COUNTRIES[selectedCountry];
     if (country) {
@@ -300,18 +365,102 @@ export default function MapView({
         duration: 2000,
       });
     }
-  }, [useRealData, selectedCountry, mapLoaded]);
+  }, [selectedCountry, mapLoaded]);
+
+  useEffect(() => {
+    if (typeof isCyclonePlaying !== "boolean") return;
+    setIsAnimationPlaying(isCyclonePlaying);
+  }, [isCyclonePlaying]);
+
+  useEffect(() => {
+    if (!wmsWarning) return;
+    const id = window.setTimeout(() => setWmsWarning(null), 7000);
+    return () => window.clearTimeout(id);
+  }, [wmsWarning]);
+
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const updateZoomHint = () => {
+      if (mapStyle !== "wind") {
+        if (windZoomHintRef.current) {
+          windZoomHintRef.current = false;
+          setWindZoomHint(false);
+        }
+        return;
+      }
+      const zoom = map.current?.getZoom() ?? 0;
+      const next = zoom < 6;
+      if (windZoomHintRef.current !== next) {
+        windZoomHintRef.current = next;
+        setWindZoomHint(next);
+      }
+    };
+    updateZoomHint();
+    map.current.on("zoomend", updateZoomHint);
+    return () => {
+      map.current?.off("zoomend", updateZoomHint);
+    };
+  }, [mapLoaded, mapStyle]);
 
   // Handle basemap style changes
   useEffect(() => {
-    if (!map.current) return;
-    
-    try {
-      map.current.setStyle(basemapStyle);
-    } catch (e) {
-      console.warn("Error changing basemap style:", e);
+    if (!map.current || !mapLoaded) return;
+    const requestId = basemapRequestIdRef.current + 1;
+    basemapRequestIdRef.current = requestId;
+
+    if (pendingStyleLoadHandlerRef.current) {
+      map.current.off("style.load", pendingStyleLoadHandlerRef.current);
+      pendingStyleLoadHandlerRef.current = null;
     }
-  }, [basemapStyle]);
+
+    const applyBasemapStyle = () => {
+      if (!map.current) return;
+
+      try {
+        // Store current center and zoom to restore after style change
+        const center = map.current.getCenter();
+        const zoom = map.current.getZoom();
+
+        map.current.setStyle(basemapStyle);
+
+        const handleStyleLoad = () => {
+          if (!map.current) return;
+          if (basemapRequestIdRef.current !== requestId) return;
+
+          // Restore position
+          map.current.setCenter(center);
+          map.current.setZoom(zoom);
+
+          // Increment counter to trigger district layers effect
+          setStyleChangeCounter((prev) => prev + 1);
+        };
+
+        pendingStyleLoadHandlerRef.current = handleStyleLoad;
+        map.current.once("style.load", handleStyleLoad);
+      } catch (e) {
+        // Silently handle - basemap changes are non-critical
+      }
+    };
+
+    // Only change style if the current style is fully loaded; otherwise,
+    // wait for the current style to finish loading and then apply.
+    if (!map.current.isStyleLoaded()) {
+      const handleStyleLoad = () => {
+        if (!map.current || !map.current.isStyleLoaded()) return;
+        if (basemapRequestIdRef.current !== requestId) return;
+        applyBasemapStyle();
+      };
+
+      pendingStyleLoadHandlerRef.current = handleStyleLoad;
+      map.current.once("style.load", handleStyleLoad);
+
+      return () => {
+        map.current?.off("style.load", handleStyleLoad);
+      };
+    }
+
+    applyBasemapStyle();
+  }, [basemapStyle, mapLoaded]);
 
   // Add district polygon layers after map loads
   useEffect(() => {
@@ -329,14 +478,14 @@ export default function MapView({
           promoteId: "id", // Required for feature state
         });
 
-        // Add fill layer for districts with semi-transparent colors
+        // Add fill layer for districts with scale-dependent opacity
         m.addLayer({
           id: DISTRICTS_FILL_LAYER_ID,
           type: "fill",
           source: DISTRICTS_SOURCE_ID,
           paint: {
             "fill-color": hazardColorExpression,
-            "fill-opacity": 0.4,
+            "fill-opacity": createScaleDependentOpacity(LAYER_OPACITY.district.fill),
             "fill-opacity-transition": { duration: 300 },
           },
         });
@@ -349,7 +498,7 @@ export default function MapView({
           paint: {
             "line-color": hazardColorExpression,
             "line-width": 2,
-            "line-opacity": 0.8,
+            "line-opacity": LAYER_OPACITY.district.outline,
           },
         });
 
@@ -371,20 +520,20 @@ export default function MapView({
       }
     };
 
-    // If style already loaded, add layers immediately, otherwise wait for styledata
+    // If style already loaded, add layers immediately, otherwise wait for style.load
     if (m.isStyleLoaded && m.isStyleLoaded()) {
       addDistrictLayers();
     } else {
-      m.once("styledata", addDistrictLayers);
+      m.once("style.load", addDistrictLayers);
     }
-  }, [mapLoaded]);
+  }, [mapLoaded, styleChangeCounter]); // Re-run when style changes
 
   // Handle district hover and click interactions
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     const m = map.current;
-    let hoveredDistrictId: string | null = null;
+    let hoveredDistrictId: string | number | null = null;
 
     // Change cursor on hover
     const handleMouseEnter = () => {
@@ -405,7 +554,7 @@ export default function MapView({
     const handleMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
       if (e.features && e.features.length > 0) {
         const feature = e.features[0];
-        const featureId = feature.properties?.id;
+        const featureId = feature.id;
 
         if (hoveredDistrictId !== null && hoveredDistrictId !== featureId) {
           m.setFeatureState(
@@ -414,7 +563,7 @@ export default function MapView({
           );
         }
 
-        if (featureId) {
+        if (featureId !== undefined && featureId !== null) {
           hoveredDistrictId = featureId;
           m.setFeatureState(
             { source: DISTRICTS_SOURCE_ID, id: featureId },
@@ -442,7 +591,7 @@ export default function MapView({
           className: "district-popup",
         })
           .setLngLat(e.lngLat)
-          .setHTML(createDistrictPopupHTML(props, filters.selectedHazards, hazards))
+          .setDOMContent(createDistrictPopupNode(props, filters.selectedHazards, hazards))
           .addTo(m);
       }
     };
@@ -463,7 +612,7 @@ export default function MapView({
         popupRef.current = null;
       }
     };
-  }, [mapLoaded, filters.selectedHazards]);
+  }, [mapLoaded, filters.selectedHazards, hazards]);
 
   // Update district layer visibility/opacity based on selected hazards
   useEffect(() => {
@@ -480,13 +629,26 @@ export default function MapView({
       // Show all districts with default styling
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", defaultColorExpression);
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", defaultColorExpression);
-      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.4);
+      m.setPaintProperty(
+        DISTRICTS_FILL_LAYER_ID,
+        "fill-opacity",
+        createScaleDependentOpacity(LAYER_OPACITY.district.fill)
+      );
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-opacity", 0.8);
     } else {
       // Build case expression for selected hazards
+      // Map UI hazard IDs to exposure field keys first
+      const selectedMappedHazards = Array.from(
+        new Set(
+          filters.selectedHazards.flatMap(
+            (uiHazardId) => UI_HAZARD_TO_EXPOSURE_MAP[uiHazardId] || []
+          )
+        )
+      );
+      
       // TypeScript assertions needed due to MapLibre's complex expression types
       const caseArgs: (maplibregl.ExpressionSpecification | string)[] = [];
-      for (const hazard of filters.selectedHazards) {
+      for (const hazard of selectedMappedHazards) {
         caseArgs.push(["==", ["get", "primaryHazard"], hazard] as maplibregl.ExpressionSpecification);
         caseArgs.push(getHazardColor(hazard));
       }
@@ -499,7 +661,8 @@ export default function MapView({
       m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", colorExpression);
 
       // Build max exposure expression for selected hazards using shared mapping
-      const exposureExpressions = filters.selectedHazards
+      // Reuse selectedMappedHazards already defined above
+      const exposureExpressions = selectedMappedHazards
         .filter((h) => HAZARD_EXPOSURE_FIELDS[h])
         .map((h) => ["get", HAZARD_EXPOSURE_FIELDS[h]] as maplibregl.ExpressionSpecification);
 
@@ -528,246 +691,109 @@ export default function MapView({
     }
   }, [filters.selectedHazards, mapLoaded]);
 
-  // Update markers when filtered events change - only shown when NOT using real data
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    // If using real data, remove all markers
-    if (useRealData) {
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current.clear();
-      return;
-    }
-
-    const currentEventIds = new Set(filteredEvents.map(e => e.id));
-    const existingEventIds = new Set(markersRef.current.keys());
-
-    // Remove markers that are no longer in filtered events
-    for (const eventId of existingEventIds) {
-      if (!currentEventIds.has(eventId)) {
-        const marker = markersRef.current.get(eventId);
-        if (marker) {
-          marker.remove();
-          markersRef.current.delete(eventId);
-        }
-      }
-    }
-
-    // Add new markers for events that don't have markers yet
-    filteredEvents.forEach((event) => {
-      if (markersRef.current.has(event.id)) return; // Skip if marker already exists
-      
-      const hazard = getHazardInfo(event.hazardId);
-      const color = hazard?.color || "#6B7280";
-      
-      // Calculate intensity for glow effect (0-1 scale based on severity)
-      const intensityMap = { low: 0.3, medium: 0.6, high: 0.9, critical: 1.0 };
-      const intensity = intensityMap[event.severity] || 0.5;
-      
-      // Calculate animation speed based on severity (faster = more severe)
-      const pulseSpeed = event.severity === "critical" ? "1.5s" : 
-                         event.severity === "high" ? "2s" : 
-                         event.severity === "medium" ? "2.5s" : "3s";
-
-      // Create custom marker element
-      const el = document.createElement("div");
-      el.className = "event-marker";
-      el.style.cssText = `
-        width: 24px;
-        height: 24px;
-        background-color: ${color};
-        color: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        cursor: pointer;
-        transition: transform 0.2s ease;
-        --pulse-speed: ${pulseSpeed};
-        filter: drop-shadow(0 0 ${intensity * 20}px ${color});
-      `;
-      
-      // Add intensity-specific animation class
-      el.style.setProperty("--glow-intensity", intensity.toString());
-
-      // Accessibility attributes for custom marker
-      el.setAttribute("role", "button");
-      el.setAttribute("aria-label", event.name);
-      el.setAttribute("tabindex", "0");
-      el.addEventListener("mouseenter", () => {
-        el.style.transform = "scale(1.2)";
-      });
-      el.addEventListener("mouseleave", () => {
-        el.style.transform = "scale(1)";
-      });
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onEventSelect(event);
-        }
-      });
-
-      // Create popup
-      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
-        <div style="padding: 8px; min-width: 200px;">
-          <h3 style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #1f2937;">
-            ${hazard?.icon || ""} ${event.name}
-          </h3>
-          <div style="font-size: 12px; color: #6b7280; space-y: 4px;">
-            <p><strong>Date:</strong> ${event.date}</p>
-            <p><strong>Severity:</strong> <span style="text-transform: capitalize;">${event.severity}</span></p>
-            <p><strong>Affected Population:</strong> ${formatNumber(event.affectedPopulation)}</p>
-            <p><strong>Economic Damage:</strong> ${formatCurrency(event.economicDamage)}</p>
-          </div>
-        </div>
-      `);
-
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([event.location.lng, event.location.lat])
-        .setPopup(popup)
-        .addTo(map.current!);
-
-      el.addEventListener("click", () => {
-        onEventSelect(event);
-      });
-
-      markersRef.current.set(event.id, marker);
-    });
-
-    // Fit bounds to show all markers
-    if (filteredEvents.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      filteredEvents.forEach((event) => {
-        bounds.extend([event.location.lng, event.location.lat]);
-      });
-      map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
-    }
-  }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect, useRealData]);
-
-  // Note: Mock hazard zones removed - now using real data from THREDDS server via RealDataLayers
-
-  // Compute which hazards to show in legend based on filter state
-  const visibleHazards = useMemo(() => {
-    // When no hazards are selected, show all hazards in the legend
-    if (filters.selectedHazards.length === 0) {
-      return hazards;
-    }
-    // Otherwise, show only selected hazards
-    return hazards.filter((h) => filters.selectedHazards.includes(h.id));
-  }, [hazards, filters.selectedHazards]);
+  // Note: Mock hazard zones and event markers removed - now using real data from THREDDS server via RealData Layers
 
   return (
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
+      <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
+
+      {showOverlays && windZoomHint && (
+        <div className="absolute top-4 left-4 z-[25] max-w-sm rounded-lg border border-blue-500/30 bg-slate-900/85 px-3 py-2 text-xs text-blue-200 shadow-lg backdrop-blur">
+          Zoom in to level 6+ to load wind hazard tiles.
+        </div>
+      )}
+
+      {showOverlays && wmsWarning && (
+        <div className="absolute top-4 right-4 z-[25] max-w-sm rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
+          {wmsWarning}
+        </div>
+      )}
+
+      {showOverlays && storyMode && map.current && (
+        <CycloneStoryOverlay
+          map={map.current}
+          forecastTrack={cycloneForecast ?? null}
+          storyBeats={storyBeats}
+          currentIndex={currentCycloneIndex}
+          onSelect={handleStorySelect}
+          onExit={() => onStoryModeChange?.(false)}
+        />
+      )}
       
-      {/* Map Legend - styled to match SummaryPanel cards - Only show for mock data */}
-      {!useRealData && (
-        <div 
-          className="absolute bottom-8 right-4 glass-panel rounded-xl p-4 min-w-[180px] z-[100]"
-          role="region"
-          aria-label="Map legend showing hazard types"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[11px] font-semibold text-slate-200 uppercase tracking-wide">
-              Hazard Legend
-            </h4>
-            <button
-              onClick={() => setLegendCollapsed(!legendCollapsed)}
-              className="text-slate-400 hover:text-slate-200"
-              aria-expanded={!legendCollapsed}
-              aria-controls="hazard-legend-items"
-            >
-              {legendCollapsed ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronUp className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-          {!legendCollapsed && (
-            <div id="hazard-legend-items" className="space-y-2">
-              {visibleHazards.map((hazard) => (
-                <div 
-                  key={hazard.id} 
-                  className="flex items-center gap-2.5 transition-opacity duration-300"
-                >
-                  <span
-                    className="w-3.5 h-3.5 rounded-full ring-2 ring-white dark:ring-slate-700 shadow-sm flex-shrink-0"
-                    style={{ backgroundColor: hazard.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-sm text-slate-200 font-medium">
-                    {hazard.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Event count indicator - Only show when NOT using real data */}
-      {!useRealData && (
-        <div className="absolute top-4 left-4 glass-panel rounded-lg px-3 py-2 z-[100]">
-          <span className="text-sm text-slate-300">
-            Showing{" "}
-            <span className="font-semibold text-slate-100">
-              {filteredEvents.length}
-            </span>{" "}
-            of {events.length} events
-          </span>
-        </div>
-      )}
-
-      {/* Real Data Layers - Load selected country's data when real data is enabled */}
-      {useRealData && (
+      {/* Map Title Overlay */}
+      {/* MapTitleOverlay removed - info now in UnifiedMapLegend and top controls */}
+      {/* Real Data Layers */}
+      {map.current && (
         <>
           <RealDataLayers
             map={map.current}
             countryCode={selectedCountry}
-            visible={useRealData}
+            visible={true}
+            mapStyle={mapStyle}
+            styleChangeCounter={styleChangeCounter}
           />
           <RegionalImpactsLayer
             map={map.current}
-            visible={useRealData}
+            visible={true}
             mapStyle={mapStyle}
+            styleChangeCounter={styleChangeCounter}
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
           />
           <IntensityHeatmapLayer
             map={map.current}
             events={filteredEvents}
-            visible={useRealData}
+            visible={true}
           />
           <DamagedBuildingsLayer
             map={map.current}
             data={damagedBuildings}
-            visible={useRealData && !!damagedBuildings}
+            visible={!!damagedBuildings}
           />
           <DamagedRoadsLayer
             map={map.current}
             data={damagedRoads}
-            visible={useRealData && !!damagedRoads}
+            visible={!!damagedRoads}
           />
           <CycloneAnimationLayer
             map={map.current}
-            forecastTrack={cycloneForecast}
-            isVisible={useRealData && !!cycloneForecast && showCycloneAnimation}
-            onClose={() => setShowCycloneAnimation(false)}
-            onPlayingChange={setIsAnimationPlaying}
+            forecastTrack={cycloneForecast ?? null}
+            isVisible={!!cycloneForecast && showCycloneAnimation}
+            uiVisible={showOverlays}
+            onClose={() => onCycloneAnimationChange?.(false)}
+            onPlayingChange={(isPlaying) => {
+              setIsAnimationPlaying(isPlaying);
+              onCyclonePlayingChange?.(isPlaying);
+            }}
+            onTimestepChange={onCycloneTimestepChange}
+            isLeftPanelOpen={isLeftPanelOpen}
+            isRightPanelOpen={isRightPanelOpen}
+            controlsContainer={cycloneControlsHost}
+            isPlayingExternal={isCyclonePlaying}
+            alwaysDocked={true}
+            storyMode={storyMode}
+            storyBeats={storyBeats}
+            onStoryModeChange={onStoryModeChange}
+            currentIndexExternal={currentCycloneIndex}
+            onCurrentIndexChange={handleStorySelect}
+            showStoryBeatCard={false}
           />
-          {/* PDIEDataLayers disabled - using local data files instead of THREDDS PDIE output */}
-          {/* <PDIEDataLayers
-            map={map.current}
-            countryCode="VU"
-            visible={useRealData}
-          /> */}
         </>
       )}
+      {/* PDIEDataLayers disabled - using local data files instead of THREDDS PDIE output */}
+      {/* <PDIEDataLayers
+        map={map.current}
+        countryCode="VU"
+        visible={true}
+      /> */}
       
       {/* Cyclone Animation Toggle Button */}
-      {useRealData && cycloneForecast && (
+      {cycloneForecast && showOverlays && showCycloneToggle && (
         <CycloneAnimationToggle
           isVisible={showCycloneAnimation}
           isPlaying={isAnimationPlaying}
-          onToggle={() => setShowCycloneAnimation(!showCycloneAnimation)}
+          onToggleVisibility={() => onCycloneAnimationChange?.(!showCycloneAnimation)}
         />
       )}
     </div>

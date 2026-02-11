@@ -21,10 +21,10 @@ const BASEMAPS = [
     style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
   },
   {
-    id: "satellite",
-    name: "Satellite",
+    id: "dark",
+    name: "Dark",
     icon: Satellite,
-    style: "https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12",
+    style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
   },
 ];
 
@@ -33,7 +33,7 @@ export function BasemapSwitcher({
   currentBasemap,
 }: BasemapSwitcherProps) {
   return (
-    <div className="absolute top-4 left-20 z-10 flex gap-2 bg-slate-900/80 backdrop-blur-sm rounded-lg p-2 border border-slate-700">
+    <div className="absolute top-4 left-4 z-[15] flex gap-2 bg-slate-900/80 backdrop-blur-sm rounded-lg p-2 border border-slate-700 max-w-[calc(100vw-5rem)] overflow-x-auto pointer-events-auto">
       {BASEMAPS.map((basemap) => (
         <button
           key={basemap.id}

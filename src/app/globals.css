@@ -1,17 +1,56 @@
 @import "tailwindcss";
 
-/* Optional: make transitions feel premium */
+/* Semantic Color System for Dashboard */
 :root {
   color-scheme: dark;
   --background: #0a0a0a;
   --foreground: #ededed;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  
+  /* Semantic Colors - Danger/Risk Indicators */
+  --color-danger: #ef4444;        /* Red for catastrophic/severe */
+  --color-warning: #f97316;       /* Orange for high risk */
+  --color-caution: #eab308;       /* Yellow/Amber for moderate */
+  
+  /* UI Element Colors - Muted Blue/Gray */
+  --color-primary: #3b82f6;       /* Single accent blue for primary actions */
+  --color-ui-base: #1e293b;       /* Slate-800 for panels */
+  --color-ui-elevated: #334155;   /* Slate-700 for elevated elements */
+  --color-ui-border: #475569;     /* Slate-600 for borders */
+  --color-ui-muted: #64748b;      /* Slate-500 for secondary text */
+  
+  /* Success/Safe Indicators */
+  --color-success: #10b981;       /* Green for safe/minimal */
+  
+  /* Grid System */
+  --spacing-unit: 8px;            /* 8px grid system base */
+  
+  /* Typography Scale - Enforced Minimum 13px */
+  --text-xs: 13px;                /* Labels, captions - MINIMUM */
+  --text-sm: 14px;                /* Body text, secondary */
+  --text-base: 16px;              /* Primary body text */
+  --text-lg: 18px;                /* Section headings */
+  --text-xl: 24px;                /* Page titles */
+  --text-2xl: 32px;               /* Hero metrics */
+  
+  /* Unified Dark Glass System */
+  --glass-bg: rgba(15, 23, 42, 0.85);           /* Base glass background */
+  --glass-bg-hover: rgba(30, 41, 59, 0.90);     /* Hover state */
+  --glass-border: rgba(148, 163, 184, 0.15);    /* Subtle borders */
+  --glass-border-bright: rgba(148, 163, 184, 0.3); /* Emphasized borders */
+  --glass-text-primary: rgb(241, 245, 249);     /* White text */
+  --glass-text-secondary: rgb(203, 213, 225);   /* Muted text */
+  --glass-text-tertiary: rgb(148, 163, 184);    /* Dimmed text */
+  
+  /* Neon Accents - Use Sparingly */
+  --neon-cyan: #06b6d4;           /* Primary accent only */
+  --neon-cyan-glow: rgba(6, 182, 212, 0.4);
+  
+  /* Spacing Scale - Consistent increments */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
 }
 
 body {
@@ -28,20 +67,22 @@ body {
     linear-gradient(180deg, #0b1220, #070a12);
 }
 
-/* Glass panel utility */
+/* Unified Glass Panel System */
 .glass-panel {
-  background: rgba(30, 40, 60, 0.6);
-  backdrop-filter: blur(8px) saturate(180%);
-  -webkit-backdrop-filter: blur(8px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.40), inset 0 0 0 0.5px rgba(255,255,255,0.06);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.05);
+  color: var(--glass-text-primary);
 }
 
-/* Slightly stronger glass on hover */
-.glass-panel-hover:hover {
-  background: rgba(40, 50, 80, 0.45);
-  box-shadow: 0 18px 45px rgba(0,0,0,0.55), inset 0 0 0 0.5px rgba(255,255,255,0.08);
-  transform: translateY(-4px);
+.glass-panel-interactive:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-bright);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  transform: translateY(-2px);
+  transition: all 0.2s ease;
 }
 
 /* Map marker: glow + pulse ring */
@@ -79,66 +120,499 @@ body {
   100% { opacity: 0; }
 }
 
-/* MapLibre popup glass styling */
+/* Keyframes for toast slide-up animation */
+@keyframes slideUp {
+  from {
+    transform: translate(-50%, 20px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ============================================
+   MAP POPUP STYLING - Accessible & Consistent
+   ============================================ */
+
+/* Base popup container */
 .maplibregl-popup-content {
-  background: rgba(30, 40, 60, 0.95) !important;
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
-  border: 1px solid rgba(0, 224, 255, 0.25) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(0, 224, 255, 0.15), inset 0 0 0 0.5px rgba(255,255,255,0.08) !important;
-  color: #f1f5f9 !important;
-  padding: 12px 16px !important;
-  min-width: 200px;
+  background: rgba(15, 23, 42, 0.98) !important;
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+  padding: 0 !important;
+  min-width: 240px;
+  max-width: 320px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
 }
 
 .maplibregl-popup-tip {
-  border-top-color: rgba(30, 40, 60, 0.95) !important;
-  border-bottom-color: rgba(30, 40, 60, 0.95) !important;
+  border-top-color: rgba(15, 23, 42, 0.98) !important;
+  border-bottom-color: rgba(15, 23, 42, 0.98) !important;
 }
 
 .maplibregl-popup-anchor-top .maplibregl-popup-tip {
-  border-bottom-color: rgba(30, 40, 60, 0.95) !important;
+  border-bottom-color: rgba(15, 23, 42, 0.98) !important;
 }
 
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
-  border-top-color: rgba(30, 40, 60, 0.95) !important;
+  border-top-color: rgba(15, 23, 42, 0.98) !important;
 }
 
+/* Close button - accessible contrast */
 .maplibregl-popup-close-button {
-  color: #00e0ff !important;
-  font-size: 20px !important;
-  padding: 4px 8px !important;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  color: rgb(226, 232, 240) !important;
+  font-size: 22px !important;
+  padding: 6px 10px !important;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+  background: transparent !important;
+  right: 8px !important;
+  top: 8px !important;
+  font-weight: 300;
+  line-height: 1;
 }
 
 .maplibregl-popup-close-button:hover {
   opacity: 1;
-  background: rgba(0, 224, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: rgb(241, 245, 249) !important;
+  border-radius: 4px;
 }
 
-/* Custom MapLibre popup styling for districts */
-.district-popup .maplibregl-popup-content {
-  padding: 0;
+.maplibregl-popup-close-button:focus {
+  outline: 2px solid rgb(59, 130, 246);
+  outline-offset: 2px;
+}
+
+/* Popup content structure */
+.popup-content {
+  padding: 16px;
+  color: rgb(226, 232, 240);
+}
+
+.popup-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 0 12px 0;
+  color: rgb(241, 245, 249);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+  padding-bottom: 10px;
+  padding-right: 24px;
+  line-height: 1.4;
+}
+
+.popup-body {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.popup-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.popup-label {
+  font-weight: 500;
+  color: rgb(203, 213, 225);
+  min-width: fit-content;
+}
+
+.popup-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
   border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Exposure progress bars */
+.popup-progress-container {
+  margin-bottom: 6px;
+}
+
+.popup-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgb(203, 213, 225);
+  margin-bottom: 4px;
+}
+
+.popup-progress-bar {
+  height: 6px;
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 3px;
   overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.district-popup .maplibregl-popup-close-button {
-  font-size: 18px;
-  padding: 4px 8px;
-  color: #6b7280;
-  right: 4px;
-  top: 4px;
+.popup-progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 8px currentColor;
 }
 
-.district-popup .maplibregl-popup-close-button:hover {
-  color: #1f2937;
-  background: transparent;
+/* Stats grid */
+.popup-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
 }
 
-.district-popup .maplibregl-popup-tip {
-  border-top-color: #ffffff;
+.popup-stat-card {
+  background: rgba(51, 65, 85, 0.4);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.popup-stat-label {
+  color: rgb(203, 213, 225);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.popup-stat-value {
+  font-weight: 600;
+  color: rgb(241, 245, 249);
+  font-size: 13px;
+}
+
+/* Section styling */
+.popup-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.popup-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(203, 213, 225);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================
+   ACCESSIBILITY IMPROVEMENTS
+   ============================================ */
+
+/* Enforced Minimum Sizes for Readability & Accessibility */
+button, a, input, select, textarea {
+  min-height: 44px; /* WCAG 2.1 touch target */
+}
+
+.text-xs {
+  font-size: var(--text-xs) !important; /* 13px enforced minimum */
+  line-height: 1.5 !important;
+}
+
+.text-sm {
+  font-size: var(--text-sm) !important;
+  line-height: 1.5 !important;
+}
+
+/* Improved contrast for body text */
+.text-gray-500 {
+  color: rgb(107 114 128 / 1);
+}
+
+.dark .text-gray-500 {
+  color: rgb(156 163 175 / 1); /* Lighter in dark mode for better contrast */
+}
+
+.text-gray-600 {
+  color: rgb(75 85 99 / 1);
+}
+
+.dark .text-gray-600 {
+  color: rgb(209 213 219 / 1); /* Much lighter in dark mode */
+}
+
+/* Focus visible improvements for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 1);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Ensure all interactive elements show focus */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 1);
+  outline-offset: 2px;
+}
+
+/* Improved hover states for better affordance */
+button:not(:disabled):hover,
+a:hover,
+[role="button"]:hover {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Better disabled state visibility */
+button:disabled,
+[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Skip to content link for keyboard users */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: rgb(59 130 246);
+  color: white;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .text-gray-500,
+  .text-gray-600 {
+    color: rgb(0 0 0 / 1);
+  }
+  
+  .dark .text-gray-500,
+  .dark .text-gray-600 {
+    color: rgb(255 255 255 / 1);
+  }
+  
+  button,
+  a {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Remove duplicates - already defined above */
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  body {
+    background: #000000;
+    color: #ffffff;
+  }
+  
+  .glass-panel {
+    background: rgba(0, 0, 0, 0.95);
+    border: 2px solid #ffffff;
+  }
+}
+
+/* Custom scrollbar for legend and panels */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) rgba(15, 23, 42, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.2);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* skip-link removed - duplicate of skip-to-content above */
+/* Cyclone Story Mode Animations */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+/* Summary Panel Pulse Animation */
+@keyframes summaryPanelPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5),
+                0 0 0 0 rgba(59, 130, 246, 0),
+                0 0 20px rgba(59, 130, 246, 0);
+  }
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6),
+                0 0 0 8px rgba(59, 130, 246, 0.15),
+                0 0 40px rgba(59, 130, 246, 0.5);
+    filter: brightness(1.05) drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));
+  }
+}
+
+.summary-panel-animated {
+  animation: summaryPanelPulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, box-shadow, filter;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Premium Custom Scrollbar Styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.6) 0%, rgba(37, 99, 235, 0.6) 100%);
+  border-radius: 8px;
+  border: 2px solid rgba(15, 23, 42, 0.5);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.8) 0%, rgba(37, 99, 235, 0.8) 100%);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.6) rgba(15, 23, 42, 0.5);
+}
+
+/* Loading Skeleton Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    90deg,
+    rgba(51, 65, 85, 0.4) 0%,
+    rgba(71, 85, 105, 0.6) 50%,
+    rgba(51, 65, 85, 0.4) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Smooth Appearance Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
+
+/* Staggered Animation Delays */
+.animate-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-300 {
+  animation-delay: 0.3s;
+}
+
+/* Enhanced Glow Effects */
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3),
+                0 0 10px rgba(59, 130, 246, 0.2),
+                0 0 15px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5),
+                0 0 20px rgba(59, 130, 246, 0.3),
+                0 0 30px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.glow-effect {
+  animation: glow 2s ease-in-out infinite;
 }

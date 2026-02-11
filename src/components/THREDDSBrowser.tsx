@@ -61,7 +61,7 @@ export default function THREDDSBrowser() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="glass-panel rounded-lg shadow-lg p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -69,10 +69,10 @@ export default function THREDDSBrowser() {
             <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            <h2 className="text-lg font-bold text-slate-100">
               THREDDS Data Browser
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-slate-400">
               TC Lola - Vanuatu Hazard Data
             </p>
           </div>
@@ -80,7 +80,7 @@ export default function THREDDSBrowser() {
         <button
           onClick={loadCatalog}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700/60 text-white rounded-lg transition-colors text-sm font-medium"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -107,7 +107,7 @@ export default function THREDDSBrowser() {
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-sm text-gray-500">Loading catalog...</p>
+            <p className="text-sm text-slate-400">Loading catalog...</p>
           </div>
         </div>
       )}
@@ -117,50 +117,50 @@ export default function THREDDSBrowser() {
         <div className="space-y-4">
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Files</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-slate-800/60 rounded-lg p-4">
+              <p className="text-sm text-slate-400">Total Files</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {datasets.length}
               </p>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">NetCDF Files</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-slate-800/60 rounded-lg p-4">
+              <p className="text-sm text-slate-400">NetCDF Files</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {datasets.filter(d => d.type === 'nc').length}
               </p>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">GeoTIFF Files</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="bg-slate-800/60 rounded-lg p-4">
+              <p className="text-sm text-slate-400">GeoTIFF Files</p>
+              <p className="text-2xl font-bold text-slate-100">
                 {datasets.filter(d => d.type === 'tif').length}
               </p>
             </div>
           </div>
 
           {/* Dataset Table */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="border border-slate-700/60 rounded-lg overflow-hidden">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700">
+              <thead className="bg-slate-800/60">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Dataset Name
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Size
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="glass-panel divide-y divide-slate-700/60">
                 {datasets.map((dataset, index) => (
                   <tr 
                     key={index}
-                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                    className={`hover:bg-white/5 transition-colors ${
                       selectedDataset?.name === dataset.name ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                   >
@@ -168,8 +168,8 @@ export default function THREDDSBrowser() {
                       <div className="flex items-center gap-2">
                         {dataset.type === 'nc' && <Map className="w-4 h-4 text-blue-500" />}
                         {dataset.type === 'tif' && <Map className="w-4 h-4 text-green-500" />}
-                        {dataset.type === 'csv' && <FileText className="w-4 h-4 text-purple-500" />}
-                        <span className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                        {dataset.type === 'csv' && <FileText className="w-4 h-4 text-blue-400" />}
+                        <span className="text-sm font-medium text-slate-100 truncate max-w-xs">
                           {dataset.name}
                         </span>
                       </div>
@@ -178,13 +178,13 @@ export default function THREDDSBrowser() {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase ${
                         dataset.type === 'nc' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
                         dataset.type === 'tif' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                        dataset.type === 'csv' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                        dataset.type === 'csv' ? 'bg-blue-500/20 text-blue-300' :
+                        'bg-slate-800/70 text-slate-200'
                       }`}>
                         {dataset.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-3 text-sm text-slate-400">
                       {dataset.size}
                     </td>
                     <td className="px-4 py-3">
@@ -221,8 +221,8 @@ export default function THREDDSBrowser() {
       {/* Empty State */}
       {!loading && datasets.length === 0 && !error && (
         <div className="text-center py-12">
-          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">
+          <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+          <p className="text-slate-400">
             No datasets found. Try refreshing the catalog.
           </p>
         </div>

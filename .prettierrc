@@ -1,0 +1,37 @@
+# Prettier Configuration
+
+# Line Length
+printWidth: 100
+
+# Indentation
+tabWidth: 2
+useTabs: false
+
+# Semicolons
+semi: true
+
+# Quotes
+singleQuote: true
+quoteProps: 'as-needed'
+
+# JSX
+jsxSingleQuote: false
+jsxBracketSameLine: false
+
+# Trailing Commas
+trailingComma: 'es5'
+
+# Bracket Spacing
+bracketSpacing: true
+
+# Arrow Functions
+arrowParens: 'avoid'
+
+# Prose Wrap
+proseWrap: 'preserve'
+
+# End of Line
+endOfLine: 'lf'
+
+# Embedded Language Formatting
+embeddedLanguageFormatting: 'auto'

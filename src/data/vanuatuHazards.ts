@@ -77,10 +77,28 @@ export const vanuatuSectors: Sector[] = [
     color: "#16A34A",
   },
   {
+    id: "Public",
+    name: "Public",
+    icon: "🏛️",
+    color: "#3B82F6",
+  },
+  {
+    id: "Residential",
+    name: "Residential",
+    icon: "🏘️",
+    color: "#EF4444",
+  },
+  {
     id: "Other",
     name: "Other",
     icon: "📦",
     color: "#64748B",
+  },
+  {
+    id: "Unknown",
+    name: "Unknown",
+    icon: "❓",
+    color: "#9CA3AF",
   },
 ];
 

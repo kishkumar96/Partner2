@@ -4,179 +4,73 @@
 
 import { Event } from "@/types";
 import { loadCycloneForecastTrack } from "./cycloneAnimationLoader";
+import { parseCSV } from "./csvParser";
+import { loadGeoJSON, loadTextData } from "./dataLoader";
 
 /**
  * Load cyclone track data from the geojson file
  */
 export async function loadCycloneTrackData() {
-  try {
-    const response = await fetch('/cyclone-track.geojson');
-    if (!response.ok) {
-      console.error('Failed to load cyclone track data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading cyclone track data:', error);
-    return null;
-  }
+  const { data, error } = await loadGeoJSON('/cyclone-track.geojson');
+  return data;
 }
 
 /**
  * Load regional impacts from geojson file
  */
 export async function loadRegionalImpacts() {
-  try {
-    const response = await fetch('/regional-impacts.geojson');
-    if (!response.ok) {
-      console.error('Failed to load regional impacts data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading regional impacts data:', error);
-    return null;
-  }
+  const { data } = await loadGeoJSON('/regional-impacts.geojson');
+  return data;
 }
 
 /**
  * Load regional impacts by sector from geojson file
  */
 export async function loadRegionalImpactsBySector() {
-  try {
-    const response = await fetch('/regional-impacts-by-sector.geojson');
-    if (!response.ok) {
-      console.error('Failed to load regional impacts by sector data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading regional impacts by sector data:', error);
-    return null;
-  }
+  const { data } = await loadGeoJSON('/regional-impacts-by-sector.geojson');
+  return data;
 }
 
 /**
  * Load exposure by cluster data
  */
 export async function loadExposureByCluster() {
-  try {
-    const response = await fetch('/exposure-by-cluster.geojson');
-    if (!response.ok) {
-      console.error('Failed to load exposure by cluster data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading exposure by cluster data:', error);
-    return null;
-  }
-}
-
-/**
- * Parse CSV data into array of objects
- */
-function parseCSV(csvText: string): Array<Record<string, string | number>> {
-  // Handle both Windows (\r\n) and Unix (\n) line endings
-  const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
-  if (lines.length < 2) return [];
-  
-  const headers = lines[0].split(',').map(h => h.trim());
-  const data = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue; // Skip empty lines
-    
-    const values = line.split(',');
-    const obj: Record<string, string | number> = {};
-    
-    headers.forEach((header, index) => {
-      const value = values[index]?.trim();
-      // Try to parse as number if it looks like one
-      obj[header] = !isNaN(Number(value)) && value !== '' ? Number(value) : value;
-    });
-    
-    data.push(obj);
-  }
-  
+  const { data } = await loadGeoJSON('/exposure-by-cluster.geojson');
   return data;
 }
+
+// CSV parsing now handled by unified csvParser utility
 
 /**
  * Load national summary CSV data
  */
 export async function loadNationalSummary() {
-  try {
-    const response = await fetch('/national-summary.csv');
-    if (!response.ok) {
-      console.error('Failed to load national summary data');
-      return null;
-    }
-    const csvText = await response.text();
-    return parseCSV(csvText);
-  } catch (error) {
-    console.error('Error loading national summary data:', error);
-    return null;
-  }
+  const { data: csvText } = await loadTextData('/national-summary.csv');
+  return csvText ? parseCSV(csvText) : null;
 }
 
 /**
  * Load impact by asset type CSV data
  */
 export async function loadImpactByAssetType() {
-  try {
-    const response = await fetch('/impact-by-asset-type.csv');
-    if (!response.ok) {
-      console.error('Failed to load impact by asset type data');
-      return null;
-    }
-    const csvText = await response.text();
-    return parseCSV(csvText);
-  } catch (error) {
-    console.error('Error loading impact by asset type data:', error);
-    return null;
-  }
+  const { data: csvText } = await loadTextData('/impact-by-asset-type.csv');
+  return csvText ? parseCSV(csvText) : null;
 }
 
 /**
  * Load impact by sector CSV data
  */
 export async function loadImpactBySector() {
-  try {
-    const response = await fetch('/impact-by-sector.csv');
-    if (!response.ok) {
-      console.error('Failed to load impact by sector data');
-      return null;
-    }
-    const csvText = await response.text();
-    return parseCSV(csvText);
-  } catch (error) {
-    console.error('Error loading impact by sector data:', error);
-    return null;
-  }
+  const { data: csvText } = await loadTextData('/impact-by-sector.csv');
+  return csvText ? parseCSV(csvText) : null;
 }
 
 /**
  * Load regional summary CSV data
  */
 export async function loadRegionalSummary() {
-  try {
-    const response = await fetch('/regional-summary.csv');
-    if (!response.ok) {
-      console.error('Failed to load regional summary data');
-      return null;
-    }
-    const csvText = await response.text();
-    return parseCSV(csvText);
-  } catch (error) {
-    console.error('Error loading regional summary data:', error);
-    return null;
-  }
+  const { data: csvText } = await loadTextData('/regional-summary.csv');
+  return csvText ? parseCSV(csvText) : null;
 }
 
 /**
@@ -258,8 +152,6 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
         id: regionId,
         name: `TC Lola Impact - ${regionName}`,
         date: "2024-01-30", // TC Lola event date
-        lat: centroid.lat,
-        lng: centroid.lng,
         hazardId: "tropical-cyclone",
         sectorId: "Infrastructure", // Primary sector for regional aggregation
         districtId: regionId,
@@ -274,6 +166,68 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
         countryCode: "VU", // All current data is for Vanuatu
       } as Event;
     });
+  
+  return events;
+}
+
+/**
+ * Convert regional impacts by sector GeoJSON to sector-specific event data
+ * This creates separate events for each sector in each region
+ */
+export function convertRegionalImpactsBySectorToEvents(geojson: any): Event[] {
+  if (!geojson || !geojson.features) return [];
+  
+  const sectors = ['Education', 'Infrastructure', 'Productive', 'Public', 'Residential', 'Other', 'Unknown'];
+  const events: Event[] = [];
+  
+  geojson.features.forEach((feature: any, regionIndex: number) => {
+    if (!feature || !feature.geometry || !feature.properties) {
+      return;
+    }
+    
+    const props = feature.properties;
+    const regionName = props['Region'] || `Region ${regionIndex + 1}`;
+    const regionId = props['ID'] || `region-${regionIndex}`;
+    const centroid = calculateCentroid(feature.geometry);
+    
+    // Create an event for each sector that has data
+    sectors.forEach((sector) => {
+      const sectorLossKey = `Sector.${sector}.Loss`;
+      const sectorExposedKey = `Sector.${sector}.Number_Exposed_Buildings`;
+      const sectorDamagedKey = `Sector.${sector}.Number_Damaged_Buildings`;
+      
+      const loss = Number(props[sectorLossKey]) || 0;
+      const exposedBuildings = Number(props[sectorExposedKey]) || 0;
+      const damagedBuildings = Number(props[sectorDamagedKey]) || 0;
+      
+      // Only create event if there's actual damage or exposure
+      if (loss > 0 || exposedBuildings > 0 || damagedBuildings > 0) {
+        // Calculate severity based on loss amount
+        let severity: "low" | "medium" | "high" | "critical" = "low";
+        if (loss > 1000000) severity = "critical";
+        else if (loss > 100000) severity = "high";
+        else if (loss > 10000) severity = "medium";
+        
+        events.push({
+          id: `${regionId}-${sector.toLowerCase()}`,
+          name: `TC Lola - ${regionName} (${sector})`,
+          date: "2024-01-30", // TC Lola event date
+          hazardId: "tropical-cyclone",
+          sectorId: sector,
+          districtId: regionId,
+          provinceId: getProvinceIdFromDistrictId(regionId),
+          location: {
+            lat: centroid.lat,
+            lng: centroid.lng,
+          },
+          severity,
+          affectedPopulation: exposedBuildings * 4, // Rough estimate: 4 people per building
+          economicDamage: loss,
+          countryCode: "VU",
+        } as Event);
+      }
+    });
+  });
   
   return events;
 }
@@ -351,6 +305,7 @@ export async function loadAllRealData() {
     cycloneTrack,
     cycloneForecast,
     regionalImpacts,
+    regionalImpactsBySectorData,
     exposureByCluster,
     nationalSummary,
     impactByAsset,
@@ -363,6 +318,7 @@ export async function loadAllRealData() {
     loadCycloneTrackData(),
     loadCycloneForecastTrack(),
     loadRegionalImpacts(),
+    loadRegionalImpactsBySector(),
     loadExposureByCluster(),
     loadNationalSummary(),
     loadImpactByAssetType(),
@@ -373,8 +329,10 @@ export async function loadAllRealData() {
     loadDamagedRoads()
   ]);
   
-  // Convert regional impacts to events
-  const events = regionalImpacts ? convertRegionalImpactsToEvents(regionalImpacts) : [];
+  // Convert regional impacts by sector to sector-specific events
+  const events = regionalImpactsBySectorData 
+    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorData) 
+    : [];
   
   // Convert CSV data to dashboard format
   const exposureData = convertToExposureData(regionalSummaryData);
@@ -528,52 +486,25 @@ export function processWindIntensityData(nationalSummary: any): any {
  * Load damaged buildings from geojson file
  */
 export async function loadDamagedBuildings() {
-  try {
-    const response = await fetch('/damaged-buildings.geojson');
-    if (!response.ok) {
-      console.error('Failed to load damaged buildings data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading damaged buildings data:', error);
-    return null;
-  }
+  const { data } = await loadGeoJSON('/damaged-buildings.geojson');
+  return data;
 }
 
 /**
  * Load damaged roads from geojson file
  */
 export async function loadDamagedRoads() {
-  try {
-    const response = await fetch('/damaged-roads.geojson');
-    if (!response.ok) {
-      console.error('Failed to load damaged roads data');
-      return null;
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error loading damaged roads data:', error);
-    return null;
-  }
+  const { data } = await loadGeoJSON('/damaged-roads.geojson');
+  return data;
 }
 
 /**
  * Load regional summary by sector CSV data
  */
+/**
+ * Load regional summary by sector CSV data
+ */
 export async function loadRegionalSummaryBySector() {
-  try {
-    const response = await fetch('/regional-summary-by-sector.csv');
-    if (!response.ok) {
-      console.error('Failed to load regional summary by sector data');
-      return null;
-    }
-    const csvText = await response.text();
-    return parseCSV(csvText);
-  } catch (error) {
-    console.error('Error loading regional summary by sector data:', error);
-    return null;
-  }
+  const { data: csvText } = await loadTextData('/regional-summary-by-sector.csv');
+  return csvText ? parseCSV(csvText) : null;
 }

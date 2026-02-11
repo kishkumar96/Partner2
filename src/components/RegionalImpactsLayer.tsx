@@ -4,22 +4,25 @@
 
 import { useEffect } from "react";
 import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
+import { createLossColorExpression, createWindColorExpression, LAYER_OPACITY } from "@/utils/colorSystem";
+import { debugLogger } from "@/utils/debugLogger";
 
 interface RegionalImpactsLayerProps {
   map: MapLibreMap | null;
   visible: boolean;
-  mapStyle?: "loss" | "wind";
+  mapStyle?: "loss" | "wind" | "satellite" | "street";
   selectedRegion?: string | null;
   onRegionSelect?: (regionId: string | null) => void;
+  styleChangeCounter?: number;
 }
 
-export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", selectedRegion = null, onRegionSelect }: RegionalImpactsLayerProps) {
+export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", selectedRegion = null, onRegionSelect, styleChangeCounter = 0 }: RegionalImpactsLayerProps) {
   useEffect(() => {
     if (!map || !visible) return;
 
     const loadRegionalImpacts = async () => {
       try {
-        console.log('📊 Loading regional impacts layer...');
+        debugLogger.info('Loading regional impacts layer', 'map-source');
 
         // Load both regional impacts and sector-specific data
         const [response, sectorResponse] = await Promise.all([
@@ -28,7 +31,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
         ]);
         
         if (!response.ok) {
-          console.warn('Could not load regional impacts data');
+          debugLogger.warn('Could not load regional impacts data', 'map-source');
           return;
         }
 
@@ -50,7 +53,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
             map.removeSource(sourceId);
           }
         } catch (e) {
-          console.warn('Error removing existing regional impacts layers:', e);
+          debugLogger.warn('Error removing existing regional impacts layers', 'map-layer', e);
         }
 
         // Create sector data lookup by region
@@ -66,40 +69,26 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
 
         // Function to add layers
         const addLayers = () => {
+          // Check if source already exists and remove it first to prevent "already exists" error
+          if (map.getSource(sourceId)) {
+            try {
+              if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
+              if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+              map.removeSource(sourceId);
+            } catch (e) {
+              debugLogger.warn('Error removing existing source before re-adding', 'map-source', e);
+            }
+          }
+          
           // Add source
           map.addSource(sourceId, {
             type: "geojson",
             data: geojson,
           });
 
-        // Define color schemes for both styles
-        const lossColorExpression = [
-          "interpolate",
-          ["linear"],
-          ["get", "Total_Loss"],
-          0, "#ffffcc",
-          1000000, "#ffeda0",
-          5000000, "#fed976",
-          10000000, "#feb24c",
-          20000000, "#fd8d3c",
-          50000000, "#fc4e2a",
-          100000000, "#e31a1c",
-          200000000, "#bd0026",
-        ] as any;
-
-        const windColorExpression = [
-          "interpolate",
-          ["linear"],
-          ["get", "Max_Wind_Gusts"],
-          0, "#f0f9ff",    // Very light blue (calm)
-          25, "#e0f2fe",   // Light cyan
-          63, "#7dd3fc",   // Sky blue (Tropical Depression)
-          88, "#38bdf8",   // Bright blue (Tropical Storm)
-          118, "#0ea5e9",  // Deep blue (Category 1)
-          165, "#0284c7",  // Darker blue (Category 2-3)
-          252, "#0369a1",  // Navy blue (Category 4)
-          311, "#075985",  // Very dark blue (Category 5)
-        ] as any;
+        // Define color expressions using unified color system
+        const lossColorExpression = createLossColorExpression();
+        const windColorExpression = createWindColorExpression();
 
         // Insert before interactive layers (damaged buildings/roads) to keep proper order
         let beforeId: string | undefined = undefined;
@@ -122,8 +111,8 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
             "fill-color": mapStyle === "wind" ? windColorExpression : lossColorExpression,
             "fill-opacity": [
               "case",
-              ["==", ["get", "Region.Region"], selectedRegion || ""], 0.85, // Selected region more opaque
-              0.6 // Default opacity
+              ["==", ["get", "Region.Region"], selectedRegion || ""], 0.75, // Selected region more opaque
+              LAYER_OPACITY.regional.fill // Default opacity from unified system (0.5)
             ],
           },
         }, beforeId);
@@ -316,7 +305,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
         console.warn('Error cleaning up regional impacts layers:', e);
       }
     };
-  }, [map, visible]);
+  }, [map, visible, styleChangeCounter]);
 
   // Separate effect to update colors when style changes (without recreating layers)
   useEffect(() => {
@@ -391,7 +380,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
     } catch (e) {
       console.warn('Error updating map style:', e);
     }
-  }, [map, visible, mapStyle, selectedRegion]);
+  }, [map, visible, mapStyle, selectedRegion, styleChangeCounter]);
 
   return null;
 }

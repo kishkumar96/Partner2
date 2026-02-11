@@ -2,6 +2,9 @@
  * Load and parse Cyclone Lola forecast track data for time-series animation
  */
 
+import { parseCSV } from './csvParser';
+import { loadTextData } from './dataLoader';
+
 export interface CycloneForecastPoint {
   time: Date;
   timeString: string;
@@ -24,46 +27,28 @@ export interface CycloneForecastPoint {
   hurricaneRadiusSE: number;
   hurricaneRadiusSW: number;
   hurricaneRadiusNW: number;
+  // Enhanced fields
+  eyeRadius: number; // Storm eye diameter (km)
+  eyeRadiusUncertainty: number; // Eye measurement uncertainty (km)
+  verticalExtent: number; // Atmospheric depth (scale 1-5)
+  pressureOCI: number; // Outermost closed isobar pressure (hPa)
+  radiusOCI: number; // Extent of cyclone circulation (km)
+  dvorakTNumber: number; // Professional intensity metric (Dvorak T-number)
+  currentIntensity: number; // Current intensity measure
+  p5Wind: number; // Alternative wind speed metric (kt)
 }
 
-/**
- * Parse CSV text into cyclone forecast points
- */
-function parseCSV(csvText: string): any[] {
-  const lines = csvText.replace(/\r\n/g, '\n').split('\n').filter(line => line.trim());
-  if (lines.length < 2) return [];
-  
-  const headers = lines[0].split(',').map(h => h.trim());
-  const rows: any[] = [];
-  
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',');
-    if (values.length !== headers.length) continue;
-    
-    const row: any = {};
-    headers.forEach((header, index) => {
-      const value = values[index].trim();
-      row[header] = value === 'NaN' || value === '' ? null : value;
-    });
-    rows.push(row);
-  }
-  
-  return rows;
-}
+// CSV parsing now handled by unified parser utility
 
 /**
  * Load cyclone forecast track data
  */
 export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[] | null> {
   try {
-    const response = await fetch('/cyclone-lola-forecast.csv');
-    if (!response.ok) {
-      console.error('Failed to load cyclone forecast track');
-      return null;
-    }
-    
-    const csvText = await response.text();
-    const rows = parseCSV(csvText);
+    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv');
+    if (!csvText) return null;
+
+    const rows = parseCSV(csvText, { convertNaN: true });
     
     const points: CycloneForecastPoint[] = rows.map((row: any) => ({
       time: new Date(row['Time[fmt=yyyy-MM-dd\'T\'HH:mm:ss\'Z\']']),
@@ -87,6 +72,15 @@ export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[]
       hurricaneRadiusSE: parseFloat(row.SEHurricaneRadius) || 0,
       hurricaneRadiusSW: parseFloat(row.SWHurricaneRadius) || 0,
       hurricaneRadiusNW: parseFloat(row.NWHurricaneRadius) || 0,
+      // Enhanced fields
+      eyeRadius: parseFloat(row.EyeRadius) || 0,
+      eyeRadiusUncertainty: parseFloat(row.UncEyeRadius) || 0,
+      verticalExtent: parseFloat(row.VerticalExtent) || 0,
+      pressureOCI: parseFloat(row.PressureOCI) || 0,
+      radiusOCI: parseFloat(row.RadiusOCI) || 0,
+      dvorakTNumber: parseFloat(row.FinalT) || 0,
+      currentIntensity: parseFloat(row.CurrentIntensity) || 0,
+      p5Wind: parseFloat(row.P5Wind) || 0,
     })).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
     
     console.log(`✅ Loaded ${points.length} cyclone forecast points`);
@@ -101,12 +95,13 @@ export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[]
  * Get category color based on cyclone intensity
  */
 export function getCategoryColor(category: number): string {
-  if (category >= 5) return '#8B0000'; // Cat 5: Dark red
-  if (category >= 4) return '#FF0000'; // Cat 4: Red
-  if (category >= 3) return '#FF6600'; // Cat 3: Orange-red
-  if (category >= 2) return '#FFA500'; // Cat 2: Orange
-  if (category >= 1) return '#FFD700'; // Cat 1: Gold
-  return '#4169E1'; // Tropical Storm: Royal blue
+  // Align with unified wind color scale
+  if (category >= 5) return '#7C3AED'; // Cat 5: Violet
+  if (category >= 4) return '#DC2626'; // Cat 4: Red
+  if (category >= 3) return '#FB923C'; // Cat 3: Orange
+  if (category >= 2) return '#FACC15'; // Cat 2: Yellow
+  if (category >= 1) return '#FDE047'; // Cat 1: Light yellow
+  return '#7DD3FC'; // Tropical Storm: Sky blue
 }
 
 /**
