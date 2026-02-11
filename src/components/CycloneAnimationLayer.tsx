@@ -137,8 +137,9 @@ export default function CycloneAnimationLayer({
   const glowPhase = useRef<number>(0);
   const isPlayingSyncRef = useRef(false);
   const isExternalIndexSyncRef = useRef(false);
-  const lastExternalIndexRef = useRef<number | null>(null);
   const lastReportedIndexRef = useRef<number | null>(null);
+  const onCurrentIndexChangeRef = useRef<typeof onCurrentIndexChange>(onCurrentIndexChange);
+  const onTimestepChangeRef = useRef<typeof onTimestepChange>(onTimestepChange);
   const audioContextRef = useRef<AudioContext | null>(null);
   const styleDataTimeoutRef = useRef<number | null>(null);
   const lastNotifiedRef = useRef<{ category: number; index: number } | null>(null);
@@ -172,14 +173,22 @@ export default function CycloneAnimationLayer({
   }, [currentIndex]);
 
   useEffect(() => {
+    onCurrentIndexChangeRef.current = onCurrentIndexChange;
+  }, [onCurrentIndexChange]);
+
+  useEffect(() => {
+    onTimestepChangeRef.current = onTimestepChange;
+  }, [onTimestepChange]);
+
+  useEffect(() => {
     if (typeof currentIndexExternal !== "number") return;
     if (!Number.isFinite(currentIndexExternal)) return;
-    if (currentIndexExternal === currentIndexRef.current) return;
-    if (lastExternalIndexRef.current === currentIndexExternal) return;
-    lastExternalIndexRef.current = currentIndexExternal;
+    const maxIndex = Math.max(0, (forecastTrack?.length ?? 1) - 1);
+    const nextIndex = Math.max(0, Math.min(currentIndexExternal, maxIndex));
+    if (nextIndex === currentIndexRef.current) return;
     isExternalIndexSyncRef.current = true;
-    setCurrentIndex(currentIndexExternal);
-  }, [currentIndexExternal]);
+    setCurrentIndex((prev) => (prev === nextIndex ? prev : nextIndex));
+  }, [currentIndexExternal, forecastTrack]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -391,21 +400,71 @@ export default function CycloneAnimationLayer({
     };
   }, [forecastTrack]);
 
+  // Keep current index in bounds when forecast length changes
+  useEffect(() => {
+    if (!forecastTrack || forecastTrack.length === 0) {
+      if (currentIndexRef.current !== 0) {
+        setCurrentIndex(0);
+      }
+      return;
+    }
+
+    const maxIndex = forecastTrack.length - 1;
+    if (currentIndexRef.current > maxIndex) {
+      setCurrentIndex(maxIndex);
+    }
+  }, [forecastTrack]);
+
   // Notify parent of timestep changes
   useEffect(() => {
+    if (!forecastTrack || forecastTrack.length === 0) {
+      return;
+    }
+
+    const maxIndex = forecastTrack.length - 1;
+    const safeIndex = Math.max(0, Math.min(currentIndex, maxIndex));
+    if (safeIndex !== currentIndex) {
+      setCurrentIndex(safeIndex);
+      return;
+    }
+
     if (isExternalIndexSyncRef.current) {
       isExternalIndexSyncRef.current = false;
-      lastReportedIndexRef.current = currentIndex;
-    } else if (typeof onCurrentIndexChange === "function") {
-      if (lastReportedIndexRef.current === currentIndex) return;
-      lastReportedIndexRef.current = currentIndex;
-      onCurrentIndexChange(currentIndex);
+      lastReportedIndexRef.current = safeIndex;
+    } else if (typeof onCurrentIndexChangeRef.current === "function") {
+      if (lastReportedIndexRef.current === safeIndex) return;
+      lastReportedIndexRef.current = safeIndex;
+      onCurrentIndexChangeRef.current(safeIndex);
     }
-    if (!forecastTrack || !onTimestepChange) return;
-    
-    const currentPoint = forecastTrack[currentIndex];
-    onTimestepChange(currentPoint || null, currentIndex, forecastTrack.length);
-  }, [currentIndex, forecastTrack, onTimestepChange, onCurrentIndexChange]);
+
+    const onTimestepChangeHandler = onTimestepChangeRef.current;
+    if (!onTimestepChangeHandler) return;
+
+    const currentPoint = forecastTrack[safeIndex];
+    onTimestepChangeHandler(currentPoint || null, safeIndex, forecastTrack.length);
+  }, [currentIndex, forecastTrack]);
+
+  // When callbacks are attached/replaced, immediately publish current snapshot
+  useEffect(() => {
+    if (typeof onCurrentIndexChange !== "function" && typeof onTimestepChange !== "function") {
+      return;
+    }
+
+    const track = forecastTrack;
+    const trackLength = track?.length ?? 0;
+    const maxIndex = Math.max(0, trackLength - 1);
+    const safeIndex = Math.max(0, Math.min(currentIndexRef.current, maxIndex));
+
+    if (typeof onCurrentIndexChange === "function") {
+      lastReportedIndexRef.current = safeIndex;
+      onCurrentIndexChange(safeIndex);
+    }
+
+    if (typeof onTimestepChange === "function") {
+      const point = trackLength > 0 ? track?.[safeIndex] ?? null : null;
+      onTimestepChange(point, safeIndex, trackLength);
+    }
+  }, [onCurrentIndexChange, onTimestepChange, forecastTrack]);
 
   // Detect story beats when forecast track changes (only if not externally provided)
   useEffect(() => {
@@ -1465,6 +1524,10 @@ export default function CycloneAnimationLayer({
     setShowShareCard(true);
   }, [forecastTrack, currentIndex]);
 
+  // Controls should ALWAYS be docked when a container is provided or when explicitly requested
+  // Never show floating controls on the map - they belong in the Summary panel
+  const isDocked = alwaysDocked || !!controlsContainer;
+
   // Animation loop with frame skipping for performance
   // Also stop animation when controls are hidden (isDocked but no container = panel closed)
   useEffect(() => {
@@ -1533,7 +1596,7 @@ export default function CycloneAnimationLayer({
       }
       lastUpdateRef.current = 0;
     };
-  }, [isPlaying, playbackSpeed, forecastTrack]);
+  }, [isPlaying, playbackSpeed, forecastTrack, isDocked, controlsContainer, uiVisible]);
 
   // Notify parent when playing state changes
   useEffect(() => {
@@ -1731,10 +1794,6 @@ export default function CycloneAnimationLayer({
       setShowLegend(false);
     }
   }, [isMinimized, showLegend]);
-
-  // Controls should ALWAYS be docked when a container is provided or when explicitly requested
-  // Never show floating controls on the map - they belong in the Summary panel
-  const isDocked = alwaysDocked || !!controlsContainer;
 
   const hasForecast = !!forecastTrack && forecastTrack.length > 0;
   const currentPoint = hasForecast ? forecastTrack[currentIndex] : null;
