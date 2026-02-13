@@ -4,11 +4,11 @@ import { useEffect, useRef } from "react";
 import { Map as MapLibreMap } from "maplibre-gl";
 import { CountryCode, COUNTRIES } from "@/types/thredds";
 import {
-
   buildWMSImageUrl,
   getLayersForCountry,
 } from "@/data/realThreddsLayers";
 import { loadCycloneForecastTrack } from "@/utils/cycloneAnimationLoader";
+import { loadCycloneTrackData } from "@/utils/realDataLoader";
 import { generateForecastCone } from "@/utils/forecastCone";
 
 interface RealDataLayersProps {
@@ -106,15 +106,14 @@ export default function RealDataLayers({
       try {
         console.log(`Loading cyclone tracks from real data...`);
 
-        // Load from public directory
-        const response = await fetch('/cyclone-track.geojson');
-        if (!response.ok) {
+        // Load from public directory using dataLoader (handles basePath)
+        const geojson = await loadCycloneTrackData();
+        if (!geojson) {
           console.warn('Could not load cyclone track data');
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
           return;
         }
 
-        const geojson = await response.json();
         const sourceId = 'cyclone-tracks-real';
         const layerId = 'cyclone-tracks-layer-real';
         
