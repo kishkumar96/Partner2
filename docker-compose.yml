@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  partner2:
+    build: .
+    container_name: partner2-dashboard
+    ports:
+      - "3112:3112"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
