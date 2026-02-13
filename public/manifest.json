@@ -2,7 +2,7 @@
   "name": "Climate Risk Dashboard",
   "short_name": "Climate Risk",
   "description": "Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis",
-  "start_url": "/",
+  "start_url": "/partner2/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#3b82f6",
