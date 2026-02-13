@@ -218,46 +218,46 @@ ${code}
 
 Provide a comprehensive analysis:
 
-🔴 **CRITICAL ISSUES** (Must fix before production):
+**CRITICAL ISSUES** (Must fix before production):
 - Security vulnerabilities (OWASP Top 10)
 - Data loss risks
 - Breaking changes
 - Memory leaks
 - Race conditions
 
-🟡 **WARNINGS** (Should fix):
+**WARNINGS** (Should fix):
 - Performance bottlenecks
 - Scalability concerns
 - Maintainability issues
 - Tech debt
 - Anti-patterns
 
-🟢 **SUGGESTIONS** (World-class improvements):
+**SUGGESTIONS** (World-class improvements):
 - How top companies (Google, Netflix, Meta) would approach this
 - Modern best practices and patterns
 - Performance optimizations
 - Developer experience improvements
 - Future-proofing recommendations
 
-✨ **EXCELLENCE OPPORTUNITIES**:
+**EXCELLENCE OPPORTUNITIES**:
 - Code that could win awards
 - Innovation possibilities
 - Standout features to add
 - Ways to exceed expectations
 
-♿ **ACCESSIBILITY & INCLUSIVITY**:
+**ACCESSIBILITY & INCLUSIVITY**:
 - WCAG 2.1 compliance
 - Screen reader support
 - Keyboard navigation
 - International support
 
-🌍 **PRODUCTION READINESS**:
+**PRODUCTION READINESS**:
 - Error handling completeness
 - Logging and monitoring
 - Testing coverage needs
 - Documentation quality
 
-✅ **STRENGTHS** (What's already world-class):
+**STRENGTHS** (What's already world-class):
 - Praise excellent patterns
 - Highlight innovative solutions
 - Note production-ready aspects
@@ -289,7 +289,7 @@ Be specific, actionable, and aim for world-class quality!`;
       throw new Error('No suitable models available for code review');
     }
 
-    console.log(`📊 Using ${reviewModels.length} models for ensemble review...`);
+    console.log(`Using ${reviewModels.length} models for ensemble review...`);
 
     // Get reviews from multiple models
     const reviews = await Promise.all(
@@ -336,7 +336,7 @@ ${code}
 \`\`\`
 
 Rate and review:
-🔴 Critical Issues | 🟡 Warnings | 🟢 Improvements | ✨ Excellence Ideas | ✅ Strengths
+Critical Issues | Warnings | Improvements | Excellence Ideas | Strengths
 
 Be specific and actionable. Focus on world-class quality.`;
   }

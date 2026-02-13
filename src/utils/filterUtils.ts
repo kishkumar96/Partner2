@@ -77,7 +77,7 @@ export function filterEvents(events: Event[], filters: FilterState): Event[] {
     if (!matchesHazardFilter(event.hazardId, filters.selectedHazards)) {
       return false;
     }
-    if (!matchesSectorFilter(event.sectorId, filters.selectedSectors)) {
+    if (!matchesSectorFilter(event.sectorId || '', filters.selectedSectors)) {
       return false;
     }
     // Filter by specific events
@@ -126,7 +126,7 @@ export function filterExposureData(
 }
 
 /**
- * Filters economic damage data based on selected hazards and sectors.
+ * Filters economic damage data based on selected hazards, sectors, and date range.
  * @param economicDamageData - Array of economic damage data to filter
  * @param filters - Current filter state
  * @returns Filtered array of economic damage data
@@ -136,10 +136,19 @@ export function filterEconomicDamageData(
   filters: FilterState
 ): EconomicDamageData[] {
   return economicDamageData.filter((damage) => {
-    return (
-      matchesHazardFilter(damage.hazardId, filters.selectedHazards) &&
-      matchesSectorFilter(damage.sectorId, filters.selectedSectors)
-    );
+    // Hazard and sector filtering
+    if (!matchesHazardFilter(damage.hazardId, filters.selectedHazards)) return false;
+    if (!matchesSectorFilter(damage.sectorId, filters.selectedSectors)) return false;
+    
+    // Date range filtering based on year
+    if (filters.dateRange.start || filters.dateRange.end) {
+      const dataYear = damage.year;
+      const startYear = filters.dateRange.start ? new Date(filters.dateRange.start).getFullYear() : 0;
+      const endYear = filters.dateRange.end ? new Date(filters.dateRange.end).getFullYear() : 9999;
+      if (dataYear < startYear || dataYear > endYear) return false;
+    }
+    
+    return true;
   });
 }
 
@@ -152,8 +161,8 @@ function computeAggregatedMetrics(events: Event[]): Omit<AggregatedEventData, 'i
   return events.reduce(
     (acc, e) => {
       acc.totalEvents += 1;
-      acc.totalAffectedPopulation += e.affectedPopulation;
-      acc.totalEconomicDamage += e.economicDamage;
+      acc.totalAffectedPopulation += e.totalAffectedPopulation || 0;
+      acc.totalEconomicDamage += e.totalEconomicDamage || 0;
       if (e.severity === "high" || e.severity === "critical") {
         acc.highRiskAreas += 1;
       }

@@ -424,7 +424,11 @@ export default function AdvancedCharts({
         </p>
         {regionalTotalData ? (
           <div className="h-56">
-            <Bar data={regionalTotalData} options={regionalTotalOptions} />
+            <Bar 
+              data={regionalTotalData} 
+              options={regionalTotalOptions}
+              aria-label="Bar chart showing total economic loss by region. Top 6 regions by aggregate damage across all sectors."
+            />
           </div>
         ) : (
           <div className="text-xs text-slate-400">No regional totals available.</div>
@@ -535,7 +539,11 @@ export default function AdvancedCharts({
         </p>
         {hasScatterPoints ? (
           <div className="h-64">
-            <Scatter data={scatterData!} options={scatterOptions} />
+            <Scatter 
+              data={scatterData!} 
+              options={scatterOptions}
+              aria-label="Scatter plot showing correlation between population size and economic loss. Each point represents a region."
+            />
           </div>
         ) : (
           <div className="h-40 flex items-center justify-center text-xs text-slate-400">
@@ -554,7 +562,11 @@ export default function AdvancedCharts({
         </p>
         {radarData ? (
           <div className="h-72">
-            <Radar data={radarData} options={radarOptions} />
+            <Radar 
+              data={radarData} 
+              options={radarOptions}
+              aria-label="Radar chart showing multi-sector impact profile for top 5 most affected regions. Each axis represents a different sector."
+            />
           </div>
         ) : (
           <div className="text-xs text-slate-400">No radar profile available.</div>

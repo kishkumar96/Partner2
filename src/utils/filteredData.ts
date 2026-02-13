@@ -4,14 +4,14 @@
  * =============================================================================
  * 
  * CURRENT IMPLEMENTATION STRENGTHS:
- * ✅ Clear separation of concerns with dedicated filtering utilities
- * ✅ Type-safe with TypeScript interfaces
- * ✅ Pure functions that are predictable and testable
- * ✅ Leverages useMemo in calling components for memoization
+ * Clear separation of concerns with dedicated filtering utilities
+ * Type-safe with TypeScript interfaces
+ * Pure functions that are predictable and testable
+ * Leverages useMemo in calling components for memoization
  * 
  * CRITICAL LIMITATIONS & RECOMMENDED IMPROVEMENTS:
  * 
- * 1. ⚠️ LINEAR ARRAY SCANNING - PERFORMANCE BOTTLENECK
+ * 1. LINEAR ARRAY SCANNING - PERFORMANCE BOTTLENECK
  *    Problem: Every filter change triggers O(n) scan of entire events array.
  *    With 1000s of events, this causes UI lag on filter interactions.
  *    
@@ -39,7 +39,7 @@
  *    );
  *    ```
  * 
- * 2. ⚠️ NO MAP VIEWPORT AWARENESS - MISSING GEOSPATIAL CONTEXT
+ * 2. NO MAP VIEWPORT AWARENESS - MISSING GEOSPATIAL CONTEXT
  *    Problem: Filtering ignores what's actually visible on the map. User pans/zooms
  *    but data doesn't update to reflect current view. This is a major UX gap for
  *    a map-centric application.
@@ -73,7 +73,7 @@
  *    const visibleEvents = visibleIds.map(i => events[i]);
  *    ```
  * 
- * 3. ⚠️ SCATTERED STATE MANAGEMENT - DUPLICATED LOGIC
+ * 3. SCATTERED STATE MANAGEMENT - DUPLICATED LOGIC
  *    Problem: Filter state lives in page.tsx, but multiple components (SummaryPanel,
  *    MapView, etc.) independently recalculate filtered data using useMemo. This causes:
  *    - Duplicated filtering logic across components
@@ -137,7 +137,7 @@
  *    - No prop drilling for filter state
  *    - Easier testing and debugging
  * 
- * 4. ⚠️ INEFFICIENT AGGREGATION
+ * 4. INEFFICIENT AGGREGATION
  *    Problem: aggregateEventsByLevel() iterates through ALL districts/provinces
  *    even if they have no events (includeEmpty=true default).
  *    
@@ -153,7 +153,7 @@
  *    });
  *    ```
  * 
- * 5. ⚠️ DATE FILTERING WITH STRING NORMALIZATION
+ * 5. DATE FILTERING WITH STRING NORMALIZATION
  *    Problem: Date normalization on every filter call is inefficient.
  *    
  *    Solution: Normalize dates once during data ingestion:
@@ -215,13 +215,13 @@ interface FilteredDataArgs {
 /**
  * Computes filtered and aggregated data based on current filter state.
  * 
- * ⚠️ CURRENT LIMITATIONS:
+ * CURRENT LIMITATIONS:
  * 1. O(n) complexity - scans entire array on each filter change
  * 2. Called independently by multiple components (duplicated work)
  * 3. No spatial/geographic filtering based on map viewport
  * 4. Re-aggregates all districts even if only a few have events
  * 
- * 💡 MIGRATION PATH:
+ * MIGRATION PATH:
  * This function should be converted into a selector/computed property
  * in a centralized store. Components would subscribe to the store and
  * automatically receive updates when filters change, with computation

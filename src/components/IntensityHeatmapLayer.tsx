@@ -33,9 +33,9 @@ export default function IntensityHeatmapLayer({
               coordinates: [event.location.lng, event.location.lat],
             },
             properties: {
-              damage: event.economicDamage || 0,
+              damage: event.totalEconomicDamage || 0,
               intensity: Math.min(
-                (event.economicDamage || 0) / 10000000, // Normalize to 0-1 scale
+                (event.totalEconomicDamage || 0) / 10000000, // Normalize to 0-1 scale
                 1
               ),
             },
@@ -138,7 +138,7 @@ export default function IntensityHeatmapLayer({
           beforeId
         );
 
-        console.log("✅ Intensity heatmap layer added");
+        console.log("Intensity heatmap layer added");
       } catch (error) {
         console.error("Error loading intensity heatmap:", error);
       }

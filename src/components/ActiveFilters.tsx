@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { FilterState, Hazard, Sector } from "@/types";
-import { X, Filter } from "lucide-react";
+import { Calendar, Filter, X } from "lucide-react";
 
 interface ActiveFiltersProps {
   filters: FilterState;
@@ -45,6 +45,7 @@ export default function ActiveFilters({
   activeHazards.forEach((hazardId) => {
     const hazard = hazards.find(h => h.id === hazardId);
     if (!hazard) return;
+    const HazardIcon = hazard.icon;
     chips.push(
       <button
         key={`hazard-${hazardId}`}
@@ -52,7 +53,7 @@ export default function ActiveFilters({
         className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors group"
         title={`Remove ${hazard.name} filter`}
       >
-        <span>{hazard.icon}</span>
+        <HazardIcon className="w-3 h-3" aria-hidden="true" />
         <span>{hazard.name}</span>
         <X className="w-3 h-3 opacity-60 group-hover:opacity-100" />
       </button>
@@ -62,6 +63,7 @@ export default function ActiveFilters({
   activeSectors.forEach((sectorId) => {
     const sector = sectors.find(s => s.id === sectorId);
     if (!sector) return;
+    const SectorIcon = sector.icon;
     chips.push(
       <button
         key={`sector-${sectorId}`}
@@ -69,7 +71,7 @@ export default function ActiveFilters({
         className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs font-medium border border-blue-500/30 hover:bg-blue-500/30 transition-colors group"
         title={`Remove ${sector.name} filter`}
       >
-        <span>{sector.icon}</span>
+        <SectorIcon className="w-3 h-3" aria-hidden="true" />
         <span>{sector.name}</span>
         <X className="w-3 h-3 opacity-60 group-hover:opacity-100" />
       </button>
@@ -96,7 +98,7 @@ export default function ActiveFilters({
         key="date-range"
         className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-800/70 text-slate-300 rounded-full text-xs font-medium border border-slate-700/60"
       >
-        <span>📅</span>
+        <Calendar className="w-3 h-3" aria-hidden="true" />
         <span>
           {filters.dateRange.start || '...'} - {filters.dateRange.end || '...'}
         </span>

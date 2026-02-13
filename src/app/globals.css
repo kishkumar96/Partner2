@@ -616,3 +616,17 @@ button:disabled,
 .glow-effect {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* Slow Spin Animation for Loop Icon */
+@keyframes slowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-slow-spin {
+  animation: slowSpin 3s linear infinite;
+}

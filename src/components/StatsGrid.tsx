@@ -1,7 +1,7 @@
 "use client";
 
 import { GlassStatCard } from "./GlassStatCard";
-import { Building2, Users, Layers, TrendingUp, Heart, School, Home } from "lucide-react";
+import { BarChart3, Building2, Home, Layers, TrendingUp, Users, Heart, School } from "lucide-react";
 
 interface StatsGridProps {
   totalEconomicDamage: number;
@@ -30,8 +30,9 @@ export function StatsGrid({
     <div className="space-y-3">
       {/* Section Label: Impact */}
       <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border-l-4 border-blue-500 rounded">
+        <BarChart3 className="h-3.5 w-3.5 text-blue-300" aria-hidden="true" />
         <span className="text-xs font-bold uppercase tracking-wide text-blue-300">
-          📊 Impact (Modelled)
+          Impact (Modelled)
         </span>
       </div>
 
@@ -55,8 +56,9 @@ export function StatsGrid({
 
       {/* Section Label: Exposure */}
       <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/10 border-l-4 border-orange-500 rounded mt-4">
+        <Home className="h-3.5 w-3.5 text-orange-400" aria-hidden="true" />
         <span className="text-xs font-bold uppercase tracking-wide text-orange-400">
-          🏘️ Exposure
+          Exposure
         </span>
       </div>
 

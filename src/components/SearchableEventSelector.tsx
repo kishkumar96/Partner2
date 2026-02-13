@@ -42,7 +42,7 @@ export default function SearchableEventSelector({
     if (!searchQuery.trim()) return events;
     const query = searchQuery.toLowerCase();
     return events.filter((event) => {
-      const districtName = districtNameById.get(event.districtId);
+      const districtName = districtNameById.get(event.districtId || '');
       const hazardName = hazardNameById.get(event.hazardId);
       const searchableText = [
         event.name,
@@ -108,7 +108,7 @@ export default function SearchableEventSelector({
       {/* Results Summary & Actions */}
       <div className="flex items-center justify-between text-xs bg-gradient-to-r from-slate-800/60 to-slate-700/40 rounded-xl px-3 py-2.5 border border-slate-700/50">
         <span aria-live="polite" aria-atomic="true" className="font-semibold text-slate-300">
-          {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""}{" "}
+          {filteredEvents.length} district{filteredEvents.length !== 1 ? "s" : ""}{" "}
           {searchQuery && `(filtered from ${events.length})`}
           {selectedEvents.length > 0 && (
             <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30">

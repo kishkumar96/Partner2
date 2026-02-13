@@ -166,8 +166,8 @@ export default function SummaryPanel({
   const stats: SummaryStats = useMemo(
     () => ({
       totalEvents: filteredEvents.length,
-      totalAffectedPopulation: filteredEvents.reduce((sum, e) => sum + e.affectedPopulation, 0),
-      totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + e.economicDamage, 0),
+      totalAffectedPopulation: filteredEvents.reduce((sum, e) => sum + (e.totalAffectedPopulation || 0), 0),
+      totalEconomicDamage: filteredEvents.reduce((sum, e) => sum + (e.totalEconomicDamage || 0), 0),
       // FIX: severity is a string union, not a number - check for 'high' or 'critical'
       highRiskAreas: filteredEvents.filter(e => e.severity === 'high' || e.severity === 'critical').length,
     }),
@@ -538,8 +538,9 @@ export default function SummaryPanel({
             {aggregatedEventData && aggregatedEventData.length > 0 && (
               <div className="glass-panel rounded-xl p-3 border border-slate-700/50 bg-slate-800/50">
                 <div className="flex items-center gap-2 mb-3">
+                  <Target className="w-4 h-4 text-amber-300" aria-hidden="true" />
                   <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-                    🎯 Key Insights
+                    Key Insights
                   </h3>
                 </div>
                 

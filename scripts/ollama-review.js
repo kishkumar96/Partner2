@@ -139,6 +139,19 @@ function getReviewFocus(file) {
 - Type safety`;
 }
 
+// Read project context
+function getProjectContext() {
+  try {
+    const contextPath = path.join(__dirname, '..', '.ollama-context.md');
+    if (fs.existsSync(contextPath)) {
+      return fs.readFileSync(contextPath, 'utf-8');
+    }
+  } catch (e) {
+    // Context file not found, continue without it
+  }
+  return '';
+}
+
 // World-class review prompt
 function getWorldClassPrompt(file, diff) {
   // Smart truncation for large diffs
@@ -156,8 +169,11 @@ function getWorldClassPrompt(file, diff) {
 
   const focus = getReviewFocus(file);
   const fileType = file.endsWith('.tsx') ? 'React Component' : file.endsWith('.ts') ? 'TypeScript' : 'JavaScript';
+  const projectContext = getProjectContext();
 
-  return `You are a world-class software architect reviewing code for a **climate disaster risk dashboard** (Next.js + TypeScript + MapLibre).
+  return `You are a world-class software architect reviewing code for a **Pacific Disaster Platform** (Next.js 16 + TypeScript + MapLibre).
+
+${projectContext ? `## Project Context\n${projectContext}\n` : ''}
 
 File: ${file} (${fileType})
 
@@ -168,25 +184,35 @@ ${truncatedDiff}
 
 ${focus}
 
-Provide CONCISE analysis (max 15 lines per section):
+## Review Guidelines
 
-🔴 CRITICAL (if any):
-- [Line X] Issue → Suggested fix
+**ONLY flag real issues:**
+- Actual bugs (undefined vars, type errors, logic errors)
+- Memory leaks (missing cleanup, map instance leaks)
+- Critical accessibility gaps
+- Severe performance issues (O(n²), large bundles)
 
-🟡 WARNINGS (if any):
-- [Line X] Issue → Improvement
+**DO NOT flag:**
+- aria-label on canvas/charts (CORRECT for accessibility)
+- Minor style/optimization preferences
+- Generic advice without specific reason
+- Framework features you're unsure about (verify first!)
+
+Provide CONCISE analysis (max 12 lines per section):
+
+🔴 CRITICAL (only real bugs):
+- [Line X] Issue → Specific fix with code
+
+🟡 WARNINGS (meaningful improvements):
+- [Line X] Issue → Concrete improvement
 
 🟢 STRENGTHS:
-- What's already excellent
+- What's done well
 
-**RATING**: X/10
+**RATING**: X/10 (Critical issues = max 7/10)
 **RECOMMENDATION**: Production Ready / Needs Work
 
-IMPORTANT:
-- Reference actual line numbers from diff
-- Provide code snippets for fixes
-- Skip generic advice ("add comments")
-- Only flag real issues, not style`;
+Be specific and accurate. Skip the issue if you're not 100% certain.`;
 }
 
 // Review with single model
@@ -219,11 +245,40 @@ async function reviewWithModel(model, file, diff) {
   }
 }
 
+// Filter out common false positives
+function filterFalsePositives(review) {
+  const falsePositivePatterns = [
+    // Known incorrect claims
+    /aria-label.*not.*standard/i,
+    /ariaLabel.*do(?:es)? not exist/i,
+    /aria-label.*not supported/i,
+    
+    // Over-optimization
+    /memoize.*onClick.*performance/i,
+    /className.*could.*performance issue/i,
+    
+    // Generic unhelpful advice
+    /consider adding.*comment/i,
+    /should.*be.*documented/i,
+    
+    // Bad hook advice
+    /useMemo.*hook.*inside/i,
+  ];
+
+  let lines = review.split('\n');
+  let filtered = lines.filter(line => {
+    return !falsePositivePatterns.some(pattern => pattern.test(line));
+  });
+
+  return filtered.join('\n');
+}
+
 // Review code with ensemble (multiple models)
 async function reviewCode(file, content, diff) {
   if (!USE_ENSEMBLE) {
     console.log(`   Using ${OLLAMA_MODEL}...`);
-    return reviewWithModel(OLLAMA_MODEL, file, diff);
+    const review = await reviewWithModel(OLLAMA_MODEL, file, diff);
+    return filterFalsePositives(review);
   }
 
   // Get available models
@@ -277,12 +332,15 @@ Create UNIFIED REVIEW:
     if (response.ok) {
       const data = await response.json();
       
+      // Filter false positives from consensus
+      const filteredConsensus = filterFalsePositives(data.response);
+      
       // Return both individual reviews and consensus
       let result = `### 🎯 Consensus Review (from ${reviewModels.length} models)\n\n`;
-      result += data.response;
+      result += filteredConsensus;
       result += `\n\n---\n\n<details>\n<summary>📊 Individual Model Reviews (click to expand)</summary>\n\n`;
       reviews.forEach((r, i) => {
-        result += `\n#### Model ${i + 1}: ${r.model}\n\n${r.review}\n\n`;
+        result += `\n#### Model ${i + 1}: ${r.model}\n\n${filterFalsePositives(r.review)}\n\n`;
       });
       result += `</details>`;
       
@@ -293,7 +351,7 @@ Create UNIFIED REVIEW:
   }
 
   // Fallback to best single review
-  return reviews[0].review;
+  return filterFalsePositives(reviews[0].review);
 }
 
 // Main function

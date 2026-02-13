@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendingUp, Users, DollarSign, Home, AlertTriangle, MapPin } from "lucide-react";
+import { TrendingUp, Users, DollarSign, Home, AlertTriangle, MapPin, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/utils/formatters";
 import { AggregatedEventData } from "@/types";
 
@@ -102,9 +102,7 @@ export default function TopInsightsCards({ insights, className = "" }: TopInsigh
               {isClickable && (
                 <div className="flex items-center gap-1 text-xs text-slate-100/70 mt-3">
                   <span>Click to view details</span>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="w-3 h-3" />
                 </div>
               )}
             </div>

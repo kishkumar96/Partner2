@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Download, RefreshCw, FileText, Map, AlertCircle } from "lucide-react";
+import { Download, RefreshCw, FileText, Map, AlertCircle, Wind } from "lucide-react";
 import { 
   fetchVanuatuTCLolaCatalog, 
   fetchCycloneTrack,
@@ -205,8 +205,9 @@ export default function THREDDSBrowser() {
           {/* Track Data Preview */}
           {trackData && trackData.features.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">
-                🌀 Cyclone Track Loaded
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center gap-2">
+                <Wind className="w-4 h-4" aria-hidden="true" />
+                Cyclone Track Loaded
               </h3>
               <div className="text-sm text-blue-800 dark:text-blue-300">
                 <p>Name: {trackData.features[0]?.properties?.name || "TC Lola"}</p>

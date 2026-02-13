@@ -16,20 +16,32 @@ const BASEMAPS = [
     name: "Light",
     icon: Globe2,
     style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+    fallback: "https://tiles.openfreemap.org/styles/positron",
   },
   {
     id: "voyager",
     name: "Detailed",
     icon: Map,
     style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    fallback: "https://tiles.openfreemap.org/styles/liberty",
   },
   {
     id: "dark",
     name: "Dark",
     icon: Satellite,
     style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+    fallback: "https://tiles.openfreemap.org/styles/dark",
+  },
+  {
+    id: "osm",
+    name: "OpenStreetMap",
+    icon: Globe2,
+    style: "https://tiles.openfreemap.org/styles/liberty",
+    fallback: null, // Already a fallback option
   },
 ];
+
+export { BASEMAPS };
 
 /**
  * Unified Map Controls - Combines basemap switcher with future controls
@@ -70,8 +82,11 @@ export function MapControls({
           <div className="absolute top-full left-0 mt-2 glass-panel rounded-lg p-3 min-w-[280px] z-[16] shadow-2xl">
             {hasMapStyleControls && (
               <div className="mb-3 pb-3 border-b border-slate-700">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                  Risk Layer
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                  Primary Focus
+                </div>
+                <div className="text-[10px] text-slate-500 mb-2">
+                  Wind hazard always visible as context layer
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -92,7 +107,7 @@ export function MapControls({
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"
                     }`}
                   >
-                    Wind Speed
+                    Wind Hazard
                   </button>
                 </div>
               </div>

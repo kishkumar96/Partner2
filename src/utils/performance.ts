@@ -22,7 +22,7 @@ export type Metric = {
 export const reportWebVitals = (metric: Metric) => {
   // Log to console in development
   if (process.env.NODE_ENV === 'development') {
-    console.log('📊 Web Vital:', {
+    console.log('Web Vital:', {
       name: metric.name,
       value: Math.round(metric.value),
       rating: metric.rating,
@@ -47,7 +47,7 @@ export const measureRenderTime = (componentName: string, startTime: number) => {
   const duration = endTime - startTime;
 
   if (process.env.NODE_ENV === 'development') {
-    console.log(`⚡ ${componentName} rendered in ${duration.toFixed(2)}ms`);
+    console.log(`${componentName} rendered in ${duration.toFixed(2)}ms`);
   }
 
   // Track if render is slow (> 100ms)
@@ -72,7 +72,7 @@ export const measureDataLoad = async <T>(
     const duration = performance.now() - startTime;
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`📦 ${operation} loaded in ${duration.toFixed(2)}ms`);
+      console.log(`${operation} loaded in ${duration.toFixed(2)}ms`);
     }
 
     analytics.performance(`data_load_${operation}`, duration);
@@ -101,7 +101,7 @@ export const trackAPICall = async <T>(
     
     // Alert if API is slow
     if (duration > 3000) {
-      console.warn(`⚠️ Slow API call: ${endpoint} took ${duration.toFixed(2)}ms`);
+      console.warn(`Slow API call: ${endpoint} took ${duration.toFixed(2)}ms`);
     }
 
     return result;
@@ -129,7 +129,7 @@ export const monitorMemory = () => {
     };
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('💾 Memory Usage:', {
+      console.log('Memory Usage:', {
         used: `${memoryInfo.usedJSHeapSize.toFixed(2)} MB`,
         total: `${memoryInfo.totalJSHeapSize.toFixed(2)} MB`,
         limit: `${memoryInfo.jsHeapSizeLimit.toFixed(2)} MB`,
@@ -139,7 +139,7 @@ export const monitorMemory = () => {
     // Alert if memory usage is high (> 80% of limit)
     const usagePercent = (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) * 100;
     if (usagePercent > 80) {
-      console.warn(`⚠️ High memory usage: ${usagePercent.toFixed(2)}%`);
+      console.warn(`High memory usage: ${usagePercent.toFixed(2)}%`);
       analytics.performance('memory_high', usagePercent);
     }
 
@@ -160,7 +160,7 @@ export const observeLongTasks = () => {
       for (const entry of list.getEntries()) {
         if (entry.duration > 50) {
           console.warn(
-            `⚠️ Long task detected: ${entry.duration.toFixed(2)}ms`,
+            `Long task detected: ${entry.duration.toFixed(2)}ms`,
             entry
           );
           analytics.performance('long_task', entry.duration);
@@ -191,7 +191,7 @@ export const trackPageLoad = () => {
       const renderTime = perfData.domComplete - perfData.domLoading;
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Page Load Metrics:', {
+        console.log('Page Load Metrics:', {
           pageLoad: `${pageLoadTime}ms`,
           connection: `${connectTime}ms`,
           render: `${renderTime}ms`,

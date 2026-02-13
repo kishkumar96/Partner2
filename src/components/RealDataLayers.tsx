@@ -8,6 +8,8 @@ import {
   buildWMSImageUrl,
   getLayersForCountry,
 } from "@/data/realThreddsLayers";
+import { loadCycloneForecastTrack } from "@/utils/cycloneAnimationLoader";
+import { generateForecastCone } from "@/utils/forecastCone";
 
 interface RealDataLayersProps {
   map: MapLibreMap | null;
@@ -102,7 +104,7 @@ export default function RealDataLayers({
       loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: true };
 
       try {
-        console.log(`📍 Loading cyclone tracks from real data...`);
+        console.log(`Loading cyclone tracks from real data...`);
 
         // Load from public directory
         const response = await fetch('/cyclone-track.geojson');
@@ -115,6 +117,10 @@ export default function RealDataLayers({
         const geojson = await response.json();
         const sourceId = 'cyclone-tracks-real';
         const layerId = 'cyclone-tracks-layer-real';
+        
+        // Also load forecast data for cone visualization
+        const forecastData = await loadCycloneForecastTrack();
+        const forecastConeData = forecastData ? generateForecastCone(forecastData) : null;
 
         // Remove existing layers and source if present
         try {
@@ -157,6 +163,54 @@ export default function RealDataLayers({
             beforeId = 'damaged-roads-layer';
           }
 
+          // Add forecast cone (uncertainty visualization) - professional standard
+          const coneSourceId = 'cyclone-forecast-cone';
+          const coneLayerId = 'cyclone-forecast-cone-layer';
+          
+          if (forecastConeData && forecastConeData.features.length > 0) {
+            // Add cone source
+            if (map.getSource(coneSourceId)) {
+              const existing = map.getSource(coneSourceId) as maplibregl.GeoJSONSource | undefined;
+              existing?.setData(forecastConeData);
+            } else {
+              map.addSource(coneSourceId, {
+                type: "geojson",
+                data: forecastConeData,
+              });
+            }
+            
+            // Add cone fill layer (subtle background)
+            if (!map.getLayer(coneLayerId)) {
+              map.addLayer({
+                id: coneLayerId,
+                type: "fill",
+                source: coneSourceId,
+                paint: {
+                  "fill-color": "#8B5CF6",
+                  "fill-opacity": 0.15, // Subtle uncertainty visualization
+                },
+              }, beforeId);
+            }
+            
+            // Add cone outline for clarity
+            const coneOutlineLayerId = `${coneLayerId}-outline`;
+            if (!map.getLayer(coneOutlineLayerId)) {
+              map.addLayer({
+                id: coneOutlineLayerId,
+                type: "line",
+                source: coneSourceId,
+                paint: {
+                  "line-color": "#8B5CF6",
+                  "line-width": 1,
+                  "line-opacity": 0.4,
+                  "line-dasharray": [3, 2],
+                },
+              }, beforeId);
+            }
+            
+            console.log(`Added forecast cone with ${forecastConeData.features.length} segments`);
+          }
+
           // Add line layer for cyclone tracks
           if (!map.getLayer(layerId)) {
             map.addLayer({
@@ -188,7 +242,16 @@ export default function RealDataLayers({
             }, beforeId);
           }
 
-          console.log(`✅ Loaded cyclone track data successfully`);
+          // Add rich interactivity: hover cursor and tooltips for cyclone track
+          map.on('mouseenter', pointsLayerId, () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          
+          map.on('mouseleave', pointsLayerId, () => {
+            map.getCanvas().style.cursor = '';
+          });
+
+          console.log(`Loaded cyclone track data successfully`);
         };
 
         // Check if style is loaded before adding layers
@@ -207,6 +270,9 @@ export default function RealDataLayers({
     const sourceId = 'cyclone-tracks-real';
     const layerId = 'cyclone-tracks-layer-real';
     const pointLayerId = `${layerId}-points`;
+    const coneSourceId = 'cyclone-forecast-cone';
+    const coneLayerId = 'cyclone-forecast-cone-layer';
+    const coneOutlineLayerId = `${coneLayerId}-outline`;
     let onStyleLoad: (() => void) | null = null;
 
     if (!map.isStyleLoaded()) {
@@ -231,6 +297,17 @@ export default function RealDataLayers({
         }
       }
       try {
+        // Remove cone layers
+        if (map.getLayer(coneOutlineLayerId)) {
+          map.removeLayer(coneOutlineLayerId);
+        }
+        if (map.getLayer(coneLayerId)) {
+          map.removeLayer(coneLayerId);
+        }
+        if (map.getSource(coneSourceId)) {
+          map.removeSource(coneSourceId);
+        }
+        // Remove track layers
         if (map.getLayer(pointLayerId)) {
           map.removeLayer(pointLayerId);
         }
@@ -244,7 +321,7 @@ export default function RealDataLayers({
         // Silently ignore cleanup errors
       }
     };
-  }, [map, countryCode, visible, styleChangeCounter]); // ✅ Re-load cyclone tracks when basemap changes
+  }, [map, countryCode, visible, styleChangeCounter]); // Re-load cyclone tracks when basemap changes
 
   // Load real WMS hazard layers from THREDDS (with lazy loading based on zoom)
   useEffect(() => {
@@ -275,16 +352,7 @@ export default function RealDataLayers({
     };
 
     const loadRealWMSLayers = async () => {
-      // Lazy loading: Only load WMS layers when zoomed in enough to see details
-      const currentZoom = map.getZoom();
-      const MIN_ZOOM_FOR_WMS = 6; // Only load WMS layers at zoom level 6 or higher
-      
-      if (currentZoom < MIN_ZOOM_FOR_WMS) {
-        console.log(`⏸️ Skipping WMS layers (zoom ${currentZoom.toFixed(1)} < ${MIN_ZOOM_FOR_WMS})`);
-        return;
-      }
-      
-      // Skip if WMS layers already loaded (prevent redundant loading on zoom events)
+      // Skip if WMS layers already loaded (prevent redundant loading)
       if (wmsLayersLoaded.current) {
         return;
       }
@@ -297,14 +365,8 @@ export default function RealDataLayers({
           ? [countryCode] 
           : Object.keys(COUNTRIES) as CountryCode[];
 
-        if (mapStyle !== "wind") {
-          if (windAnimationFrame.current) {
-            cancelAnimationFrame(windAnimationFrame.current);
-            windAnimationFrame.current = null;
-          }
-          removeWmsLayers(countriesToLoad);
-          return;
-        }
+        // Wind layers are now always loaded for context
+        // Opacity is controlled by mapStyle (high when "wind", low when "loss")
 
         for (const country of countriesToLoad) {
           const availableLayers = getLayersForCountry(country).filter(
@@ -312,12 +374,12 @@ export default function RealDataLayers({
           );
           
           if (availableLayers.length === 0) {
-            console.log(`ℹ️ No real WMS layers available for ${country}`);
+            console.log(`No real WMS layers available for ${country}`);
             continue;
           }
 
           console.log(
-            `📊 Loading ${availableLayers.length} real WMS layers for ${country} (zoom: ${currentZoom.toFixed(1)}):`,
+            `Loading ${availableLayers.length} real WMS layers for ${country}:`,
             availableLayers.map((l) => l.name)
           );
 
@@ -345,7 +407,7 @@ export default function RealDataLayers({
                 ...loadingStateRef.current,
                 layers: { ...loadingStateRef.current.layers, [layer.id]: true },
               };
-              console.log(`⏳ Loading WMS layer: ${layer.name}...`);
+              console.log(`Loading WMS layer: ${layer.name}...`);
               
               // Function to add WMS layer
               const addWMSLayer = () => {
@@ -374,13 +436,17 @@ export default function RealDataLayers({
                     beforeId = 'cyclone-forecast-track-line';
                   }
                   
+                  // Dynamic opacity: high when viewing wind, low for context when viewing loss
+                  const windOpacity = mapStyle === "wind" ? 0.85 : 0.25;
+                  
                   map.addLayer({
                     id: layerId,
                     type: "raster",
                     source: sourceId,
                     paint: {
-                      "raster-opacity": 0.6,
+                      "raster-opacity": windOpacity, // Always visible, opacity varies by mode
                       "raster-fade-duration": 300,
+                      "raster-contrast": 0.2,
                     },
                   }, beforeId);
 
@@ -389,14 +455,14 @@ export default function RealDataLayers({
                     ...loadingStateRef.current,
                     layers: { ...loadingStateRef.current.layers, [layer.id]: false },
                   };
-                  console.log(`✅ WMS layer loaded: ${layer.name}`);
+                  console.log(`WMS layer loaded: ${layer.name} (opacity: ${windOpacity})`);
                   
-                  // Start animation for wind layers
-                  if (layer.hazardType === "wind" && !windAnimationFrame.current) {
+                  // Start subtle animation for wind layers when in wind mode
+                  if (layer.hazardType === "wind" && mapStyle === "wind" && !windAnimationFrame.current) {
                     startWindAnimation(map, layerId);
                   }
                 } catch (innerError) {
-                  console.error(`❌ Error adding WMS layer ${layer.id}:`, innerError);
+                  console.error(`Error adding WMS layer ${layer.id}:`, innerError);
                   loadingStateRef.current = {
                     ...loadingStateRef.current,
                     layers: { ...loadingStateRef.current.layers, [layer.id]: false },
@@ -411,7 +477,7 @@ export default function RealDataLayers({
                 map.once('styledata', addWMSLayer);
               }
             } catch (error) {
-              console.error(`❌ Error preparing WMS layer ${layer.id}:`, error);
+              console.error(`Error preparing WMS layer ${layer.id}:`, error);
               loadingStateRef.current = {
                 ...loadingStateRef.current,
                 layers: { ...loadingStateRef.current.layers, [layer.id]: false },
@@ -420,7 +486,7 @@ export default function RealDataLayers({
           }
         }
 
-        console.log(`✅ Real WMS hazard layers loaded`);
+        console.log(`Real WMS hazard layers loaded`);
         wmsLayersLoaded.current = true; // Mark as loaded to prevent re-loading
       } catch (error) {
         console.error(`Error loading WMS layers:`, error);
@@ -456,7 +522,39 @@ export default function RealDataLayers({
         windAnimationFrame.current = null;
       }
     };
-  }, [map, countryCode, visible, mapStyle, styleChangeCounter]); // ✅ Re-load WMS layers when basemap changes
+  }, [map, countryCode, visible, mapStyle, styleChangeCounter]); // Re-load WMS layers when basemap changes
+
+  // Update wind layer opacity dynamically when mapStyle changes
+  useEffect(() => {
+    if (!map || !visible) return;
+    
+    const windOpacity = mapStyle === "wind" ? 0.85 : 0.25;
+    
+    // Update all wind layer opacities
+    windLayerIds.current.forEach(layerId => {
+      try {
+        if (map.getLayer(layerId)) {
+          map.setPaintProperty(layerId, "raster-opacity", windOpacity);
+        }
+      } catch (e) {
+        // Layer might not exist yet, ignore
+      }
+    });
+    
+    // Control animation based on mode
+    if (mapStyle === "wind") {
+      // Start animation in wind mode
+      if (windLayerIds.current.length > 0 && !windAnimationFrame.current) {
+        startWindAnimation(map, windLayerIds.current[0]);
+      }
+    } else {
+      // Stop animation in loss mode (static context layer)
+      if (windAnimationFrame.current) {
+        cancelAnimationFrame(windAnimationFrame.current);
+        windAnimationFrame.current = null;
+      }
+    }
+  }, [map, visible, mapStyle]);
 
   return null; // This is a non-visual component that manages map layers
 }

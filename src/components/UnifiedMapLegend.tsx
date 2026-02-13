@@ -5,6 +5,8 @@ import { DollarSign, Wind, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { formatCurrency } from "@/utils/formatters";
 import { LOSS_SEQUENTIAL_COLORS, WIND_SEQUENTIAL_COLORS } from "@/utils/colorSystem";
 
+import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
+
 interface UnifiedMapLegendProps {
   mode: "loss" | "wind";
   visible?: boolean;
@@ -17,6 +19,12 @@ interface UnifiedMapLegendProps {
   // Sidebar state for responsive positioning
   isLeftPanelOpen?: boolean;
   isRightPanelOpen?: boolean;
+  // Active layers visibility
+  showBuildings?: boolean;
+  showRoads?: boolean;
+  showCyclone?: boolean;
+  onZoomToBuildings?: () => void;
+  onZoomToRoads?: () => void;
 }
 
 /**
@@ -115,11 +123,13 @@ export default function UnifiedMapLegend({
   dataValues = [],
   isLeftPanelOpen = false,
   isRightPanelOpen = false,
+  showBuildings = false,
+  showRoads = false,
+  showCyclone = false,
+  onZoomToBuildings,
+  onZoomToRoads,
 }: UnifiedMapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // Hide when not visible or when something is selected
-  if (!visible || hasSelection) return null;
 
   // Compute data-driven legend breaks
   const legendClasses = useMemo(() => {
@@ -190,6 +200,31 @@ export default function UnifiedMapLegend({
     }
   }, [mode]);
 
+  // Building damage legend classes (when buildings are visible)
+  const buildingLegendClasses = useMemo(() => {
+    if (!showBuildings) return [];
+    
+    return [
+      { label: "< $10K", color: BUILDING_DAMAGE_COLORS.minimal, range: "Minimal" },
+      { label: "$10K - $50K", color: BUILDING_DAMAGE_COLORS.moderate, range: "Moderate" },
+      { label: "$50K - $100K", color: BUILDING_DAMAGE_COLORS.substantial, range: "Substantial" },
+      { label: "$100K - $500K", color: BUILDING_DAMAGE_COLORS.severe, range: "Severe" },
+      { label: "> $500K", color: BUILDING_DAMAGE_COLORS.catastrophic, range: "Catastrophic" },
+    ];
+  }, [showBuildings]);
+
+  // Road damage legend classes (when roads are visible)
+  const roadLegendClasses = useMemo(() => {
+    if (!showRoads) return [];
+    
+    return [
+      { label: "< $5K", color: ROAD_DAMAGE_COLORS.light, range: "Light", width: "3px" },
+      { label: "$5K - $25K", color: ROAD_DAMAGE_COLORS.moderate, range: "Moderate", width: "5px" },
+      { label: "$25K - $75K", color: ROAD_DAMAGE_COLORS.heavy, range: "Heavy", width: "7px" },
+      { label: "> $75K", color: ROAD_DAMAGE_COLORS.severe, range: "Severe", width: "9px" },
+    ];
+  }, [showRoads]);
+
   const IconComponent = config.icon;
   
   // Find min and max from data
@@ -218,11 +253,15 @@ export default function UnifiedMapLegend({
     
     return {
       width: isExpanded 
-        ? 'min(340px, calc(100vw - 400px))' // Adaptive width
+        ? 'clamp(280px, calc(100vw - 2rem), 340px)' // Responsive width: min 280px, max 340px, adapts with 2rem margin
         : '56px',
       maxHeight: 'calc(100vh - 180px)', // Prevent vertical overflow
     };
   };
+  
+  // Hide when not visible or when something is selected
+  // This must come AFTER all hooks to comply with Rules of Hooks
+  if (!visible || hasSelection) return null;
   
   return (
     <div 
@@ -355,6 +394,118 @@ export default function UnifiedMapLegend({
                 </p>
               )}
             </div>
+
+            {/* Buildings layer legend (when visible) */}
+            {showBuildings && buildingLegendClasses.length > 0 && (
+              <>
+                <div className="px-3 py-2 border-t border-white/10">
+                  <h4 className="text-xs font-bold text-amber-400 mb-0.5 flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-amber-400" />
+                    Damaged Buildings
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Individual building damage (zoom to view)
+                  </p>
+                  {onZoomToBuildings && (
+                    <button
+                      type="button"
+                      onClick={onZoomToBuildings}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-400/20"
+                      aria-label="Zoom to damaged buildings"
+                    >
+                      Zoom to buildings
+                    </button>
+                  )}
+                </div>
+
+                <div className="px-2 py-2 space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {buildingLegendClasses.map((item, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                    >
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold font-mono text-slate-200">
+                          {item.label}
+                        </span>
+                        <span className="text-xs text-slate-500 uppercase tracking-wide">
+                          {item.range}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Roads layer legend (when visible) */}
+            {showRoads && roadLegendClasses.length > 0 && (
+              <>
+                <div className="px-3 py-2 border-t border-white/10">
+                  <h4 className="text-xs font-bold text-orange-400 mb-0.5 flex items-center gap-1.5">
+                    <div className="w-4 h-0.5 bg-orange-400" />
+                    Damaged Roads
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Road network damage (line thickness = severity)
+                  </p>
+                  {onZoomToRoads && (
+                    <button
+                      type="button"
+                      onClick={onZoomToRoads}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-orange-400/40 bg-orange-400/10 px-2.5 py-1 text-xs font-semibold text-orange-200 transition-colors hover:bg-orange-400/20"
+                      aria-label="Zoom to damaged roads"
+                    >
+                      Zoom to roads
+                    </button>
+                  )}
+                </div>
+
+                <div className="px-2 py-2 space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {roadLegendClasses.map((item, index) => (
+                    <div 
+                      key={index} 
+                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                    >
+                      <div 
+                        className="flex-shrink-0"
+                        style={{ 
+                          width: '24px',
+                          height: item.width,
+                          backgroundColor: item.color,
+                          borderRadius: '2px'
+                        }}
+                      />
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold font-mono text-slate-200">
+                          {item.label}
+                        </span>
+                        <span className="text-xs text-slate-500 uppercase tracking-wide">
+                          {item.range}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Active layers indicator */}
+            {(showBuildings || showRoads || showCyclone) && (
+              <div className="px-3 py-2 border-t border-white/10 bg-black/5">
+                <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                  Active layers: 
+                  {showBuildings && <span className="text-amber-400 font-medium">Buildings</span>}
+                  {showRoads && <span className="text-orange-400 font-medium">Roads</span>}
+                  {showCyclone && <span className="text-blue-400 font-medium">Cyclone</span>}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

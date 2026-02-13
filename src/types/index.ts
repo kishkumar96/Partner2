@@ -1,14 +1,16 @@
+import type { LucideIcon } from "lucide-react";
+
 export interface Hazard {
   id: string;
   name: string;
   color: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 export interface Sector {
   id: string;
   name: string;
-  icon: string;
+  icon: LucideIcon;
   color: string;
 }
 
@@ -23,14 +25,16 @@ export interface Province {
   name: string;
 }
 
-export interface Event {
+/**
+ * Regional Impact - represents the impact of a disaster event on a specific region
+ * Multiple regional impacts belong to one disaster event
+ */
+export interface RegionalImpact {
   id: string;
-  name: string;
-  date: string;
-  hazardId: string;
-  sectorId: string;
-  districtId: string;
-  provinceId: string;
+  eventId: string; // Links to the parent Event
+  regionId: string; // District or province ID
+  regionName: string;
+  regionType: 'district' | 'province';
   location: {
     lat: number;
     lng: number;
@@ -38,7 +42,49 @@ export interface Event {
   severity: "low" | "medium" | "high" | "critical";
   affectedPopulation: number;
   economicDamage: number;
-  countryCode?: string; // Country code for multi-country support
+  // Sector-specific impacts within this region
+  sectorImpacts?: {
+    sectorId: string;
+    loss: number;
+    exposedBuildings: number;
+    damagedBuildings: number;
+  }[];
+}
+
+/**
+ * Event - represents a single disaster occurrence (e.g., TC Lola, TC Harold)
+ * This is the primary event entity, NOT regional breakdowns
+ */
+export interface Event {
+  id: string;
+  name: string; // e.g., "Tropical Cyclone Lola"
+  date: string;
+  hazardId: string;
+  countryCode?: string;
+  
+  // Aggregated national-level statistics
+  totalAffectedPopulation: number;
+  totalEconomicDamage: number;
+  affectedRegions: number; // Count of regions/districts impacted
+  severity: "low" | "medium" | "high" | "critical";
+  
+  // Primary location (e.g., landfall point or country center)
+  location: {
+    lat: number;
+    lng: number;
+  };
+  
+  // Optional: Link to detailed regional impacts
+  regionalImpacts?: RegionalImpact[];
+  
+  // DEPRECATED: These fields maintained for backward compatibility
+  // Will be removed in future version
+  /** @deprecated Use regionalImpacts instead */
+  sectorId?: string;
+  /** @deprecated Use regionalImpacts instead */
+  districtId?: string;
+  /** @deprecated Use regionalImpacts instead */
+  provinceId?: string;
 }
 
 export interface HazardLayer {
@@ -53,9 +99,11 @@ export interface ExposureData {
   id: string;
   hazardId: string;
   sectorId: string;
+  region?: string; // Region name for geographic context
   population: number;
   assets: number;
   infrastructure: number;
+  buildingCount?: number; // Number of buildings exposed
 }
 
 export interface EconomicDamageData {

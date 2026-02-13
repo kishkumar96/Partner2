@@ -30,15 +30,15 @@ export default function CycloneShareCard({
       minute: '2-digit',
     });
     
-    return `🌀 Tropical Cyclone Update
+    return `Tropical Cyclone Update
 
 ${getCategoryLabel(currentPoint.category)}
 ${date}
 
-💨 Wind: ${Math.round(currentPoint.meanWind)} kt (sustained)
-🌪️ Gusts: ${Math.round(currentPoint.windGust)} kt
-🌡️ Pressure: ${Math.round(currentPoint.pressure)} hPa
-📍 Position: ${currentPoint.latitude.toFixed(2)}°${currentPoint.latitude >= 0 ? 'N' : 'S'}, ${currentPoint.longitude.toFixed(2)}°${currentPoint.longitude >= 0 ? 'E' : 'W'}
+  Wind: ${Math.round(currentPoint.meanWind)} kt (sustained)
+  Gusts: ${Math.round(currentPoint.windGust)} kt
+  Pressure: ${Math.round(currentPoint.pressure)} hPa
+  Position: ${currentPoint.latitude.toFixed(2)}°${currentPoint.latitude >= 0 ? 'N' : 'S'}, ${currentPoint.longitude.toFixed(2)}°${currentPoint.longitude >= 0 ? 'E' : 'W'}
 
 #TropicalCyclone #Weather #DisasterPreparedness`;
   };
@@ -71,7 +71,7 @@ ${date}
     // Title
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 42px Arial';
-    ctx.fillText('🌀 Tropical Cyclone', 40, 70);
+    ctx.fillText('Tropical Cyclone', 40, 70);
     
     // Category badge
     const categoryLabel = getCategoryLabel(currentPoint.category);

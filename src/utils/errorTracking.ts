@@ -96,7 +96,7 @@ export const logError = (
 ) => {
   // Always log to console in development
   if (process.env.NODE_ENV === 'development') {
-    console.error('🚨 Error:', error, context);
+    console.error('Error:', error, context);
   }
 
   if (!isErrorTrackingEnabled) return;
@@ -134,7 +134,7 @@ export const logMessage = (
   context?: ErrorContext
 ) => {
   if (process.env.NODE_ENV === 'development') {
-    console.log(`📝 [${level}]:`, message, context);
+    console.log(`[${level}]:`, message, context);
   }
 
   if (!isErrorTrackingEnabled) return;
@@ -165,7 +165,7 @@ export const logMessage = (
  */
 export const trackPerformance = (metric: string, value: number, unit: string = 'ms') => {
   if (process.env.NODE_ENV === 'development') {
-    console.log(`⚡ Performance [${metric}]:`, value, unit);
+    console.log(`Performance [${metric}]:`, value, unit);
   }
 
   if (!isErrorTrackingEnabled) return;

@@ -14,6 +14,12 @@ import { Chart as ChartJS,
 import { Chart } from 'react-chartjs-2';
 import { CycloneForecastPoint } from '../utils/cycloneAnimationLoader';
 import { StoryBeat } from '../utils/cycloneStory';
+import {
+  getCategoryColor,
+  getBeatColor,
+  CHART_COLORS,
+  hexToRGBA,
+} from '@/theme/cycloneScale';
 
 ChartJS.register(
   CategoryScale,
@@ -38,7 +44,6 @@ export default function CycloneIntensityChart({
   forecastTrack,
   currentIndex,
   onPointClick,
-  isPlaying = false,
   storyBeats = [],
 }: CycloneIntensityChartProps) {
   const chartRef = useRef<ChartJS<'line'>>(null);
@@ -53,75 +58,78 @@ export default function CycloneIntensityChart({
     return map;
   }, [storyBeats]);
 
+  // Accessibility label
+  const chartAriaLabel = useMemo(() => {
+    const maxWind = Math.max(...forecastTrack.map(p => p.meanWind));
+    const duration = forecastTrack.length;
+    return `Cyclone intensity chart showing wind speed over time. Maximum wind speed: ${maxWind} knots across ${duration} forecast timesteps.`;
+  }, [forecastTrack]);
+
+  // Performance optimization: precompute all point presentation data in a single pass
+  // Avoids 10+ array.map() operations per render
+  const presentationData = useMemo(() => {
+    return forecastTrack.map((point, i) => {
+      const beat = beatIndices.get(i);
+      const isCurrent = i === currentIndex;
+      const isBeat = !!beat;
+      
+      return {
+        // Labels
+        label: new Date(point.time).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        
+        // Data values
+        meanWind: point.meanWind,
+        maxGust: Math.max(point.windGust, point.meanWind),
+        pressure: point.pressure,
+        
+        // Visual properties (precomputed)
+        pointRadius: isCurrent ? 8 : isBeat ? 7 : 4,
+        pointColor: isCurrent 
+          ? '#EF4444' 
+          : beat 
+            ? getBeatColor(beat.type) 
+            : getCategoryColor(point.category),
+        pointBorderWidth: isBeat ? 3 : 2,
+        pointStyle: beat 
+          ? beat.type === 'peak-intensity' ? 'star' as const
+            : beat.type === 'rapid-intensification' ? 'triangle' as const
+            : beat.type === 'category-upgrade' ? 'rectRot' as const
+            : beat.type === 'closest-approach' ? 'crossRot' as const
+            : 'circle' as const
+          : 'circle' as const,
+      };
+    });
+  }, [forecastTrack, currentIndex, beatIndices]);
+
   // Memoize chart data to prevent unnecessary recalculations
+  // Now uses precomputed presentation array (single iteration)
   const chartData = useMemo(() => ({
-    labels: forecastTrack.map((point) => {
-      const date = new Date(point.time);
-      return date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }),
+    labels: presentationData.map(p => p.label),
     datasets: [
       {
         label: 'Wind Speed (kt)',
-        data: forecastTrack.map((point) => point.meanWind),
+        data: presentationData.map(p => p.meanWind),
         borderColor: '#3B82F6',
         backgroundColor: 'rgba(59, 130, 246, 0.12)',
         fill: false,
         tension: 0.4,
-        pointRadius: forecastTrack.map((_, i) => {
-          if (i === currentIndex) return 8;
-          if (beatIndices.has(i)) return 7;
-          return 4;
-        }),
+        pointRadius: presentationData.map(p => p.pointRadius),
         pointHoverRadius: 8,
-        pointBackgroundColor: forecastTrack.map((point, i) => {
-          // Current index gets special highlight
-          if (i === currentIndex) return '#EF4444';
-          
-          // Story beat markers get unique colors by type
-          const beat = beatIndices.get(i);
-          if (beat) {
-            if (beat.type === 'peak-intensity') return '#ef4444';
-            if (beat.type === 'rapid-intensification') return '#f59e0b';
-            if (beat.type === 'category-upgrade') return '#8b5cf6';
-            if (beat.type === 'closest-approach') return '#ec4899';
-            if (beat.type === 'peak-uncertainty') return '#6366f1';
-          }
-          
-          // Default category-based colors
-          if (point.category >= 5) return '#8B0000';
-          if (point.category >= 4) return '#FF0000';
-          if (point.category >= 3) return '#FF6600';
-          if (point.category >= 2) return '#FFA500';
-          if (point.category >= 1) return '#FFD700';
-          return '#3B82F6';
-        }),
-        pointBorderColor: forecastTrack.map((_, i) => 
-          beatIndices.has(i) ? '#ffffff' : '#ffffff'
-        ),
-        pointBorderWidth: forecastTrack.map((_, i) => 
-          beatIndices.has(i) ? 3 : 2
-        ),
-        pointStyle: forecastTrack.map((_, i) => {
-          const beat = beatIndices.get(i);
-          if (beat) {
-            if (beat.type === 'peak-intensity') return 'star';
-            if (beat.type === 'rapid-intensification') return 'triangle';
-            if (beat.type === 'category-upgrade') return 'rectRot';
-            if (beat.type === 'closest-approach') return 'crossRot';
-          }
-          return 'circle';
-        }),
+        pointBackgroundColor: presentationData.map(p => p.pointColor),
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: presentationData.map(p => p.pointBorderWidth),
+        pointStyle: presentationData.map(p => p.pointStyle),
       },
       {
         label: 'Gust Range (kt)',
-        data: forecastTrack.map((point) => Math.max(point.windGust, point.meanWind)),
+        data: presentationData.map(p => p.maxGust),
         borderColor: 'rgba(59, 130, 246, 0)',
-        backgroundColor: 'rgba(59, 130, 246, 0.14)',
+        backgroundColor: CHART_COLORS.windFill,
         fill: '-1',
         tension: 0.4,
         pointRadius: 0,
@@ -129,9 +137,9 @@ export default function CycloneIntensityChart({
       },
       {
         label: 'Pressure (hPa)',
-        data: forecastTrack.map((point) => point.pressure),
-        borderColor:'#8B5CF6',
-        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        data: presentationData.map(p => p.pressure),
+        borderColor: CHART_COLORS.pressure,
+        backgroundColor: CHART_COLORS.pressureFill,
         fill: true,
         tension: 0.4,
         yAxisID: 'y1',
@@ -139,7 +147,7 @@ export default function CycloneIntensityChart({
         pointHoverRadius: 6,
       },
     ],
-  }), [forecastTrack, currentIndex, beatIndices]);
+  }), [presentationData]);
 
   const options = {
     responsive: true,
@@ -191,7 +199,7 @@ export default function CycloneIntensityChart({
             const beat = beatIndices.get(idx);
             if (beat) {
               lines.push('');
-              lines.push(`📖 Story Beat: ${beat.title}`);
+              lines.push(`Story Beat: ${beat.title}`);
               lines.push(beat.description);
             }
             
@@ -366,7 +374,14 @@ export default function CycloneIntensityChart({
 
   return (
     <div className="h-full w-full">
-      <Chart type="line" ref={chartRef} data={chartData} options={options} plugins={[animatorPlugin]} />
+      <Chart 
+        type="line" 
+        ref={chartRef} 
+        data={chartData} 
+        options={options} 
+        plugins={[animatorPlugin]}
+        aria-label={chartAriaLabel}
+      />
     </div>
   );
 }

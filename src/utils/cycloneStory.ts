@@ -4,6 +4,9 @@
  */
 
 import { CycloneForecastPoint } from './cycloneAnimationLoader';
+import { CountryCode } from '@/types/thredds';
+import { ArrowUp, Cloud, Flame, MapPin, Wind, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export type StoryBeatType = 
   | 'peak-intensity'
@@ -11,6 +14,23 @@ export type StoryBeatType =
   | 'category-upgrade'
   | 'closest-approach'
   | 'peak-uncertainty';
+
+export function getStoryBeatIcon(type: StoryBeatType): LucideIcon {
+  switch (type) {
+    case 'peak-intensity':
+      return Flame;
+    case 'rapid-intensification':
+      return Zap;
+    case 'category-upgrade':
+      return ArrowUp;
+    case 'closest-approach':
+      return MapPin;
+    case 'peak-uncertainty':
+      return Cloud;
+    default:
+      return Wind;
+  }
+}
 
 export interface StoryBeat {
   id: string;
@@ -31,7 +51,15 @@ export interface StoryBeat {
   };
 }
 
-// Vanuatu center coordinates (Port Vila area)
+// Region center coordinates for closest approach detection
+const REGION_CENTERS: Record<string, { lat: number; lon: number }> = {
+  'VU': { lat: -17.7333, lon: 168.3167 }, // Vanuatu - Port Vila
+  'WS': { lat: -13.8333, lon: -171.7667 }, // Samoa - Apia
+  'TO': { lat: -21.1789, lon: -175.1982 }, // Tonga - Nuku'alofa
+  'CK': { lat: -21.2067, lon: -159.7777 }, // Cook Islands - Avarua
+};
+
+// Default center (Vanuatu) for backwards compatibility
 const VANUATU_CENTER = { lat: -17.7333, lon: 168.3167 };
 
 /**
@@ -71,9 +99,21 @@ function getCategoryName(category: number): string {
 
 /**
  * Detect story beats from cyclone forecast data
+ * @param forecastTrack - Array of cyclone forecast points
+ * @param countryCode - Country code to determine closest approach center (VU, WS, TO, CK)
+ * @param centerPoint - Optional override center point for closest approach
  */
-export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBeat[] {
+export function detectStoryBeats(
+  forecastTrack: CycloneForecastPoint[],
+  countryCode?: CountryCode | null,
+  centerPoint?: { lat: number; lon: number }
+): StoryBeat[] {
   if (forecastTrack.length === 0) return [];
+
+  // Determine center point: explicit override > country code > default
+  const center = centerPoint 
+    || (countryCode && REGION_CENTERS[countryCode]) 
+    || VANUATU_CENTER;
 
   const beats: StoryBeat[] = [];
 
@@ -147,7 +187,7 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
         id: `rapid-intensification-${i}`,
         index: i,
         time: current.time,
-        title: '⚡ Rapid Intensification',
+        title: 'Rapid Intensification',
         description:
           windIncrease >= 25
             ? `Winds increased by ${Math.round(
@@ -182,7 +222,7 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
           id: `category-${threshold}`,
           index: i,
           time: point.time,
-          title: `📈 ${catName} Cyclone`,
+          title: `${catName} Cyclone`,
           description: `Storm upgraded to ${catName} with ${Math.round(point.meanWind)} kt winds`,
           severity: threshold === 5 ? 5 : threshold === 3 ? 4 : 3,
           type: 'category-upgrade',
@@ -197,13 +237,13 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
     }
   }
 
-  // 4. Closest Approach to Vanuatu
+  // 4. Closest Approach to specified center point
   let closestIndex = 0;
   let minDistance = haversineDistance(
     forecastTrack[0].latitude,
     forecastTrack[0].longitude,
-    VANUATU_CENTER.lat,
-    VANUATU_CENTER.lon
+    center.lat,
+    center.lon
   );
 
   for (let i = 1; i < forecastTrack.length; i++) {
@@ -211,8 +251,8 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
     const distance = haversineDistance(
       point.latitude,
       point.longitude,
-      VANUATU_CENTER.lat,
-      VANUATU_CENTER.lon
+      center.lat,
+      center.lon
     );
     if (distance < minDistance) {
       minDistance = distance;
@@ -221,12 +261,24 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
   }
 
   const closestPoint = forecastTrack[closestIndex];
+  
+  // Helper to get region name
+  const getRegionName = (code?: CountryCode | null): string => {
+    const regionNames: Record<string, string> = {
+      'VU': 'Vanuatu',
+      'WS': 'Samoa',
+      'TO': 'Tonga',
+      'CK': 'Cook Islands',
+    };
+    return (code && regionNames[code]) || 'the region';
+  };
+  
   beats.push({
     id: 'closest-approach',
     index: closestIndex,
     time: closestPoint.time,
-    title: '🎯 Closest Approach',
-    description: `Cyclone passes ${Math.round(minDistance)} km from Vanuatu at ${getCategoryName(closestPoint.category)} strength`,
+    title: 'Closest Approach',
+    description: `Cyclone passes ${Math.round(minDistance)} km from ${getRegionName(countryCode)} at ${getCategoryName(closestPoint.category)} strength`,
     severity: minDistance < 100 ? 5 : minDistance < 200 ? 4 : 3,
     type: 'closest-approach',
     metrics: {
@@ -252,7 +304,7 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
     id: 'peak-uncertainty',
     index: maxUncertaintyIndex,
     time: uncertainPoint.time,
-    title: '📊 Peak Uncertainty',
+    title: 'Peak Uncertainty',
     description: `Highest forecast uncertainty at ${Math.round(maxUncertainty)} km radius`,
     severity: 2,
     type: 'peak-uncertainty',
@@ -265,57 +317,53 @@ export function detectStoryBeats(forecastTrack: CycloneForecastPoint[]): StoryBe
   // Sort by index
   beats.sort((a, b) => a.index - b.index);
 
-  // De-duplicate beats within 1-2 steps (keep higher severity)
+  // De-duplicate beats using time-based and type-based logic
+  // Keeps beats if they are different types or separated by 6+ hours
   const dedupedBeats: StoryBeat[] = [];
 
   if (beats.length === 0) {
     return dedupedBeats;
   }
 
-  // Since beats are sorted by index, we can form clusters of overlapping beats
-  let cluster: StoryBeat[] = [];
-
-  const flushCluster = () => {
-    if (cluster.length === 0) return;
-    // Select the beat with the highest severity within this cluster.
-    // If multiple have the same severity, keep the earliest in the cluster
-    // (which also has the lowest index due to sorting).
-    let best = cluster[0];
-    for (let i = 1; i < cluster.length; i++) {
-      const candidate = cluster[i];
-      if (candidate.severity > best.severity) {
-        best = candidate;
-      }
-    }
-    dedupedBeats.push(best);
-    cluster = [];
-  };
-
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  
   for (let i = 0; i < beats.length; i++) {
     const current = beats[i];
-
-    if (cluster.length === 0) {
-      cluster.push(current);
-      continue;
+    
+    // Check if we should keep this beat
+    let shouldKeep = true;
+    
+    // Look back at recent beats to see if current is redundant
+    for (let j = dedupedBeats.length - 1; j >= 0; j--) {
+      const existing = dedupedBeats[j];
+      
+      // If beats are far apart in index (>5), stop checking
+      if (current.index - existing.index > 5) break;
+      
+      // If different types, both can coexist
+      if (current.type !== existing.type) continue;
+      
+      // Same type - check time separation
+      const timeDiff = Math.abs(current.time.getTime() - existing.time.getTime());
+      
+      if (timeDiff < SIX_HOURS_MS) {
+        // Too close in time - keep only higher severity
+        if (current.severity > existing.severity) {
+          // Replace existing with current
+          dedupedBeats[j] = current;
+        }
+        // Either way, don't add current as a new beat
+        shouldKeep = false;
+        break;
+      }
     }
-
-    const lastInCluster = cluster[cluster.length - 1];
-    // If current beat is within 2 indices of the last beat in the cluster,
-    // it belongs to the same overlapping cluster.
-    if (Math.abs(current.index - lastInCluster.index) <= 2) {
-      cluster.push(current);
-    } else {
-      // Current beat starts a new cluster; flush the previous one.
-      flushCluster();
-      cluster.push(current);
+    
+    if (shouldKeep) {
+      dedupedBeats.push(current);
     }
   }
 
-  // Flush the final cluster
-  flushCluster();
-
-  // Re-sort after deduplication (preserves existing behavior, even though
-  // dedupedBeats should already be in order)
+  // Re-sort after deduplication
   dedupedBeats.sort((a, b) => a.index - b.index);
 
   return dedupedBeats;
@@ -328,6 +376,7 @@ export function getNextBeat(
   beats: StoryBeat[],
   currentIndex: number
 ): StoryBeat | null {
+  if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
   return beats.find((b) => b.index > currentIndex) || null;
 }
 
@@ -338,6 +387,7 @@ export function getPreviousBeat(
   beats: StoryBeat[],
   currentIndex: number
 ): StoryBeat | null {
+  if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
   for (let i = beats.length - 1; i >= 0; i--) {
     if (beats[i].index < currentIndex) {
       return beats[i];
@@ -347,11 +397,12 @@ export function getPreviousBeat(
 }
 
 /**
- * Check if current index is at a beat (within 1 step tolerance)
+ * Check if current index is at a beat (within 1 step tolerance for consistency)
  */
 export function isAtBeat(
   beats: StoryBeat[],
   currentIndex: number
 ): StoryBeat | null {
+  if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
   return beats.find((b) => Math.abs(b.index - currentIndex) <= 1) || null;
 }

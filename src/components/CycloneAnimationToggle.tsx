@@ -1,5 +1,7 @@
 "use client";
 
+import { Wind } from "lucide-react";
+
 interface CycloneAnimationToggleProps {
   isVisible: boolean;
   isPlaying: boolean;
@@ -28,13 +30,13 @@ export default function CycloneAnimationToggle({
       <div className="flex items-center justify-center">
         {isVisible ? (
           <div className="relative">
-            <span className="text-2xl">🌀</span>
+            <Wind className="w-6 h-6 text-white" aria-hidden="true" />
             {isPlaying && (
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
             )}
           </div>
         ) : (
-          <span className="text-2xl opacity-50">🌀</span>
+          <Wind className="w-6 h-6 text-slate-200/60" aria-hidden="true" />
         )}
       </div>
     </button>

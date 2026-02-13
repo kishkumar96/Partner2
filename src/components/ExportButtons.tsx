@@ -108,13 +108,13 @@ export default function ExportButtons({
     doc.setTextColor(55, 65, 81);
 
     const totalEvents = events.length;
-    const totalDamage = events.reduce((sum, e) => sum + e.economicDamage, 0);
+    const totalDamage = events.reduce((sum, e) => sum + (e.totalEconomicDamage || 0), 0);
     const totalPopulation = events.reduce(
-      (sum, e) => sum + e.affectedPopulation,
+      (sum, e) => sum + (e.totalAffectedPopulation || 0),
       0
     );
 
-    doc.text(`Total Events Recorded: ${totalEvents}`, 20, yPos);
+    doc.text(`Districts Assessed: ${totalEvents}`, 20, yPos);
     yPos += 7;
     doc.text(
       `Total Economic Damage: $${(totalDamage / 1000000).toFixed(1)}M`,
@@ -128,18 +128,18 @@ export default function ExportButtons({
       yPos
     );
 
-    // Events Table
+    // District Impacts Table
     yPos += 15;
     doc.setFontSize(14);
     doc.setTextColor(31, 41, 55);
-    doc.text("Event History", 15, yPos);
+    doc.text("District Impact Assessment", 15, yPos);
 
     yPos += 10;
     doc.setFontSize(8);
     doc.setTextColor(107, 114, 128);
 
     // Table headers
-    const headers = ["Event", "Date", "Hazard", "Severity", "Population", "Damage"];
+    const headers = ["District", "Date", "Hazard", "Severity", "Population", "Damage"];
     let xPos = 15;
 
     headers.forEach((header, i) => {
@@ -183,8 +183,8 @@ export default function ExportButtons({
         event.date,
         getHazardName(event.hazardId),
         event.severity,
-        event.affectedPopulation.toLocaleString(),
-        `$${(event.economicDamage / 1000000).toFixed(1)}M`,
+        (event.totalAffectedPopulation || 0).toLocaleString(),
+        `$${((event.totalEconomicDamage || 0) / 1000000).toFixed(1)}M`,
       ];
 
       row.forEach((cell, i) => {
@@ -306,8 +306,8 @@ export default function ExportButtons({
         date: event.date,
         hazard: getHazardName(event.hazardId),
         severity: event.severity,
-        population: event.affectedPopulation,
-        damage: event.economicDamage,
+        population: event.totalAffectedPopulation || 0,
+        damage: event.totalEconomicDamage || 0,
         lat: event.location.lat,
         lng: event.location.lng,
       });

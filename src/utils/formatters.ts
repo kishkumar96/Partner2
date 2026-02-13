@@ -1,3 +1,5 @@
+import { getHazardColor as getThemeHazardColor } from '@/theme/colors';
+
 export function formatCurrency(value: number | undefined | null): string {
   if (value == null || isNaN(value)) {
     return '$0';
@@ -38,10 +40,5 @@ export function getSeverityColor(severity: string): string {
 }
 
 export function getHazardColor(hazardId: string): string {
-  const colors: Record<string, string> = {
-    wind: "#3B82F6",
-    cyclone_track: "#3B82F6",
-    inundation: "#06B6D4",
-  };
-  return colors[hazardId] || "#6B7280";
+  return getThemeHazardColor(hazardId);
 }

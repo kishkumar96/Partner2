@@ -36,7 +36,7 @@ export default function PDIEDataLayers({
           return;
         }
 
-        console.log(`📊 Loading PDIE output data for ${countryCode}...`);
+        console.log(`Loading PDIE output data for ${countryCode}...`);
 
         // Load exposure points
         const exposureData = await loadPDIEOutputData(countryCode, 'exposure');
@@ -86,7 +86,7 @@ export default function PDIEDataLayers({
               },
             });
 
-            console.log(`✅ Added PDIE exposure layer with ${exposureData.features?.length || 0} points`);
+            console.log(`Added PDIE exposure layer with ${exposureData.features?.length || 0} points`);
           };
 
           // Check if style is loaded before adding layer
@@ -148,7 +148,7 @@ export default function PDIEDataLayers({
               },
             });
 
-            console.log(`✅ Added PDIE regional impacts layer with ${impactsData.features?.length || 0} regions`);
+            console.log(`Added PDIE regional impacts layer with ${impactsData.features?.length || 0} regions`);
           };
 
           // Check if style is loaded before adding layer
@@ -159,7 +159,7 @@ export default function PDIEDataLayers({
           }
         }
 
-        console.log(`✅ PDIE output layers loaded successfully`);
+        console.log(`PDIE output layers loaded successfully`);
       } catch (error) {
         console.error(`Error loading PDIE layers:`, error);
       } finally {

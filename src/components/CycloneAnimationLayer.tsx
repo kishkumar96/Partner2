@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import maplibregl from 'maplibre-gl';
 import { Play, Pause, SkipBack, SkipForward, Timer, X, Minimize2, Maximize2, Share2, Bell, BellOff, BarChart3, Layers, Book, ChevronLeft, ChevronRight, RotateCcw, Volume2, VolumeX } from 'lucide-react';
@@ -13,11 +13,15 @@ import {
   detectStoryBeats,
   getNextBeat,
   getPreviousBeat,
+  getStoryBeatIcon,
   isAtBeat,
   StoryBeat,
 } from '../utils/cycloneStory';
+import { useCycloneTrackPlayback } from '@/hooks/useCycloneTrackPlayback';
+import { WIND_RADII_COLORS, MAP_COLORS } from '@/theme/colors';
 import CycloneIntensityChart from './CycloneIntensityChart';
 import CycloneShareCard from './CycloneShareCard';
+import StoryBeatAnnotation from './StoryBeatAnnotation';
 
 interface CycloneAnimationLayerProps {
   map: maplibregl.Map;
@@ -77,17 +81,17 @@ export default function CycloneAnimationLayer({
   onCurrentIndexChange,
   showStoryBeatCard = true,
 }: CycloneAnimationLayerProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  // Early return BEFORE hooks - React Rules of Hooks compliance
+  if (!forecastTrack || forecastTrack.length === 0) {
+    return null;
+  }
+  
   const [isMinimized, setIsMinimized] = useState(true); // Start minimized to reduce clutter
   const [showLegend, setShowLegend] = useState(true);
   const [showChart, setShowChart] = useState(false); // Start closed
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [storyModeInternal, setStoryModeInternal] = useState(false);
   const [storyBeatsInternal, setStoryBeatsInternal] = useState<StoryBeat[]>([]);
-  const beatPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastBeatFeedbackRef = useRef<string | null>(null);
   const [showShareCard, setShowShareCard] = useState(false);
   const [currentScenario, setCurrentScenario] = useState<'forecast' | 'best' | 'worst'>('forecast');
   const [qualityMode, setQualityMode] = useState<'balanced' | 'high'>('balanced');
@@ -135,19 +139,37 @@ export default function CycloneAnimationLayer({
   const windGlowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const glowAnimationFrameRef = useRef<number | undefined>(undefined);
   const glowPhase = useRef<number>(0);
-  const isPlayingSyncRef = useRef(false);
-  const isExternalIndexSyncRef = useRef(false);
-  const lastReportedIndexRef = useRef<number | null>(null);
-  const onCurrentIndexChangeRef = useRef<typeof onCurrentIndexChange>(onCurrentIndexChange);
-  const onTimestepChangeRef = useRef<typeof onTimestepChange>(onTimestepChange);
   const audioContextRef = useRef<AudioContext | null>(null);
   const styleDataTimeoutRef = useRef<number | null>(null);
   const lastNotifiedRef = useRef<{ category: number; index: number } | null>(null);
   const storyModeEnabled = typeof storyModeProp === "boolean" ? storyModeProp : storyModeInternal;
   const storyBeats = storyBeatsProp ?? storyBeatsInternal;
-  const currentIndexRef = useRef(0);
   const displayedPositionRef = useRef<[number, number] | null>(null);
-  const isPlayingRef = useRef(false);
+  const isDocked = alwaysDocked || !!controlsContainer;
+
+  const { state: playbackState, controls: playbackControls } = useCycloneTrackPlayback({
+    forecastTrack,
+    storyMode: storyModeEnabled,
+    storyBeats,
+    suspendPlayback: storyModeEnabled || (isDocked && !controlsContainer && !uiVisible),
+    isPlayingExternal,
+    currentIndexExternal,
+    onPlayingChange,
+    onIndexChange: onCurrentIndexChange,
+    onTimestepChange,
+  });
+
+  const { isPlaying, currentIndex, playbackSpeed } = playbackState;
+  const {
+    pause,
+    toggle,
+    seekTo,
+    next,
+    previous,
+    setSpeed,
+    nextBeat,
+    previousBeat,
+  } = playbackControls;
   
   // Particle system refs
   interface Particle {
@@ -160,39 +182,6 @@ export default function CycloneAnimationLayer({
     opacity: number;
   }
   const particlesRef = useRef<Particle[]>([]);
-
-  useEffect(() => {
-    if (typeof isPlayingExternal !== "boolean") return;
-    if (isPlayingExternal === isPlaying) return;
-    isPlayingSyncRef.current = true;
-    setIsPlaying(isPlayingExternal);
-  }, [isPlayingExternal]); // Only watch external prop, not internal state
-
-  useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
-  useEffect(() => {
-    onCurrentIndexChangeRef.current = onCurrentIndexChange;
-  }, [onCurrentIndexChange]);
-
-  useEffect(() => {
-    onTimestepChangeRef.current = onTimestepChange;
-  }, [onTimestepChange]);
-
-  useEffect(() => {
-    if (typeof currentIndexExternal !== "number") return;
-    if (!Number.isFinite(currentIndexExternal)) return;
-    const maxIndex = Math.max(0, (forecastTrack?.length ?? 1) - 1);
-    const nextIndex = Math.max(0, Math.min(currentIndexExternal, maxIndex));
-    if (nextIndex === currentIndexRef.current) return;
-    isExternalIndexSyncRef.current = true;
-    setCurrentIndex((prev) => (prev === nextIndex ? prev : nextIndex));
-  }, [currentIndexExternal, forecastTrack]);
-
-  useEffect(() => {
-    isPlayingRef.current = isPlaying;
-  }, [isPlaying]);
 
   const activeQuality = QUALITY_SETTINGS[qualityMode];
 
@@ -392,7 +381,6 @@ export default function CycloneAnimationLayer({
     }
     
     setIsLoadingGeometry(false);
-    console.log(`✅ Pre-computed geometries for ${forecastTrack.length} timesteps`);
 
     // Cleanup: Clear cache when forecast changes
     return () => {
@@ -403,87 +391,89 @@ export default function CycloneAnimationLayer({
   // Keep current index in bounds when forecast length changes
   useEffect(() => {
     if (!forecastTrack || forecastTrack.length === 0) {
-      if (currentIndexRef.current !== 0) {
-        setCurrentIndex(0);
+      if (currentIndex !== 0) {
+        seekTo(0);
       }
       return;
     }
 
     const maxIndex = forecastTrack.length - 1;
-    if (currentIndexRef.current > maxIndex) {
-      setCurrentIndex(maxIndex);
+    if (currentIndex > maxIndex) {
+      seekTo(maxIndex);
     }
-  }, [forecastTrack]);
-
-  // Notify parent of timestep changes
-  useEffect(() => {
-    if (!forecastTrack || forecastTrack.length === 0) {
-      return;
-    }
-
-    const maxIndex = forecastTrack.length - 1;
-    const safeIndex = Math.max(0, Math.min(currentIndex, maxIndex));
-    if (safeIndex !== currentIndex) {
-      setCurrentIndex(safeIndex);
-      return;
-    }
-
-    if (isExternalIndexSyncRef.current) {
-      isExternalIndexSyncRef.current = false;
-      lastReportedIndexRef.current = safeIndex;
-    } else if (typeof onCurrentIndexChangeRef.current === "function") {
-      if (lastReportedIndexRef.current === safeIndex) return;
-      lastReportedIndexRef.current = safeIndex;
-      onCurrentIndexChangeRef.current(safeIndex);
-    }
-
-    const onTimestepChangeHandler = onTimestepChangeRef.current;
-    if (!onTimestepChangeHandler) return;
-
-    const currentPoint = forecastTrack[safeIndex];
-    onTimestepChangeHandler(currentPoint || null, safeIndex, forecastTrack.length);
-  }, [currentIndex, forecastTrack]);
-
-  // When callbacks are attached/replaced, immediately publish current snapshot
-  useEffect(() => {
-    if (typeof onCurrentIndexChange !== "function" && typeof onTimestepChange !== "function") {
-      return;
-    }
-
-    const track = forecastTrack;
-    const trackLength = track?.length ?? 0;
-    const maxIndex = Math.max(0, trackLength - 1);
-    const safeIndex = Math.max(0, Math.min(currentIndexRef.current, maxIndex));
-
-    if (typeof onCurrentIndexChange === "function") {
-      lastReportedIndexRef.current = safeIndex;
-      onCurrentIndexChange(safeIndex);
-    }
-
-    if (typeof onTimestepChange === "function") {
-      const point = trackLength > 0 ? track?.[safeIndex] ?? null : null;
-      onTimestepChange(point, safeIndex, trackLength);
-    }
-  }, [onCurrentIndexChange, onTimestepChange, forecastTrack]);
+  }, [forecastTrack, currentIndex, seekTo]);
 
   // Detect story beats when forecast track changes (only if not externally provided)
+  // Use useMemo to avoid unnecessary recomputation when forecastTrack reference changes
+  const detectedBeats = useMemo(() => {
+    if (!forecastTrack || forecastTrack.length === 0) return [];
+    return detectStoryBeats(forecastTrack);
+  }, [forecastTrack]);
+
   useEffect(() => {
     if (storyBeatsProp) return;
-    if (!forecastTrack || forecastTrack.length === 0) {
-      setStoryBeatsInternal([]);
-      return;
+    setStoryBeatsInternal(detectedBeats);
+    if (detectedBeats.length > 0) {
+      console.log(`Detected ${detectedBeats.length} story beats:`, detectedBeats);
     }
+  }, [detectedBeats, storyBeatsProp]);
+
+  // ============================================================================
+  // CAMERA CHOREOGRAPHY - Story Mode
+  // ============================================================================
+  /**
+   * Automatically fly camera to follow the cyclone in story mode
+   * Provides cinematic experience with smooth transitions and appropriate framing
+   */
+  useEffect(() => {
+    if (!map || !storyModeEnabled || !forecastTrack || forecastTrack.length === 0) return;
     
-    const beats = detectStoryBeats(forecastTrack);
-    setStoryBeatsInternal(beats);
-    console.log(`✨ Detected ${beats.length} story beats:`, beats);
-  }, [forecastTrack, storyBeatsProp]);
+    const currentPoint = forecastTrack[currentIndex];
+    if (!currentPoint) return;
+
+    // Calculate appropriate zoom level based on cyclone intensity and wind radii
+    const calculateDynamicZoom = (): number => {
+      // Get maximum wind radius to frame the cyclone appropriately
+      const maxGaleRadius = Math.max(
+        currentPoint.galeRadiusNE,
+        currentPoint.galeRadiusSE,
+        currentPoint.galeRadiusSW,
+        currentPoint.galeRadiusNW,
+        0
+      );
+      
+      // Zoom based on cyclone size:
+      // - Small cyclones (< 100km): Zoom in closer (z10-11)
+      // - Medium cyclones (100-200km): Medium zoom (z9-10)
+      // - Large cyclones (> 200km): Zoom out to show full extent (z8-9)
+      if (maxGaleRadius > 200) return 8.5;
+      if (maxGaleRadius > 100) return 9.5;
+      return 10.5;
+    };
+
+    const zoom = calculateDynamicZoom();
+    
+    // Fly to cyclone position with smooth animation
+    map.flyTo({
+      center: [currentPoint.longitude, currentPoint.latitude],
+      zoom: zoom,
+      duration: 1500,  // 1.5 second transition
+      essential: true,  // Respect prefers-reduced-motion
+      pitch: 0,         // Top-down view for clarity
+      bearing: 0,       // North-up orientation
+    });
+
+    // Log camera movement in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`📷 Story mode camera: Flying to [${currentPoint.latitude.toFixed(2)}, ${currentPoint.longitude.toFixed(2)}] zoom ${zoom}`);
+    }
+  }, [map, storyModeEnabled, forecastTrack, currentIndex]);
 
   // Initialize panel position on mount
   useEffect(() => {
     const initialPosition = getDefaultPanelPosition();
     setPanelPosition(clampPanelPosition(initialPosition.x, initialPosition.y));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getDefaultPanelPosition, clampPanelPosition]);
 
   // Auto-reposition when sidebars open/close (only if user hasn't manually moved it)
   useEffect(() => {
@@ -491,7 +481,7 @@ export default function CycloneAnimationLayer({
       const newPosition = getDefaultPanelPosition();
       setPanelPosition(clampPanelPosition(newPosition.x, newPosition.y));
     }
-  }, [isLeftPanelOpen, isRightPanelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLeftPanelOpen, isRightPanelOpen, userHasManuallyPositioned, getDefaultPanelPosition, clampPanelPosition]);
 
   // Auto-minimize on small screens for better cartographic clarity
   useEffect(() => {
@@ -502,13 +492,13 @@ export default function CycloneAnimationLayer({
       // Auto-minimize on small screens unless user explicitly expanded
       if (isSmallScreen && !isMinimized) {
         setIsMinimized(true);
-        console.log('📱 Auto-minimized cyclone panel for small screen');
+        console.log('Auto-minimized cyclone panel for small screen');
       }
       
       // Adjust quality mode for performance on small screens
       if (isVerySmallScreen && qualityMode === 'high') {
         setQualityMode('balanced');
-        console.log('⚡ Switched to balanced quality for mobile performance');
+        console.log('Switched to balanced quality for mobile performance');
       }
     };
     
@@ -551,49 +541,12 @@ export default function CycloneAnimationLayer({
     };
   }, [map, isMinimized, isPlaying]);
 
-  // Auto-pause at beats when in story mode and playing
-  useEffect(() => {
-    if (!storyModeEnabled || !forecastTrack) return;
-
-    const currentBeat = isAtBeat(storyBeats, currentIndex);
-    if (!currentBeat || !isPlayingRef.current) return;
-
-    // Pause briefly at beat
-    setIsPlaying(false);
-    if (beatPauseTimeoutRef.current) {
-      clearTimeout(beatPauseTimeoutRef.current);
-    }
-    beatPauseTimeoutRef.current = setTimeout(() => {
-      setIsPlaying(true);
-    }, 800); // 0.8s pause
-
-    return () => {
-      if (beatPauseTimeoutRef.current) {
-        clearTimeout(beatPauseTimeoutRef.current);
-        beatPauseTimeoutRef.current = null;
-      }
-    };
-  }, [currentIndex, storyModeEnabled, storyBeats, forecastTrack]);
-
-  // Optional beat feedback (audio + haptics)
-  useEffect(() => {
-    if (!beatFeedbackEnabled || !forecastTrack) return;
-    const beat = isAtBeat(storyBeats, currentIndex);
-    if (!beat) {
-      lastBeatFeedbackRef.current = null;
-      return;
-    }
-    if (lastBeatFeedbackRef.current === beat.id) return;
-    lastBeatFeedbackRef.current = beat.id;
-    playBeatTick();
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      (navigator as any).vibrate?.(15);
-    }
-  }, [beatFeedbackEnabled, currentIndex, storyBeats, forecastTrack, playBeatTick]);
+  // Story mode is handled entirely by CycloneStoryOverlay to avoid conflicts
+  // No auto-pause or beat feedback here - keeps animation smooth
 
   // Wind Field Glow & Particle Flow Effect
   useEffect(() => {
-    if (!map || !forecastTrack || !windGlowCanvasRef.current) return;
+    if (!uiVisible || !map || !forecastTrack || !windGlowCanvasRef.current) return;
     
     const canvas = windGlowCanvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -633,6 +586,16 @@ export default function CycloneAnimationLayer({
       }
     };
     
+    // Hoist category colors to avoid per-frame allocation
+    const categoryColors = {
+      5: { rgba: 'rgba(139, 0, 0, 0.4)', rgb: [139, 0, 0] },    // Dark red for Cat 5
+      4: { rgba: 'rgba(255, 0, 0, 0.35)', rgb: [255, 0, 0] },    // Red for Cat 4
+      3: { rgba: 'rgba(255, 102, 0, 0.3)', rgb: [255, 102, 0] },   // Orange for Cat 3
+      2: { rgba: 'rgba(255, 165, 0, 0.25)', rgb: [255, 165, 0] },  // Light orange for Cat 2
+      1: { rgba: 'rgba(255, 215, 0, 0.2)', rgb: [255, 215, 0] },   // Gold for Cat 1
+      0: { rgba: 'rgba(59, 130, 246, 0.15)', rgb: [59, 130, 246] }, // Blue for tropical depression
+    };
+    
     const updateParticles = () => {
       const currentPoint = forecastTrack[currentIndex];
       const displayPosition = displayedPositionRef.current ?? [currentPoint.longitude, currentPoint.latitude];
@@ -641,10 +604,16 @@ export default function CycloneAnimationLayer({
                             currentPoint.galeRadiusSW + currentPoint.galeRadiusNW) / 4;
       const radiusPixels = (avgGaleRadius / 111) * map.getZoom() * 15;
       
-      particlesRef.current = particlesRef.current.filter(particle => {
+      // In-place compaction to reduce GC pressure
+      const particles = particlesRef.current;
+      let writeIndex = 0;
+      
+      for (let i = 0; i < particles.length; i++) {
+        const particle = particles[i];
+        
         // Age particle
         particle.life += 1;
-        if (particle.life > particle.maxLife) return false;
+        if (particle.life > particle.maxLife) continue;
         
         // Calculate distance and angle from cyclone center
         const dx = particle.x - cyclonePos.x;
@@ -652,7 +621,7 @@ export default function CycloneAnimationLayer({
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         // Don't update particles too far from center
-        if (distance > radiusPixels * 1.5) return false;
+        if (distance > radiusPixels * 1.5) continue;
         
         // Tangential swirl velocity (counter-clockwise in northern hemisphere)
         const angle = Math.atan2(dy, dx);
@@ -672,8 +641,15 @@ export default function CycloneAnimationLayer({
         // Fade out near end of life (slower fade)
         particle.opacity = Math.min(1, (particle.maxLife - particle.life) / 20);
         
-        return true;
-      });
+        // Keep particle by moving it to write position
+        if (writeIndex !== i) {
+          particles[writeIndex] = particle;
+        }
+        writeIndex++;
+      }
+      
+      // Truncate array to new length
+      particles.length = writeIndex;
     };
     
     const drawWindGlow = () => {
@@ -701,20 +677,10 @@ export default function CycloneAnimationLayer({
         return;
       }
       
-      // Get category color with adjusted opacity
-      const categoryColors = {
-        5: 'rgba(139, 0, 0, 0.4)',    // Dark red for Cat 5
-        4: 'rgba(255, 0, 0, 0.35)',    // Red for Cat 4
-        3: 'rgba(255, 102, 0, 0.3)',   // Orange for Cat 3
-        2: 'rgba(255, 165, 0, 0.25)',  // Light orange for Cat 2
-        1: 'rgba(255, 215, 0, 0.2)',   // Gold for Cat 1
-        0: 'rgba(59, 130, 246, 0.15)', // Blue for tropical depression
-      };
-      const color = categoryColors[currentPoint.category as keyof typeof categoryColors] || categoryColors[0];
-      
-      // Parse RGB from color for particles
-      const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      const particleColor = rgbMatch ? [parseInt(rgbMatch[1]), parseInt(rgbMatch[2]), parseInt(rgbMatch[3])] : [59, 130, 246];
+      // Get category color with adjusted opacity (using pre-parsed values)
+      const colorInfo = categoryColors[currentPoint.category as keyof typeof categoryColors] || categoryColors[0];
+      const color = colorInfo.rgba;
+      const particleColor = colorInfo.rgb;
       
       // Calculate radius based on gale radius (average of quadrants)
       const avgGaleRadius = (currentPoint.galeRadiusNE + currentPoint.galeRadiusSE + 
@@ -802,9 +768,9 @@ export default function CycloneAnimationLayer({
     map.on('zoom', handleMapChange);
     map.on('resize', handleMapChange);
     
-    // Animate rotation and particles when playing
+    // Animate rotation and particles when playing OR in story mode
     let animationId: number;
-    if (isPlaying) {
+    if (isPlaying || storyModeEnabled) {
       const animate = () => {
         // Spawn new particles
         if (particlesRef.current.length < MAX_PARTICLES) {
@@ -830,7 +796,7 @@ export default function CycloneAnimationLayer({
         cancelAnimationFrame(animationId);
       }
     };
-  }, [map, forecastTrack, currentIndex, isPlaying, activeQuality]);
+  }, [map, forecastTrack, currentIndex, isPlaying, activeQuality, uiVisible, storyModeEnabled]);
 
   useEffect(() => {
     if (!map || !forecastTrack || forecastTrack.length === 0) return;
@@ -929,7 +895,7 @@ export default function CycloneAnimationLayer({
           type: 'fill',
           source: 'cyclone-gale-radius',
           paint: {
-            'fill-color': '#FFD700',
+            'fill-color': WIND_RADII_COLORS.gale.stroke,
             'fill-opacity': 0.25,
           },
         }, beforeId);
@@ -938,7 +904,7 @@ export default function CycloneAnimationLayer({
           type: 'line',
           source: 'cyclone-gale-radius',
           paint: {
-            'line-color': '#FFD700',
+            'line-color': WIND_RADII_COLORS.gale.stroke,
             'line-width': 3,
             'line-opacity': 0.8,
           },
@@ -955,7 +921,7 @@ export default function CycloneAnimationLayer({
           type: 'fill',
           source: 'cyclone-storm-radius',
           paint: {
-            'fill-color': '#FFA500',
+            'fill-color': WIND_RADII_COLORS.storm.stroke,
             'fill-opacity': 0.3,
           },
         }, beforeId);
@@ -964,7 +930,7 @@ export default function CycloneAnimationLayer({
           type: 'line',
           source: 'cyclone-storm-radius',
           paint: {
-            'line-color': '#FFA500',
+            'line-color': WIND_RADII_COLORS.storm.stroke,
             'line-width': 3,
             'line-opacity': 0.85,
           },
@@ -981,7 +947,7 @@ export default function CycloneAnimationLayer({
           type: 'fill',
           source: 'cyclone-hurricane-radius',
           paint: {
-            'fill-color': '#FF0000',
+            'fill-color': WIND_RADII_COLORS.hurricane.stroke,
             'fill-opacity': 0.3,
           },
         }, beforeId);
@@ -990,7 +956,7 @@ export default function CycloneAnimationLayer({
           type: 'line',
           source: 'cyclone-hurricane-radius',
           paint: {
-            'line-color': '#FF0000',
+            'line-color': WIND_RADII_COLORS.hurricane.stroke,
             'line-width': 3,
             'line-opacity': 0.9,
           },
@@ -1082,6 +1048,9 @@ export default function CycloneAnimationLayer({
     map.on('styledata', handleStyleData);
 
     return () => {
+      // Check if map still exists before cleanup
+      if (!map || !map.getStyle()) return;
+      
       // Cleanup layers on unmount
       try {
         const layers = [
@@ -1127,7 +1096,7 @@ export default function CycloneAnimationLayer({
         trailMarkersRef.current.forEach(marker => marker.remove());
         trailMarkersRef.current = [];
       } catch (e) {
-        console.warn('Cleanup error:', e);
+        // Silently ignore cleanup errors when map is destroyed
       }
 
       // Remove styledata listener
@@ -1187,18 +1156,44 @@ export default function CycloneAnimationLayer({
       if (middleSpiral) middleSpiral.style.animationDuration = middleSpeed;
       if (innerSpiral) innerSpiral.style.animationDuration = innerSpeed;
       
-      // Update popup content
+      // Update popup content (safe DOM creation to avoid XSS)
       const popup = markerRef.current.getPopup();
       if (popup) {
-        popup.setHTML(`
-          <div style="font-size: 11px; min-width: 180px;">
-            <strong style="font-size: 12px; color: ${categoryColor};">${getCategoryLabel(point.category)}</strong><br/>
-            <strong>Time:</strong> ${new Date(point.time).toLocaleString()}<br/>
-            <strong>Wind:</strong> ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)<br/>
-            <strong>Pressure:</strong> ${point.pressure.toFixed(0)} hPa<br/>
-            <strong>Position:</strong> ${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°
-          </div>
-        `);
+        const div = document.createElement('div');
+        div.style.fontSize = '11px';
+        div.style.minWidth = '180px';
+        
+        const categoryLabel = document.createElement('strong');
+        categoryLabel.style.fontSize = '12px';
+        categoryLabel.style.color = categoryColor;
+        categoryLabel.textContent = getCategoryLabel(point.category);
+        div.appendChild(categoryLabel);
+        div.appendChild(document.createElement('br'));
+        
+        const timeLabel = document.createElement('strong');
+        timeLabel.textContent = 'Time:';
+        div.appendChild(timeLabel);
+        div.appendChild(document.createTextNode(' ' + new Date(point.time).toLocaleString()));
+        div.appendChild(document.createElement('br'));
+        
+        const windLabel = document.createElement('strong');
+        windLabel.textContent = 'Wind:';
+        div.appendChild(windLabel);
+        div.appendChild(document.createTextNode(` ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)`));
+        div.appendChild(document.createElement('br'));
+        
+        const pressureLabel = document.createElement('strong');
+        pressureLabel.textContent = 'Pressure:';
+        div.appendChild(pressureLabel);
+        div.appendChild(document.createTextNode(` ${point.pressure.toFixed(0)} hPa`));
+        div.appendChild(document.createElement('br'));
+        
+        const positionLabel = document.createElement('strong');
+        positionLabel.textContent = 'Position:';
+        div.appendChild(positionLabel);
+        div.appendChild(document.createTextNode(` ${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°`));
+        
+        popup.setDOMContent(div);
       }
     } else {
       const el = document.createElement('div');
@@ -1327,18 +1322,45 @@ export default function CycloneAnimationLayer({
       `;
 
       
+      // Create popup with safe DOM construction
+      const popupDiv = document.createElement('div');
+      popupDiv.style.fontSize = '11px';
+      popupDiv.style.minWidth = '180px';
+      
+      const categoryLabel = document.createElement('strong');
+      categoryLabel.style.fontSize = '12px';
+      categoryLabel.style.color = getCategoryColor(point.category);
+      categoryLabel.textContent = getCategoryLabel(point.category);
+      popupDiv.appendChild(categoryLabel);
+      popupDiv.appendChild(document.createElement('br'));
+      
+      const timeLabel = document.createElement('strong');
+      timeLabel.textContent = 'Time:';
+      popupDiv.appendChild(timeLabel);
+      popupDiv.appendChild(document.createTextNode(' ' + new Date(point.time).toLocaleString()));
+      popupDiv.appendChild(document.createElement('br'));
+      
+      const windLabel = document.createElement('strong');
+      windLabel.textContent = 'Wind:';
+      popupDiv.appendChild(windLabel);
+      popupDiv.appendChild(document.createTextNode(` ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)`));
+      popupDiv.appendChild(document.createElement('br'));
+      
+      const pressureLabel = document.createElement('strong');
+      pressureLabel.textContent = 'Pressure:';
+      popupDiv.appendChild(pressureLabel);
+      popupDiv.appendChild(document.createTextNode(` ${point.pressure.toFixed(0)} hPa`));
+      popupDiv.appendChild(document.createElement('br'));
+      
+      const positionLabel = document.createElement('strong');
+      positionLabel.textContent = 'Position:';
+      popupDiv.appendChild(positionLabel);
+      popupDiv.appendChild(document.createTextNode(` ${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°`));
+      
       markerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat([point.longitude, point.latitude])
         .setPopup(
-          new maplibregl.Popup({ offset: 25 }).setHTML(`
-            <div style="font-size: 11px; min-width: 180px;">
-              <strong style="font-size: 12px; color: ${getCategoryColor(point.category)};">${getCategoryLabel(point.category)}</strong><br/>
-              <strong>Time:</strong> ${new Date(point.time).toLocaleString()}<br/>
-              <strong>Wind:</strong> ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)<br/>
-              <strong>Pressure:</strong> ${point.pressure.toFixed(0)} hPa<br/>
-              <strong>Position:</strong> ${point.latitude.toFixed(2)}°, ${point.longitude.toFixed(2)}°
-            </div>
-          `)
+          new maplibregl.Popup({ offset: 25 }).setDOMContent(popupDiv)
         )
         .addTo(map);
       displayedPositionRef.current = [point.longitude, point.latitude];
@@ -1524,20 +1546,20 @@ export default function CycloneAnimationLayer({
     setShowShareCard(true);
   }, [forecastTrack, currentIndex]);
 
-  // Controls should ALWAYS be docked when a container is provided or when explicitly requested
-  // Never show floating controls on the map - they belong in the Summary panel
-  const isDocked = alwaysDocked || !!controlsContainer;
-
-  // Animation loop with frame skipping for performance
-  // Also stop animation when controls are hidden (isDocked but no container = panel closed)
+  // Smooth marker interpolation while playback advances via the hook
   useEffect(() => {
-    if (!isPlaying || !forecastTrack || forecastTrack.length === 0) {
+    if (!forecastTrack || forecastTrack.length === 0) {
       lastUpdateRef.current = 0;
+      displayedPositionRef.current = null;
       return;
     }
 
-    // Pause when docked controls are hidden (no container and no floating fallback)
-    if (isDocked && !controlsContainer && !uiVisible) {
+    const currentPoint = forecastTrack[currentIndex];
+    if (!isPlaying || storyModeEnabled || (isDocked && !controlsContainer && !uiVisible)) {
+      if (currentPoint) {
+        displayedPositionRef.current = [currentPoint.longitude, currentPoint.latitude];
+        markerRef.current?.setLngLat([currentPoint.longitude, currentPoint.latitude]);
+      }
       lastUpdateRef.current = 0;
       return;
     }
@@ -1547,46 +1569,25 @@ export default function CycloneAnimationLayer({
         lastUpdateRef.current = timestamp;
       }
 
+      const interval = intervalRef.current;
       const elapsed = timestamp - lastUpdateRef.current;
-      const interval = intervalRef.current; // Use memoized interval
+      const progress = Math.min(elapsed / interval, 1);
 
-      const baseIndex = currentIndexRef.current;
+      const baseIndex = currentIndex;
       const nextIndex = Math.min(baseIndex + 1, forecastTrack.length - 1);
       const basePoint = forecastTrack[baseIndex];
       const nextPoint = forecastTrack[nextIndex];
       if (markerRef.current && basePoint && nextPoint) {
-        const progress = Math.min(elapsed / interval, 1);
         const lng = basePoint.longitude + (nextPoint.longitude - basePoint.longitude) * progress;
         const lat = basePoint.latitude + (nextPoint.latitude - basePoint.latitude) * progress;
         displayedPositionRef.current = [lng, lat];
         markerRef.current.setLngLat([lng, lat]);
       }
 
-      if (elapsed > interval) {
-        // Frame skipping: if we're falling behind, skip frames
-        const framesToAdvance = elapsed > interval * 2 
-          ? Math.floor(elapsed / interval) 
-          : 1;
-        
-        lastUpdateRef.current = timestamp - (elapsed % interval); // Maintain timing accuracy
-        
-        setCurrentIndex((prev) => {
-          const nextIndex = prev + framesToAdvance;
-          if (nextIndex >= forecastTrack.length) {
-            // Stop at the end instead of looping
-            setIsPlaying(false);
-            return forecastTrack.length - 1;
-          }
-          return nextIndex;
-        });
-      }
-
-      if (isPlaying) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      }
+      animationFrameRef.current = requestAnimationFrame(animate);
     };
 
-    lastUpdateRef.current = 0; // Reset timestamp on play start
+    lastUpdateRef.current = 0;
     animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -1596,16 +1597,7 @@ export default function CycloneAnimationLayer({
       }
       lastUpdateRef.current = 0;
     };
-  }, [isPlaying, playbackSpeed, forecastTrack, isDocked, controlsContainer, uiVisible]);
-
-  // Notify parent when playing state changes
-  useEffect(() => {
-    if (isPlayingSyncRef.current) {
-      isPlayingSyncRef.current = false;
-      return;
-    }
-    onPlayingChange?.(isPlaying);
-  }, [isPlaying, onPlayingChange]);
+  }, [isPlaying, forecastTrack, currentIndex, isDocked, controlsContainer, uiVisible, storyModeEnabled]);
 
   const toggleChart = useCallback(() => {
     setShowChart((prev) => {
@@ -1626,45 +1618,60 @@ export default function CycloneAnimationLayer({
     }
     if (next) {
       setIsMinimized(false);
-      setIsPlaying(false);
+      pause();
     }
-  }, [storyModeEnabled, onStoryModeChange]);
+  }, [storyModeEnabled, onStoryModeChange, pause]);
 
   useEffect(() => {
     if (storyModeEnabled) {
       setIsMinimized(false);
-      if (isPlaying) setIsPlaying(false);
+      if (isPlaying) pause();
     }
-  }, [storyModeEnabled, isPlaying]);
+  }, [storyModeEnabled, isPlaying, pause]);
 
   // Keyboard shortcuts
+  // Shortcuts: Space/K: Play/Pause, Arrow Keys/J/L: Navigate, Home/End: Jump, Escape: Close
+  // I: Toggle legend, M: Minimize, C: Toggle chart, B: Story mode, N: Notifications, S: Share
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isVisible || !uiVisible) return;
+      
+      // Don't hijack typing in inputs, textareas, selects, or contenteditable elements
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
       
       switch(e.key) {
         case ' ':
         case 'k':
           e.preventDefault();
-          setIsPlaying(prev => !prev);
+          toggle();
           break;
         case 'ArrowLeft':
         case 'j':
           e.preventDefault();
-          setCurrentIndex(prev => Math.max(0, prev - 1));
+          previous();
           break;
         case 'ArrowRight':
         case 'l':
           e.preventDefault();
-          setCurrentIndex(prev => Math.min((forecastTrack?.length ?? 0) - 1, prev + 1));
+          next();
           break;
         case 'Home':
           e.preventDefault();
-          setCurrentIndex(0);
+          seekTo(0);
           break;
         case 'End':
           e.preventDefault();
-          setCurrentIndex((forecastTrack?.length ?? 0) - 1);
+          if (forecastTrack) {
+            seekTo(forecastTrack.length - 1);
+          }
           break;
         case 'Escape':
           if (onClose) onClose();
@@ -1698,7 +1705,7 @@ export default function CycloneAnimationLayer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, uiVisible, forecastTrack, onClose, handleShare, toggleStoryMode]);
+  }, [isVisible, uiVisible, forecastTrack, onClose, handleShare, toggleStoryMode, next, previous, seekTo, toggle]);
 
   // Visibility control
   useEffect(() => {
@@ -1796,7 +1803,9 @@ export default function CycloneAnimationLayer({
   }, [isMinimized, showLegend]);
 
   const hasForecast = !!forecastTrack && forecastTrack.length > 0;
-  const currentPoint = hasForecast ? forecastTrack[currentIndex] : null;
+  // currentIndex is bounded by the playback hook, but use fallback for safety
+  const currentPoint = (forecastTrack && forecastTrack[currentIndex]) ?? forecastTrack[0];
+  
   useEffect(() => {
     if (!showChart || chartUserPositioned) return;
     if (typeof window === 'undefined') return;
@@ -2136,7 +2145,7 @@ export default function CycloneAnimationLayer({
               min="0"
               max={maxIndex}
               value={currentIndex}
-              onChange={(e) => setCurrentIndex(parseInt(e.target.value))}
+              onChange={(e) => seekTo(Number(e.target.value))}
               className="w-full h-1.5 bg-slate-600/70 rounded-lg appearance-none cursor-pointer relative z-10"
               aria-label="Cyclone animation timeline slider"
               style={{
@@ -2160,17 +2169,22 @@ export default function CycloneAnimationLayer({
                 <button
                   key={beat.id}
                   type="button"
-                  className="absolute w-2 h-2 rounded-full border-2 border-white cursor-pointer hover:scale-150 transition-transform"
+                  className="absolute rounded-full border-2 border-white cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800 hover:scale-150"
                   style={{
                     left: `${position}%`,
                     top: '50%',
                     backgroundColor: beatColor,
                     transform: 'translate(-50%, -50%)',
                     zIndex: 20,
+                    // Larger click target (12px visible + 12px padding = 24x24px hit area)
+                    width: '12px',
+                    height: '12px',
+                    padding: '6px',
+                    boxSizing: 'content-box',
                   }}
-                  title={beat.title}
-                  aria-label={`${beat.title} at ${beat.time.toLocaleString()}`}
-                  onClick={() => setCurrentIndex(beat.index)}
+                  title={`Story beat: ${beat.title}`}
+                  aria-label={`Story beat: ${beat.title} at ${beat.time.toLocaleString()}`}
+                  onClick={() => seekTo(beat.index)}
                 />
               );
             })}
@@ -2193,7 +2207,7 @@ export default function CycloneAnimationLayer({
             {!storyModeEnabled ? (
               <>
                 <button
-                  onClick={() => setCurrentIndex(0)}
+                  onClick={() => seekTo(0)}
                   className="p-1.5 rounded bg-slate-700/70 hover:bg-slate-600/70 text-white transition-colors"
                   title="Reset to start"
                   aria-label="Reset to start"
@@ -2202,7 +2216,7 @@ export default function CycloneAnimationLayer({
                 </button>
                 
                 <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={toggle}
                   className="p-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
                   title={isPlaying ? 'Pause' : 'Play'}
                   aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
@@ -2211,7 +2225,11 @@ export default function CycloneAnimationLayer({
                 </button>
                 
                 <button
-                  onClick={() => forecastTrack && setCurrentIndex(forecastTrack.length - 1)}
+                  onClick={() => {
+                    if (forecastTrack) {
+                      seekTo(forecastTrack.length - 1);
+                    }
+                  }}
                   className="p-1.5 rounded bg-slate-700/70 hover:bg-slate-600/70 text-white transition-colors"
                   title="Skip to end"
                   aria-label="Skip to end"
@@ -2222,10 +2240,7 @@ export default function CycloneAnimationLayer({
             ) : (
               <>
                 <button
-                  onClick={() => {
-                    const prevBeat = getPreviousBeat(storyBeats, currentIndex);
-                    if (prevBeat) setCurrentIndex(prevBeat.index);
-                  }}
+                  onClick={previousBeat}
                   disabled={!getPreviousBeat(storyBeats, currentIndex)}
                   className="p-1.5 rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Previous Beat"
@@ -2235,7 +2250,7 @@ export default function CycloneAnimationLayer({
                 </button>
                 
                 <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={toggle}
                   className="p-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
                   title={isPlaying ? 'Pause' : 'Play'}
                   aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
@@ -2244,10 +2259,7 @@ export default function CycloneAnimationLayer({
                 </button>
                 
                 <button
-                  onClick={() => {
-                    const nextBeat = getNextBeat(storyBeats, currentIndex);
-                    if (nextBeat) setCurrentIndex(nextBeat.index);
-                  }}
+                  onClick={nextBeat}
                   disabled={!getNextBeat(storyBeats, currentIndex)}
                   className="p-1.5 rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Next Beat"
@@ -2265,7 +2277,7 @@ export default function CycloneAnimationLayer({
             {[0.25, 0.5, 1, 2, 4].map((speed) => (
               <button
                 key={speed}
-                onClick={() => setPlaybackSpeed(speed)}
+                onClick={() => setSpeed(speed)}
                 className={`px-2 py-1 rounded text-xs font-medium min-w-[40px] transition-all ${
                   playbackSpeed === speed
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/50'
@@ -2372,8 +2384,6 @@ export default function CycloneAnimationLayer({
     </div>
   );
 
-  if (!hasForecast || !currentPoint) return null;
-
   return (
     <>
       {/* Wind Field Glow Canvas Overlay */}
@@ -2410,10 +2420,20 @@ export default function CycloneAnimationLayer({
         </div>
       )}
 
+      {/* Story Beat Annotations - Narrative text overlay */}
+      <StoryBeatAnnotation
+        currentPoint={currentPoint}
+        storyBeats={storyBeats}
+        currentIndex={currentIndex}
+        visible={uiVisible && storyModeEnabled}
+      />
+
       {/* Story Beat Moment Card */}
       {uiVisible && storyModeEnabled && showStoryBeatCard && (() => {
         const currentBeat = isAtBeat(storyBeats, currentIndex);
         if (!currentBeat) return null;
+
+        const BeatIcon = getStoryBeatIcon(currentBeat.type);
         
         const beatColor = 
           currentBeat.type === 'peak-intensity' ? '#ef4444' :
@@ -2435,7 +2455,8 @@ export default function CycloneAnimationLayer({
             }}
           >
             <div className="text-center">
-              <h3 className="text-white text-lg font-bold mb-1">
+              <h3 className="text-white text-lg font-bold mb-1 flex items-center justify-center gap-2">
+                <BeatIcon className="w-4 h-4 text-white/90" aria-hidden="true" />
                 {currentBeat.title}
               </h3>
               <p className="text-slate-300 text-sm">
@@ -2543,7 +2564,7 @@ export default function CycloneAnimationLayer({
               <CycloneIntensityChart
                 forecastTrack={forecastTrack}
                 currentIndex={currentIndex}
-                onPointClick={setCurrentIndex}
+                onPointClick={seekTo}
                 isPlaying={isPlaying}
                 storyBeats={storyBeats}
               />

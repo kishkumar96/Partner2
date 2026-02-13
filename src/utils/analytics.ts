@@ -110,7 +110,7 @@ export const trackEvent = ({
 
   // Console log in development
   if (process.env.NODE_ENV === 'development') {
-    console.log('📊 Analytics Event:', {
+    console.log('Analytics Event:', {
       action,
       category,
       label,

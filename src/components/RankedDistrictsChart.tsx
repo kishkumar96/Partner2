@@ -96,6 +96,13 @@ export default function RankedDistrictsChart({
     indexAxis: "y" as const,
     responsive: true,
     maintainAspectRatio: false,
+    // Accessibility
+    ariaLabel: metric === "loss" 
+      ? `Bar chart showing top ${topN} districts by economic loss`
+      : metric === "population"
+      ? `Bar chart showing top ${topN} districts by affected population`
+      : `Bar chart showing top ${topN} districts by high risk areas`,
+    ariaDescription: `Horizontal bar chart ranking districts from highest to lowest ${metric === "loss" ? "economic damage" : metric === "population" ? "affected population" : "risk areas"}`,
     plugins: {
       legend: {
         display: false,
@@ -170,7 +177,15 @@ export default function RankedDistrictsChart({
   return (
     <div className="w-full">
       <div style={{ height: `${topN * 30 + 60}px` }}>
-        <Bar data={chartData} options={options} />
+        <Bar 
+          data={chartData} 
+          options={options}
+          aria-label={metric === "loss" 
+            ? `Bar chart showing top ${topN} districts by economic loss`
+            : metric === "population"
+            ? `Bar chart showing top ${topN} districts by affected population`
+            : `Bar chart showing top ${topN} districts by high risk areas`}
+        />
       </div>
     </div>
   );

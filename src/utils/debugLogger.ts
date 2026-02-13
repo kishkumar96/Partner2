@@ -89,14 +89,14 @@ function categorizeMessage(message: string): LogCategory {
  */
 function formatLogEntry(entry: LogEntry): string {
   const timestamp = entry.timestamp.toISOString().split("T")[1].split(".")[0];
-  const emoji = {
-    debug: "🔍",
-    info: "ℹ️",
-    warn: "⚠️",
-    error: "❌",
+  const levelLabel = {
+    debug: "DEBUG",
+    info: "INFO",
+    warn: "WARN",
+    error: "ERROR",
   }[entry.level];
-  
-  return `[${timestamp}] ${emoji} [${entry.category}] ${entry.message}`;
+
+  return `[${timestamp}] [${levelLabel}] [${entry.category}] ${entry.message}`;
 }
 
 /**

@@ -9,7 +9,7 @@ import { CountryCode, THREDDS_CONFIG, GeoTIFFLayer } from "@/types/thredds";
  */
 export async function loadGeoTIFF(url: string) {
   try {
-    console.log(`🔄 Loading GeoTIFF from:`, url);
+    console.log(`Loading GeoTIFF from:`, url);
     
     // @ts-ignore - this package has no shipped type declarations in this project
     const imported = await import("georaster");
@@ -17,7 +17,7 @@ export async function loadGeoTIFF(url: string) {
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.warn(`⚠️ GeoTIFF not available (${response.status} ${response.statusText})`);
+      console.warn(`GeoTIFF not available (${response.status} ${response.statusText})`);
       console.info(`URL: ${url}`);
       return null;
     }
@@ -25,10 +25,10 @@ export async function loadGeoTIFF(url: string) {
     const arrayBuffer = await response.arrayBuffer();
     const georaster = await parseGeoraster(arrayBuffer);
     
-    console.log(`✅ Successfully loaded GeoTIFF`);
+    console.log(`Successfully loaded GeoTIFF`);
     return georaster;
   } catch (error) {
-    console.warn(`⚠️ Could not load GeoTIFF:`, error instanceof Error ? error.message : error);
+    console.warn(`Could not load GeoTIFF:`, error instanceof Error ? error.message : error);
     console.info(`URL: ${url}`);
     return null;
   }
@@ -161,7 +161,7 @@ export async function loadCycloneTrack(countryCode: CountryCode) {
     : generateTimestampCandidates();
   
   if (catalogTimestamps.length > 0) {
-    console.log(`📋 Found ${catalogTimestamps.length} timestamps in catalog for ${countryCode}`);
+    console.log(`Found ${catalogTimestamps.length} timestamps in catalog for ${countryCode}`);
   }
   
   // Limit search to prevent excessive requests
@@ -180,7 +180,7 @@ export async function loadCycloneTrack(countryCode: CountryCode) {
       
       if (response.ok) {
         const geojson = await response.json();
-        console.log(`✅ Successfully loaded cyclone track for ${countryCode} (${timestamp})`);
+        console.log(`Successfully loaded cyclone track for ${countryCode} (${timestamp})`);
         return geojson;
       } else {
         consecutiveFailures++;
@@ -213,7 +213,7 @@ export async function loadCycloneTrack(countryCode: CountryCode) {
   }
   
   // For other countries, no real data available - return empty
-  console.log(`ℹ️ No cyclone track data available for ${countryCode}`);
+  console.log(`No cyclone track data available for ${countryCode}`);
   return [];
 }
 
@@ -242,7 +242,7 @@ async function loadRealOutputTrack(countryCode: CountryCode) {
       
       if (response.ok) {
         const geojson = await response.json();
-        console.log(`✅ Loaded real output track for ${countryCode}: ${timestamp}`);
+        console.log(`Loaded real output track for ${countryCode}: ${timestamp}`);
         return geojson;
       }
     } catch (error) {
@@ -290,11 +290,11 @@ export async function loadPDIEOutputData(countryCode: CountryCode, dataType: 'ex
     if (response.ok) {
       if (filename.endsWith('.csv')) {
         const text = await response.text();
-        console.log(`✅ Loaded PDIE ${dataType} data for ${countryCode}`);
+        console.log(`Loaded PDIE ${dataType} data for ${countryCode}`);
         return parseCSV(text);
       } else {
         const geojson = await response.json();
-        console.log(`✅ Loaded PDIE ${dataType} data for ${countryCode}`);
+        console.log(`Loaded PDIE ${dataType} data for ${countryCode}`);
         return geojson;
       }
     }
@@ -355,7 +355,7 @@ async function loadHistoricalTCLolaTrack() {
         const csvText = await response.text();
         const geojson = parseCSVToGeoJSON(csvText, "TC Lola (Official Forecast Track)");
         if (geojson) {
-          console.log(`✅ Loaded TC Lola track: ${filename}`);
+          console.log(`Loaded TC Lola track: ${filename}`);
           return geojson;
         }
       }
@@ -366,7 +366,7 @@ async function loadHistoricalTCLolaTrack() {
   }
   
   // If historical data not available, return empty array
-  console.log(`ℹ️ No cyclone track data available for Vanuatu`);
+  console.log(`No cyclone track data available for Vanuatu`);
   return [];
 }
 

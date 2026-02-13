@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
+import maplibregl, { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
+import { ROAD_DAMAGE_COLORS } from '@/theme/colors';
+import type { RoadProperties } from '@/types/realData';
 
 interface DamagedRoadsLayerProps {
   map: MapLibreMap | null;
-  data: any;
+  data: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   visible?: boolean;
   styleChangeCounter?: number;
 }
@@ -28,36 +30,64 @@ export default function DamagedRoadsLayer({
     const layerIdOutline = "damaged-roads-outline";
 
     // Define event handlers outside addLayers so we can remove them in cleanup
-    const handleClick = (e: any) => {
+    const handleClick = (e: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
       if (!e.features || e.features.length === 0) return;
 
       const feature = e.features[0];
-      const props = feature.properties;
+      const props = feature.properties as RoadProperties;
 
-      const html = `
-        <div class="p-2">
-          <h3 class="font-bold text-sm mb-1">Damaged Road</h3>
-          <p class="text-xs"><strong>Damage:</strong> $${Number(
-            props.Wind_Loss || 0
-          ).toLocaleString()}</p>
-          <p class="text-xs"><strong>Exposure:</strong> $${Number(
-            props.Exposure || 0
-          ).toLocaleString()}</p>
-          <p class="text-xs"><strong>Damage Ratio:</strong> ${(
-            (Number(props.Damage_Ratio) || 0) * 100
-          ).toFixed(1)}%</p>
-          <p class="text-xs"><strong>Road Type:</strong> ${
-            props.Road_Type || "Unknown"
-          }</p>
-          <p class="text-xs"><strong>Surface:</strong> ${
-            props.Surface || "Unknown"
-          }</p>
-        </div>
-      `;
+      const popupContent = document.createElement("div");
+      popupContent.className = "p-2";
+
+      const title = document.createElement("h3");
+      title.className = "font-bold text-sm mb-1";
+      title.textContent = "Damaged Road";
+      popupContent.appendChild(title);
+
+      const damageP = document.createElement("p");
+      damageP.className = "text-xs";
+      const damageStrong = document.createElement("strong");
+      damageStrong.textContent = "Damage:";
+      damageP.appendChild(damageStrong);
+      damageP.appendChild(document.createTextNode(" $" + Number(props.Wind_Loss || 0).toLocaleString()));
+      popupContent.appendChild(damageP);
+
+      const exposureP = document.createElement("p");
+      exposureP.className = "text-xs";
+      const exposureStrong = document.createElement("strong");
+      exposureStrong.textContent = "Exposure:";
+      exposureP.appendChild(exposureStrong);
+      exposureP.appendChild(document.createTextNode(" $" + Number(props.Exposure || 0).toLocaleString()));
+      popupContent.appendChild(exposureP);
+
+      const ratioP = document.createElement("p");
+      ratioP.className = "text-xs";
+      const ratioStrong = document.createElement("strong");
+      ratioStrong.textContent = "Damage Ratio:";
+      ratioP.appendChild(ratioStrong);
+      const ratioValue = ((Number(props.Damage_Ratio) || 0) * 100).toFixed(1) + "%";
+      ratioP.appendChild(document.createTextNode(" " + ratioValue));
+      popupContent.appendChild(ratioP);
+
+      const roadTypeP = document.createElement("p");
+      roadTypeP.className = "text-xs";
+      const roadTypeStrong = document.createElement("strong");
+      roadTypeStrong.textContent = "Road Type:";
+      roadTypeP.appendChild(roadTypeStrong);
+      roadTypeP.appendChild(document.createTextNode(" " + (props.Road_Type || "Unknown")));
+      popupContent.appendChild(roadTypeP);
+
+      const surfaceP = document.createElement("p");
+      surfaceP.className = "text-xs";
+      const surfaceStrong = document.createElement("strong");
+      surfaceStrong.textContent = "Surface:";
+      surfaceP.appendChild(surfaceStrong);
+      surfaceP.appendChild(document.createTextNode(" " + (props.Surface || "Unknown")));
+      popupContent.appendChild(surfaceP);
 
       new maplibregl.Popup()
         .setLngLat(e.lngLat)
-        .setHTML(html)
+        .setDOMContent(popupContent)
         .addTo(map);
     };
 
@@ -75,7 +105,7 @@ export default function DamagedRoadsLayer({
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, {
           type: "geojson",
-          data: data,
+          data: data as GeoJSON.FeatureCollection,
         });
       }
 
@@ -88,50 +118,50 @@ export default function DamagedRoadsLayer({
           paint: {
             "line-color": "#000000",
             "line-width": [
-              "interpolate",
-              ["linear"],
+              "step",
               ["get", "Total_Loss"],
-              0, 5,
-              10000, 7,
-              50000, 9,
-              100000, 11,
+              5,        // < $5K
+              5000, 7,   // $5K-$25K
+              25000, 9,  // $25K-$75K
+              75000, 11  // > $75K
             ],
-            "line-opacity": 0.3,
+            "line-opacity": 0.4,
           },
         });
       }
 
-      // Add main line layer
+      // Add main line layer - MUST render above regional polygons
       if (!map.getLayer(layerId)) {
+        // Find the first symbol layer to insert before
+        const layers = map.getStyle()?.layers || [];
+        const firstSymbolId = layers.find(layer => layer.type === 'symbol')?.id;
+        
         map.addLayer({
           id: layerId,
           type: "line",
           source: sourceId,
           paint: {
-            // Width based on damage severity
+            // Width based on damage severity - matches legend
             "line-width": [
-              "interpolate",
-              ["linear"],
+              "step",
               ["get", "Total_Loss"],
-              0, 3,
-              10000, 5,
-              50000, 7,
-              100000, 9,
+              3,       // < $5K
+              5000, 5,  // $5K-$25K
+              25000, 7, // $25K-$75K
+              75000, 9  // > $75K
             ],
-            // Color by damage severity
+            // Color by damage severity - using theme colors
             "line-color": [
-              "interpolate",
-              ["linear"],
+              "step",
               ["get", "Total_Loss"],
-              0, "#10b981", // green - minimal
-              5000, "#fbbf24", // yellow - moderate
-              20000, "#f97316", // orange - significant
-              50000, "#ef4444", // red - severe
-              100000, "#991b1b", // dark red - catastrophic
+              ROAD_DAMAGE_COLORS.light,    // < $5K
+              5000, ROAD_DAMAGE_COLORS.moderate,   // $5K-$25K
+              25000, ROAD_DAMAGE_COLORS.heavy,     // $25K-$75K
+              75000, ROAD_DAMAGE_COLORS.severe     // > $75K
             ],
-            "line-opacity": 0.8,
+            "line-opacity": 0.9,
           },
-        });
+        }, firstSymbolId); // Insert before symbol layers for proper z-order
       }
 
       // Add event listeners using handlers defined in outer scope

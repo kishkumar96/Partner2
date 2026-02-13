@@ -1,6 +1,7 @@
 "use client";
 
 import { CountryCode, COUNTRIES } from "@/types/thredds";
+import { Globe2, Info, Lightbulb } from "lucide-react";
 
 interface CountrySelectorProps {
   selectedCountry: CountryCode | null;
@@ -34,7 +35,10 @@ export default function CountrySelector({
                   : "bg-slate-800/70 text-slate-200 border border-slate-700/60 hover:bg-slate-700/70"
               }`}
             >
-              🌍 All Countries
+              <span className="inline-flex items-center gap-2">
+                <Globe2 className="w-4 h-4" aria-hidden="true" />
+                All Countries
+              </span>
             </button>
             {Object.values(COUNTRIES).map((country) => (
               <button
@@ -60,7 +64,7 @@ export default function CountrySelector({
           <div className="pt-3 border-t border-slate-700/60">
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <span className="text-lg">ℹ️</span>
+                <Info className="w-4 h-4 text-blue-200 mt-0.5" aria-hidden="true" />
                 <div className="flex-1">
                   <p className="text-xs font-medium text-blue-200">
                     Data Source
@@ -83,7 +87,7 @@ export default function CountrySelector({
           <div className="pt-3 border-t border-slate-700/60">
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <span className="text-lg">💡</span>
+                <Lightbulb className="w-4 h-4 text-amber-200 mt-0.5" aria-hidden="true" />
                 <div className="flex-1">
                   <p className="text-xs font-medium text-amber-200">
                     Select a Country

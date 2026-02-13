@@ -4,6 +4,22 @@
  */
 
 import { Hazard, Sector } from "@/types";
+import {
+  Activity,
+  Building2,
+  Droplet,
+  Flame,
+  HelpCircle,
+  Home,
+  Landmark,
+  Leaf,
+  Mountain,
+  Package,
+  School,
+  Sun,
+  Waves,
+  Wind,
+} from "lucide-react";
 
 /**
  * Primary hazards affecting Vanuatu
@@ -13,43 +29,43 @@ export const vanuatuHazards: Hazard[] = [
     id: "tropical-cyclone",
     name: "Tropical Cyclone",
     color: "#DC2626", // Red
-    icon: "🌀",
+    icon: Wind,
   },
   {
     id: "flood",
     name: "Flood",
     color: "#2563EB", // Blue
-    icon: "🌊",
+    icon: Droplet,
   },
   {
     id: "volcanic",
     name: "Volcanic Activity",
     color: "#EA580C", // Orange
-    icon: "🌋",
+    icon: Flame,
   },
   {
     id: "earthquake",
     name: "Earthquake",
     color: "#7C3AED", // Purple
-    icon: "📍",
+    icon: Activity,
   },
   {
     id: "tsunami",
     name: "Tsunami",
     color: "#0891B2", // Cyan
-    icon: "〰️",
+    icon: Waves,
   },
   {
     id: "landslide",
     name: "Landslide",
     color: "#92400E", // Brown
-    icon: "⛰️",
+    icon: Mountain,
   },
   {
     id: "drought",
     name: "Drought",
     color: "#D97706", // Amber
-    icon: "☀️",
+    icon: Sun,
   },
 ];
 
@@ -61,43 +77,43 @@ export const vanuatuSectors: Sector[] = [
   {
     id: "Education",
     name: "Education",
-    icon: "🎓",
+    icon: School,
     color: "#8B5CF6",
   },
   {
     id: "Infrastructure",
     name: "Infrastructure",
-    icon: "🏗️",
+    icon: Building2,
     color: "#6B7280",
   },
   {
     id: "Productive",
     name: "Productive",
-    icon: "🌾",
+    icon: Leaf,
     color: "#16A34A",
   },
   {
     id: "Public",
     name: "Public",
-    icon: "🏛️",
+    icon: Landmark,
     color: "#3B82F6",
   },
   {
     id: "Residential",
     name: "Residential",
-    icon: "🏘️",
+    icon: Home,
     color: "#EF4444",
   },
   {
     id: "Other",
     name: "Other",
-    icon: "📦",
+    icon: Package,
     color: "#64748B",
   },
   {
     id: "Unknown",
     name: "Unknown",
-    icon: "❓",
+    icon: HelpCircle,
     color: "#9CA3AF",
   },
 ];

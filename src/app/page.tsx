@@ -2,15 +2,18 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { X, Map as MapIcon, BookOpen, AlertCircle } from "lucide-react";
-import TemporalModeToggle, { TemporalMode } from "@/components/TemporalModeToggle";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { X, Map as MapIcon, BookOpen, AlertCircle, Globe2 } from "lucide-react";
+import maplibregl from "maplibre-gl";
 import ActiveFilters from "@/components/ActiveFilters";
 import { MapControls } from "@/components/MapControls";
+import ShareLinkButton from "@/components/ShareLinkButton";
 import { FilterState, Event } from "@/types";
 import { CountryCode, COUNTRIES } from "@/types/thredds";
 import { vanuatuHazards, vanuatuSectors, vanuatuProvinces, vanuatuDistricts } from "@/data/vanuatuHazards";
-import { loadAllRealData } from "@/utils/realDataLoader";
+import { loadAllRealData, expandEventsToRegionalEntries } from "@/utils/realDataLoader";
 import { detectStoryBeats } from "@/utils/cycloneStory";
+import { deserializeMapState, serializeMapState, MapURLState } from "@/utils/urlState";
 
 // Vanuatu-specific data
 const allHazards = vanuatuHazards;
@@ -65,6 +68,14 @@ const MethodologyDrawer = dynamic(() => import("@/components/MethodologyDrawer")
   loading: () => null,
 });
 
+const DataQualityIndicator = dynamic(() => import("@/components/DataQualityIndicator"), {
+  loading: () => null,
+});
+
+const ComparativeAnalytics = dynamic(() => import("@/components/ComparativeAnalytics"), {
+  loading: () => null,
+});
+
 const UnifiedMapLegend = dynamic(() => import("@/components/UnifiedMapLegend"), {
   ssr: false,
   loading: () => null,
@@ -76,6 +87,13 @@ const Toast = dynamic(() => import("@/components/Toast"), {
 });
 
 export default function Home() {
+  // Next.js router for URL state management
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const hasLoadedFromUrl = useRef(false);
+  const urlUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [filters, setFilters] = useState<FilterState>({
     selectedHazards: [],
     selectedSectors: [],
@@ -93,15 +111,16 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
-  const [temporalMode, setTemporalMode] = useState<TemporalMode>("cumulative");
   const [showCycloneControls, setShowCycloneControls] = useState(true);
   const [isCyclonePlaying, setIsCyclonePlaying] = useState(false);
   const [storyMode, setStoryMode] = useState(false);
   const [currentCycloneIndex, setCurrentCycloneIndex] = useState(0);
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState<"success" | "info" | "warning">("info");
   const [toastAction, setToastAction] = useState<{label: string; onClick: () => void} | undefined>(undefined);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const summaryPanelRef = useRef<HTMLDivElement>(null);
   const [cycloneControlsHost, setCycloneControlsHost] = useState<HTMLDivElement | null>(null);
@@ -110,9 +129,12 @@ export default function Home() {
   }, []);
   
   // Real data state
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<Event[]>([]); // Master events (e.g., 1 for TC Lola)
+  const [expandedEvents, setExpandedEvents] = useState<Event[]>([]); // Regional-level entries for filtering
   const [exposureData, setExposureData] = useState<any[]>([]);
-  const [economicDamageData, setEconomicDamageData] = useState<any[]>([]);
+  const [economicDamageData, setEconomicDamageData] = useState<any[]>([]); // Combined for backward compatibility
+  const [sectorEconomicData, setSectorEconomicData] = useState<any[]>([]); // Sector-level economic data
+  const [assetEconomicData, setAssetEconomicData] = useState<any[]>([]); // Asset-level economic data
   const [assetExposureData, setAssetExposureData] = useState<any>(null);
   const [impactByAssetType, setImpactByAssetType] = useState<any[]>([]);
   const [impactBySector, setImpactBySector] = useState<any[] | undefined>();
@@ -123,8 +145,323 @@ export default function Home() {
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
   const storyBeats = useMemo(() => (
-    cycloneForecast ? detectStoryBeats(cycloneForecast) : []
-  ), [cycloneForecast]);
+    cycloneForecast ? detectStoryBeats(cycloneForecast, selectedCountry) : []
+  ), [cycloneForecast, selectedCountry]);
+
+  // Memoized data values for legend (performance optimization)
+  const legendDataValues = useMemo(() => {
+    return regionalSummary
+      .map((r: any) => {
+        if (mapStyle === "loss") {
+          return parseFloat(r.Total_Loss) || 0;
+        } else {
+          return parseFloat(r.Max_Wind_Gusts) || 0;
+        }
+      })
+      .filter((v: number) => v > 0);
+  }, [regionalSummary, mapStyle]);
+  
+  // Stable story beats to prevent empty-state flashing during recomputation
+  const [stableStoryBeats, setStableStoryBeats] = useState<any[]>([]);
+  useEffect(() => {
+    if (storyBeats.length > 0) {
+      setStableStoryBeats(storyBeats);
+    }
+  }, [storyBeats]);
+
+  // ============================================================================
+  // URL State Management - Shareable Links
+  // ============================================================================
+  
+  /**
+   * Restore application state from URL parameters (one-time on mount)
+   */
+  useEffect(() => {
+    if (hasLoadedFromUrl.current) return;
+    hasLoadedFromUrl.current = true;
+    
+    const urlState = deserializeMapState(searchParams);
+    
+    // Restore basic state
+    if (urlState.country !== undefined) {
+      setSelectedCountry(urlState.country);
+    }
+    if (urlState.region) {
+      setSelectedRegion(urlState.region);
+    }
+    if (urlState.mapStyle) {
+      setMapStyle(urlState.mapStyle);
+    }
+    if (urlState.basemap) {
+      setBasemapStyle(urlState.basemap);
+    }
+    
+    // Restore filters
+    if (urlState.hazards || urlState.sectors || urlState.events || urlState.dateStart || urlState.dateEnd || urlState.aggregation) {
+      setFilters(prev => ({
+        selectedHazards: urlState.hazards || prev.selectedHazards,
+        selectedSectors: urlState.sectors || prev.selectedSectors,
+        selectedEvents: urlState.events || prev.selectedEvents,
+        dateRange: {
+          start: urlState.dateStart || prev.dateRange.start,
+          end: urlState.dateEnd || prev.dateRange.end,
+        },
+        aggregationLevel: urlState.aggregation || prev.aggregationLevel,
+      }));
+    }
+    
+    // Restore cyclone state
+    if (urlState.cycloneIndex !== undefined) {
+      setCurrentCycloneIndex(urlState.cycloneIndex);
+    }
+    if (urlState.storyMode !== undefined) {
+      setStoryMode(urlState.storyMode);
+    }
+    
+    // Restore panel states
+    if (urlState.showFilters) {
+      setShowFilters(true);
+    }
+    if (urlState.showSummary) {
+      setShowSummary(true);
+    }
+    
+    // Map center/zoom handled by MapView component via onMapReady callback
+    if (mapInstance && urlState.center && urlState.zoom) {
+      mapInstance.jumpTo({
+        center: [urlState.center.lng, urlState.center.lat],
+        zoom: urlState.zoom,
+      });
+    }
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('📍 Restored state from URL:', urlState);
+    }
+  }, [searchParams, mapInstance]);
+
+  /**
+   * Update URL when map state changes (debounced to avoid spam)
+   */
+  const updateUrl = useCallback((state: Partial<MapURLState>) => {
+    if (typeof window === 'undefined') return;
+    
+    // Clear existing timeout
+    if (urlUpdateTimeoutRef.current) {
+      clearTimeout(urlUpdateTimeoutRef.current);
+    }
+    
+    // Debounce URL updates (300ms)
+    urlUpdateTimeoutRef.current = setTimeout(() => {
+      // Get current map center/zoom
+      let center: { lat: number; lng: number } | undefined;
+      let zoom: number | undefined;
+      
+      if (mapInstance) {
+        const mapCenter = mapInstance.getCenter();
+        center = { lat: mapCenter.lat, lng: mapCenter.lng };
+        zoom = mapInstance.getZoom();
+      }
+      
+      const fullState: MapURLState = {
+        center,
+        zoom,
+        country: selectedCountry,
+        region: selectedRegion,
+        hazards: filters.selectedHazards,
+        sectors: filters.selectedSectors,
+        events: filters.selectedEvents,
+        dateStart: filters.dateRange.start || undefined,
+        dateEnd: filters.dateRange.end || undefined,
+        aggregation: filters.aggregationLevel === 'national' ? undefined : filters.aggregationLevel,
+        mapStyle,
+        basemap: basemapStyle,
+        cycloneIndex: currentCycloneIndex,
+        storyMode,
+        showFilters,
+        showSummary,
+        // Merge with any partial updates
+        ...state,
+      };
+      
+      const params = serializeMapState(fullState);
+      const newUrl = `${pathname}?${params.toString()}`;
+      
+      // Use replace to avoid cluttering browser history
+      router.replace(newUrl, { scroll: false });
+    }, 300);
+  }, [
+    mapInstance,
+    selectedCountry,
+    selectedRegion, 
+    filters,
+    mapStyle,
+    basemapStyle,
+    currentCycloneIndex,
+    storyMode,
+    showFilters,
+    showSummary,
+    pathname,
+    router,
+  ]);
+
+  // Update URL when key state changes
+  useEffect(() => {
+    if (!hasLoadedFromUrl.current) return; // Don't update URL during initial load
+    updateUrl({});
+  }, [
+    selectedCountry,
+    selectedRegion,
+    mapStyle,
+    currentCycloneIndex,
+    storyMode,
+    filters.selectedHazards,
+    filters.selectedSectors,
+    filters.aggregationLevel,
+    updateUrl,
+  ]);
+
+  // Cleanup URL update timeout
+  useEffect(() => {
+    return () => {
+      if (urlUpdateTimeoutRef.current) {
+        clearTimeout(urlUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const getGeoJsonBounds = useCallback((data: GeoJSON.FeatureCollection): maplibregl.LngLatBoundsLike | null => {
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+
+    const updateBounds = (lng: number, lat: number) => {
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+      minLng = Math.min(minLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLng = Math.max(maxLng, lng);
+      maxLat = Math.max(maxLat, lat);
+    };
+
+    const walkCoords = (coords: any) => {
+      if (!Array.isArray(coords)) return;
+      if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+        updateBounds(coords[0], coords[1]);
+        return;
+      }
+      coords.forEach(walkCoords);
+    };
+
+    const walkGeometry = (geometry: GeoJSON.Geometry) => {
+      if (geometry.type === "GeometryCollection") {
+        geometry.geometries.forEach(walkGeometry);
+        return;
+      }
+      walkCoords((geometry as GeoJSON.Geometry & { coordinates: any }).coordinates);
+    };
+
+    data.features.forEach((feature) => {
+      if (!feature.geometry) return;
+      walkGeometry(feature.geometry as GeoJSON.Geometry);
+    });
+
+    if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) {
+      return null;
+    }
+
+    return [
+      [minLng, minLat],
+      [maxLng, maxLat],
+    ] as maplibregl.LngLatBoundsLike;
+  }, []);
+
+  const zoomToData = useCallback((data?: GeoJSON.FeatureCollection | null) => {
+    if (!mapInstance || !data) return;
+    const bounds = getGeoJsonBounds(data);
+    if (!bounds) return;
+
+    const fit = () => {
+      mapInstance.fitBounds(bounds, {
+        padding: 80,
+        maxZoom: 14,
+        duration: 900,
+      });
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+      fit();
+    } else {
+      mapInstance.once("load", fit);
+    }
+  }, [mapInstance, getGeoJsonBounds]);
+
+  const handleZoomToBuildings = useCallback(() => {
+    if (!damagedBuildings || !damagedBuildings.features || damagedBuildings.features.length === 0) {
+      console.warn('No building data available to zoom to');
+      return;
+    }
+    zoomToData(damagedBuildings);
+    // URL will be updated by map moveend event
+  }, [zoomToData, damagedBuildings]);
+
+  const handleZoomToRoads = useCallback(() => {
+    if (!damagedRoads || !damagedRoads.features || damagedRoads.features.length === 0) {
+      console.warn('No road data available to zoom to');
+      return;
+    }
+    zoomToData(damagedRoads);
+    // URL will be updated by map moveend event
+  }, [zoomToData, damagedRoads]);
+
+  /**
+   * Zoom to specific asset coordinates (for table row clicks)
+   */
+  const handleZoomToAsset = useCallback((coordinates: [number, number], zoom: number = 16) => {
+    if (!mapInstance) {
+      console.warn('Map not ready for zooming');
+      return;
+    }
+
+    const flyTo = () => {
+      mapInstance.flyTo({
+        center: coordinates,
+        zoom: zoom,
+        duration: 1200,
+        essential: true,
+      });
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+      flyTo();
+    } else {
+      mapInstance.once('load', flyTo);
+    }
+  }, [mapInstance]);
+
+  // Update URL when map view changes (pan/zoom)
+  useEffect(() => {
+    if (!mapInstance || !hasLoadedFromUrl.current) return;
+    
+    const handleMapMove = () => {
+      updateUrl({});
+    };
+    
+    // Listen to moveend (fired after pan/zoom completes)
+    mapInstance.on('moveend', handleMapMove);
+    
+    return () => {
+      mapInstance.off('moveend', handleMapMove);
+    };
+  }, [mapInstance, updateUrl]);
+
+  // Cleanup toast timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const accessibleDistricts = useMemo(() => (
     regionalSummary.map((r: any) => ({
@@ -143,8 +480,9 @@ export default function Home() {
   const loadRequestVersion = useRef(0);
   
   // Filter events by selected country and region
+  // Use expandedEvents for filtering (contains regional-level entries)
   const countryEvents = useMemo(() => {
-    let filtered = events;
+    let filtered = expandedEvents;
     
     // Filter by country
     if (selectedCountry) {
@@ -157,7 +495,7 @@ export default function Home() {
     }
     
     return filtered;
-  }, [events, selectedCountry, selectedRegion]);
+  }, [expandedEvents, selectedCountry, selectedRegion]);
 
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
@@ -172,19 +510,27 @@ export default function Home() {
 
   // Calculate total economic damage for export button state
   const totalEconomicDamage = useMemo(() => {
-    return countryEvents.reduce((sum, e) => sum + (e.economicDamage || 0), 0);
+    return countryEvents.reduce((sum, e) => sum + (e.totalEconomicDamage || 0), 0);
   }, [countryEvents]);
 
   // Load real data function
   const handleCycloneTimestepChange = useCallback(
     (_timestep: any | null, index: number) => {
-      if (index === currentCycloneIndex) return;
-      setCurrentCycloneIndex(index);
-      console.log('Cyclone timestep changed to:', index);
+      // Bounds validation
+      if (index < 0 || index >= (cycloneForecast?.length ?? 0)) return;
+      // Use functional setState to access current value without dependency
+      setCurrentCycloneIndex(prevIndex => {
+        if (index === prevIndex) return prevIndex;
+        if (process.env.NODE_ENV !== "production") {
+          console.log('Cyclone timestep changed to:', index);
+        }
+        return index;
+      });
     },
-    [currentCycloneIndex]
+    [cycloneForecast]
   );
 
+  // Story mode side effects: pause playback and show controls on entry
   useEffect(() => {
     if (storyMode && isCyclonePlaying) {
       setIsCyclonePlaying(false);
@@ -195,9 +541,12 @@ export default function Home() {
     if (storyMode && !showCycloneControls) {
       setShowCycloneControls(true);
     }
+    // Note: We keep controls visible on exit for now (user can manually hide)
+    // Could optionally restore previous state if needed
   }, [storyMode, showCycloneControls]);
 
-  const loadData = async () => {
+  // Stabilized loadData with useCallback to prevent stale closures
+  const loadData = useCallback(async () => {
     // Increment version to invalidate any in-flight requests
     const currentVersion = ++loadRequestVersion.current;
     
@@ -207,6 +556,8 @@ export default function Home() {
       setDamagedBuildings(null);
       setDamagedRoads(null);
       setDataLoadError(null);
+      // Ensure we are not left in a loading state if this is called mid-load
+      setIsLoadingData(false);
       return;
     }
     
@@ -217,13 +568,21 @@ export default function Home() {
       
       // Check if this request is still current (not superseded by a newer request)
       if (currentVersion !== loadRequestVersion.current) {
-        console.log('🚫 Ignoring stale data load response');
+        console.log('Ignoring stale data load response');
         return;
       }
       
       if (realData.events && realData.events.length > 0) {
         setEvents(realData.events);
-        console.log(`✅ Loaded ${realData.events.length} events from real data`);
+        // Use sector-specific events for filtering if available, otherwise expand the main events
+        const expanded = realData.sectorSpecificEvents && realData.sectorSpecificEvents.length > 0
+          ? realData.sectorSpecificEvents
+          : expandEventsToRegionalEntries(realData.events);
+        setExpandedEvents(expanded);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Loaded ${realData.events.length} event(s) from real data`);
+          console.log(`   - Expanded to ${expanded.length} regional entries for filtering (with sector data)`);
+        }
       }
       
       if (realData.exposureData && realData.exposureData.length > 0) {
@@ -232,6 +591,15 @@ export default function Home() {
       
       if (realData.economicDamageData && realData.economicDamageData.length > 0) {
         setEconomicDamageData(realData.economicDamageData);
+      }
+      
+      // Load separate sector and asset economic data
+      if (realData.sectorEconomicData && realData.sectorEconomicData.length > 0) {
+        setSectorEconomicData(realData.sectorEconomicData);
+      }
+      
+      if (realData.assetEconomicData && realData.assetEconomicData.length > 0) {
+        setAssetEconomicData(realData.assetEconomicData);
       }
       
       if (realData.assetExposureData) {
@@ -252,38 +620,70 @@ export default function Home() {
       
       if (realData.damagedBuildings) {
         setDamagedBuildings(realData.damagedBuildings);
-        console.log('✅ Loaded damaged buildings data');
+        if (process.env.NODE_ENV !== "production") {
+          console.log('Loaded damaged buildings data');
+        }
+        const buildingCount = realData.damagedBuildings?.features?.length || 0;
+        if (buildingCount > 0) {
+          // Clear existing toast timeout
+          if (toastTimeoutRef.current) {
+            clearTimeout(toastTimeoutRef.current);
+          }
+          setToastMessage(
+            `Building damage data loaded: ${buildingCount.toLocaleString()} buildings analyzed. Zoom in to see individual buildings.`
+          );
+          setToastType('info');
+          setShowToast(true);
+          toastTimeoutRef.current = setTimeout(() => setShowToast(false), 5000);
+        }
       }
       
       if (realData.damagedRoads) {
         setDamagedRoads(realData.damagedRoads);
-        console.log('✅ Loaded damaged roads data');
+        if (process.env.NODE_ENV !== "production") {
+          console.log('Loaded damaged roads data');
+        }
       }
       
       if (realData.regionalSummary) {
         setRegionalSummary(realData.regionalSummary);
-        console.log(`✅ Loaded ${realData.regionalSummary.length} regional summaries`);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Loaded ${realData.regionalSummary.length} regional summaries`);
+        }
       }
       
       if (realData.regionalSummaryBySector) {
         setRegionalSummaryBySector(realData.regionalSummaryBySector);
-        console.log(`✅ Loaded ${realData.regionalSummaryBySector.length} regional sector records`);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Loaded ${realData.regionalSummaryBySector.length} regional sector records`);
+        }
       }
       
       if (realData.cycloneForecast) {
         setCycloneForecast(realData.cycloneForecast);
-        console.log(`✅ Loaded ${realData.cycloneForecast.length} cyclone forecast timesteps`);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Loaded ${realData.cycloneForecast.length} cyclone forecast timesteps`);
+        }
       }
     } catch (error) {
       // Check if this request is still current before showing error
       if (currentVersion !== loadRequestVersion.current) {
-        console.log('🚫 Ignoring error from stale data load');
+        if (process.env.NODE_ENV !== "production") {
+          console.log('Ignoring error from stale data load');
+        }
         return;
       }
       
-      console.error('Error loading real data:', error);
+      if (process.env.NODE_ENV !== "production") {
+        console.error('Error loading real data:', error);
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setDataLoadError(`Failed to load data: ${errorMessage}`);
+      
+      // Clear existing toast timeout
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
       
       // Show error toast
       setToastMessage('Failed to load data. Please try again.');
@@ -303,16 +703,20 @@ export default function Home() {
         setIsLoadingData(false);
       }
     }
-  };
+  }, [selectedCountry]);
 
-  // Load real data on mount
+  // Load real data on mount and when selectedCountry changes
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Show toast notification when region is selected
   useEffect(() => {
     if (selectedRegion) {
+      // Clear existing toast timeout
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
       const regionName = districts.find((d: any) => d.id === selectedRegion)?.name || selectedRegion;
       setToastMessage(`Region selected: ${regionName}`);
       setToastType("info");
@@ -406,31 +810,14 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-white">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
-                  <path d="M2 12h20"></path>
-                </svg>
+                <Globe2 className="w-6 h-6 text-white" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-bold text-slate-100 truncate">
-                  Climate Risk Dashboard
+                  Pacific Disaster Platform
                 </h1>
                 <p className="text-xs text-slate-400 truncate">
-                  {isLoadingData ? "Loading real data..." : 
-                    (() => {
-                      const countryName = selectedCountry ? COUNTRIES[selectedCountry].name : "Global";
-                      const districtInfo = `${countryEvents.length} ${countryEvents.length === 1 ? 'District' : 'Districts'}`;
-                      
-                      if (selectedCountry) {
-                        // Real data with country selected - show event name
-                        return `TC Lola (${countryName}) • Real Data • ${districtInfo}`;
-                      } else {
-                        // Real data without country
-                        return `Real Data • ${events.length} events loaded`;
-                      }
-                    })()
-                  }
+                  {isLoadingData ? "Loading..." : "Tropical Cyclone Lola"}
                 </p>
               </div>
             </div>
@@ -438,16 +825,15 @@ export default function Home() {
           
           {/* Actions Group - Right aligned, consistent spacing */}
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap lg:flex-nowrap justify-end">
-            <TemporalModeToggle
-              currentMode={temporalMode}
-              onModeChange={setTemporalMode}
-            />
-            
             {/* Country Selector Button */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 rounded-lg border border-slate-700/50">
               <button
                 onClick={() => setShowCountrySelector(!showCountrySelector)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                aria-label={selectedCountry ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country` : "Select country"}
+                aria-expanded={showCountrySelector}
+                aria-haspopup="dialog"
+                aria-controls="country-selector-panel"
                 title="Select country"
               >
                 {selectedCountry ? (
@@ -463,14 +849,44 @@ export default function Home() {
                 )}
               </button>
               
-              <button
-                onClick={() => setShowMethodology(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded transition-colors text-xs font-medium border border-blue-500/30"
-                aria-label="View methodology"
+              <a
+                href="/methodology"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                aria-label="View methodology and data documentation"
+                title="Open methodology page in new tab"
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>Info</span>
-              </button>
+                <span>Methodology</span>
+              </a>
+              
+              <ShareLinkButton 
+                mapState={{
+                  center: mapInstance ? { 
+                    lat: mapInstance.getCenter().lat, 
+                    lng: mapInstance.getCenter().lng 
+                  } : undefined,
+                  zoom: mapInstance?.getZoom(),
+                  country: selectedCountry,
+                  region: selectedRegion,
+                  hazards: filters.selectedHazards,
+                  sectors: filters.selectedSectors,
+                  events: filters.selectedEvents,
+                  dateStart: filters.dateRange.start || undefined,
+                  dateEnd: filters.dateRange.end || undefined,
+                  aggregation: filters.aggregationLevel === 'national' ? undefined : filters.aggregationLevel,
+                  mapStyle,
+                  basemap: basemapStyle,
+                  cycloneIndex: currentCycloneIndex,
+                  storyMode,
+                  showSummary,
+                  showFilters,
+                }}
+                compact
+              />
+              
+              <DataQualityIndicator compact />
               
               <ExportButtons
                 events={countryEvents}
@@ -491,35 +907,56 @@ export default function Home() {
             hazards={hazards}
             sectors={sectors}
             onClearFilter={(type, id) => {
-              if (type === 'all') {
-                setFilters({
-                  selectedHazards: [],
-                  selectedSectors: [],
-                  selectedEvents: [],
-                  dateRange: { start: "", end: "" },
-                  aggregationLevel: "district",
-                });
-              } else if (type === 'hazard') {
-                if (!id) {
-                  setFilters({ ...filters, selectedHazards: [] });
-                  return;
+              setFilters((prevFilters) => {
+                if (type === "all") {
+                  return {
+                    selectedHazards: [],
+                    selectedSectors: [],
+                    selectedEvents: [],
+                    dateRange: { start: "", end: "" },
+                    aggregationLevel: "district",
+                  };
                 }
-                setFilters({
-                  ...filters,
-                  selectedHazards: filters.selectedHazards.filter((hazardId) => hazardId !== id),
-                });
-              } else if (type === 'sector') {
-                if (!id) {
-                  setFilters({ ...filters, selectedSectors: [] });
-                  return;
+
+                if (type === "hazard") {
+                  if (!id) {
+                    return {
+                      ...prevFilters,
+                      selectedHazards: [],
+                    };
+                  }
+                  return {
+                    ...prevFilters,
+                    selectedHazards: prevFilters.selectedHazards.filter(
+                      (hazardId) => hazardId !== id
+                    ),
+                  };
                 }
-                setFilters({
-                  ...filters,
-                  selectedSectors: filters.selectedSectors.filter((sectorId) => sectorId !== id),
-                });
-              } else if (type === 'event') {
-                setFilters({ ...filters, selectedEvents: [] });
-              }
+
+                if (type === "sector") {
+                  if (!id) {
+                    return {
+                      ...prevFilters,
+                      selectedSectors: [],
+                    };
+                  }
+                  return {
+                    ...prevFilters,
+                    selectedSectors: prevFilters.selectedSectors.filter(
+                      (sectorId) => sectorId !== id
+                    ),
+                  };
+                }
+
+                if (type === "event") {
+                  return {
+                    ...prevFilters,
+                    selectedEvents: [],
+                  };
+                }
+
+                return prevFilters;
+              });
             }}
             className="w-full"
           />
@@ -565,12 +1002,13 @@ export default function Home() {
             hasCycloneData={!!cycloneForecast}
             cycloneControlsHostRef={cycloneControlsHostRef}
             accessibleDistricts={accessibleDistricts}
+            storyMode={storyMode}
             onDistrictSelect={(districtId) => {
               const region = regionalSummary.find(
                 (r: any) => r.Region_ID === districtId || r.Region === districtId
               );
               if (region) {
-                setSelectedRegion(region.Region);
+                setSelectedRegion(region.Region_ID ?? region.Region);
               }
             }}
           />
@@ -598,38 +1036,24 @@ export default function Home() {
                   )}
                   
                   {/* NEW: Unified Map Legend with data-driven breaks */}
-                  {showMapOverlays && (() => {
-                    // Compute data values for legend breaks from regional summary
-                    const dataValues = regionalSummary
-                      .map((r: any) => {
-                        if (mapStyle === "loss") {
-                          return parseFloat(r.Total_Loss) || 0;
-                        } else {
-                          return parseFloat(r.Max_Wind_Gusts) || 0;
-                        }
-                      })
-                      .filter((v: number) => v > 0);
-                    
-                    return (
-                      <UnifiedMapLegend
-                        mode={mapStyle}
-                        visible={true}
-                        isPanelOpen={isPanelOpen}
-                        hasSelection={hasSelection}
-                        dataSource="PDIE Real Data"
-                        temporalScope={
-                          temporalMode === "current"
-                            ? "Current Timestep"
-                            : temporalMode === "cumulative"
-                            ? "Cumulative"
-                            : "Event Total"
-                        }
-                        dataValues={dataValues}
-                        isLeftPanelOpen={showFilters}
-                        isRightPanelOpen={showSummary}
-                      />
-                    );
-                  })()}
+                  {showMapOverlays && (
+                    <UnifiedMapLegend
+                      mode={mapStyle}
+                      visible={true}
+                      isPanelOpen={isPanelOpen}
+                      hasSelection={hasSelection}
+                      dataSource="PDIE Real Data"
+                      temporalScope="Cumulative"
+                      dataValues={legendDataValues}
+                      isLeftPanelOpen={showFilters}
+                      isRightPanelOpen={showSummary}
+                      showBuildings={!!damagedBuildings}
+                      showRoads={!!damagedRoads}
+                      showCyclone={isCyclonePlaying || currentCycloneIndex > 0}
+                      onZoomToBuildings={handleZoomToBuildings}
+                      onZoomToRoads={handleZoomToRoads}
+                    />
+                  )}
                   
                   {/* Cyclone Animation Timestep Indicator removed to reduce clutter */}
                   
@@ -665,10 +1089,11 @@ export default function Home() {
               isLeftPanelOpen={showFilters}
               isRightPanelOpen={showSummary}
               storyMode={storyMode}
-              storyBeats={storyBeats}
+              storyBeats={stableStoryBeats}
               currentCycloneIndex={currentCycloneIndex}
               onStoryModeChange={setStoryMode}
               onStoryIndexChange={setCurrentCycloneIndex}
+              onMapReady={setMapInstance}
             />
 
             {/* Loading Overlay */}
@@ -723,7 +1148,12 @@ export default function Home() {
 
             {/* Country Selector Overlay */}
             {showCountrySelector && (
-              <div className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)]">
+              <div 
+                id="country-selector-panel"
+                className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)]"
+                role="dialog"
+                aria-label="Country selector"
+              >
                 <div className="relative">
                   <button
                     onClick={() => setShowCountrySelector(false)}
@@ -771,12 +1201,17 @@ export default function Home() {
             sectors={sectors}
             exposureData={exposureData}
             economicDamageData={economicDamageData}
+            sectorEconomicData={sectorEconomicData}
+            assetEconomicData={assetEconomicData}
             filters={filters}
             districts={districts}
             provinces={provinces}
             impactByAssetType={impactByAssetType}
             impactBySector={impactBySector || []}
             regionalSummary={regionalSummary}
+            damagedBuildings={damagedBuildings}
+            damagedRoads={damagedRoads}
+            onZoomToAsset={handleZoomToAsset}
           />
         </div>
 
