@@ -9,6 +9,20 @@
  * - Caching support
  */
 
+// Get basePath from Next.js config
+const BASE_PATH = '/partner2';
+
+/**
+ * Add basePath to URL if needed
+ */
+function getFullUrl(url: string): string {
+  // If URL is relative and starts with /, prepend basePath
+  if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
+    return `${BASE_PATH}${url}`;
+  }
+  return url;
+}
+
 export interface DataLoaderOptions {
   /** Number of retry attempts (default: 0) */
   retries?: number;
@@ -46,10 +60,12 @@ export async function loadData<T>(
     cache = false,
   } = options;
 
+  const fullUrl = getFullUrl(url);
+
   // Check cache first
-  if (cache && dataCache.has(url)) {
+  if (cache && dataCache.has(fullUrl)) {
     return {
-      data: dataCache.get(url) as T,
+      data: dataCache.get(fullUrl) as T,
       error: null,
       cached: true,
     };
@@ -57,12 +73,12 @@ export async function loadData<T>(
 
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; attempt <=retries; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(url, {
+      const response = await fetch(fullUrl, {
         signal: controller.signal,
       });
 
@@ -76,7 +92,7 @@ export async function loadData<T>(
 
       // Cache if requested
       if (cache) {
-        dataCache.set(url, data);
+        dataCache.set(fullUrl, data);
       }
 
       return {
@@ -119,10 +135,12 @@ export async function loadTextData(
     cache = false,
   } = options;
 
+  const fullUrl = getFullUrl(url);
+
   // Check cache first
-  if (cache && dataCache.has(url)) {
+  if (cache && dataCache.has(fullUrl)) {
     return {
-      data: dataCache.get(url) as string,
+      data: dataCache.get(fullUrl) as string,
       error: null,
       cached: true,
     };
@@ -135,7 +153,7 @@ export async function loadTextData(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(url, {
+      const response = await fetch(fullUrl, {
         signal: controller.signal,
       });
 
@@ -149,7 +167,7 @@ export async function loadTextData(
 
       // Cache if requested
       if (cache) {
-        dataCache.set(url, text);
+        dataCache.set(fullUrl, text);
       }
 
       return {
