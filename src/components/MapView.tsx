@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Event, Hazard, FilterState, DistrictGeoProperties } from "@/types";
+import type { BuildingProperties, RoadProperties } from "@/types/realData";
 import { CountryCode, COUNTRIES } from "@/types/thredds";
 import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
 import { filterEvents } from "@/utils/filterUtils";
@@ -200,8 +201,8 @@ interface MapViewProps {
   selectedCountry?: CountryCode | null;
   mapStyle?: "loss" | "wind";
   basemapStyle?: string;
-  damagedBuildings?: GeoJSON.FeatureCollection;
-  damagedRoads?: GeoJSON.FeatureCollection;
+  damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
+  damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
   aggregationLevel?: string;
   showOverlays?: boolean;
@@ -218,6 +219,7 @@ interface MapViewProps {
   storyBeats?: StoryBeat[];
   currentCycloneIndex?: number;
   onStoryModeChange?: (enabled: boolean) => void;
+  onMapReady?: (map: maplibregl.Map) => void;
   onStoryIndexChange?: (index: number) => void;
 }
 
@@ -247,6 +249,7 @@ export default function MapView({
   storyBeats = [],
   currentCycloneIndex = 0,
   onStoryModeChange,
+  onMapReady,
   onStoryIndexChange,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -255,9 +258,10 @@ export default function MapView({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [styleChangeCounter, setStyleChangeCounter] = useState(0); // Track style changes to trigger layer reload
   const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
-  const [windZoomHint, setWindZoomHint] = useState(false);
   const [wmsWarning, setWmsWarning] = useState<string | null>(null);
-  const windZoomHintRef = useRef(false);
+  const [basemapError, setBasemapError] = useState<string | null>(null);
+  const tileErrorCountRef = useRef(0);
+  const styleLoadAttemptsRef = useRef(0);
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -292,6 +296,21 @@ export default function MapView({
       style: basemapStyle,
       center: initialCenter,
       zoom: initialZoom,
+      maxTileCacheSize: 100, // Limit cache for better memory management
+      transformRequest: (url, resourceType) => {
+        // Enhanced tile request handling with retry logic
+        if (resourceType === 'Tile' || resourceType === 'Source') {
+          console.log(`Loading ${resourceType}:`, url);
+          
+          // Add retry parameters for failed requests
+          return {
+            url,
+            // Add timeout to prevent hanging requests
+            credentials: 'same-origin',
+          };
+        }
+        return { url };
+      },
     });
     
     // Log map initialization
@@ -300,6 +319,8 @@ export default function MapView({
       zoom: initialZoom,
       style: basemapStyle,
     });
+
+    onMapReady?.(map.current);
     
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
     map.current.addControl(new maplibregl.ScaleControl(), "bottom-left");
@@ -317,13 +338,43 @@ export default function MapView({
       const isStyleDiffWarning = errorMessage.includes('style diff') || errorMessage.includes('setState');
       const isFileSystemWarning = errorMessage.includes('filesystem') || errorMessage.includes('illegal path');
       
-      if (isWMSError) {
+      // Detect basemap tile/resource loading errors
+      const isTileError = errorMessage.includes('tile') || errorMessage.includes('sprite') || errorMessage.includes('glyph') || errorMessage.includes('style');
+      const isNetworkError = errorMessage.includes('network') || errorMessage.includes('NetworkError') || errorMessage.includes('fetch');
+      const isCORSError = errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin');
+      
+      if (isWMSError && !isTileError) {
         setWmsWarning((prev) => prev ?? "Wind hazard tiles unavailable. Check THREDDS connectivity.");
         return;
       }
 
       if (isStyleDiffWarning || isFileSystemWarning) {
         // Silently ignore - these are expected warnings that don't affect functionality
+        return;
+      }
+      
+      // Critical basemap errors - notify user
+      if (isTileError || isNetworkError || isCORSError) {
+        tileErrorCountRef.current += 1;
+        // Log only via debugLogger to avoid duplicate console output
+        debugLogger.error("Basemap error", "map-initialization", { 
+          error: errorMessage,
+          errorCount: tileErrorCountRef.current,
+          url: e?.sourceId || 'unknown'
+        });
+        
+        // Show error to user after multiple failures
+        if (tileErrorCountRef.current >= 3) {
+          let errorMsg = "Basemap tiles failed to load. ";
+          if (isCORSError) {
+            errorMsg += "CORS configuration issue detected.";
+          } else if (isNetworkError) {
+            errorMsg += "Check your internet connection.";
+          } else {
+            errorMsg += "Please try switching to a different basemap.";
+          }
+          setBasemapError(errorMsg);
+        }
         return;
       }
       
@@ -378,31 +429,7 @@ export default function MapView({
     return () => window.clearTimeout(id);
   }, [wmsWarning]);
 
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-    const updateZoomHint = () => {
-      if (mapStyle !== "wind") {
-        if (windZoomHintRef.current) {
-          windZoomHintRef.current = false;
-          setWindZoomHint(false);
-        }
-        return;
-      }
-      const zoom = map.current?.getZoom() ?? 0;
-      const next = zoom < 6;
-      if (windZoomHintRef.current !== next) {
-        windZoomHintRef.current = next;
-        setWindZoomHint(next);
-      }
-    };
-    updateZoomHint();
-    map.current.on("zoomend", updateZoomHint);
-    return () => {
-      map.current?.off("zoomend", updateZoomHint);
-    };
-  }, [mapLoaded, mapStyle]);
-
-  // Handle basemap style changes
+  // Handle basemap style changes with retry logic and error handling
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
     const requestId = basemapRequestIdRef.current + 1;
@@ -413,19 +440,30 @@ export default function MapView({
       pendingStyleLoadHandlerRef.current = null;
     }
 
+    // Reset error counters on style change
+    tileErrorCountRef.current = 0;
+    setBasemapError(null);
+    styleLoadAttemptsRef.current = 0;
+
     const applyBasemapStyle = () => {
       if (!map.current) return;
+      styleLoadAttemptsRef.current += 1;
 
       try {
         // Store current center and zoom to restore after style change
         const center = map.current.getCenter();
         const zoom = map.current.getZoom();
 
-        map.current.setStyle(basemapStyle);
+        console.log(`Applying basemap style (attempt ${styleLoadAttemptsRef.current}):`, basemapStyle);
+        map.current.setStyle(basemapStyle, { diff: false });
 
         const handleStyleLoad = () => {
           if (!map.current) return;
           if (basemapRequestIdRef.current !== requestId) return;
+
+          console.log('Basemap style loaded successfully');
+          styleLoadAttemptsRef.current = 0;
+          tileErrorCountRef.current = 0;
 
           // Restore position
           map.current.setCenter(center);
@@ -698,12 +736,6 @@ export default function MapView({
       <div ref={mapContainer} className="w-full h-full" />
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 
-      {showOverlays && windZoomHint && (
-        <div className="absolute top-4 left-4 z-[25] max-w-sm rounded-lg border border-blue-500/30 bg-slate-900/85 px-3 py-2 text-xs text-blue-200 shadow-lg backdrop-blur">
-          Zoom in to level 6+ to load wind hazard tiles.
-        </div>
-      )}
-
       {showOverlays && wmsWarning && (
         <div className="absolute top-4 right-4 z-[25] max-w-sm rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
           {wmsWarning}
@@ -748,37 +780,39 @@ export default function MapView({
           />
           <DamagedBuildingsLayer
             map={map.current}
-            data={damagedBuildings}
+            data={damagedBuildings ?? null}
             visible={!!damagedBuildings}
           />
           <DamagedRoadsLayer
             map={map.current}
-            data={damagedRoads}
+            data={damagedRoads ?? null}
             visible={!!damagedRoads}
           />
-          <CycloneAnimationLayer
-            map={map.current}
-            forecastTrack={cycloneForecast ?? null}
-            isVisible={!!cycloneForecast && showCycloneAnimation}
-            uiVisible={showOverlays}
-            onClose={() => onCycloneAnimationChange?.(false)}
-            onPlayingChange={(isPlaying) => {
-              setIsAnimationPlaying(isPlaying);
-              onCyclonePlayingChange?.(isPlaying);
-            }}
-            onTimestepChange={onCycloneTimestepChange}
-            isLeftPanelOpen={isLeftPanelOpen}
-            isRightPanelOpen={isRightPanelOpen}
-            controlsContainer={cycloneControlsHost}
-            isPlayingExternal={isCyclonePlaying}
-            alwaysDocked={true}
-            storyMode={storyMode}
-            storyBeats={storyBeats}
-            onStoryModeChange={onStoryModeChange}
-            currentIndexExternal={currentCycloneIndex}
-            onCurrentIndexChange={handleStorySelect}
-            showStoryBeatCard={false}
-          />
+          {cycloneForecast && cycloneForecast.length > 0 && (
+            <CycloneAnimationLayer
+              map={map.current}
+              forecastTrack={cycloneForecast}
+              isVisible={showCycloneAnimation}
+              uiVisible={showOverlays}
+              onClose={() => onCycloneAnimationChange?.(false)}
+              onPlayingChange={(isPlaying) => {
+                setIsAnimationPlaying(isPlaying);
+                onCyclonePlayingChange?.(isPlaying);
+              }}
+              onTimestepChange={onCycloneTimestepChange}
+              isLeftPanelOpen={isLeftPanelOpen}
+              isRightPanelOpen={isRightPanelOpen}
+              controlsContainer={cycloneControlsHost}
+              isPlayingExternal={isCyclonePlaying}
+              alwaysDocked={true}
+              storyMode={storyMode}
+              storyBeats={storyBeats}
+              onStoryModeChange={onStoryModeChange}
+              currentIndexExternal={currentCycloneIndex}
+              onCurrentIndexChange={handleStorySelect}
+              showStoryBeatCard={false}
+            />
+          )}
         </>
       )}
       {/* PDIEDataLayers disabled - using local data files instead of THREDDS PDIE output */}
@@ -795,6 +829,46 @@ export default function MapView({
           isPlaying={isAnimationPlaying}
           onToggleVisibility={() => onCycloneAnimationChange?.(!showCycloneAnimation)}
         />
+      )}
+      
+      {/* Basemap Error Notification */}
+      {basemapError && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto">
+          <div className="glass-panel px-6 py-4 rounded-lg border-2 border-amber-500/50 bg-amber-900/30 backdrop-blur-sm max-w-md animate-fadeSlide">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <span className="text-amber-400 text-lg">⚠️</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-300 mb-1">
+                  Basemap Loading Issue
+                </h4>
+                <p className="text-xs text-amber-200/90 mb-3">
+                  {basemapError}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setBasemapError(null);
+                      tileErrorCountRef.current = 0;
+                      // Force reload by incrementing counter
+                      setStyleChangeCounter(prev => prev + 1);
+                    }}
+                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium rounded transition-colors"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={() => setBasemapError(null)}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

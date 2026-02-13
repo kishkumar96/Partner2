@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
 import { createLossColorExpression, createWindColorExpression, LAYER_OPACITY } from "@/utils/colorSystem";
 import { debugLogger } from "@/utils/debugLogger";
+import { loadGeoJSON } from "@/utils/dataLoader";
 
 interface RegionalImpactsLayerProps {
   map: MapLibreMap | null;
@@ -24,19 +25,19 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
       try {
         debugLogger.info('Loading regional impacts layer', 'map-source');
 
-        // Load both regional impacts and sector-specific data
-        const [response, sectorResponse] = await Promise.all([
-          fetch('/regional-impacts.geojson'),
-          fetch('/regional-impacts-by-sector.geojson')
+        // Load both regional impacts and sector-specific data using cached loader
+        const [regionalResult, sectorResult] = await Promise.all([
+          loadGeoJSON('/regional-impacts.geojson'),
+          loadGeoJSON('/regional-impacts-by-sector.geojson')
         ]);
         
-        if (!response.ok) {
+        if (!regionalResult.data) {
           debugLogger.warn('Could not load regional impacts data', 'map-source');
           return;
         }
 
-        const geojson = await response.json();
-        const sectorGeojson = sectorResponse.ok ? await sectorResponse.json() : null;
+        const geojson = regionalResult.data;
+        const sectorGeojson = sectorResult.data || null;
         const sourceId = 'regional-impacts';
         const fillLayerId = 'regional-impacts-fill';
         const lineLayerId = 'regional-impacts-line';
@@ -90,30 +91,31 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
         const lossColorExpression = createLossColorExpression();
         const windColorExpression = createWindColorExpression();
 
-        // Insert before interactive layers (damaged buildings/roads) to keep proper order
-        let beforeId: string | undefined = undefined;
-        if (map.getLayer('damaged-buildings-layer')) {
-          beforeId = 'damaged-buildings-layer';
-        } else if (map.getLayer('damaged-buildings-clusters')) {
-          beforeId = 'damaged-buildings-clusters';  
-        } else if (map.getLayer('damaged-roads-layer')) {
-          beforeId = 'damaged-roads-layer';
-        } else if (map.getLayer('cyclone-forecast-track-line')) {
-          beforeId = 'cyclone-forecast-track-line';
-        }
+        // Regional polygons should render BELOW buildings and roads
+        // Buildings/roads will insert themselves before symbol layers
+        // So we don't need a beforeId here - regional impacts render first (lowest z-index)
+        const beforeId: string | undefined = undefined;
 
         // Add fill layer for regions with dynamic color based on mapStyle
+        // Both modes optimized for maximum building/road visibility underneath
+        // Wind mode: Reduced from 0.45 to 0.28 to prevent obscuring point data
         map.addLayer({
           id: fillLayerId,
           type: "fill",
           source: sourceId,
           paint: {
             "fill-color": mapStyle === "wind" ? windColorExpression : lossColorExpression,
-            "fill-opacity": [
-              "case",
-              ["==", ["get", "Region.Region"], selectedRegion || ""], 0.75, // Selected region more opaque
-              LAYER_OPACITY.regional.fill // Default opacity from unified system (0.5)
-            ],
+            "fill-opacity": mapStyle === "wind" 
+              ? [ // Wind mode: balanced visibility (20-30% recommended range)
+                  "case",
+                  ["==", ["get", "Region.Region"], selectedRegion || ""], 0.60, // Selected region (reduced from 0.65)
+                  0.28 // Base opacity reduced from 0.45 → buildings clearly visible
+                ]
+              : [ // Loss mode: already optimal transparency
+                  "case",
+                  ["==", ["get", "Region.Region"], selectedRegion || ""], 0.55, // Selected region more opaque
+                  0.15 // Very transparent so buildings show clearly
+                ],
           },
         }, beforeId);
 
@@ -128,6 +130,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
         });
 
         // Add outline layer with selection highlighting
+        // In wind mode, use brighter outlines to complement vibrant wind colors
         map.addLayer({
           id: lineLayerId,
           type: "line",
@@ -136,14 +139,14 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
             "line-color": [
               "case",
               ["==", ["get", "Region.Region"], selectedRegion || ""], "#fbbf24", // Gold outline for selected
-              "#333" // Default black outline
+              mapStyle === "wind" ? "#ffffff" : "#475569" // White outline in wind mode for contrast, gray in loss mode
             ],
             "line-width": [
               "case",
               ["==", ["get", "Region.Region"], selectedRegion || ""], 3, // Thicker line for selected
-              1 // Default width
+              mapStyle === "wind" ? 2 : 1 // Thicker white lines in wind mode
             ],
-            "line-opacity": 0.8,
+            "line-opacity": mapStyle === "wind" ? 0.8 : 0.8, // Strong outlines for clarity
           },
         });
 
@@ -228,7 +231,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
               </h3>
               ${windCategory ? `
                 <div style="background: ${windColor}; color: ${windSpeed >= 88 ? 'white' : '#0f172a'}; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; font-weight: bold;">
-                  🌪️ ${windCategory}
+                  Wind Category: ${windCategory}
                 </div>
               ` : ''}
               <div style="font-size: 12px;">
@@ -257,7 +260,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
             map.getCanvas().style.cursor = '';
           });
 
-          console.log('✅ Loaded regional impacts layer successfully');
+          console.log('Loaded regional impacts layer successfully');
         };
 
         // Check if style is loaded before adding layers
@@ -375,7 +378,7 @@ export default function RegionalImpactsLayer({ map, visible, mapStyle = "loss", 
           ]);
         }
         
-        console.log(`🎨 Switched to ${mapStyle} color scheme`);
+        console.log(`Switched to ${mapStyle} color scheme`);
       }
     } catch (e) {
       console.warn('Error updating map style:', e);

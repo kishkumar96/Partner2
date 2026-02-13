@@ -4,6 +4,11 @@
 
 import { parseCSV } from './csvParser';
 import { loadTextData } from './dataLoader';
+import {
+  getCategoryColor as getThemeCategoryColor,
+  getCategoryLabel as getThemeCategoryLabel,
+} from '@/theme/cycloneScale';
+import { validateForecastTrack, type CycloneForecastRow } from '@/schemas/cycloneForecastSchema';
 
 export interface CycloneForecastPoint {
   time: Date;
@@ -41,49 +46,79 @@ export interface CycloneForecastPoint {
 // CSV parsing now handled by unified parser utility
 
 /**
- * Load cyclone forecast track data
+ * Load cyclone forecast track data with schema validation
+ * Returns validated data with detailed error reporting
  */
 export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[] | null> {
   try {
-    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv');
-    if (!csvText) return null;
+    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv', { cache: true });
+    if (!csvText) {
+      console.error('Failed to load cyclone forecast CSV file');
+      return null;
+    }
 
     const rows = parseCSV(csvText, { convertNaN: true });
     
-    const points: CycloneForecastPoint[] = rows.map((row: any) => ({
-      time: new Date(row['Time[fmt=yyyy-MM-dd\'T\'HH:mm:ss\'Z\']']),
-      timeString: row['Time[fmt=yyyy-MM-dd\'T\'HH:mm:ss\'Z\']'],
-      latitude: parseFloat(row.Latitude),
-      longitude: parseFloat(row.Longitude),
-      category: parseFloat(row.Category),
-      pressure: parseFloat(row.Pressure),
-      meanWind: parseFloat(row.MeanWind),
-      windGust: parseFloat(row.WindGust),
-      uncertainty: parseFloat(row.Uncertainty) || 0,
-      galeRadiusNE: parseFloat(row.NEGaleRadius) || 0,
-      galeRadiusSE: parseFloat(row.SEGaleRadius) || 0,
-      galeRadiusSW: parseFloat(row.SWGaleRadius) || 0,
-      galeRadiusNW: parseFloat(row.NWGaleRadius) || 0,
-      stormRadiusNE: parseFloat(row.NEStormRadius) || 0,
-      stormRadiusSE: parseFloat(row.SEStormRadius) || 0,
-      stormRadiusSW: parseFloat(row.SWStormRadius) || 0,
-      stormRadiusNW: parseFloat(row.NWStormRadius) || 0,
-      hurricaneRadiusNE: parseFloat(row.NEHurricaneRadius) || 0,
-      hurricaneRadiusSE: parseFloat(row.SEHurricaneRadius) || 0,
-      hurricaneRadiusSW: parseFloat(row.SWHurricaneRadius) || 0,
-      hurricaneRadiusNW: parseFloat(row.NWHurricaneRadius) || 0,
-      // Enhanced fields
-      eyeRadius: parseFloat(row.EyeRadius) || 0,
-      eyeRadiusUncertainty: parseFloat(row.UncEyeRadius) || 0,
-      verticalExtent: parseFloat(row.VerticalExtent) || 0,
-      pressureOCI: parseFloat(row.PressureOCI) || 0,
-      radiusOCI: parseFloat(row.RadiusOCI) || 0,
-      dvorakTNumber: parseFloat(row.FinalT) || 0,
-      currentIntensity: parseFloat(row.CurrentIntensity) || 0,
-      p5Wind: parseFloat(row.P5Wind) || 0,
-    })).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
+    // Validate all rows with Zod schema
+    const validationResult = validateForecastTrack(rows);
     
-    console.log(`✅ Loaded ${points.length} cyclone forecast points`);
+    // Log warnings (non-fatal issues) - only in development
+    if (validationResult.warnings && validationResult.warnings.length > 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Cyclone data warnings (${validationResult.warnings.length}):`, 
+          validationResult.warnings.slice(0, 5)); // Show first 5
+      }
+    }
+    
+    // Log errors (parsing failures)
+    if (validationResult.errors && validationResult.errors.length > 0) {
+      console.error(`Cyclone data validation errors (${validationResult.errors.length}):`,
+        validationResult.errors.slice(0, 5)); // Show first 5
+    }
+    
+    // Transform validated rows to CycloneForecastPoint format
+    if (!validationResult.data || validationResult.data.length === 0) {
+      console.error('No valid cyclone forecast points after validation');
+      return null;
+    }
+    
+    const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => ({
+      time: new Date(row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"]),
+      timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
+      latitude: row.Latitude,
+      longitude: row.Longitude,
+      category: row.Category,
+      pressure: row.Pressure,
+      meanWind: row.MeanWind,
+      windGust: row.WindGust,
+      uncertainty: row.Uncertainty,
+      galeRadiusNE: row.NEGaleRadius ?? 0,
+      galeRadiusSE: row.SEGaleRadius ?? 0,
+      galeRadiusSW: row.SWGaleRadius ?? 0,
+      galeRadiusNW: row.NWGaleRadius ?? 0,
+      stormRadiusNE: row.NEStormRadius ?? 0,
+      stormRadiusSE: row.SEStormRadius ?? 0,
+      stormRadiusSW: row.SWStormRadius ?? 0,
+      stormRadiusNW: row.NWStormRadius ?? 0,
+      hurricaneRadiusNE: row.NEHurricaneRadius ?? 0,
+      hurricaneRadiusSE: row.SEHurricaneRadius ?? 0,
+      hurricaneRadiusSW: row.SWHurricaneRadius ?? 0,
+      hurricaneRadiusNW: row.NWHurricaneRadius ?? 0,
+      eyeRadius: row.EyeRadius ?? 0,
+      eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
+      verticalExtent: row.VerticalExtent ?? 0,
+      pressureOCI: row.PressureOCI ?? 0,
+      radiusOCI: row.RadiusOCI ?? 0,
+      dvorakTNumber: row.FinalT ?? 0,
+      currentIntensity: row.CurrentIntensity ?? 0,
+      p5Wind: row.P5Wind ?? 0,
+    }));
+    
+    console.log(`Loaded ${points.length} cyclone forecast points`);
+    if (validationResult.warnings && validationResult.warnings.length > 0) {
+      console.log(`  ⚠️  ${validationResult.warnings.length} warnings (check console for details)`);
+    }
+    
     return points;
   } catch (error) {
     console.error('Error loading cyclone forecast track:', error);
@@ -93,25 +128,16 @@ export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[]
 
 /**
  * Get category color based on cyclone intensity
+ * Re-exported from centralized theme for backwards compatibility
  */
 export function getCategoryColor(category: number): string {
-  // Align with unified wind color scale
-  if (category >= 5) return '#7C3AED'; // Cat 5: Violet
-  if (category >= 4) return '#DC2626'; // Cat 4: Red
-  if (category >= 3) return '#FB923C'; // Cat 3: Orange
-  if (category >= 2) return '#FACC15'; // Cat 2: Yellow
-  if (category >= 1) return '#FDE047'; // Cat 1: Light yellow
-  return '#7DD3FC'; // Tropical Storm: Sky blue
+  return getThemeCategoryColor(category);
 }
 
 /**
  * Get category label
+ * Re-exported from centralized theme for backwards compatibility
  */
 export function getCategoryLabel(category: number): string {
-  if (category >= 5) return 'Category 5';
-  if (category >= 4) return 'Category 4';
-  if (category >= 3) return 'Category 3';
-  if (category >= 2) return 'Category 2';
-  if (category >= 1) return 'Category 1';
-  return 'Tropical Storm';
+  return getThemeCategoryLabel(category);
 }

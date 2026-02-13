@@ -2,7 +2,8 @@
  * Utility to load real data from the project data files
  */
 
-import { Event } from "@/types";
+import { Event, RegionalImpact } from "@/types";
+import type { RealDataLoadResult } from "@/types/realData";
 import { loadCycloneForecastTrack } from "./cycloneAnimationLoader";
 import { parseCSV } from "./csvParser";
 import { loadGeoJSON, loadTextData } from "./dataLoader";
@@ -11,23 +12,23 @@ import { loadGeoJSON, loadTextData } from "./dataLoader";
  * Load cyclone track data from the geojson file
  */
 export async function loadCycloneTrackData() {
-  const { data, error } = await loadGeoJSON('/cyclone-track.geojson');
+  const { data } = await loadGeoJSON('/cyclone-track.geojson', { cache: true });
   return data;
 }
 
 /**
- * Load regional impacts from geojson file
+ * Load regional impacts from geojson file (9.2MB - cached)
  */
 export async function loadRegionalImpacts() {
-  const { data } = await loadGeoJSON('/regional-impacts.geojson');
+  const { data } = await loadGeoJSON('/regional-impacts.geojson', { cache: true });
   return data;
 }
 
 /**
- * Load regional impacts by sector from geojson file
+ * Load regional impacts by sector from geojson file (2.6MB - cached)
  */
 export async function loadRegionalImpactsBySector() {
-  const { data } = await loadGeoJSON('/regional-impacts-by-sector.geojson');
+  const { data } = await loadGeoJSON('/regional-impacts-by-sector.geojson', { cache: true });
   return data;
 }
 
@@ -35,7 +36,7 @@ export async function loadRegionalImpactsBySector() {
  * Load exposure by cluster data
  */
 export async function loadExposureByCluster() {
-  const { data } = await loadGeoJSON('/exposure-by-cluster.geojson');
+  const { data } = await loadGeoJSON('/exposure-by-cluster.geojson', { cache: true });
   return data;
 }
 
@@ -45,7 +46,7 @@ export async function loadExposureByCluster() {
  * Load national summary CSV data
  */
 export async function loadNationalSummary() {
-  const { data: csvText } = await loadTextData('/national-summary.csv');
+  const { data: csvText } = await loadTextData('/national-summary.csv', { cache: true });
   return csvText ? parseCSV(csvText) : null;
 }
 
@@ -53,7 +54,7 @@ export async function loadNationalSummary() {
  * Load impact by asset type CSV data
  */
 export async function loadImpactByAssetType() {
-  const { data: csvText } = await loadTextData('/impact-by-asset-type.csv');
+  const { data: csvText } = await loadTextData('/impact-by-asset-type.csv', { cache: true });
   return csvText ? parseCSV(csvText) : null;
 }
 
@@ -61,7 +62,7 @@ export async function loadImpactByAssetType() {
  * Load impact by sector CSV data
  */
 export async function loadImpactBySector() {
-  const { data: csvText } = await loadTextData('/impact-by-sector.csv');
+  const { data: csvText } = await loadTextData('/impact-by-sector.csv', { cache: true });
   return csvText ? parseCSV(csvText) : null;
 }
 
@@ -69,7 +70,15 @@ export async function loadImpactBySector() {
  * Load regional summary CSV data
  */
 export async function loadRegionalSummary() {
-  const { data: csvText } = await loadTextData('/regional-summary.csv');
+  const { data: csvText } = await loadTextData('/regional-summary.csv', { cache: true });
+  return csvText ? parseCSV(csvText) : null;
+}
+
+/**
+ * Load regional summary by sector CSV data
+ */
+export async function loadRegionalSummaryBySector() {
+  const { data: csvText } = await loadTextData('/regional-summary-by-sector.csv', { cache: true });
   return csvText ? parseCSV(csvText) : null;
 }
 
@@ -114,9 +123,6 @@ function calculateCentroid(geometry: any): { lat: number; lng: number } {
 }
 
 /**
- * Convert regional impacts GeoJSON to event data for the dashboard
- */
-/**
  * Map district ID to province ID based on Vanuatu Admin structure
  */
 function getProvinceIdFromDistrictId(districtId: string): string {
@@ -130,6 +136,97 @@ function getProvinceIdFromDistrictId(districtId: string): string {
   return 'unknown';
 }
 
+/**
+ * Convert regional impacts GeoJSON to regional impact data
+ * This creates RegionalImpact objects, NOT individual events
+ */
+export function convertRegionalImpactsToRegionalImpacts(geojson: any, eventId: string): RegionalImpact[] {
+  if (!geojson || !geojson.features) return [];
+  
+  const regionalImpacts: RegionalImpact[] = geojson.features
+    .filter((feature: any) => {
+      if (!feature || !feature.geometry || !feature.properties) {
+        console.warn('Skipping feature with missing geometry or properties');
+        return false;
+      }
+      return true;
+    })
+    .map((feature: any, index: number) => {
+      const props = feature.properties;
+      const regionName = props['Region.Region'] || `Region ${index + 1}`;
+      const centroid = calculateCentroid(feature.geometry);
+      const regionId = props['Region.ID'] || `region-${index}`;
+      
+      const maxWindGusts = Number(props.Max_Wind_Gusts) || 0;
+      const severity: "low" | "medium" | "high" | "critical" = 
+        maxWindGusts > 200 ? "critical" : 
+        maxWindGusts > 150 ? "high" : 
+        maxWindGusts > 100 ? "medium" : "low";
+      
+      return {
+        id: `${eventId}-${regionId}`,
+        eventId,
+        regionId,
+        regionName,
+        regionType: 'district' as const,
+        location: {
+          lat: centroid.lat,
+          lng: centroid.lng,
+        },
+        severity,
+        affectedPopulation: Number(props.Population_Exposed_To_Any_Hazard) || 0,
+        economicDamage: Number(props.Total_Loss) || 0,
+      } as RegionalImpact;
+    });
+  
+  return regionalImpacts;
+}
+
+/**
+ * Expand events to regional-level entries for backward compatibility
+ * with existing filter/visualization code that expects one entry per region
+ * 
+ * @param events - Array of events (may have nested regionalImpacts)
+ * @returns Expanded array with one entry per regional impact
+ */
+export function expandEventsToRegionalEntries(events: Event[]): Event[] {
+  const expandedEvents: Event[] = [];
+  
+  events.forEach(event => {
+    if (event.regionalImpacts && event.regionalImpacts.length > 0) {
+      // Create event-like entry for each regional impact
+      event.regionalImpacts.forEach(ri => {
+        expandedEvents.push({
+          ...event,
+          id: ri.id,
+          name: `${event.name} - ${ri.regionName}`,
+          districtId: ri.regionId,
+          provinceId: getProvinceIdFromDistrictId(ri.regionId),
+          sectorId: 'Infrastructure', // Default sector
+          affectedPopulation: ri.affectedPopulation,
+          economicDamage: ri.economicDamage,
+          location: ri.location,
+          severity: ri.severity,
+          // Keep the aggregated totals for reference
+          totalAffectedPopulation: ri.affectedPopulation,
+          totalEconomicDamage: ri.economicDamage,
+          affectedRegions: 1,
+        } as Event);
+      });
+    } else {
+      // No regional data, use event as-is
+      expandedEvents.push(event);
+    }
+  });
+  
+  return expandedEvents;
+}
+
+/**
+ * DEPRECATED: Old function for backward compatibility
+ * Convert regional impacts GeoJSON to event data for the dashboard
+ * @deprecated Use convertRegionalImpactsToRegionalImpacts and create single event instead
+ */
 export function convertRegionalImpactsToEvents(geojson: any): Event[] {
   if (!geojson || !geojson.features) return [];
   
@@ -163,6 +260,9 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
         severity: props.Max_Wind_Gusts > 200 ? "critical" : props.Max_Wind_Gusts > 150 ? "high" : props.Max_Wind_Gusts > 100 ? "medium" : "low",
         affectedPopulation: Number(props.Population_Exposed_To_Any_Hazard) || 0,
         economicDamage: Number(props.Total_Loss) || 0,
+        totalAffectedPopulation: Number(props.Population_Exposed_To_Any_Hazard) || 0,
+        totalEconomicDamage: Number(props.Total_Loss) || 0,
+        affectedRegions: 1,
         countryCode: "VU", // All current data is for Vanuatu
       } as Event;
     });
@@ -223,6 +323,9 @@ export function convertRegionalImpactsBySectorToEvents(geojson: any): Event[] {
           severity,
           affectedPopulation: exposedBuildings * 4, // Rough estimate: 4 people per building
           economicDamage: loss,
+          totalAffectedPopulation: exposedBuildings * 4,
+          totalEconomicDamage: loss,
+          affectedRegions: 1,
           countryCode: "VU",
         } as Event);
       }
@@ -298,14 +401,16 @@ function processAssetExposureData(exposureByCluster: any) {
 /**
  * Load all real data for the dashboard
  */
-export async function loadAllRealData() {
-  console.log('📊 Loading real data from files...');
+export async function loadAllRealData(): Promise<RealDataLoadResult> {
+  if (process.env.NODE_ENV !== "production") {
+    console.log('Loading real data from files...');
+  }
   
   const [
     cycloneTrack,
     cycloneForecast,
     regionalImpacts,
-    regionalImpactsBySectorData,
+    regionalImpactsBySectorGeoJSON,
     exposureByCluster,
     nationalSummary,
     impactByAsset,
@@ -318,7 +423,7 @@ export async function loadAllRealData() {
     loadCycloneTrackData(),
     loadCycloneForecastTrack(),
     loadRegionalImpacts(),
-    loadRegionalImpactsBySector(),
+    loadRegionalImpactsBySector(), // Load sector-specific regional data
     loadExposureByCluster(),
     loadNationalSummary(),
     loadImpactByAssetType(),
@@ -329,105 +434,187 @@ export async function loadAllRealData() {
     loadDamagedRoads()
   ]);
   
-  // Convert regional impacts by sector to sector-specific events
-  const events = regionalImpactsBySectorData 
-    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorData) 
+  // Create a SINGLE event for TC Lola (the actual cyclone event)
+  const tcLolaEventId = 'tc-lola-2024';
+  
+  // Convert regional impacts to RegionalImpact objects
+  const regionalImpactsData = regionalImpacts
+    ? convertRegionalImpactsToRegionalImpacts(regionalImpacts, tcLolaEventId)
+    : [];
+  
+  // Calculate national aggregated statistics from regional impacts
+  const totalAffectedPopulation = regionalImpactsData.reduce((sum, ri) => sum + ri.affectedPopulation, 0);
+  const totalEconomicDamage = regionalImpactsData.reduce((sum, ri) => sum + ri.economicDamage, 0);
+  const affectedRegions = regionalImpactsData.length;
+  
+  // Determine overall severity from regional impacts
+  const criticalCount = regionalImpactsData.filter(ri => ri.severity === 'critical').length;
+  const highCount = regionalImpactsData.filter(ri => ri.severity === 'high').length;
+  const overallSeverity: "low" | "medium" | "high" | "critical" = 
+    criticalCount > 0 ? 'critical' :
+    highCount > affectedRegions / 2 ? 'high' :
+    highCount > 0 ? 'medium' : 'low';
+  
+  // Create the single TC Lola event
+  const tcLolaEvent: Event = {
+    id: tcLolaEventId,
+    name: 'Tropical Cyclone Lola',
+    date: '2024-01-30',
+    hazardId: 'tropical-cyclone',
+    countryCode: 'VU',
+    totalAffectedPopulation,
+    totalEconomicDamage,
+    affectedRegions,
+    severity: overallSeverity,
+    location: {
+      lat: -17.7333, // Vanuatu center (or could use landfall point)
+      lng: 168.3167,
+    },
+    regionalImpacts: regionalImpactsData,
+  };
+  
+  // Events array now contains only ONE event
+  const events = [tcLolaEvent];
+  
+  // Also create sector-specific events for filtering (backward compatibility)
+  // This allows sector filtering to work correctly
+  const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
+    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON)
     : [];
   
   // Convert CSV data to dashboard format
-  const exposureData = convertToExposureData(regionalSummaryData);
-  const economicDamageData = convertToEconomicDamageData(impactBySector, impactByAsset);
+  // Use regional-summary-by-sector for sector-specific exposure data
+  const exposureData = convertToExposureData(regionalSummaryBySector);
+  
+  // Separate economic data into sector-level and asset-level
+  const sectorEconomicData = convertSectorEconomicData(impactBySector);
+  const assetEconomicData = convertAssetEconomicData(impactByAsset);
   
   // Process asset-level exposure data
   const assetExposureData = processAssetExposureData(exposureByCluster);
   
-  console.log(`✅ Loaded ${events.length} events from real data`);
-  console.log(`✅ Loaded ${exposureData.length} exposure records`);
-  console.log(`✅ Loaded ${economicDamageData.length} economic damage records`);
-  if (assetExposureData) {
-    console.log(`✅ Processed ${assetExposureData.assets.length} individual assets`);
-    console.log(`   - Health Facilities: ${assetExposureData.stats.criticalInfrastructure.healthFacilities}`);
-    console.log(`   - Schools: ${assetExposureData.stats.criticalInfrastructure.schools}`);
-    console.log(`   - Evacuation Centers: ${assetExposureData.stats.criticalInfrastructure.evacuationCenters}`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Loaded ${events.length} event(s) from real data`);
+    console.log(`   - TC Lola: ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`);
+    console.log(`Loaded ${regionalImpactsData.length} regional impacts for TC Lola`);
+    console.log(`Loaded ${exposureData.length} exposure records (sector-specific)`);
+    console.log(`Loaded ${sectorEconomicData.length} sector economic damage records`);
+    console.log(`Loaded ${assetEconomicData.length} asset economic damage records`);
+    if (assetExposureData) {
+      console.log(`Processed ${assetExposureData.assets.length} individual assets`);
+      console.log(`   - Health Facilities: ${assetExposureData.stats.criticalInfrastructure.healthFacilities}`);
+      console.log(`   - Schools: ${assetExposureData.stats.criticalInfrastructure.schools}`);
+      console.log(`   - Evacuation Centers: ${assetExposureData.stats.criticalInfrastructure.evacuationCenters}`);
+    }
   }
   
   return {
     cycloneTrack,
-    cycloneForecast,
+    cycloneForecast: (cycloneForecast as any) || null,
     regionalImpacts,
     exposureByCluster,
-    nationalSummary,
-    impactByAsset,
-    impactBySector,
-    regionalSummary: regionalSummaryData,
-    regionalSummaryBySector,
-    damagedBuildings,
-    damagedRoads,
+    nationalSummary: (nationalSummary || []) as any,
+    impactByAsset: (impactByAsset || []) as any,
+    impactBySector: (impactBySector || []) as any,
+    regionalSummary: (regionalSummaryData || []) as any,
+    regionalSummaryBySector: (regionalSummaryBySector || []) as any,
+    damagedBuildings: (damagedBuildings as any) || null,
+    damagedRoads: (damagedRoads as any) || null,
     events,
     exposureData,
-    economicDamageData,
+    economicDamageData: [...sectorEconomicData, ...assetEconomicData], // Combined for backward compatibility
+    sectorEconomicData,
+    assetEconomicData,
     assetExposureData,
+    regionalImpactsData, // Add regional impacts to the result
+    sectorSpecificEvents, // Sector-specific events for filtering
   };
 }
 
 /**
- * Convert regional summary CSV to ExposureData format
+ * Map asset types to their appropriate sectors
  */
-function convertToExposureData(regionalSummary: any): any[] {
-  if (!regionalSummary || !Array.isArray(regionalSummary)) return [];
+function mapAssetToSector(assetType: string): string {
+  const assetSectorMap: Record<string, string> = {
+    'School': 'Education',
+    'Hospital': 'Public',
+    'Health Facility': 'Public',
+    'Health_Facility': 'Public',
+    'Residential Building': 'Residential',
+    'Residential_Building': 'Residential',
+    'House': 'Residential',
+    'Road': 'Infrastructure',
+    'Bridge': 'Infrastructure',
+    'Port': 'Infrastructure',
+    'Airport': 'Infrastructure',
+    'Power_Station': 'Infrastructure',
+    'Water_Treatment': 'Infrastructure',
+    'Commercial': 'Productive',
+    'Office': 'Productive',
+    'Factory': 'Productive',
+    'Farm': 'Productive',
+  };
+  return assetSectorMap[assetType] || 'Other';
+}
+
+/**
+ * Convert regional summary by sector CSV to ExposureData format
+ * Uses sector-specific data for proper filtering
+ */
+function convertToExposureData(regionalSummaryBySector: any): any[] {
+  if (!regionalSummaryBySector || !Array.isArray(regionalSummaryBySector)) return [];
   
-  return regionalSummary.map((row, index) => ({
+  return regionalSummaryBySector.map((row, index) => ({
     id: `exposure-${index}`,
     hazardId: 'tropical-cyclone',
-    sectorId: 'all', // We can parse this from region data if needed
+    sectorId: row.Sector || 'Unknown',
+    region: row.Region || 'Unknown',
     population: Number(row.Population_Exposed_To_Any_Hazard) || 0,
     assets: Number(row.Total_Exposed_Value_To_Any_Hazard) || 0,
     infrastructure: Number(row.Exposed_Infrastructure) || 0,
-    region: row.Region || 'Unknown',
+    buildingCount: Number(row.Number_Exposed_Buildings) || 0,
   }));
 }
 
 /**
- * Convert impact by sector/asset CSV to EconomicDamageData format
+ * Convert impact by sector CSV to EconomicDamageData format (sector-level)
  */
-function convertToEconomicDamageData(impactBySector: any, impactByAsset: any): any[] {
-  const damageData: any[] = [];
+function convertSectorEconomicData(impactBySector: any): any[] {
+  if (!impactBySector || !Array.isArray(impactBySector)) return [];
   
-  // Process sector data
-  if (impactBySector && Array.isArray(impactBySector)) {
-    impactBySector.forEach((row, index) => {
-      damageData.push({
-        id: `damage-sector-${index}`,
-        hazardId: 'tropical-cyclone',
-        sectorId: row.Sector || 'Unknown', // Use actual sector name from data
-        directLoss: Number(row.Total_Wind_Loss) || 0,
-        indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
-        totalLoss: Number(row.Total_Loss) || 0,
-        year: 2024, // TC Lola event
-        sector: row.Sector || 'Unknown',
-        buildingCount: Number(row.Number_Exposed_Buildings) || 0,
-      });
-    });
-  }
+  return impactBySector.map((row, index) => ({
+    id: `damage-sector-${index}`,
+    hazardId: 'tropical-cyclone',
+    sectorId: row.Sector || 'Unknown',
+    region: row.Region || 'National',
+    directLoss: Number(row.Total_Wind_Loss) || 0,
+    indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
+    totalLoss: Number(row.Total_Loss) || 0,
+    buildingCount: Number(row.Number_Damaged_Buildings) || Number(row.Number_Exposed_Buildings) || 0,
+    year: 2023, // TC Lola actual event date: October 2023
+    eventId: 'tc-lola-2023',
+    sector: row.Sector || 'Unknown',
+  }));
+}
+
+/**
+ * Convert impact by asset type CSV to AssetDamageData format (asset-level)
+ */
+function convertAssetEconomicData(impactByAsset: any): any[] {
+  if (!impactByAsset || !Array.isArray(impactByAsset)) return [];
   
-  // Process asset type data
-  if (impactByAsset && Array.isArray(impactByAsset)) {
-    impactByAsset.forEach((row, index) => {
-      damageData.push({
-        id: `damage-asset-${index}`,
-        hazardId: 'tropical-cyclone',
-        sectorId: 'Infrastructure',
-        directLoss: Number(row.Total_Wind_Loss) || 0,
-        indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
-        totalLoss: Number(row.Total_Loss) || 0,
-        year: 2024, // TC Lola event
-        assetType: row.Asset || 'Unknown',
-        assetCount: Number(row.Number_Exposed) || 0,
-      });
-    });
-  }
-  
-  return damageData;
+  return impactByAsset.map((row, index) => ({
+    id: `damage-asset-${index}`,
+    hazardId: 'tropical-cyclone',
+    assetType: row.Asset || 'Unknown',
+    sectorId: mapAssetToSector(row.Asset || 'Unknown'), // Correct sector mapping
+    assetCount: Number(row.Number_Damaged) || Number(row.Number_Exposed) || 0,
+    directLoss: Number(row.Total_Wind_Loss) || 0,
+    indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
+    totalLoss: Number(row.Total_Loss) || 0,
+    year: 2023, // TC Lola actual event date
+    eventId: 'tc-lola-2023',
+  }));
 }
 
 /**
@@ -483,28 +670,21 @@ export function processWindIntensityData(nationalSummary: any): any {
 }
 
 /**
- * Load damaged buildings from geojson file
+ * Load damaged buildings from geojson file (35MB - LARGE FILE - cached)
  */
 export async function loadDamagedBuildings() {
-  const { data } = await loadGeoJSON('/damaged-buildings.geojson');
+  const { data } = await loadGeoJSON('/damaged-buildings.geojson', { cache: true });
   return data;
 }
 
 /**
- * Load damaged roads from geojson file
+ * Load damaged roads from geojson file (cached)
  */
 export async function loadDamagedRoads() {
-  const { data } = await loadGeoJSON('/damaged-roads.geojson');
+  const { data } = await loadGeoJSON('/damaged-roads.geojson', { cache: true });
   return data;
 }
 
 /**
  * Load regional summary by sector CSV data
  */
-/**
- * Load regional summary by sector CSV data
- */
-export async function loadRegionalSummaryBySector() {
-  const { data: csvText } = await loadTextData('/regional-summary-by-sector.csv');
-  return csvText ? parseCSV(csvText) : null;
-}
