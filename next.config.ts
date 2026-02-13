@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Base path for subdirectory deployment
+  basePath: '/partner2',
+  
   // Production optimizations
   reactStrictMode: true,
   poweredByHeader: false,
