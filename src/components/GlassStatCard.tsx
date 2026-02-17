@@ -1,22 +1,22 @@
-"use client";
+'use client';
 
-import React from "react";
-import MetricTooltip from "./MetricTooltip";
+import React from 'react';
+import MetricTooltip from './MetricTooltip';
 
-type Severity = "danger" | "warning" | "caution" | "normal" | "success";
+type Severity = 'danger' | 'warning' | 'caution' | 'normal' | 'success';
 
 function getSeverityColor(severity: Severity) {
   switch (severity) {
-    case "danger":
-      return "text-red-500"; // Semantic: catastrophic/severe
-    case "warning":
-      return "text-orange-500"; // Semantic: high risk
-    case "caution":
-      return "text-yellow-500"; // Semantic: moderate
-    case "success":
-      return "text-green-500"; // Semantic: safe/minimal
+    case 'danger':
+      return 'text-red-500'; // Semantic: catastrophic/severe
+    case 'warning':
+      return 'text-orange-500'; // Semantic: high risk
+    case 'caution':
+      return 'text-yellow-500'; // Semantic: moderate
+    case 'success':
+      return 'text-green-500'; // Semantic: safe/minimal
     default:
-      return "text-blue-400"; // UI element color
+      return 'text-blue-400'; // UI element color
   }
 }
 
@@ -39,10 +39,10 @@ export function GlassStatCard(props: {
     unit: string;
     temporalScope: string;
     methodology: string;
-    classification?: "Hazard" | "Exposure" | "Impact";
+    classification?: 'Hazard' | 'Exposure' | 'Impact';
   };
 }) {
-  const { title, value, subtitle, badge, severity = "danger", icon, metricInfo } = props;
+  const { title, value, subtitle, badge, severity = 'danger', icon, metricInfo } = props;
 
   return (
     <div className="bg-slate-800 rounded-lg p-3 border border-slate-700/50 transition-all duration-200 hover:bg-slate-800/80">
@@ -50,14 +50,10 @@ export function GlassStatCard(props: {
         <div className="min-w-0 flex-1">
           {/* Title with improved contrast - 12px, muted */}
           <div className="flex items-center gap-2">
-            {icon && (
-              <div className="shrink-0 text-slate-500">{icon}</div>
-            )}
+            {icon && <div className="shrink-0 text-slate-500">{icon}</div>}
 
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-              {title}
-            </p>
-            
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{title}</p>
+
             {metricInfo && (
               <MetricTooltip
                 unit={metricInfo.unit}
@@ -85,18 +81,14 @@ export function GlassStatCard(props: {
       <div className="mb-1">
         <div
           className={`text-xl font-bold tabular-nums ${getSeverityColor(severity)}`}
-          style={{ letterSpacing: "-0.01em", lineHeight: 1.2 }}
+          style={{ letterSpacing: '-0.01em', lineHeight: 1.2 }}
         >
           {formatCompactCurrency(value)}
         </div>
       </div>
 
       {/* Subtitle - 12px, muted */}
-      {subtitle && (
-        <p className="text-xs text-slate-500 font-normal">
-          {subtitle}
-        </p>
-      )}
+      {subtitle && <p className="text-xs text-slate-500 font-normal">{subtitle}</p>}
     </div>
   );
 }

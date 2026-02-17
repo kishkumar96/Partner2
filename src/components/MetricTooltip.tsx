@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { HelpCircle } from "lucide-react";
-import { useState } from "react";
+import { HelpCircle } from 'lucide-react';
+import { useState } from 'react';
 
 interface MetricTooltipProps {
   unit: string;
@@ -19,9 +19,9 @@ export default function MetricTooltip({
   const [showTooltip, setShowTooltip] = useState(false);
 
   const classificationColors = {
-    Hazard: "text-red-300 bg-red-500/20",
-    Exposure: "text-orange-300 bg-orange-500/20",
-    Impact: "text-blue-300 bg-blue-500/20",
+    Hazard: 'text-red-300 bg-red-500/20',
+    Exposure: 'text-orange-300 bg-orange-500/20',
+    Impact: 'text-blue-300 bg-blue-500/20',
   };
 
   return (
@@ -43,12 +43,14 @@ export default function MetricTooltip({
             <div className="space-y-2 text-xs">
               {classification && (
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-700/60">
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${classificationColors[classification as keyof typeof classificationColors]}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide ${classificationColors[classification as keyof typeof classificationColors]}`}
+                  >
                     {classification}
                   </span>
                 </div>
               )}
-              
+
               <div>
                 <span className="font-semibold text-slate-100">Unit:</span>
                 <div className="text-slate-300 mt-0.5">{unit}</div>

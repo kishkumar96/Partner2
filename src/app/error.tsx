@@ -17,7 +17,7 @@ export default function Error({
   useEffect(() => {
     // Log the error to an error reporting service
     console.error('Application error:', error);
-    
+
     // You can send to error tracking service here
     // logErrorToService(error);
   }, [error]);
@@ -28,27 +28,19 @@ export default function Error({
         <div className="inline-flex items-center justify-center p-4 bg-orange-500/20 rounded-full mb-6">
           <AlertTriangle className="w-12 h-12 text-orange-400" />
         </div>
-        
-        <h2 className="text-3xl font-bold text-white mb-3">
-          Oops! Something went wrong
-        </h2>
-        
+
+        <h2 className="text-3xl font-bold text-white mb-3">Oops! Something went wrong</h2>
+
         <p className="text-slate-400 mb-6">
           We're sorry for the inconvenience. The application encountered an unexpected error.
         </p>
 
         {process.env.NODE_ENV === 'development' && error.message && (
           <div className="mb-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700/50 text-left">
-            <p className="text-sm font-semibold text-red-400 mb-2">
-              Error Message:
-            </p>
-            <p className="text-sm text-slate-300 font-mono">
-              {error.message}
-            </p>
+            <p className="text-sm font-semibold text-red-400 mb-2">Error Message:</p>
+            <p className="text-sm text-slate-300 font-mono">{error.message}</p>
             {error.digest && (
-              <p className="text-xs text-slate-500 mt-2">
-                Error ID: {error.digest}
-              </p>
+              <p className="text-xs text-slate-500 mt-2">Error ID: {error.digest}</p>
             )}
           </div>
         )}

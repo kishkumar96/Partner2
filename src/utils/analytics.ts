@@ -13,9 +13,8 @@ export type AnalyticsEvent = {
 };
 
 // Check if analytics is enabled
-const isAnalyticsEnabled = 
-  typeof window !== 'undefined' && 
-  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
+const isAnalyticsEnabled =
+  typeof window !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true';
 
 /**
  * Initialize analytics (Google Analytics, Plausible, etc.)
@@ -77,13 +76,7 @@ export const trackPageView = (url: string) => {
 /**
  * Track custom event
  */
-export const trackEvent = ({
-  action,
-  category,
-  label,
-  value,
-  metadata,
-}: AnalyticsEvent) => {
+export const trackEvent = ({ action, category, label, value, metadata }: AnalyticsEvent) => {
   if (!isAnalyticsEnabled) return;
 
   // Google Analytics

@@ -1,8 +1,16 @@
-"use client";
+'use client';
 
-import { TrendingUp, Users, DollarSign, Home, AlertTriangle, MapPin, ChevronRight } from "lucide-react";
-import { formatCurrency, formatNumber } from "@/utils/formatters";
-import { AggregatedEventData } from "@/types";
+import {
+  TrendingUp,
+  Users,
+  DollarSign,
+  Home,
+  AlertTriangle,
+  MapPin,
+  ChevronRight,
+} from 'lucide-react';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { AggregatedEventData } from '@/types';
 
 interface TopInsight {
   id: string;
@@ -11,7 +19,7 @@ interface TopInsight {
   subtitle?: string;
   icon: any;
   color: string;
-  trend?: "up" | "down" | "neutral";
+  trend?: 'up' | 'down' | 'neutral';
   onClick?: () => void;
 }
 
@@ -20,12 +28,12 @@ interface TopInsightsCardsProps {
   className?: string;
 }
 
-export default function TopInsightsCards({ insights, className = "" }: TopInsightsCardsProps) {
+export default function TopInsightsCards({ insights, className = '' }: TopInsightsCardsProps) {
   if (insights.length === 0) return null;
 
   return (
     <div className={`grid grid-cols-1 gap-3 ${className}`}>
-      {insights.map((insight) => {
+      {insights.map(insight => {
         const IconComponent = insight.icon;
         const isClickable = !!insight.onClick;
 
@@ -35,15 +43,15 @@ export default function TopInsightsCards({ insights, className = "" }: TopInsigh
             onClick={insight.onClick}
             className={`
               relative overflow-hidden rounded-xl border glass-panel p-4 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl min-w-0
-              ${isClickable ? "cursor-pointer hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]" : ""}
+              ${isClickable ? 'cursor-pointer hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]' : ''}
               ${insight.color}
             `}
-            role={isClickable ? "button" : "article"}
+            role={isClickable ? 'button' : 'article'}
             tabIndex={isClickable ? 0 : undefined}
             onKeyDown={
               isClickable
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
+                ? e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       insight.onClick?.();
                     }
@@ -68,14 +76,14 @@ export default function TopInsightsCards({ insights, className = "" }: TopInsigh
                   {insight.trend && (
                     <div
                       className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        insight.trend === "up"
-                          ? "bg-red-500/30 text-red-100"
-                          : insight.trend === "down"
-                          ? "bg-green-500/30 text-green-100"
-                          : "bg-slate-700/40 text-slate-100"
+                        insight.trend === 'up'
+                          ? 'bg-red-500/30 text-red-100'
+                          : insight.trend === 'down'
+                            ? 'bg-green-500/30 text-green-100'
+                            : 'bg-slate-700/40 text-slate-100'
                       }`}
                     >
-                      {insight.trend === "up" ? "↑" : insight.trend === "down" ? "↓" : "→"}
+                      {insight.trend === 'up' ? '↑' : insight.trend === 'down' ? '↓' : '→'}
                     </div>
                   )}
                 </div>
@@ -89,7 +97,7 @@ export default function TopInsightsCards({ insights, className = "" }: TopInsigh
               {/* Value */}
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-slate-100 leading-none break-words">
-                  {typeof insight.value === "number" ? formatNumber(insight.value) : insight.value}
+                  {typeof insight.value === 'number' ? formatNumber(insight.value) : insight.value}
                 </p>
                 {insight.subtitle && (
                   <p className="text-xs text-slate-100/80 font-medium break-words">
@@ -123,20 +131,16 @@ export function createDistrictInsights(
   // Support both aggregated data format (totalEconomicDamage) and raw format (economicDamage)
   const getEconomicDamage = (d: AggregatedEventData) => d.totalEconomicDamage || 0;
   const getAffectedPop = (d: AggregatedEventData) => d.totalAffectedPopulation || 0;
-  const getHighRiskAreas = (d: AggregatedEventData) => d.highRiskAreas || 0;
 
   // Find top districts by various metrics
   const sortedByLoss = [...districts].sort((a, b) => getEconomicDamage(b) - getEconomicDamage(a));
   const sortedByPop = [...districts].sort((a, b) => getAffectedPop(b) - getAffectedPop(a));
-  const sortedByRisk = [...districts].sort((a, b) => getHighRiskAreas(b) - getHighRiskAreas(a));
 
   const topByLoss = sortedByLoss[0];
   const topByPop = sortedByPop[0];
-  const topByRisk = sortedByRisk[0];
 
   const totalLoss = districts.reduce((sum, d) => sum + getEconomicDamage(d), 0);
   const totalPop = districts.reduce((sum, d) => sum + getAffectedPop(d), 0);
-  const totalRiskAreas = districts.reduce((sum, d) => sum + getHighRiskAreas(d), 0);
 
   const insights: TopInsight[] = [];
 
@@ -145,13 +149,13 @@ export function createDistrictInsights(
     const lossValue = getEconomicDamage(topByLoss);
     const lossPercent = totalLoss > 0 ? ((lossValue / totalLoss) * 100).toFixed(1) : '0.0';
     insights.push({
-      id: "top-loss",
-      label: "Highest Economic Loss",
+      id: 'top-loss',
+      label: 'Highest Economic Loss',
       value: formatCurrency(lossValue),
       subtitle: `${topByLoss.name} (${lossPercent}% of total)`,
       icon: DollarSign,
-      color: "border-red-500/40 text-slate-100",
-      trend: "up",
+      color: 'border-red-500/40 text-slate-100',
+      trend: 'up',
       onClick: onDistrictClick ? () => onDistrictClick(topByLoss.id) : undefined,
     });
   }
@@ -161,46 +165,31 @@ export function createDistrictInsights(
     const popValue = getAffectedPop(topByPop);
     const popPercent = totalPop > 0 ? ((popValue / totalPop) * 100).toFixed(1) : '0.0';
     insights.push({
-      id: "top-pop",
-      label: "Most Affected Population",
+      id: 'top-pop',
+      label: 'Most Affected Population',
       value: formatNumber(popValue),
       subtitle: `${topByPop.name} (${popPercent}% of total)`,
       icon: Users,
-      color: "border-orange-500/40 text-slate-100",
-      trend: "up",
+      color: 'border-orange-500/40 text-slate-100',
+      trend: 'up',
       onClick: onDistrictClick ? () => onDistrictClick(topByPop.id) : undefined,
-    });
-  }
-
-  // Top District by High Risk Areas
-  if (topByRisk && getHighRiskAreas(topByRisk) > 0) {
-    const riskValue = getHighRiskAreas(topByRisk);
-    insights.push({
-      id: "top-risk",
-      label: "Most High Risk Areas",
-      value: formatNumber(riskValue),
-      subtitle: `${topByRisk.name} with severe/critical events`,
-      icon: Home,
-      color: "border-blue-500/40 text-slate-100",
-      trend: "up",
-      onClick: onDistrictClick ? () => onDistrictClick(topByRisk.id) : undefined,
     });
   }
 
   // High Risk Districts Count
   const highRiskCount = districts.filter(
-    (d) => getEconomicDamage(d) > 1000000 || getAffectedPop(d) > 1000
+    d => getEconomicDamage(d) > 1000000 || getAffectedPop(d) > 1000
   ).length;
-  
+
   if (highRiskCount > 0) {
     insights.push({
-      id: "high-risk-count",
-      label: "High Risk Districts",
+      id: 'high-risk-count',
+      label: 'High Risk Districts',
       value: highRiskCount,
       subtitle: `${((highRiskCount / districts.length) * 100).toFixed(0)}% of total districts`,
       icon: AlertTriangle,
-      color: "border-yellow-500/40 text-slate-100",
-      trend: "neutral",
+      color: 'border-yellow-500/40 text-slate-100',
+      trend: 'neutral',
     });
   }
 

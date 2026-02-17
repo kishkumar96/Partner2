@@ -1,6 +1,6 @@
 /**
  * RoadsTable - Interactive table of damaged roads with zoom functionality
- * 
+ *
  * Features:
  * - Sortable columns (loss, damage level, type, region)
  * - Search and filter capabilities
@@ -10,13 +10,13 @@
  * - Responsive design
  */
 
-"use client";
+'use client';
 
 import { useCallback, useMemo } from 'react';
 import { Construction, Search, ChevronDown, ChevronUp, MapPin, X } from 'lucide-react';
 import type { RoadAsset } from '@/types/assetTables';
 import { useAssetTableData, transformRoadData } from '@/hooks/useAssetTableData';
-import { ROAD_DAMAGE_COLORS, getRoadDamageColor } from '@/theme/colors';
+import { getRoadDamageColor } from '@/theme/colors';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface RoadsTableProps {
@@ -25,14 +25,51 @@ interface RoadsTableProps {
   maxHeight?: string;
 }
 
-export default function RoadsTable({
-  data,
-  onZoom,
-  maxHeight = '600px',
-}: RoadsTableProps) {
+// Sort indicator component (moved outside to avoid recreation on every render)
+function SortIndicator({
+  columnKey,
+  sortConfig,
+}: {
+  columnKey: keyof RoadAsset;
+  sortConfig: { key: keyof RoadAsset; direction: 'asc' | 'desc' } | null;
+}) {
+  if (sortConfig?.key !== columnKey) {
+    return <ChevronDown className="w-3 h-3 opacity-30" />;
+  }
+  return sortConfig.direction === 'desc' ? (
+    <ChevronDown className="w-3 h-3" />
+  ) : (
+    <ChevronUp className="w-3 h-3" />
+  );
+}
+
+// Damage indicator component (moved outside to avoid recreation on every render)
+function DamageIndicator({ level, loss }: { level: string; loss: number }) {
+  const color = getRoadDamageColor(loss);
+  const widths = {
+    light: '3px',
+    moderate: '5px',
+    heavy: '7px',
+    severe: '9px',
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="h-3 rounded-sm flex-shrink-0"
+        style={{
+          backgroundColor: color,
+          width: widths[level as keyof typeof widths] || '3px',
+        }}
+      />
+      <span className="text-xs capitalize">{level}</span>
+    </div>
+  );
+}
+
+export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsTableProps) {
   // Transform and manage data
   const roads = useMemo(() => transformRoadData(data), [data]);
-  
+
   const {
     data: displayData,
     totalCount,
@@ -49,53 +86,19 @@ export default function RoadsTable({
   } = useAssetTableData<RoadAsset>(roads);
 
   // Handle row click to zoom
-  const handleRowClick = useCallback((road: RoadAsset) => {
-    onZoom(road.coordinates, 15);
-  }, [onZoom]);
-
-  // Render sort indicator
-  const SortIndicator = ({ columnKey }: { columnKey: keyof RoadAsset }) => {
-    if (sortConfig?.key !== columnKey) {
-      return <ChevronDown className="w-3 h-3 opacity-30" />;
-    }
-    return sortConfig.direction === 'desc' ? (
-      <ChevronDown className="w-3 h-3" />
-    ) : (
-      <ChevronUp className="w-3 h-3" />
-    );
-  };
-
-  // Render damage indicator badge
-  const DamageIndicator = ({ level, loss }: { level: string; loss: number }) => {
-    const color = getRoadDamageColor(loss);
-    const widths = {
-      light: '3px',
-      moderate: '5px',
-      heavy: '7px',
-      severe: '9px',
-    };
-    return (
-      <div className="flex items-center gap-2">
-        <div
-          className="h-3 rounded-sm flex-shrink-0"
-          style={{ 
-            backgroundColor: color,
-            width: widths[level as keyof typeof widths] || '3px'
-          }}
-        />
-        <span className="text-xs capitalize">{level}</span>
-      </div>
-    );
-  };
+  const handleRowClick = useCallback(
+    (road: RoadAsset) => {
+      onZoom(road.coordinates, 15);
+    },
+    [onZoom]
+  );
 
   if (!data || roads.length === 0) {
     return (
       <div className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-lg p-8 text-center">
         <Construction className="w-12 h-12 mx-auto mb-3 text-slate-400" />
         <p className="text-slate-300 font-medium">No road damage data available</p>
-        <p className="text-sm text-slate-400 mt-1">
-          Road data will appear here when loaded
-        </p>
+        <p className="text-sm text-slate-400 mt-1">Road data will appear here when loaded</p>
       </div>
     );
   }
@@ -120,10 +123,12 @@ export default function RoadsTable({
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
+              id="roads-search"
+              name="roadsSearch"
               type="text"
               placeholder="Search by ID, region, type..."
               value={filter.searchTerm}
-              onChange={(e) => handleFilterChange({ searchTerm: e.target.value })}
+              onChange={e => handleFilterChange({ searchTerm: e.target.value })}
               className="w-full pl-9 pr-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -132,7 +137,7 @@ export default function RoadsTable({
           {uniqueRegions.length > 1 && (
             <select
               value={filter.region?.[0] || ''}
-              onChange={(e) =>
+              onChange={e =>
                 handleFilterChange({
                   region: e.target.value ? [e.target.value] : undefined,
                 })
@@ -140,7 +145,7 @@ export default function RoadsTable({
               className="px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Regions</option>
-              {uniqueRegions.map((region) => (
+              {uniqueRegions.map(region => (
                 <option key={region} value={region}>
                   {region}
                 </option>
@@ -167,24 +172,31 @@ export default function RoadsTable({
           <thead className="bg-slate-800/80 sticky top-0 z-10 border-b border-white/10">
             <tr>
               <th
+                onClick={() => handleSort('name')}
+                className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-1">
+                  Road Name
+                  <SortIndicator columnKey="name" sortConfig={sortConfig} />
+                </div>
+              </th>
+              <th
                 onClick={() => handleSort('loss')}
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-1">
                   Loss (USD)
-                  <SortIndicator columnKey="loss" />
+                  <SortIndicator columnKey="loss" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-left p-3 text-white/80 font-medium">
-                Damage Level
-              </th>
+              <th className="text-left p-3 text-white/80 font-medium">Damage Level</th>
               <th
                 onClick={() => handleSort('roadType')}
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-1">
                   Road Type
-                  <SortIndicator columnKey="roadType" />
+                  <SortIndicator columnKey="roadType" sortConfig={sortConfig} />
                 </div>
               </th>
               <th
@@ -193,7 +205,7 @@ export default function RoadsTable({
               >
                 <div className="flex items-center gap-1">
                   Surface
-                  <SortIndicator columnKey="surface" />
+                  <SortIndicator columnKey="surface" sortConfig={sortConfig} />
                 </div>
               </th>
               <th
@@ -202,12 +214,10 @@ export default function RoadsTable({
               >
                 <div className="flex items-center gap-1">
                   Region
-                  <SortIndicator columnKey="region" />
+                  <SortIndicator columnKey="region" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-center p-3 text-white/80 font-medium">
-                Actions
-              </th>
+              <th className="text-center p-3 text-white/80 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -219,9 +229,8 @@ export default function RoadsTable({
                   idx % 2 === 0 ? 'bg-white/0' : 'bg-white/[0.02]'
                 }`}
               >
-                <td className="p-3 text-white font-mono">
-                  {formatCurrency(road.loss)}
-                </td>
+                <td className="p-3 text-white/90">{road.name || `Road ${road.id}`}</td>
+                <td className="p-3 text-white font-mono">{formatCurrency(road.loss)}</td>
                 <td className="p-3 text-white/80">
                   <DamageIndicator level={road.damageLevel} loss={road.loss} />
                 </td>
@@ -230,7 +239,7 @@ export default function RoadsTable({
                 <td className="p-3 text-white/80">{road.region}</td>
                 <td className="p-3 text-center">
                   <button
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation();
                       handleRowClick(road);
                     }}
@@ -254,7 +263,7 @@ export default function RoadsTable({
             <span className="text-slate-300">Rows per page:</span>
             <select
               value={pagination.pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              onChange={e => handlePageSizeChange(Number(e.target.value))}
               className="px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value={25}>25</option>
@@ -269,7 +278,7 @@ export default function RoadsTable({
               {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of{' '}
               {pagination.totalItems}
             </span>
-            
+
             <div className="flex gap-1 ml-2">
               <button
                 onClick={() => handlePageChange(pagination.currentPage - 1)}

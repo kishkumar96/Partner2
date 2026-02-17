@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { Wind } from "lucide-react";
+import { Wind } from 'lucide-react';
 
 interface CycloneAnimationToggleProps {
   isVisible: boolean;
@@ -13,7 +13,7 @@ export default function CycloneAnimationToggle({
   isPlaying,
   onToggleVisibility,
 }: CycloneAnimationToggleProps) {
-  const toggleLabel = isVisible ? "Hide cyclone animation" : "Show cyclone animation";
+  const toggleLabel = isVisible ? 'Hide cyclone animation' : 'Show cyclone animation';
   return (
     <button
       type="button"

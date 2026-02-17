@@ -22,7 +22,7 @@ export async function GET(
   { params }: { params: Promise<{ filename: string }> }
 ) {
   const { filename } = await params;
-  
+
   // Security: Only allow specific file types
   if (!filename.endsWith('.geojson') && !filename.endsWith('.csv')) {
     return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
@@ -40,17 +40,15 @@ export async function GET(
 
   // Check for range request (for resumable downloads)
   const range = request.headers.get('range');
-  
+
   // For small files (< 1MB), send directly with compression
   if (fileSize < 1024 * 1024) {
     const content = fs.readFileSync(filePath);
     const compressed = await gzip(content);
-    
+
     return new NextResponse(compressed, {
       headers: {
-        'Content-Type': filename.endsWith('.geojson') 
-          ? 'application/geo+json' 
-          : 'text/csv',
+        'Content-Type': filename.endsWith('.geojson') ? 'application/geo+json' : 'text/csv',
         'Content-Encoding': 'gzip',
         'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
         'Content-Length': compressed.length.toString(),
@@ -67,16 +65,14 @@ export async function GET(
     const chunksize = end - start + 1;
 
     const stream = fs.createReadStream(filePath, { start, end });
-    
+
     return new NextResponse(stream as any, {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize.toString(),
-        'Content-Type': filename.endsWith('.geojson') 
-          ? 'application/geo+json' 
-          : 'text/csv',
+        'Content-Type': filename.endsWith('.geojson') ? 'application/geo+json' : 'text/csv',
         'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
       },
     });
@@ -84,12 +80,10 @@ export async function GET(
 
   // Stream full file in chunks
   const readStream = fs.createReadStream(filePath, { highWaterMark: CHUNK_SIZE });
-  
+
   return new NextResponse(readStream as any, {
     headers: {
-      'Content-Type': filename.endsWith('.geojson') 
-        ? 'application/geo+json' 
-        : 'text/csv',
+      'Content-Type': filename.endsWith('.geojson') ? 'application/geo+json' : 'text/csv',
       'Content-Length': fileSize.toString(),
       'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
       'Accept-Ranges': 'bytes',

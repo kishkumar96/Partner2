@@ -1,4 +1,12 @@
-import { Event, ExposureData, EconomicDamageData, FilterState, District, Province, AggregationLevel } from "@/types";
+import {
+  Event,
+  ExposureData,
+  EconomicDamageData,
+  FilterState,
+  District,
+  Province,
+  AggregationLevel,
+} from '@/types';
 
 /**
  * Aggregated data structure for events grouped by region
@@ -9,7 +17,6 @@ export interface AggregatedEventData {
   totalEvents: number;
   totalAffectedPopulation: number;
   totalEconomicDamage: number;
-  highRiskAreas: number;
 }
 
 /**
@@ -49,15 +56,15 @@ function isValidISODate(dateStr: string): boolean {
  * @returns ISO formatted date string or empty string if invalid
  */
 function normalizeDate(dateStr: string): string {
-  if (!dateStr) return "";
-  
+  if (!dateStr) return '';
+
   // If already in ISO format, return as-is
   if (isValidISODate(dateStr)) return dateStr;
-  
+
   // Try to parse the date
   const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return ""; // Invalid date
-  
+  if (isNaN(date.getTime())) return ''; // Invalid date
+
   // Convert to ISO format (YYYY-MM-DD)
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -72,7 +79,7 @@ function normalizeDate(dateStr: string): string {
  * @returns Filtered array of events
  */
 export function filterEvents(events: Event[], filters: FilterState): Event[] {
-  return events.filter((event) => {
+  return events.filter(event => {
     // Filter by hazards and sectors using shared helpers
     if (!matchesHazardFilter(event.hazardId, filters.selectedHazards)) {
       return false;
@@ -81,9 +88,12 @@ export function filterEvents(events: Event[], filters: FilterState): Event[] {
       return false;
     }
     // Filter by specific events
+    // Also check parentEventId so expanded/regional events (which have regional IDs)
+    // are correctly matched against their master event ID.
     if (
       filters.selectedEvents.length > 0 &&
-      !filters.selectedEvents.includes(event.id)
+      !filters.selectedEvents.includes(event.id) &&
+      !(event.parentEventId && filters.selectedEvents.includes(event.parentEventId))
     ) {
       return false;
     }
@@ -117,7 +127,7 @@ export function filterExposureData(
   exposureData: ExposureData[],
   filters: FilterState
 ): ExposureData[] {
-  return exposureData.filter((exposure) => {
+  return exposureData.filter(exposure => {
     return (
       matchesHazardFilter(exposure.hazardId, filters.selectedHazards) &&
       matchesSectorFilter(exposure.sectorId, filters.selectedSectors)
@@ -135,19 +145,21 @@ export function filterEconomicDamageData(
   economicDamageData: EconomicDamageData[],
   filters: FilterState
 ): EconomicDamageData[] {
-  return economicDamageData.filter((damage) => {
+  return economicDamageData.filter(damage => {
     // Hazard and sector filtering
     if (!matchesHazardFilter(damage.hazardId, filters.selectedHazards)) return false;
     if (!matchesSectorFilter(damage.sectorId, filters.selectedSectors)) return false;
-    
+
     // Date range filtering based on year
     if (filters.dateRange.start || filters.dateRange.end) {
       const dataYear = damage.year;
-      const startYear = filters.dateRange.start ? new Date(filters.dateRange.start).getFullYear() : 0;
+      const startYear = filters.dateRange.start
+        ? new Date(filters.dateRange.start).getFullYear()
+        : 0;
       const endYear = filters.dateRange.end ? new Date(filters.dateRange.end).getFullYear() : 9999;
       if (dataYear < startYear || dataYear > endYear) return false;
     }
-    
+
     return true;
   });
 }
@@ -163,12 +175,9 @@ function computeAggregatedMetrics(events: Event[]): Omit<AggregatedEventData, 'i
       acc.totalEvents += 1;
       acc.totalAffectedPopulation += e.totalAffectedPopulation || 0;
       acc.totalEconomicDamage += e.totalEconomicDamage || 0;
-      if (e.severity === "high" || e.severity === "critical") {
-        acc.highRiskAreas += 1;
-      }
       return acc;
     },
-    { totalEvents: 0, totalAffectedPopulation: 0, totalEconomicDamage: 0, highRiskAreas: 0 }
+    { totalEvents: 0, totalAffectedPopulation: 0, totalEconomicDamage: 0 }
   );
 }
 
@@ -188,16 +197,18 @@ export function aggregateEventsByLevel(
   provinces: Province[],
   includeEmpty: boolean = true
 ): AggregatedEventData[] {
-  if (aggregationLevel === "national") {
+  if (aggregationLevel === 'national') {
     const metrics = computeAggregatedMetrics(events);
-    return [{
-      id: "national",
-      name: "National",
-      ...metrics,
-    }];
-  } else if (aggregationLevel === "province") {
-    const result = provinces.map((province) => {
-      const provinceEvents = events.filter((e) => e.provinceId === province.id);
+    return [
+      {
+        id: 'national',
+        name: 'National',
+        ...metrics,
+      },
+    ];
+  } else if (aggregationLevel === 'province') {
+    const result = provinces.map(province => {
+      const provinceEvents = events.filter(e => e.provinceId === province.id);
       const metrics = computeAggregatedMetrics(provinceEvents);
       return {
         id: province.id,
@@ -207,8 +218,8 @@ export function aggregateEventsByLevel(
     });
     return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
   } else {
-    const result = districts.map((district) => {
-      const districtEvents = events.filter((e) => e.districtId === district.id);
+    const result = districts.map(district => {
+      const districtEvents = events.filter(e => e.districtId === district.id);
       const metrics = computeAggregatedMetrics(districtEvents);
       return {
         id: district.id,

@@ -119,6 +119,15 @@ const nextConfig: NextConfig = {
 
   // Webpack optimizations
   webpack: (config, { dev, isServer }) => {
+    // Suppress jsPDF filesystem warnings (harmless internal warnings)
+    if (!isServer) {
+      config.ignoreWarnings = [
+        ...(config.ignoreWarnings || []),
+        { module: /node_modules\/jspdf/ },
+        /filesystem/,
+      ];
+    }
+
     // Production optimizations
     if (!dev && !isServer) {
       config.optimization = {

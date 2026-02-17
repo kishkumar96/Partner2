@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { Clock, Layers, Activity } from "lucide-react";
+import { Clock, Layers, Activity } from 'lucide-react';
 
 interface ContextStampProps {
   scenario?: string;
   timestep?: string;
   metric?: string;
-  aggregation?: "current" | "cumulative";
+  aggregation?: 'current' | 'cumulative';
   className?: string;
 }
 
@@ -14,11 +14,11 @@ export default function ContextStamp({
   scenario,
   timestep,
   metric,
-  aggregation = "cumulative",
-  className = "",
+  aggregation = 'cumulative',
+  className = '',
 }: ContextStampProps) {
   return (
-    <div 
+    <div
       className={`flex flex-wrap items-center gap-3 px-4 py-2.5 glass-panel border border-white/10 rounded-lg text-xs ${className}`}
       role="status"
       aria-label="Current data context"
@@ -51,9 +51,7 @@ export default function ContextStamp({
       )}
 
       {/* Separator */}
-      {timestep && metric && (
-        <div className="h-4 w-px bg-slate-700" aria-hidden="true" />
-      )}
+      {timestep && metric && <div className="h-4 w-px bg-slate-700" aria-hidden="true" />}
 
       {/* Metric */}
       {metric && (
@@ -68,15 +66,19 @@ export default function ContextStamp({
 
       {/* Aggregation Badge */}
       <div className="ml-auto">
-        <span 
+        <span
           className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-            aggregation === "current"
-              ? "bg-orange-500/20 text-orange-300 border border-orange-500/40"
-              : "bg-green-500/20 text-green-300 border border-green-500/40"
+            aggregation === 'current'
+              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+              : 'bg-green-500/20 text-green-300 border border-green-500/40'
           }`}
-          title={aggregation === "current" ? "Showing data for selected timestep only" : "Showing cumulative data across entire event"}
+          title={
+            aggregation === 'current'
+              ? 'Showing data for selected timestep only'
+              : 'Showing cumulative data across entire event'
+          }
         >
-          {aggregation === "current" ? "Current Timestep" : "Cumulative"}
+          {aggregation === 'current' ? 'Current Timestep' : 'Cumulative'}
         </span>
       </div>
     </div>

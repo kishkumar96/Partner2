@@ -22,11 +22,7 @@ export const SkipToContent: React.FC = () => {
  * Hide content visually but keep it available for screen readers
  */
 export const VisuallyHidden: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <span className="sr-only">
-      {children}
-    </span>
-  );
+  return <span className="sr-only">{children}</span>;
 };
 
 /**
@@ -39,12 +35,7 @@ export const LiveRegion: React.FC<{
   atomic?: boolean;
 }> = ({ children, priority = 'polite', atomic = true }) => {
   return (
-    <div
-      role="status"
-      aria-live={priority}
-      aria-atomic={atomic}
-      className="sr-only"
-    >
+    <div role="status" aria-live={priority} aria-atomic={atomic} className="sr-only">
       {children}
     </div>
   );

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="17" failures="8" errors="0" time="9.585">
+  <testsuite name="useAssetTableData Hook" errors="0" failures="0" skipped="0" timestamp="2026-02-17T22:47:49" time="0.321" tests="5">
+    <testcase classname="useAssetTableData Hook returns initial data structure" name="useAssetTableData Hook returns initial data structure" time="0.012">
+    </testcase>
+    <testcase classname="useAssetTableData Hook returns filtered data" name="useAssetTableData Hook returns filtered data" time="0.002">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles sorting" name="useAssetTableData Hook handles sorting" time="0.002">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles pagination" name="useAssetTableData Hook handles pagination" time="0.001">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles search filtering" name="useAssetTableData Hook handles search filtering" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="Data Flow Integration Tests" errors="0" failures="1" skipped="0" timestamp="2026-02-17T22:47:49" time="1.319" tests="5">
+    <testcase classname="Data Flow Integration Tests loads and displays dashboard data" name="Data Flow Integration Tests loads and displays dashboard data" time="1.008">
+      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
+
+Expected number of calls: &gt;= 1
+Received number of calls:    0
+
+Ignored nodes: comments, script, style
+&lt;html&gt;
+  &lt;head /&gt;
+  &lt;body /&gt;
+&lt;/html&gt;
+    at toHaveBeenCalled (/home/kishank/Partner2/src/__tests__/integration.test.ts:27:28)
+    at runWithExpensiveErrorDiagnosticsDisabled (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/home/kishank/Partner2/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:581:17)
+    at processTimers (node:internal/timers:519:7)</failure>
+    </testcase>
+    <testcase classname="Data Flow Integration Tests handles API errors gracefully" name="Data Flow Integration Tests handles API errors gracefully" time="0">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests filters data across components" name="Data Flow Integration Tests filters data across components" time="0">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests exports data in correct format" name="Data Flow Integration Tests exports data in correct format" time="0.001">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests maintains state consistency across updates" name="Data Flow Integration Tests maintains state consistency across updates" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="Cache Utility" errors="0" failures="7" skipped="0" timestamp="2026-02-17T22:47:49" time="5.406" tests="7">
+    <testcase classname="Cache Utility stores and retrieves values" name="Cache Utility stores and retrieves values" time="0.002">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility returns null for non-existent keys" name="Cache Utility returns null for non-existent keys" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility handles cache expiration" name="Cache Utility handles cache expiration" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility deletes specific cache entries" name="Cache Utility deletes specific cache entries" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility checks if key exists" name="Cache Utility checks if key exists" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility deletes keys by pattern" name="Cache Utility deletes keys by pattern" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility handles complex objects" name="Cache Utility handles complex objects" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname=" Test execution failure: could be caused by test hooks like &apos;afterAll&apos;." name=" Test execution failure: could be caused by test hooks like &apos;afterAll&apos;." time="0">
+      <failure>{&quot;message&quot;:&quot;&quot;,&quot;stack&quot;:&quot;ERR AUTH &lt;password&gt; called without any password configured for the default user. Are you sure your configuration is correct?&quot;}</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

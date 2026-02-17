@@ -47,7 +47,7 @@ describe('ErrorBoundary', () => {
 
   it('can reset error boundary', async () => {
     const user = userEvent.setup();
-    
+
     const { rerender } = render(
       <ErrorBoundary>
         <ThrowError />

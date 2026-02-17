@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, useMemo } from 'react';
-import { Chart as ChartJS,
+import {
+  Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -14,12 +15,7 @@ import { Chart as ChartJS,
 import { Chart } from 'react-chartjs-2';
 import { CycloneForecastPoint } from '../utils/cycloneAnimationLoader';
 import { StoryBeat } from '../utils/cycloneStory';
-import {
-  getCategoryColor,
-  getBeatColor,
-  CHART_COLORS,
-  hexToRGBA,
-} from '@/theme/cycloneScale';
+import { getCategoryColor, getBeatColor, CHART_COLORS, hexToRGBA } from '@/theme/cycloneScale';
 
 ChartJS.register(
   CategoryScale,
@@ -72,7 +68,7 @@ export default function CycloneIntensityChart({
       const beat = beatIndices.get(i);
       const isCurrent = i === currentIndex;
       const isBeat = !!beat;
-      
+
       return {
         // Labels
         label: new Date(point.time).toLocaleString('en-US', {
@@ -81,73 +77,80 @@ export default function CycloneIntensityChart({
           hour: '2-digit',
           minute: '2-digit',
         }),
-        
+
         // Data values
         meanWind: point.meanWind,
         maxGust: Math.max(point.windGust, point.meanWind),
         pressure: point.pressure,
-        
+
         // Visual properties (precomputed)
         pointRadius: isCurrent ? 8 : isBeat ? 7 : 4,
-        pointColor: isCurrent 
-          ? '#EF4444' 
-          : beat 
-            ? getBeatColor(beat.type) 
+        pointColor: isCurrent
+          ? '#EF4444'
+          : beat
+            ? getBeatColor(beat.type)
             : getCategoryColor(point.category),
         pointBorderWidth: isBeat ? 3 : 2,
-        pointStyle: beat 
-          ? beat.type === 'peak-intensity' ? 'star' as const
-            : beat.type === 'rapid-intensification' ? 'triangle' as const
-            : beat.type === 'category-upgrade' ? 'rectRot' as const
-            : beat.type === 'closest-approach' ? 'crossRot' as const
-            : 'circle' as const
-          : 'circle' as const,
+        pointStyle: beat
+          ? beat.type === 'peak-intensity'
+            ? ('star' as const)
+            : beat.type === 'rapid-intensification'
+              ? ('triangle' as const)
+              : beat.type === 'category-upgrade'
+                ? ('rectRot' as const)
+                : beat.type === 'closest-approach'
+                  ? ('crossRot' as const)
+                  : ('circle' as const)
+          : ('circle' as const),
       };
     });
   }, [forecastTrack, currentIndex, beatIndices]);
 
   // Memoize chart data to prevent unnecessary recalculations
   // Now uses precomputed presentation array (single iteration)
-  const chartData = useMemo(() => ({
-    labels: presentationData.map(p => p.label),
-    datasets: [
-      {
-        label: 'Wind Speed (kt)',
-        data: presentationData.map(p => p.meanWind),
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.12)',
-        fill: false,
-        tension: 0.4,
-        pointRadius: presentationData.map(p => p.pointRadius),
-        pointHoverRadius: 8,
-        pointBackgroundColor: presentationData.map(p => p.pointColor),
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: presentationData.map(p => p.pointBorderWidth),
-        pointStyle: presentationData.map(p => p.pointStyle),
-      },
-      {
-        label: 'Gust Range (kt)',
-        data: presentationData.map(p => p.maxGust),
-        borderColor: 'rgba(59, 130, 246, 0)',
-        backgroundColor: CHART_COLORS.windFill,
-        fill: '-1',
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 0,
-      },
-      {
-        label: 'Pressure (hPa)',
-        data: presentationData.map(p => p.pressure),
-        borderColor: CHART_COLORS.pressure,
-        backgroundColor: CHART_COLORS.pressureFill,
-        fill: true,
-        tension: 0.4,
-        yAxisID: 'y1',
-        pointRadius: 3,
-        pointHoverRadius: 6,
-      },
-    ],
-  }), [presentationData]);
+  const chartData = useMemo(
+    () => ({
+      labels: presentationData.map(p => p.label),
+      datasets: [
+        {
+          label: 'Wind Speed (kt)',
+          data: presentationData.map(p => p.meanWind),
+          borderColor: '#3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          fill: false,
+          tension: 0.4,
+          pointRadius: presentationData.map(p => p.pointRadius),
+          pointHoverRadius: 8,
+          pointBackgroundColor: presentationData.map(p => p.pointColor),
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: presentationData.map(p => p.pointBorderWidth),
+          pointStyle: presentationData.map(p => p.pointStyle),
+        },
+        {
+          label: 'Gust Range (kt)',
+          data: presentationData.map(p => p.maxGust),
+          borderColor: 'rgba(59, 130, 246, 0)',
+          backgroundColor: CHART_COLORS.windFill,
+          fill: '-1',
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 0,
+        },
+        {
+          label: 'Pressure (hPa)',
+          data: presentationData.map(p => p.pressure),
+          borderColor: CHART_COLORS.pressure,
+          backgroundColor: CHART_COLORS.pressureFill,
+          fill: true,
+          tension: 0.4,
+          yAxisID: 'y1',
+          pointRadius: 3,
+          pointHoverRadius: 6,
+        },
+      ],
+    }),
+    [presentationData]
+  );
 
   const options = {
     responsive: true,
@@ -190,11 +193,8 @@ export default function CycloneIntensityChart({
           afterBody: (items: any[]) => {
             const idx = items[0].dataIndex;
             const point = forecastTrack[idx];
-            const lines = [
-              `Category: ${point.category}`,
-              `Gust: ${point.windGust.toFixed(0)} kt`,
-            ];
-            
+            const lines = [`Category: ${point.category}`, `Gust: ${point.windGust.toFixed(0)} kt`];
+
             // Add beat information if this is a story beat
             const beat = beatIndices.get(idx);
             if (beat) {
@@ -202,7 +202,7 @@ export default function CycloneIntensityChart({
               lines.push(`Story Beat: ${beat.title}`);
               lines.push(beat.description);
             }
-            
+
             return lines;
           },
         },
@@ -270,68 +270,71 @@ export default function CycloneIntensityChart({
     },
   };
 
-  const animatorPlugin = useMemo(() => ({
-    id: 'intensityAnimator',
-    afterDatasetsDraw: (chart: ChartJS<'line'>) => {
-      const meta = chart.getDatasetMeta(0);
-      if (!meta?.data?.length) return;
+  const animatorPlugin = useMemo(
+    () => ({
+      id: 'intensityAnimator',
+      afterDatasetsDraw: (chart: ChartJS<'line'>) => {
+        const meta = chart.getDatasetMeta(0);
+        if (!meta?.data?.length) return;
 
-      const ctx = chart.ctx;
-      const count = meta.data.length;
-      const index = Math.max(0, Math.min(count - 1, animatedIndexRef.current));
-      const floor = Math.floor(index);
-      const ceil = Math.min(count - 1, floor + 1);
-      const t = index - floor;
-      const p1 = meta.data[floor];
-      const p2 = meta.data[ceil];
-      const x = p1.x + (p2.x - p1.x) * t;
-      const y = p1.y + (p2.y - p1.y) * t;
+        const ctx = chart.ctx;
+        const count = meta.data.length;
+        const index = Math.max(0, Math.min(count - 1, animatedIndexRef.current));
+        const floor = Math.floor(index);
+        const ceil = Math.min(count - 1, floor + 1);
+        const t = index - floor;
+        const p1 = meta.data[floor];
+        const p2 = meta.data[ceil];
+        const x = p1.x + (p2.x - p1.x) * t;
+        const y = p1.y + (p2.y - p1.y) * t;
 
-      const now = performance.now();
-      const pulse = 0.5 + 0.5 * Math.sin(now / 320);
+        const now = performance.now();
+        const pulse = 0.5 + 0.5 * Math.sin(now / 320);
 
-      ctx.save();
+        ctx.save();
 
-      // Motion blur tail
-      const tailLength = 6;
-      for (let i = 1; i <= tailLength; i += 1) {
-        const idx = Math.max(0, floor - i);
-        const tailPoint = meta.data[idx];
-        const alpha = ((tailLength - i + 1) / (tailLength + 1)) * 0.35;
-        ctx.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
-        ctx.lineWidth = 3;
+        // Motion blur tail
+        const tailLength = 6;
+        for (let i = 1; i <= tailLength; i += 1) {
+          const idx = Math.max(0, floor - i);
+          const tailPoint = meta.data[idx];
+          const alpha = ((tailLength - i + 1) / (tailLength + 1)) * 0.35;
+          ctx.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(tailPoint.x, tailPoint.y);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+
+        // Uncertainty glow around the cursor
+        const glowRadius = 12 + pulse * 4;
         ctx.beginPath();
-        ctx.moveTo(tailPoint.x, tailPoint.y);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
+        ctx.fillStyle = `rgba(59, 130, 246, ${0.18 + pulse * 0.12})`;
+        ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Uncertainty glow around the cursor
-      const glowRadius = 12 + pulse * 4;
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(59, 130, 246, ${0.18 + pulse * 0.12})`;
-      ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
-      ctx.fill();
+        // Beat pulse ring
+        const beat = beatIndices.get(Math.round(index));
+        if (beat) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(239, 68, 68, ${0.6 - pulse * 0.2})`;
+          ctx.lineWidth = 2;
+          ctx.arc(x, y, 16 + pulse * 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
-      // Beat pulse ring
-      const beat = beatIndices.get(Math.round(index));
-      if (beat) {
+        // Current point marker
         ctx.beginPath();
-        ctx.strokeStyle = `rgba(239, 68, 68, ${0.6 - pulse * 0.2})`;
-        ctx.lineWidth = 2;
-        ctx.arc(x, y, 16 + pulse * 6, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+        ctx.fillStyle = '#ef4444';
+        ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
 
-      // Current point marker
-      ctx.beginPath();
-      ctx.fillStyle = '#ef4444';
-      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    },
-  }), [beatIndices]);
+        ctx.restore();
+      },
+    }),
+    [beatIndices]
+  );
 
   useEffect(() => {
     const now = performance.now();
@@ -374,11 +377,11 @@ export default function CycloneIntensityChart({
 
   return (
     <div className="h-full w-full">
-      <Chart 
-        type="line" 
-        ref={chartRef} 
-        data={chartData} 
-        options={options} 
+      <Chart
+        type="line"
+        ref={chartRef}
+        data={chartData}
+        options={options}
         plugins={[animatorPlugin]}
         aria-label={chartAriaLabel}
       />

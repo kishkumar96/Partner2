@@ -1,6 +1,6 @@
 /**
  * Optimized Data Loader - Ultra-Fast Version
- * 
+ *
  * Combines all performance optimizations:
  * - IndexedDB caching for instant subsequent loads
  * - Web Worker parsing for large files
@@ -24,10 +24,7 @@ export interface FastLoadOptions {
 /**
  * Ultra-fast GeoJSON loader with all optimizations
  */
-export async function loadGeoJSONFast(
-  url: string,
-  options: FastLoadOptions = {}
-): Promise<any> {
+export async function loadGeoJSONFast(url: string, options: FastLoadOptions = {}): Promise<any> {
   const {
     useCache = true,
     useWorker = true,
@@ -74,7 +71,7 @@ export async function loadGeoJSONFast(
     } else {
       // Small files: parse on main thread
       data = JSON.parse(text);
-      
+
       // Apply filter if needed
       if (filter && data.features) {
         data.features = data.features.filter((feature: any) => {
@@ -84,7 +81,7 @@ export async function loadGeoJSONFast(
           return true;
         });
       }
-      
+
       const totalTime = performance.now() - startTime;
       console.log(`${url} loaded in ${totalTime.toFixed(0)}ms`);
     }
@@ -104,10 +101,7 @@ export async function loadGeoJSONFast(
 /**
  * Load CSV with caching
  */
-export async function loadCSVFast(
-  url: string,
-  options: FastLoadOptions = {}
-): Promise<string> {
+export async function loadCSVFast(url: string, options: FastLoadOptions = {}): Promise<string> {
   const { useCache = true, priority = 'high', defer = false } = options;
 
   try {
@@ -169,7 +163,7 @@ export async function loadConditional(
  */
 export function preload(url: string, options: FastLoadOptions = {}): void {
   // Don't await - let it load in background
-  loadGeoJSONFast(url, { ...options, defer: true }).catch((error) => {
+  loadGeoJSONFast(url, { ...options, defer: true }).catch(error => {
     console.warn(`Background preload failed for ${url}:`, error);
   });
 }

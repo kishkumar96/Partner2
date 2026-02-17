@@ -6,7 +6,10 @@
 /**
  * Announce message to screen readers
  */
-export const announceToScreenReader = (message: string, priority: 'polite' | 'assertive' = 'polite') => {
+export const announceToScreenReader = (
+  message: string,
+  priority: 'polite' | 'assertive' = 'polite'
+) => {
   if (typeof document === 'undefined') return;
 
   const announcement = document.createElement('div');
@@ -106,11 +109,11 @@ export const meetsWCAGStandards = (
   size: 'normal' | 'large' = 'normal'
 ): boolean => {
   const ratio = getContrastRatio(foreground, background);
-  
+
   if (level === 'AAA') {
     return size === 'large' ? ratio >= 4.5 : ratio >= 7;
   }
-  
+
   // AA level
   return size === 'large' ? ratio >= 3 : ratio >= 4.5;
 };
@@ -227,7 +230,7 @@ export const getAccessibleStatusColor = (
  */
 export const formatAccessibleDate = (date: Date | string): string => {
   const d = typeof date === 'string' ? new Date(date) : date;
-  
+
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -243,9 +246,10 @@ export const createSkipLink = (targetId: string, label: string): HTMLAnchorEleme
   const skipLink = document.createElement('a');
   skipLink.href = `#${targetId}`;
   skipLink.textContent = label;
-  skipLink.className = 'sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded';
+  skipLink.className =
+    'sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded';
   skipLink.setAttribute('aria-label', label);
-  
+
   return skipLink;
 };
 

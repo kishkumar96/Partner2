@@ -74,7 +74,7 @@ const colorStyles = {
 
 /**
  * HeroMetric - Consistent metric display card with subdued styling
- * 
+ *
  * Designed for visual consistency with:
  * - Uniform card size and padding
  * - Subtle background colors
@@ -85,7 +85,9 @@ export default function HeroMetric({ label, value, subtitle, icon: Icon, color }
   const styles = colorStyles[color];
 
   return (
-    <div className={`rounded-xl border ${styles.border} ${styles.bg} backdrop-blur-sm transition-all duration-200 hover:bg-slate-800`}>
+    <div
+      className={`rounded-xl border ${styles.border} ${styles.bg} backdrop-blur-sm transition-all duration-200 hover:bg-slate-800`}
+    >
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -95,16 +97,12 @@ export default function HeroMetric({ label, value, subtitle, icon: Icon, color }
                 {label}
               </p>
             </div>
-            <p className={`text-2xl font-bold ${styles.valueText} mb-1 tabular-nums`}>
-              {value}
-            </p>
-            {subtitle && (
-              <p className={`text-xs ${styles.subtitleText}`}>
-                {subtitle}
-              </p>
-            )}
+            <p className={`text-2xl font-bold ${styles.valueText} mb-1 tabular-nums`}>{value}</p>
+            {subtitle && <p className={`text-xs ${styles.subtitleText}`}>{subtitle}</p>}
           </div>
-          <div className={`w-10 h-10 rounded-lg ${styles.iconBg} flex items-center justify-center flex-shrink-0`}>
+          <div
+            className={`w-10 h-10 rounded-lg ${styles.iconBg} flex items-center justify-center flex-shrink-0`}
+          >
             <Icon className={`w-5 h-5 ${styles.iconText}`} />
           </div>
         </div>

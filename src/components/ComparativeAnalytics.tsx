@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useMemo } from "react";
-import { formatCurrency, formatNumber } from "@/utils/formatters";
-import { BarChart3, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
+import { useState, useMemo } from 'react';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { BarChart3, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface RegionalData {
   region: string;
@@ -31,22 +31,24 @@ export default function ComparativeAnalytics({
   regionalData = [],
   sectorData = [],
 }: ComparativeAnalyticsProps) {
-  const [view, setView] = useState<"regions" | "sectors">("regions");
+  const [view, setView] = useState<'regions' | 'sectors'>('regions');
 
   // Process regional data
   const processedRegions = useMemo(() => {
     if (!regionalData || regionalData.length === 0) return [];
 
     return regionalData
-      .map((row) => ({
-        region: row.Region || row.region || "Unknown",
+      .map(row => ({
+        region: row.Region || row.region || 'Unknown',
         totalLoss: parseFloat(row.Total_Loss || row.total_loss || 0),
         buildingDamage: parseFloat(row.Building_Loss || row.building_loss || 0),
-        populationExposed: parseInt(row.Population_Exposed_To_Any_Hazard || row.population_exposed || 0),
+        populationExposed: parseInt(
+          row.Population_Exposed_To_Any_Hazard || row.population_exposed || 0
+        ),
         infrastructureLoss: parseFloat(row.Infrastructure_Loss || row.infrastructure_loss || 0),
         cropLoss: parseFloat(row.Crop_Loss || row.crop_loss || 0),
       }))
-      .filter((r) => r.totalLoss > 0)
+      .filter(r => r.totalLoss > 0)
       .sort((a, b) => b.totalLoss - a.totalLoss)
       .slice(0, 10); // Top 10 regions
   }, [regionalData]);
@@ -56,26 +58,24 @@ export default function ComparativeAnalytics({
     if (!sectorData || sectorData.length === 0) return [];
 
     return sectorData
-      .map((row) => ({
-        sector: row.Sector || row.sector || "Unknown",
+      .map(row => ({
+        sector: row.Sector || row.sector || 'Unknown',
         totalLoss: parseFloat(row.Total_Loss || row.total_loss || 0),
         windLoss: parseFloat(row.Total_Wind_Loss || row.wind_loss || 0),
         floodLoss:
-          parseFloat(row.Total_Fluvial_Loss || 0) +
-          parseFloat(row.Total_Coastal_Loss || 0),
+          parseFloat(row.Total_Fluvial_Loss || 0) + parseFloat(row.Total_Coastal_Loss || 0),
         buildingsExposed: parseInt(row.Number_Exposed_Buildings || 0),
         buildingsDamaged: parseInt(row.Number_Damaged_Buildings || 0),
       }))
-      .filter((s) => s.sector !== "Unknown" && s.totalLoss > 0)
+      .filter(s => s.sector !== 'Unknown' && s.totalLoss > 0)
       .sort((a, b) => b.totalLoss - a.totalLoss);
   }, [sectorData]);
 
   // Calculate statistics
   const regionalStats = useMemo(() => {
-    if (processedRegions.length === 0)
-      return { total: 0, avg: 0, median: 0, max: 0 };
+    if (processedRegions.length === 0) return { total: 0, avg: 0, median: 0, max: 0 };
 
-    const losses = processedRegions.map((r) => r.totalLoss);
+    const losses = processedRegions.map(r => r.totalLoss);
     const total = losses.reduce((sum, loss) => sum + loss, 0);
     const avg = total / losses.length;
     const sorted = [...losses].sort((a, b) => a - b);
@@ -91,7 +91,7 @@ export default function ComparativeAnalytics({
         total: 0,
         windProportion: 0,
         floodProportion: 0,
-        mostVulnerable: "N/A",
+        mostVulnerable: 'N/A',
       };
 
     const total = processedSectors.reduce((sum, s) => sum + s.totalLoss, 0);
@@ -99,7 +99,7 @@ export default function ComparativeAnalytics({
     const totalFlood = processedSectors.reduce((sum, s) => sum + s.floodLoss, 0);
     const windProportion = (totalWind / total) * 100;
     const floodProportion = (totalFlood / total) * 100;
-    const mostVulnerable = processedSectors[0]?.sector || "N/A";
+    const mostVulnerable = processedSectors[0]?.sector || 'N/A';
 
     return { total, windProportion, floodProportion, mostVulnerable };
   }, [processedSectors]);
@@ -109,27 +109,25 @@ export default function ComparativeAnalytics({
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-blue-600" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Comparative Analysis
-          </h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Comparative Analysis</h2>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setView("regions")}
+            onClick={() => setView('regions')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              view === "regions"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              view === 'regions'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             Regions
           </button>
           <button
-            onClick={() => setView("sectors")}
+            onClick={() => setView('sectors')}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              view === "sectors"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              view === 'sectors'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             Sectors
@@ -137,38 +135,30 @@ export default function ComparativeAnalytics({
         </div>
       </div>
 
-      {view === "regions" ? (
+      {view === 'regions' ? (
         <div>
           {/* Regional Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">
-                Total Loss
-              </div>
+              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Loss</div>
               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                 {formatCurrency(regionalStats.total)}
               </div>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-              <div className="text-sm text-green-600 dark:text-green-400 mb-1">
-                Average Loss
-              </div>
+              <div className="text-sm text-green-600 dark:text-green-400 mb-1">Average Loss</div>
               <div className="text-2xl font-bold text-green-900 dark:text-green-100">
                 {formatCurrency(regionalStats.avg)}
               </div>
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
-              <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">
-                Median Loss
-              </div>
+              <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">Median Loss</div>
               <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">
                 {formatCurrency(regionalStats.median)}
               </div>
             </div>
             <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-              <div className="text-sm text-red-600 dark:text-red-400 mb-1">
-                Max Loss
-              </div>
+              <div className="text-sm text-red-600 dark:text-red-400 mb-1">Max Loss</div>
               <div className="text-2xl font-bold text-red-900 dark:text-red-100">
                 {formatCurrency(regionalStats.max)}
               </div>
@@ -185,21 +175,18 @@ export default function ComparativeAnalytics({
               const percentage = (region.totalLoss / maxLoss) * 100;
 
               return (
-                <div
-                  key={region.region}
-                  className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
-                >
+                <div key={region.region} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                           index === 0
-                            ? "bg-red-600 text-white"
+                            ? 'bg-red-600 text-white'
                             : index === 1
-                            ? "bg-orange-600 text-white"
-                            : index === 2
-                            ? "bg-amber-600 text-white"
-                            : "bg-gray-400 text-white"
+                              ? 'bg-orange-600 text-white'
+                              : index === 2
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-gray-400 text-white'
                         }`}
                       >
                         {index + 1}
@@ -266,17 +253,13 @@ export default function ComparativeAnalytics({
               </div>
             </div>
             <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-              <div className="text-sm text-red-600 dark:text-red-400 mb-1">
-                Wind Damage
-              </div>
+              <div className="text-sm text-red-600 dark:text-red-400 mb-1">Wind Damage</div>
               <div className="text-2xl font-bold text-red-900 dark:text-red-100">
                 {sectorStats.windProportion.toFixed(1)}%
               </div>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">
-                Flood Damage
-              </div>
+              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Flood Damage</div>
               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                 {sectorStats.floodProportion.toFixed(1)}%
               </div>
@@ -308,10 +291,7 @@ export default function ComparativeAnalytics({
               const floodProportion = (sector.floodLoss / sector.totalLoss) * 100;
 
               return (
-                <div
-                  key={sector.sector}
-                  className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
-                >
+                <div key={sector.sector} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold">
@@ -366,10 +346,10 @@ export default function ComparativeAnalytics({
         <div className="flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div className="text-sm text-blue-800 dark:text-blue-200">
-            <strong>Data Source:</strong> TC Lola Impact Assessment (Vanuatu, Feb 2024) • 
-            <strong> Model:</strong> RiskScape Multi-Hazard Platform • 
-            <strong> Accuracy:</strong> ±20% economic, ±10m spatial • 
-            <strong> Validation:</strong> Field-verified in 12 communities (r²=0.78)
+            <strong>Data Source:</strong> TC Lola Impact Assessment (Vanuatu, Feb 2024) •
+            <strong> Model:</strong> RiskScape Multi-Hazard Platform •<strong> Accuracy:</strong>{' '}
+            ±20% economic, ±10m spatial •<strong> Validation:</strong> Field-verified in 12
+            communities (r²=0.78)
           </div>
         </div>
       </div>

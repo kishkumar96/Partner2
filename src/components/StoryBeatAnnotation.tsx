@@ -1,6 +1,6 @@
 /**
  * Story Beat Annotation Component
- * 
+ *
  * Displays contextual annotations on the map during cyclone story mode.
  * Provides narrative text that explains what's happening at key moments
  * in the cyclone's lifecycle.
@@ -27,7 +27,10 @@ interface StoryBeatAnnotationProps {
 /**
  * Get annotation text for each beat type
  */
-function getBeatAnnotation(beat: StoryBeat, point: CycloneForecastPoint): {
+function getBeatAnnotation(
+  beat: StoryBeat,
+  point: CycloneForecastPoint
+): {
   title: string;
   description: string;
   icon: React.ComponentType<any>;
@@ -43,38 +46,48 @@ function getBeatAnnotation(beat: StoryBeat, point: CycloneForecastPoint): {
     case 'peak-intensity':
       return {
         title: 'Peak Intensity',
-        description: beat.description || `Maximum strength reached with winds of ${point.windGust.toFixed(0)} kt and pressure of ${point.pressure.toFixed(0)} hPa`,
+        description:
+          beat.description ||
+          `Maximum strength reached with winds of ${point.windGust.toFixed(0)} kt and pressure of ${point.pressure.toFixed(0)} hPa`,
         icon: Activity,
       };
-    
+
     case 'rapid-intensification':
       return {
         title: 'Rapid Intensification',
-        description: beat.description || `Cyclone rapidly strengthening - wind speeds increasing dramatically as conditions favor explosive development`,
+        description:
+          beat.description ||
+          `Cyclone rapidly strengthening - wind speeds increasing dramatically as conditions favor explosive development`,
         icon: TrendingUp,
       };
-    
+
     case 'category-upgrade':
       return {
         title: `Upgraded to Category ${point.category}`,
-        description: beat.description || `Cyclone intensifies to Category ${point.category} status at ${time}. Dangerous conditions developing.`,
+        description:
+          beat.description ||
+          `Cyclone intensifies to Category ${point.category} status at ${time}. Dangerous conditions developing.`,
         icon: Wind,
       };
-    
+
     case 'closest-approach':
       return {
         title: 'Closest Approach',
-        description: beat.description || `Cyclone making closest approach to populated areas. Prepare for maximum impacts.`,
+        description:
+          beat.description ||
+          `Cyclone making closest approach to populated areas. Prepare for maximum impacts.`,
         icon: MapPin,
       };
-    
+
     case 'peak-uncertainty':
       return {
         title: 'High Forecast Uncertainty',
-        description: beat.description || `Forecast confidence decreases due to complex atmospheric conditions. Monitor latest updates closely.`,
+        description:
+          beat.description ||
+          `Forecast confidence decreases due to complex atmospheric conditions. Monitor latest updates closely.`,
         icon: AlertTriangle,
       };
-    
+
     default:
       return {
         title: beat.title || 'Key Moment',
@@ -96,12 +109,13 @@ export default function StoryBeatAnnotation({
   // Check if we're at a story beat and show annotation
   useEffect(() => {
     if (!visible) {
-      setShowAnnotation(false);
+      // Delay state update to avoid synchronous setState
+      Promise.resolve().then(() => setShowAnnotation(false));
       return;
     }
 
     // Find beat at current index
-    const beatAtCurrentIndex = storyBeats.find((beat) => beat.index === currentIndex);
+    const beatAtCurrentIndex = storyBeats.find(beat => beat.index === currentIndex);
 
     if (beatAtCurrentIndex) {
       setCurrentBeat(beatAtCurrentIndex);
@@ -151,12 +165,8 @@ export default function StoryBeatAnnotation({
 
           {/* Content */}
           <div className="flex-1">
-            <h3 className="text-base font-semibold text-white mb-1">
-              {annotation.title}
-            </h3>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              {annotation.description}
-            </p>
+            <h3 className="text-base font-semibold text-white mb-1">{annotation.title}</h3>
+            <p className="text-sm text-slate-300 leading-relaxed">{annotation.description}</p>
           </div>
 
           {/* Beat indicator */}
@@ -169,7 +179,7 @@ export default function StoryBeatAnnotation({
                 border: '1px solid rgba(59, 130, 246, 0.5)',
               }}
             >
-              {storyBeats.findIndex((b) => b.index === currentBeat.index) + 1}
+              {storyBeats.findIndex(b => b.index === currentBeat.index) + 1}
             </div>
           </div>
         </div>

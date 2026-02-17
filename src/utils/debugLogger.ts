@@ -1,9 +1,9 @@
 /**
  * Debug Logger Utility
- * 
+ *
  * Provides structured logging for map-related warnings and errors.
  * Only logs in development mode to avoid cluttering production console.
- * 
+ *
  * Categories:
  * - map-initialization: Map setup and configuration warnings
  * - map-style: Style loading and diffing warnings
@@ -12,8 +12,14 @@
  * - performance: Performance-related warnings
  */
 
-type LogLevel = "debug" | "info" | "warn" | "error";
-type LogCategory = "map-initialization" | "map-style" | "map-source" | "map-layer" | "performance" | "general";
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogCategory =
+  | 'map-initialization'
+  | 'map-style'
+  | 'map-source'
+  | 'map-layer'
+  | 'performance'
+  | 'general';
 
 interface LogEntry {
   level: LogLevel;
@@ -23,7 +29,7 @@ interface LogEntry {
   details?: any;
 }
 
-const isDevelopment = process.env.NODE_ENV === "development";
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Store original console methods to prevent infinite recursion
 const originalConsole = {
@@ -64,36 +70,48 @@ function isNonCriticalWarning(message: string): boolean {
  */
 function categorizeMessage(message: string): LogCategory {
   const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes("style") || lowerMessage.includes("stylesheet")) {
-    return "map-style";
+
+  if (lowerMessage.includes('style') || lowerMessage.includes('stylesheet')) {
+    return 'map-style';
   }
-  if (lowerMessage.includes("source") || lowerMessage.includes("geojson")) {
-    return "map-source";
+  if (lowerMessage.includes('source') || lowerMessage.includes('geojson')) {
+    return 'map-source';
   }
-  if (lowerMessage.includes("layer") || lowerMessage.includes("paint") || lowerMessage.includes("layout")) {
-    return "map-layer";
+  if (
+    lowerMessage.includes('layer') ||
+    lowerMessage.includes('paint') ||
+    lowerMessage.includes('layout')
+  ) {
+    return 'map-layer';
   }
-  if (lowerMessage.includes("performance") || lowerMessage.includes("slow") || lowerMessage.includes("throttle")) {
-    return "performance";
+  if (
+    lowerMessage.includes('performance') ||
+    lowerMessage.includes('slow') ||
+    lowerMessage.includes('throttle')
+  ) {
+    return 'performance';
   }
-  if (lowerMessage.includes("map") || lowerMessage.includes("maplibre") || lowerMessage.includes("initialization")) {
-    return "map-initialization";
+  if (
+    lowerMessage.includes('map') ||
+    lowerMessage.includes('maplibre') ||
+    lowerMessage.includes('initialization')
+  ) {
+    return 'map-initialization';
   }
-  
-  return "general";
+
+  return 'general';
 }
 
 /**
  * Format log entry for console output
  */
 function formatLogEntry(entry: LogEntry): string {
-  const timestamp = entry.timestamp.toISOString().split("T")[1].split(".")[0];
+  const timestamp = entry.timestamp.toISOString().split('T')[1].split('.')[0];
   const levelLabel = {
-    debug: "DEBUG",
-    info: "INFO",
-    warn: "WARN",
-    error: "ERROR",
+    debug: 'DEBUG',
+    info: 'INFO',
+    warn: 'WARN',
+    error: 'ERROR',
   }[entry.level];
 
   return `[${timestamp}] [${levelLabel}] [${entry.category}] ${entry.message}`;
@@ -105,7 +123,7 @@ function formatLogEntry(entry: LogEntry): string {
 function log(level: LogLevel, category: LogCategory, message: string, details?: any) {
   // Skip logging in production
   if (!isDevelopment) return;
-  
+
   const entry: LogEntry = {
     level,
     category,
@@ -113,37 +131,37 @@ function log(level: LogLevel, category: LogCategory, message: string, details?: 
     timestamp: new Date(),
     details,
   };
-  
+
   // Add to history
   logHistory.push(entry);
   if (logHistory.length > MAX_LOG_HISTORY) {
     logHistory.shift();
   }
-  
+
   // Output to console
   const formattedMessage = formatLogEntry(entry);
-  
+
   // Use original console methods to prevent infinite recursion
   try {
     switch (level) {
-      case "debug":
-        originalConsole.debug(formattedMessage, details || "");
+      case 'debug':
+        originalConsole.debug(formattedMessage, details || '');
         break;
-      case "info":
-        originalConsole.info(formattedMessage, details || "");
+      case 'info':
+        originalConsole.info(formattedMessage, details || '');
         break;
-      case "warn":
-        originalConsole.warn(formattedMessage, details || "");
+      case 'warn':
+        originalConsole.warn(formattedMessage, details || '');
         break;
-      case "error":
-        originalConsole.error(formattedMessage, details || "");
+      case 'error':
+        originalConsole.error(formattedMessage, details || '');
         break;
     }
   } catch (err) {
     // Failsafe: If logging itself fails, use bare console.log
     // This should never happen, but prevents any possible crash
     try {
-      originalConsole.error("[Logger Error]", message);
+      originalConsole.error('[Logger Error]', message);
     } catch {
       // Absolute last resort - do nothing to prevent crash
     }
@@ -157,37 +175,37 @@ export const debugLogger = {
   /**
    * Log debug information (verbose, development only)
    */
-  debug(message: string, category: LogCategory = "general", details?: any) {
-    log("debug", category, message, details);
+  debug(message: string, category: LogCategory = 'general', details?: any) {
+    log('debug', category, message, details);
   },
-  
+
   /**
    * Log informational messages
    */
-  info(message: string, category: LogCategory = "general", details?: any) {
-    log("info", category, message, details);
+  info(message: string, category: LogCategory = 'general', details?: any) {
+    log('info', category, message, details);
   },
-  
+
   /**
    * Log warnings (may indicate issues)
    */
-  warn(message: string, category: LogCategory = "general", details?: any) {
+  warn(message: string, category: LogCategory = 'general', details?: any) {
     // Check if this is a known non-critical warning
     if (isNonCriticalWarning(message)) {
       // Log at debug level instead of warn
-      log("debug", category, `[Non-Critical] ${message}`, details);
+      log('debug', category, `[Non-Critical] ${message}`, details);
     } else {
-      log("warn", category, message, details);
+      log('warn', category, message, details);
     }
   },
-  
+
   /**
    * Log errors (critical issues)
    */
-  error(message: string, category: LogCategory = "general", details?: any) {
-    log("error", category, message, details);
+  error(message: string, category: LogCategory = 'general', details?: any) {
+    log('error', category, message, details);
   },
-  
+
   /**
    * Create a console.warn wrapper that categorizes MapLibre warnings
    */
@@ -198,12 +216,12 @@ export const debugLogger = {
         originalWarn(...args);
         return;
       }
-      
+
       try {
         isInWarningHandler = true;
-        const message = args.join(" ");
+        const message = args.join(' ');
         const category = categorizeMessage(message);
-        
+
         // Use our warning handler
         debugLogger.warn(message, category, args.length > 1 ? args.slice(1) : undefined);
       } catch (error) {
@@ -214,14 +232,14 @@ export const debugLogger = {
       }
     };
   },
-  
+
   /**
    * Get recent log history (for debugging UI)
    */
   getHistory(): LogEntry[] {
     return [...logHistory];
   },
-  
+
   /**
    * Clear log history
    */

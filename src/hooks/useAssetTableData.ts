@@ -3,16 +3,19 @@
  * Handles filtering, sorting, pagination, and search
  */
 
-import { useMemo, useState, useCallback } from 'react';
-import type { BuildingAsset, RoadAsset, SortConfig, AssetFilter, PaginationState } from '@/types/assetTables';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import type {
+  BuildingAsset,
+  RoadAsset,
+  SortConfig,
+  AssetFilter,
+  PaginationState,
+} from '@/types/assetTables';
 import { getBuildingDamageColor, getRoadDamageColor } from '@/theme/colors';
 
 type Asset = BuildingAsset | RoadAsset;
 
-export function useAssetTableData<T extends Asset>(
-  rawData: T[] | null,
-  initialPageSize = 50
-) {
+export function useAssetTableData<T extends Asset>(rawData: T[] | null, initialPageSize = 50) {
   // State management
   const [sortConfig, setSortConfig] = useState<SortConfig<T> | null>({
     key: 'loss' as keyof T,
@@ -37,38 +40,36 @@ export function useAssetTableData<T extends Asset>(
     // Search filter
     if (filter.searchTerm) {
       const searchLower = filter.searchTerm.toLowerCase();
-      result = result.filter((asset) => {
+      result = result.filter(asset => {
         const searchableFields = [
           asset.id,
           asset.region,
           'buildingType' in asset ? asset.buildingType : '',
           'roadType' in asset ? asset.roadType : '',
-        ].join(' ').toLowerCase();
-        
+        ]
+          .join(' ')
+          .toLowerCase();
+
         return searchableFields.includes(searchLower);
       });
     }
 
     // Damage level filter
     if (filter.damageLevel && filter.damageLevel.length > 0) {
-      result = result.filter((asset) =>
-        filter.damageLevel!.includes(asset.damageLevel)
-      );
+      result = result.filter(asset => filter.damageLevel!.includes(asset.damageLevel));
     }
 
     // Region filter
     if (filter.region && filter.region.length > 0) {
-      result = result.filter((asset) =>
-        filter.region!.includes(asset.region)
-      );
+      result = result.filter(asset => filter.region!.includes(asset.region));
     }
 
     // Loss range filter
     if (filter.lossMin !== undefined) {
-      result = result.filter((asset) => asset.loss >= filter.lossMin!);
+      result = result.filter(asset => asset.loss >= filter.lossMin!);
     }
     if (filter.lossMax !== undefined) {
-      result = result.filter((asset) => asset.loss <= filter.lossMax!);
+      result = result.filter(asset => asset.loss <= filter.lossMax!);
     }
 
     return result;
@@ -92,9 +93,7 @@ export function useAssetTableData<T extends Asset>(
       }
 
       if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortConfig.direction === 'asc'
-          ? aValue - bValue
-          : bValue - aValue;
+        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
       }
 
       return 0;
@@ -103,19 +102,12 @@ export function useAssetTableData<T extends Asset>(
     return sorted;
   }, [filteredData, sortConfig]);
 
-  // Paginate sorted data
-  const paginatedData = useMemo(() => {
-    const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
-    const endIndex = startIndex + pagination.pageSize;
-    return sortedData.slice(startIndex, endIndex);
-  }, [sortedData, pagination.currentPage, pagination.pageSize]);
-
   // Update pagination when filtered data changes
-  useMemo(() => {
+  useEffect(() => {
     const totalItems = sortedData.length;
     const totalPages = Math.ceil(totalItems / pagination.pageSize);
-    
-    setPagination((prev) => ({
+
+    setPagination(prev => ({
       ...prev,
       totalItems,
       totalPages,
@@ -123,9 +115,16 @@ export function useAssetTableData<T extends Asset>(
     }));
   }, [sortedData.length, pagination.pageSize]);
 
+  // Paginate data
+  const paginatedData = useMemo(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
+    const endIndex = startIndex + pagination.pageSize;
+    return sortedData.slice(startIndex, endIndex);
+  }, [sortedData, pagination.currentPage, pagination.pageSize]);
+
   // Handler functions
   const handleSort = useCallback((key: keyof T) => {
-    setSortConfig((prev) => {
+    setSortConfig(prev => {
       if (prev?.key === key) {
         // Toggle direction or remove sort
         if (prev.direction === 'desc') {
@@ -138,16 +137,16 @@ export function useAssetTableData<T extends Asset>(
   }, []);
 
   const handleFilterChange = useCallback((newFilter: Partial<AssetFilter>) => {
-    setFilter((prev) => ({ ...prev, ...newFilter }));
-    setPagination((prev) => ({ ...prev, currentPage: 1 })); // Reset to first page
+    setFilter(prev => ({ ...prev, ...newFilter }));
+    setPagination(prev => ({ ...prev, currentPage: 1 })); // Reset to first page
   }, []);
 
   const handlePageChange = useCallback((page: number) => {
-    setPagination((prev) => ({ ...prev, currentPage: page }));
+    setPagination(prev => ({ ...prev, currentPage: page }));
   }, []);
 
   const handlePageSizeChange = useCallback((pageSize: number) => {
-    setPagination((prev) => ({
+    setPagination(prev => ({
       ...prev,
       pageSize,
       currentPage: 1,
@@ -156,18 +155,18 @@ export function useAssetTableData<T extends Asset>(
 
   const resetFilters = useCallback(() => {
     setFilter({ searchTerm: '' });
-    setPagination((prev) => ({ ...prev, currentPage: 1 }));
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
   }, []);
 
   // Get unique values for filter dropdowns
   const uniqueRegions = useMemo(() => {
     if (!rawData) return [];
-    return Array.from(new Set(rawData.map((a) => a.region))).sort();
+    return Array.from(new Set(rawData.map(a => a.region))).sort();
   }, [rawData]);
 
   const uniqueDamageLevels = useMemo(() => {
     if (!rawData) return [];
-    return Array.from(new Set(rawData.map((a) => a.damageLevel)));
+    return Array.from(new Set(rawData.map(a => a.damageLevel)));
   }, [rawData]);
 
   return {
@@ -175,16 +174,16 @@ export function useAssetTableData<T extends Asset>(
     data: paginatedData,
     allData: sortedData,
     totalCount: sortedData.length,
-    
+
     // State
     sortConfig,
     filter,
     pagination,
-    
+
     // Metadata
     uniqueRegions,
     uniqueDamageLevels,
-    
+
     // Actions
     handleSort,
     handleFilterChange,
@@ -197,16 +196,14 @@ export function useAssetTableData<T extends Asset>(
 /**
  * Transform GeoJSON building data into table format
  */
-export function transformBuildingData(
-  geojson: GeoJSON.FeatureCollection | null
-): BuildingAsset[] {
+export function transformBuildingData(geojson: GeoJSON.FeatureCollection | null): BuildingAsset[] {
   if (!geojson || !geojson.features) return [];
 
   return geojson.features
     .map((feature, index) => {
       const props = feature.properties || {};
       const geometry = feature.geometry;
-      
+
       // Extract coordinates
       let coordinates: [number, number] = [0, 0];
       if (geometry && geometry.type === 'Point') {
@@ -238,22 +235,20 @@ export function transformBuildingData(
         properties: props,
       };
     })
-    .filter((asset) => asset.loss > 0); // Only show damaged buildings
+    .filter(asset => asset.loss > 0); // Only show damaged buildings
 }
 
 /**
  * Transform GeoJSON road data into table format
  */
-export function transformRoadData(
-  geojson: GeoJSON.FeatureCollection | null
-): RoadAsset[] {
+export function transformRoadData(geojson: GeoJSON.FeatureCollection | null): RoadAsset[] {
   if (!geojson || !geojson.features) return [];
 
-  return geojson.features
+  const roads = geojson.features
     .map((feature, index) => {
       const props = feature.properties || {};
       const geometry = feature.geometry;
-      
+
       // Extract center point of road segment
       let coordinates: [number, number] = [0, 0];
       if (geometry && geometry.type === 'LineString') {
@@ -262,28 +257,37 @@ export function transformRoadData(
         coordinates = coords[midIndex] as [number, number];
       }
 
-      const loss = Number(props.Wind_Loss || props.Loss || 0);
+      // Support both database (Total_Loss) and file (Wind_Loss) formats
+      const loss = Number(props.Total_Loss || props.Wind_Loss || props.Loss || 0);
       const exposure = Number(props.Exposure || props.Value || 0);
       const damageRatio = Number(props.Damage_Ratio || 0);
 
-      // Determine damage level
+      // Determine damage level - adjusted for actual data range ($1K-$5K)
       let damageLevel: RoadAsset['damageLevel'] = 'light';
-      if (loss >= 75000) damageLevel = 'severe';
-      else if (loss >= 25000) damageLevel = 'heavy';
-      else if (loss >= 5000) damageLevel = 'moderate';
+      if (loss >= 3000) damageLevel = 'severe';
+      else if (loss >= 2000) damageLevel = 'heavy';
+      else if (loss >= 1000) damageLevel = 'moderate';
+
+      // Support both database (road_type, road_name) and file (Road_Type) formats
+      const roadType = props.road_type || props.Road_Type || props.UseType || 'Unknown';
+      const roadName = props.road_name || props.Road_Name || '';
+      const region = props.Admin2_Region || props.Admin1_Region || props.region || 'Unknown';
 
       return {
         id: props.id || props.ID || `road-${index}`,
+        name: roadName,
         loss,
         exposure,
         damageRatio,
         damageLevel,
-        roadType: props.Road_Type || props.UseType || 'Unknown',
+        roadType,
         surface: props.Surface || 'Unknown',
-        region: props.Admin2_Region || props.Admin1_Region || 'Unknown',
+        region,
         coordinates,
         properties: props,
       };
     })
-    .filter((asset) => asset.loss > 0); // Only show damaged roads
+    .filter(asset => asset.loss > 0); // Only show damaged roads
+
+  return roads;
 }

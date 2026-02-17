@@ -1,6 +1,6 @@
 /**
  * Error Handling Utilities
- * 
+ *
  * World-class error handling with:
  * - Consistent error logging
  * - User-friendly error messages
@@ -121,7 +121,7 @@ export function classifyError(error: Error | unknown): AppError {
 export function logError(error: AppError): void {
   const prefix = `[${error.severity.toUpperCase()}][${error.category}]`;
   const timestamp = error.timestamp.toISOString();
-  
+
   const logMessage = `${prefix} ${error.message}`;
   const details = {
     timestamp,
@@ -152,11 +152,11 @@ export function handleError(
 ): AppError {
   const appError = classifyError(error);
   logError(appError);
-  
+
   if (onError) {
     onError(appError);
   }
-  
+
   return appError;
 }
 
@@ -194,7 +194,7 @@ function getDefaultUserMessage(category: ErrorCategory): string {
     [ErrorCategory.NETWORK]: 'Unable to connect. Please check your internet connection.',
     [ErrorCategory.PARSE]: 'Received invalid data. Please try refreshing the page.',
     [ErrorCategory.VALIDATION]: 'Invalid input. Please check your data and try again.',
-    [ErrorCategory.PERMISSION]: 'You don\'t have permission to perform this action.',
+    [ErrorCategory.PERMISSION]: "You don't have permission to perform this action.",
     [ErrorCategory.NOT_FOUND]: 'The requested resource could not be found.',
     [ErrorCategory.TIMEOUT]: 'Request timed out. Please try again.',
     [ErrorCategory.UNKNOWN]: 'An unexpected error occurred. Please try again.',
@@ -244,9 +244,7 @@ export function createErrorHandler(componentName: string) {
 export function aggregateErrors(errors: AppError[]): AppError {
   const highestSeverity = errors.reduce(
     (highest, err) =>
-      getSeverityLevel(err.severity) > getSeverityLevel(highest)
-        ? err.severity
-        : highest,
+      getSeverityLevel(err.severity) > getSeverityLevel(highest) ? err.severity : highest,
     ErrorSeverity.LOW
   );
 

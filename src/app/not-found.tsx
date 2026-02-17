@@ -10,18 +10,14 @@ export default function NotFound() {
       <div className="max-w-2xl w-full text-center">
         {/* 404 Animation */}
         <div className="relative mb-8">
-          <h1 className="text-9xl font-bold text-slate-800/50 select-none">
-            404
-          </h1>
+          <h1 className="text-9xl font-bold text-slate-800/50 select-none">404</h1>
           <div className="absolute inset-0 flex items-center justify-center">
             <MapPin className="w-24 h-24 text-blue-500 animate-bounce" />
           </div>
         </div>
 
-        <h2 className="text-4xl font-bold text-white mb-4">
-          Page Not Found
-        </h2>
-        
+        <h2 className="text-4xl font-bold text-white mb-4">Page Not Found</h2>
+
         <p className="text-xl text-slate-400 mb-8">
           We couldn't find the climate data you're looking for.
         </p>
@@ -34,7 +30,7 @@ export default function NotFound() {
             <Home className="w-5 h-5" />
             Back to Dashboard
           </Link>
-          
+
           <a
             href="mailto:support@example.com"
             className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
@@ -46,9 +42,7 @@ export default function NotFound() {
 
         {/* Helpful links */}
         <div className="mt-12 p-6 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50">
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Popular Sections
-          </h3>
+          <h3 className="text-lg font-semibold text-white mb-4">Popular Sections</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <Link
               href="/"

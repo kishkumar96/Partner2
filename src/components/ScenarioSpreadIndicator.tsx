@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { formatCurrency, formatNumber } from "@/utils/formatters";
+import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface ScenarioMetric {
   best: number;
   forecast: number;
   worst: number;
   label: string;
-  unit?: "currency" | "number";
+  unit?: 'currency' | 'number';
 }
 
 interface ScenarioComparisonProps {
@@ -15,9 +15,9 @@ interface ScenarioComparisonProps {
   className?: string;
 }
 
-export function ScenarioComparison({ metrics, className = "" }: ScenarioComparisonProps) {
-  const formatValue = (value: number, unit?: "currency" | "number") => {
-    if (unit === "currency") {
+export function ScenarioComparison({ metrics, className = '' }: ScenarioComparisonProps) {
+  const formatValue = (value: number, unit?: 'currency' | 'number') => {
+    if (unit === 'currency') {
       return formatCurrency(value);
     }
     return formatNumber(value);
@@ -33,7 +33,9 @@ export function ScenarioComparison({ metrics, className = "" }: ScenarioComparis
   };
 
   return (
-    <div className={`bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-6 ${className}`}>
+    <div
+      className={`bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-6 ${className}`}
+    >
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-white mb-2">Scenario Analysis</h3>
         <p className="text-sm text-white/60">
@@ -45,7 +47,8 @@ export function ScenarioComparison({ metrics, className = "" }: ScenarioComparis
         {metrics.map((metric, idx) => {
           const spread = calculateSpread(metric.best, metric.forecast, metric.worst);
           const bestPosition = 0;
-          const forecastPosition = ((metric.forecast - metric.best) / (metric.worst - metric.best)) * 100;
+          const forecastPosition =
+            ((metric.forecast - metric.best) / (metric.worst - metric.best)) * 100;
           const worstPosition = 100;
 
           return (
@@ -61,21 +64,21 @@ export function ScenarioComparison({ metrics, className = "" }: ScenarioComparis
               <div className="relative h-12 bg-white/5 rounded-lg overflow-hidden">
                 {/* Gradient background showing range */}
                 <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 via-yellow-500/20 to-red-500/20" />
-                
+
                 {/* Best case marker */}
-                <div 
+                <div
                   className="absolute top-0 bottom-0 w-1 bg-green-400"
                   style={{ left: `${bestPosition}%` }}
                 />
-                
+
                 {/* Forecast marker */}
-                <div 
+                <div
                   className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-400 rounded-full border-2 border-white shadow-lg"
                   style={{ left: `${forecastPosition}%`, marginLeft: '-6px' }}
                 />
-                
+
                 {/* Worst case marker */}
-                <div 
+                <div
                   className="absolute top-0 bottom-0 w-1 bg-red-400"
                   style={{ left: `${worstPosition}%` }}
                 />
@@ -89,7 +92,9 @@ export function ScenarioComparison({ metrics, className = "" }: ScenarioComparis
                 </div>
                 <div className="text-center">
                   <div className="text-blue-400 font-medium mb-1">Forecast</div>
-                  <div className="text-white font-semibold">{formatValue(metric.forecast, metric.unit)}</div>
+                  <div className="text-white font-semibold">
+                    {formatValue(metric.forecast, metric.unit)}
+                  </div>
                 </div>
                 <div className="text-center">
                   <div className="text-red-400 font-medium mb-1">Worst Case</div>

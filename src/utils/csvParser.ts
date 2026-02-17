@@ -1,6 +1,6 @@
 /**
  * Unified CSV Parser Utility
- * 
+ *
  * World-class CSV parsing with support for:
  * - Quoted fields containing commas
  * - Escaped quotes
@@ -30,12 +30,7 @@ export function parseCSV(
   csvText: string,
   options: CSVParseOptions = {}
 ): Record<string, string | number | null>[] {
-  const {
-    inferTypes = true,
-    trimValues = true,
-    skipEmptyRows = true,
-    convertNaN = true,
-  } = options;
+  const { inferTypes = true, trimValues = true, skipEmptyRows = true, convertNaN = true } = options;
 
   // Normalize line endings
   const normalizedText = csvText.trim().replace(/\r\n/g, '\n');
@@ -48,15 +43,17 @@ export function parseCSV(
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    
+
     // Skip empty rows if option is set
     if (skipEmptyRows && !line.trim()) continue;
 
     const values = parseLine(line, trimValues);
-    
+
     // Skip if column count mismatch
     if (values.length !== headers.length && values.length > 0) {
-      console.warn(`CSV line ${i + 1}: Column count mismatch (expected ${headers.length}, got ${values.length})`);
+      console.warn(
+        `CSV line ${i + 1}: Column count mismatch (expected ${headers.length}, got ${values.length})`
+      );
     }
 
     const row: Record<string, string | number | null> = {};
@@ -198,7 +195,9 @@ export function validateCSV(csvText: string): {
   for (let i = 1; i < lines.length; i++) {
     const columnCount = parseLine(lines[i], true).length;
     if (columnCount !== headerColumnCount && columnCount > 0) {
-      errors.push(`Row ${i + 1}: Column count mismatch (expected ${headerColumnCount}, got ${columnCount})`);
+      errors.push(
+        `Row ${i + 1}: Column count mismatch (expected ${headerColumnCount}, got ${columnCount})`
+      );
     }
   }
 

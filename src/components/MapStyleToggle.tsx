@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { DollarSign, Wind } from "lucide-react";
+import { DollarSign, Wind } from 'lucide-react';
 
 interface MapStyleToggleProps {
-  onStyleChange: (style: "loss" | "wind") => void;
-  currentStyle: "loss" | "wind";
+  onStyleChange: (style: 'loss' | 'wind') => void;
+  currentStyle: 'loss' | 'wind';
 }
 
 export function MapStyleToggle({ onStyleChange, currentStyle }: MapStyleToggleProps) {
@@ -16,13 +16,13 @@ export function MapStyleToggle({ onStyleChange, currentStyle }: MapStyleTogglePr
         </div>
         <div className="flex gap-1.5 flex-wrap justify-center">
           <button
-            onClick={() => onStyleChange("loss")}
+            onClick={() => onStyleChange('loss')}
             className={`
               px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap
               ${
-                currentStyle === "loss"
-                  ? "bg-neon-coral/20 text-neon-coral shadow-glowCoral border border-neon-coral/40"
-                  : "text-slate-300 hover:text-slate-100 hover:bg-white/5"
+                currentStyle === 'loss'
+                  ? 'bg-neon-coral/20 text-neon-coral shadow-glowCoral border border-neon-coral/40'
+                  : 'text-slate-300 hover:text-slate-100 hover:bg-white/5'
               }
             `}
           >
@@ -32,13 +32,13 @@ export function MapStyleToggle({ onStyleChange, currentStyle }: MapStyleTogglePr
             </span>
           </button>
           <button
-            onClick={() => onStyleChange("wind")}
+            onClick={() => onStyleChange('wind')}
             className={`
               px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 whitespace-nowrap
               ${
-                currentStyle === "wind"
-                  ? "bg-neon-cyan/20 text-neon-cyan shadow-glowCyan border border-neon-cyan/40"
-                  : "text-slate-300 hover:text-slate-100 hover:bg-white/5"
+                currentStyle === 'wind'
+                  ? 'bg-neon-cyan/20 text-neon-cyan shadow-glowCyan border border-neon-cyan/40'
+                  : 'text-slate-300 hover:text-slate-100 hover:bg-white/5'
               }
             `}
           >

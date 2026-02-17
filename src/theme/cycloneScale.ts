@@ -22,11 +22,11 @@ export interface CategoryScale {
  * Used for: track markers, labels, legend items
  */
 export const CATEGORY_COLORS: CategoryScale = {
-  category5: '#7C3AED',    // Violet - Catastrophic
-  category4: '#DC2626',    // Red - Extreme
-  category3: '#FB923C',    // Orange - Extensive
-  category2: '#FACC15',    // Yellow - Moderate
-  category1: '#FDE047',    // Light Yellow - Minimal
+  category5: '#7C3AED', // Violet - Catastrophic
+  category4: '#DC2626', // Red - Extreme
+  category3: '#FB923C', // Orange - Extensive
+  category2: '#FACC15', // Yellow - Moderate
+  category1: '#FDE047', // Light Yellow - Minimal
   tropicalStorm: '#7DD3FC', // Sky Blue - Tropical Storm
 };
 
@@ -98,9 +98,9 @@ export function getCategoryLabel(category: number): string {
 export function getWindColor(windKnots: number): string {
   if (windKnots >= 137) return CATEGORY_COLORS.category5; // Cat 5
   if (windKnots >= 113) return CATEGORY_COLORS.category4; // Cat 4
-  if (windKnots >= 96) return CATEGORY_COLORS.category3;  // Cat 3
-  if (windKnots >= 83) return CATEGORY_COLORS.category2;  // Cat 2
-  if (windKnots >= 64) return CATEGORY_COLORS.category1;  // Cat 1
+  if (windKnots >= 96) return CATEGORY_COLORS.category3; // Cat 3
+  if (windKnots >= 83) return CATEGORY_COLORS.category2; // Cat 2
+  if (windKnots >= 64) return CATEGORY_COLORS.category1; // Cat 1
   if (windKnots >= 34) return CATEGORY_COLORS.tropicalStorm; // Tropical Storm
   return '#94A3B8'; // Below tropical storm threshold (slate-400)
 }
@@ -151,11 +151,11 @@ export type StoryBeatType =
  * Used for: beat markers, timeline indicators, story cards
  */
 export const STORY_BEAT_COLORS: Record<StoryBeatType, string> = {
-  'peak-intensity': '#DC2626',        // Red - Critical moment
+  'peak-intensity': '#DC2626', // Red - Critical moment
   'rapid-intensification': '#F59E0B', // Amber - Rapid change
-  'category-upgrade': '#8B5CF6',      // Purple - Milestone
-  'closest-approach': '#EC4899',      // Pink - Geographical concern
-  'peak-uncertainty': '#6B7280',      // Gray - Unknown
+  'category-upgrade': '#8B5CF6', // Purple - Milestone
+  'closest-approach': '#EC4899', // Pink - Geographical concern
+  'peak-uncertainty': '#6B7280', // Gray - Unknown
 };
 
 /**
@@ -185,18 +185,18 @@ export function getBeatColorRGBA(beatType: StoryBeatType, alpha: number): string
  */
 export const CHART_COLORS = {
   // Primary data lines
-  windSpeed: '#3B82F6',      // Blue-500
-  windGust: '#60A5FA',       // Blue-400 (lighter for gust envelope)
-  pressure: '#8B5CF6',       // Purple-500
-  
+  windSpeed: '#3B82F6', // Blue-500
+  windGust: '#60A5FA', // Blue-400 (lighter for gust envelope)
+  pressure: '#8B5CF6', // Purple-500
+
   // Fills and backgrounds
   windFill: 'rgba(59, 130, 246, 0.14)',
   pressureFill: 'rgba(139, 92, 246, 0.1)',
-  
+
   // Grid and axes
   gridColor: 'rgba(148, 163, 184, 0.1)',
   axisColor: 'rgba(148, 163, 184, 0.5)',
-  
+
   // Interactive elements
   tooltipBackground: 'rgba(15, 23, 42, 0.95)', // slate-900
   tooltipBorder: 'rgba(148, 163, 184, 0.3)',
@@ -211,11 +211,11 @@ export const CHART_COLORS = {
  * Based on Paul Tol's color schemes
  */
 export const CATEGORY_COLORS_COLORBLIND: CategoryScale = {
-  category5: '#882255',    // Purple-magenta
-  category4: '#CC6677',    // Rose
-  category3: '#DDCC77',    // Sand
-  category2: '#88CCEE',    // Cyan
-  category1: '#44AA99',    // Teal
+  category5: '#882255', // Purple-magenta
+  category4: '#CC6677', // Rose
+  category3: '#DDCC77', // Sand
+  category2: '#88CCEE', // Cyan
+  category1: '#44AA99', // Teal
   tropicalStorm: '#117733', // Green
 };
 
@@ -252,9 +252,9 @@ export function getContrastColor(hexColor: string): string {
   const r = parseInt(hexColor.slice(1, 3), 16);
   const g = parseInt(hexColor.slice(3, 5), 16);
   const b = parseInt(hexColor.slice(5, 7), 16);
-  
+
   // Calculate relative luminance (WCAG formula)
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  
+
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }

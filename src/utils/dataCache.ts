@@ -1,6 +1,6 @@
 /**
  * IndexedDB Cache for Large Data Files
- * 
+ *
  * Provides persistent caching for large GeoJSON and CSV files
  * - Instant loading after first fetch
  * - Version-based invalidation
@@ -29,7 +29,7 @@ class DataCache {
    */
   private async init(): Promise<void> {
     if (this.db) return;
-    
+
     if (this.initPromise) {
       return this.initPromise;
     }
@@ -48,9 +48,9 @@ class DataCache {
         resolve();
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = event => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
+
         // Create object store if it doesn't exist
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
@@ -253,7 +253,7 @@ export async function fetchWithCache(
   // Fetch from network
   console.log(`Fetching ${url}...`);
   const startTime = performance.now();
-  
+
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -261,7 +261,7 @@ export async function fetchWithCache(
 
   const data = await response.json();
   const loadTime = performance.now() - startTime;
-  
+
   console.log(`Loaded ${url} in ${loadTime.toFixed(0)}ms`);
 
   // Cache for next time (don't await - fire and forget)

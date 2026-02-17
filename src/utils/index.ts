@@ -1,16 +1,11 @@
 /**
  * Centralized Utilities Exports
- * 
+ *
  * World-class utility functions for consistent patterns across the codebase
  */
 
 // CSV Parsing
-export {
-  parseCSV,
-  parseCSVToArray,
-  validateCSV,
-  type CSVParseOptions,
-} from './csvParser';
+export { parseCSV, parseCSVToArray, validateCSV, type CSVParseOptions } from './csvParser';
 
 // Data Loading
 export {

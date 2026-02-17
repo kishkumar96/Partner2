@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 import {
   BookOpen,
   Database,
@@ -12,18 +12,18 @@ import {
   TrendingUp,
   Shield,
   Calendar,
-} from "lucide-react";
+} from 'lucide-react';
 
 export default function MethodologyPage() {
-  const [activeSection, setActiveSection] = useState("overview");
+  const [activeSection, setActiveSection] = useState('overview');
 
   const sections = [
-    { id: "overview", label: "Overview", icon: BookOpen },
-    { id: "data", label: "Data Files", icon: Database },
-    { id: "methodology", label: "Methodology", icon: Activity },
-    { id: "quality", label: "Data Quality", icon: CheckCircle },
-    { id: "limitations", label: "Limitations", icon: AlertTriangle },
-    { id: "governance", label: "Governance", icon: Shield },
+    { id: 'overview', label: 'Overview', icon: BookOpen },
+    { id: 'data', label: 'Data Files', icon: Database },
+    { id: 'methodology', label: 'Methodology', icon: Activity },
+    { id: 'quality', label: 'Data Quality', icon: CheckCircle },
+    { id: 'limitations', label: 'Limitations', icon: AlertTriangle },
+    { id: 'governance', label: 'Governance', icon: Shield },
   ];
 
   return (
@@ -38,8 +38,8 @@ export default function MethodologyPage() {
             </h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Comprehensive documentation of data sources, modeling methodology, and
-            quality assurance for the Climate Risk Dashboard
+            Comprehensive documentation of data sources, modeling methodology, and quality assurance
+            for the Climate Risk Dashboard
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-medium">
@@ -62,7 +62,7 @@ export default function MethodologyPage() {
           <div className="lg:col-span-1">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sticky top-6">
               <nav className="space-y-1">
-                {sections.map((section) => {
+                {sections.map(section => {
                   const Icon = section.icon;
                   return (
                     <button
@@ -70,8 +70,8 @@ export default function MethodologyPage() {
                       onClick={() => setActiveSection(section.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         activeSection === section.id
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                     >
                       <Icon className="w-5 h-5" />
@@ -86,7 +86,7 @@ export default function MethodologyPage() {
           {/* Content Area */}
           <div className="lg:col-span-3">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-              {activeSection === "overview" && (
+              {activeSection === 'overview' && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
@@ -94,20 +94,14 @@ export default function MethodologyPage() {
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">
-                          Event
-                        </div>
+                        <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Event</div>
                         <div className="font-bold text-gray-900 dark:text-white">
                           Tropical Cyclone Lola
                         </div>
                       </div>
                       <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div className="text-sm text-green-600 dark:text-green-400 mb-1">
-                          Date
-                        </div>
-                        <div className="font-bold text-gray-900 dark:text-white">
-                          February 2024
-                        </div>
+                        <div className="text-sm text-green-600 dark:text-green-400 mb-1">Date</div>
+                        <div className="font-bold text-gray-900 dark:text-white">February 2024</div>
                       </div>
                       <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                         <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">
@@ -118,9 +112,7 @@ export default function MethodologyPage() {
                         </div>
                       </div>
                       <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                        <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">
-                          Model
-                        </div>
+                        <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">Model</div>
                         <div className="font-bold text-gray-900 dark:text-white">
                           RiskScape v1.x
                         </div>
@@ -151,9 +143,9 @@ export default function MethodologyPage() {
                           Single Event Dataset
                         </div>
                         <p className="text-sm text-amber-800 dark:text-amber-200">
-                          This dashboard visualizes a single cyclone event. It cannot
-                          predict future events, assess multi-hazard cumulative risk, or
-                          provide probabilistic return period analysis.
+                          This dashboard visualizes a single cyclone event. It cannot predict future
+                          events, assess multi-hazard cumulative risk, or provide probabilistic
+                          return period analysis.
                         </p>
                       </div>
                     </div>
@@ -161,7 +153,7 @@ export default function MethodologyPage() {
                 </div>
               )}
 
-              {activeSection === "data" && (
+              {activeSection === 'data' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     Data Files
@@ -187,54 +179,54 @@ export default function MethodologyPage() {
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {[
                           {
-                            file: "damaged-buildings.geojson",
-                            size: "35MB",
-                            format: "GeoJSON",
-                            desc: "Individual building impacts (n≈62,000)",
+                            file: 'damaged-buildings.geojson',
+                            size: '35MB',
+                            format: 'GeoJSON',
+                            desc: 'Individual building impacts (n≈62,000)',
                           },
                           {
-                            file: "damaged-roads.geojson",
-                            size: "1.3MB",
-                            format: "GeoJSON",
-                            desc: "Road network damage (4,380km)",
+                            file: 'damaged-roads.geojson',
+                            size: '1.3MB',
+                            format: 'GeoJSON',
+                            desc: 'Road network damage (4,380km)',
                           },
                           {
-                            file: "regional-impacts.geojson",
-                            size: "9.1MB",
-                            format: "GeoJSON",
-                            desc: "Administrative boundary impacts (66 regions)",
+                            file: 'regional-impacts.geojson',
+                            size: '9.1MB',
+                            format: 'GeoJSON',
+                            desc: 'Administrative boundary impacts (66 regions)',
                           },
                           {
-                            file: "regional-impacts-by-sector.geojson",
-                            size: "2.6MB",
-                            format: "GeoJSON",
-                            desc: "Sectoral impacts by region",
+                            file: 'regional-impacts-by-sector.geojson',
+                            size: '2.6MB',
+                            format: 'GeoJSON',
+                            desc: 'Sectoral impacts by region',
                           },
                           {
-                            file: "exposure-by-cluster.geojson",
-                            size: "304KB",
-                            format: "GeoJSON",
-                            desc: "Geographic exposure clusters",
+                            file: 'exposure-by-cluster.geojson',
+                            size: '304KB',
+                            format: 'GeoJSON',
+                            desc: 'Geographic exposure clusters',
                           },
                           {
-                            file: "cyclone-track.geojson",
-                            size: "4KB",
-                            format: "GeoJSON",
-                            desc: "Official cyclone trajectory",
+                            file: 'cyclone-track.geojson',
+                            size: '4KB',
+                            format: 'GeoJSON',
+                            desc: 'Official cyclone trajectory',
                           },
                           {
-                            file: "national-summary.csv",
-                            size: "4KB",
-                            format: "CSV",
-                            desc: "National-level statistics",
+                            file: 'national-summary.csv',
+                            size: '4KB',
+                            format: 'CSV',
+                            desc: 'National-level statistics',
                           },
                           {
-                            file: "impact-by-sector.csv",
-                            size: "4KB",
-                            format: "CSV",
-                            desc: "Losses by economic sector",
+                            file: 'impact-by-sector.csv',
+                            size: '4KB',
+                            format: 'CSV',
+                            desc: 'Losses by economic sector',
                           },
-                        ].map((row) => (
+                        ].map(row => (
                           <tr key={row.file} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td className="px-4 py-3 font-mono text-xs text-gray-900 dark:text-white">
                               {row.file}
@@ -258,7 +250,7 @@ export default function MethodologyPage() {
                 </div>
               )}
 
-              {activeSection === "methodology" && (
+              {activeSection === 'methodology' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     Risk Assessment Framework
@@ -280,16 +272,15 @@ export default function MethodologyPage() {
                       </h3>
                       <div className="space-y-2 text-gray-700 dark:text-gray-300">
                         <p>
-                          <strong>Wind (Tropical Cyclone):</strong> Pacific Disaster Center
-                          cyclonic wind field model, 1km resolution
+                          <strong>Wind (Tropical Cyclone):</strong> Pacific Disaster Center cyclonic
+                          wind field model, 1km resolution
                         </p>
                         <ul className="ml-4 space-y-1">
                           <li>• 6 intensity bands (Beaufort scale)</li>
                           <li>• Categories 1-5 (83-280+ km/h)</li>
                         </ul>
                         <p className="mt-2">
-                          <strong>Flood Inundation:</strong> ANUGA hydrodynamic model,
-                          10m DEM-based
+                          <strong>Flood Inundation:</strong> ANUGA hydrodynamic model, 10m DEM-based
                         </p>
                         <ul className="ml-4 space-y-1">
                           <li>• Fluvial (river overflow) + Coastal (storm surge)</li>
@@ -304,20 +295,19 @@ export default function MethodologyPage() {
                       </h3>
                       <div className="space-y-2 text-gray-700 dark:text-gray-300">
                         <p>
-                          <strong>Buildings:</strong> 178,520 structures from OpenStreetMap
-                          + Vanuatu NSO
+                          <strong>Buildings:</strong> 178,520 structures from OpenStreetMap +
+                          Vanuatu NSO
                         </p>
                         <p>
-                          <strong>Population:</strong> 306,697 people (2020 Census,
-                          dasymetric mapping)
+                          <strong>Population:</strong> 306,697 people (2020 Census, dasymetric
+                          mapping)
                         </p>
                         <p>
-                          <strong>Infrastructure:</strong> Roads (4,380km), 563 evacuation
-                          centers, 136 health facilities, 470 schools
+                          <strong>Infrastructure:</strong> Roads (4,380km), 563 evacuation centers,
+                          136 health facilities, 470 schools
                         </p>
                         <p>
-                          <strong>Economic Assets:</strong> VUV 9.0T (~USD $75M) total
-                          value
+                          <strong>Economic Assets:</strong> VUV 9.0T (~USD $75M) total value
                         </p>
                       </div>
                     </div>
@@ -328,19 +318,15 @@ export default function MethodologyPage() {
                       </h3>
                       <div className="space-y-2 text-gray-700 dark:text-gray-300">
                         <p>
-                          <strong>Building Damage:</strong> Pacific Island Building
-                          Taxonomy (PDIE system)
+                          <strong>Building Damage:</strong> Pacific Island Building Taxonomy (PDIE
+                          system)
                         </p>
                         <ul className="ml-4 space-y-1">
                           <li>• Fragility curves by construction type and roofing</li>
-                          <li>
-                            • Damage states: None → Slight → Moderate → Extensive →
-                            Complete
-                          </li>
+                          <li>• Damage states: None → Slight → Moderate → Extensive → Complete</li>
                         </ul>
                         <p className="mt-2">
-                          <strong>Flood Vulnerability:</strong> Depth-damage curves from
-                          PCRAFI
+                          <strong>Flood Vulnerability:</strong> Depth-damage curves from PCRAFI
                         </p>
                       </div>
                     </div>
@@ -366,7 +352,7 @@ export default function MethodologyPage() {
                 </div>
               )}
 
-              {activeSection === "quality" && (
+              {activeSection === 'quality' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     Data Quality Assessment
@@ -376,9 +362,7 @@ export default function MethodologyPage() {
                     <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <CheckCircle className="w-5 h-5 text-green-600" />
-                        <h3 className="font-bold text-gray-900 dark:text-white">
-                          Completeness
-                        </h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white">Completeness</h3>
                       </div>
                       <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                         <li>• Buildings: ~85% coverage</li>
@@ -391,9 +375,7 @@ export default function MethodologyPage() {
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <TrendingUp className="w-5 h-5 text-blue-600" />
-                        <h3 className="font-bold text-gray-900 dark:text-white">
-                          Accuracy
-                        </h3>
+                        <h3 className="font-bold text-gray-900 dark:text-white">Accuracy</h3>
                       </div>
                       <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                         <li>• Spatial: ±10m (buildings)</li>
@@ -435,14 +417,14 @@ export default function MethodologyPage() {
                       </div>
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-3">
-                      Field surveys conducted in 12 communities (n=450 structures) to
-                      validate modeled damage against observed damage.
+                      Field surveys conducted in 12 communities (n=450 structures) to validate
+                      modeled damage against observed damage.
                     </p>
                   </div>
                 </div>
               )}
 
-              {activeSection === "limitations" && (
+              {activeSection === 'limitations' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     Limitations & Capabilities
@@ -486,46 +468,39 @@ export default function MethodologyPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                      Known Gaps
-                    </h3>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Known Gaps</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {[
                         {
-                          title: "Single Event",
-                          desc: "No historical baseline or context",
+                          title: 'Single Event',
+                          desc: 'No historical baseline or context',
                         },
                         {
-                          title: "No Uncertainty",
-                          desc: "Point estimates only (should be ranges)",
+                          title: 'No Uncertainty',
+                          desc: 'Point estimates only (should be ranges)',
                         },
                         {
-                          title: "Deterministic",
-                          desc: "Not probabilistic risk assessment",
+                          title: 'Deterministic',
+                          desc: 'Not probabilistic risk assessment',
                         },
                         {
-                          title: "Limited Validation",
-                          desc: "Field checks in 12 sites only",
+                          title: 'Limited Validation',
+                          desc: 'Field checks in 12 sites only',
                         },
                         {
-                          title: "Static Snapshot",
-                          desc: "No temporal dynamics or recovery modeling",
+                          title: 'Static Snapshot',
+                          desc: 'No temporal dynamics or recovery modeling',
                         },
                         {
-                          title: "Rural Undercount",
-                          desc: "Remote areas may be underrepresented",
+                          title: 'Rural Undercount',
+                          desc: 'Remote areas may be underrepresented',
                         },
-                      ].map((gap) => (
-                        <div
-                          key={gap.title}
-                          className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                        >
+                      ].map(gap => (
+                        <div key={gap.title} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <div className="font-semibold text-gray-900 dark:text-white text-sm">
                             {gap.title}
                           </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">
-                            {gap.desc}
-                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">{gap.desc}</div>
                         </div>
                       ))}
                     </div>
@@ -533,7 +508,7 @@ export default function MethodologyPage() {
                 </div>
               )}
 
-              {activeSection === "governance" && (
+              {activeSection === 'governance' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     Data Governance
@@ -545,12 +520,11 @@ export default function MethodologyPage() {
                     </h3>
                     <ul className="space-y-2 text-gray-700 dark:text-gray-300">
                       <li>
-                        <strong>License:</strong> Open Data Commons Open Database License
-                        (ODbL)
+                        <strong>License:</strong> Open Data Commons Open Database License (ODbL)
                       </li>
                       <li>
-                        <strong>Attribution:</strong> "Climate Risk Dashboard, powered by
-                        RiskScape, Pacific Disaster Center, 2024"
+                        <strong>Attribution:</strong> "Climate Risk Dashboard, powered by RiskScape,
+                        Pacific Disaster Center, 2024"
                       </li>
                       <li>
                         <strong>Commercial use:</strong> Permitted with attribution
@@ -566,12 +540,8 @@ export default function MethodologyPage() {
                       Privacy & Security
                     </h3>
                     <ul className="space-y-2 text-gray-700 dark:text-gray-300">
-                      <li>
-                        • Building data: Aggregated, no personally identifiable information
-                      </li>
-                      <li>
-                        • Population: Census statistical areas, not individual level
-                      </li>
+                      <li>• Building data: Aggregated, no personally identifiable information</li>
+                      <li>• Population: Census statistical areas, not individual level</li>
                       <li>• All data is public and anonymized</li>
                     </ul>
                   </div>
@@ -589,8 +559,7 @@ export default function MethodologyPage() {
                         <strong>Current version:</strong> 1.0.0 (Feb 2024)
                       </li>
                       <li>
-                        <strong>Next update:</strong> Pending validation and field
-                        verification
+                        <strong>Next update:</strong> Pending validation and field verification
                       </li>
                     </ul>
                   </div>
@@ -601,7 +570,7 @@ export default function MethodologyPage() {
                     </h3>
                     <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                       <li>
-                        1. <strong>RiskScape:</strong>{" "}
+                        1. <strong>RiskScape:</strong>{' '}
                         <a
                           href="https://www.riskscape.org.nz/"
                           target="_blank"
@@ -612,7 +581,7 @@ export default function MethodologyPage() {
                         </a>
                       </li>
                       <li>
-                        2. <strong>PCRAFI:</strong>{" "}
+                        2. <strong>PCRAFI:</strong>{' '}
                         <a
                           href="https://www.gfdrr.org/en/pcrafi"
                           target="_blank"
@@ -623,7 +592,7 @@ export default function MethodologyPage() {
                         </a>
                       </li>
                       <li>
-                        3. <strong>Vanuatu NSO:</strong>{" "}
+                        3. <strong>Vanuatu NSO:</strong>{' '}
                         <a
                           href="https://vnso.gov.vu/"
                           target="_blank"
@@ -634,7 +603,7 @@ export default function MethodologyPage() {
                         </a>
                       </li>
                       <li>
-                        4. <strong>ANUGA:</strong>{" "}
+                        4. <strong>ANUGA:</strong>{' '}
                         <a
                           href="https://github.com/GeoscienceAustralia/anuga_core"
                           target="_blank"

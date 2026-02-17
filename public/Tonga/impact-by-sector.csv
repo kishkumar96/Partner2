@@ -1,0 +1,8 @@
+Sector,Total_Loss,Total_Wind_Loss,Total_Fluvial_Loss,Total_Coastal_Loss,Total_Exposed_Value,Total_Value,Number_Exposed_Buildings,Number_Damaged_Buildings,Total_Number_Buildings,Building_Loss,Total_Exposed_Building_Value,Total_Building_Value,By_Loss.range_<_1.Number,By_Loss.range_<_1.Total_Loss,By_Loss.range_1_100.Number,By_Loss.range_1_100.Total_Loss,By_Loss.range_100_1000.Number,By_Loss.range_100_1000.Total_Loss,By_Loss.range_1000_10000.Number,By_Loss.range_1000_10000.Total_Loss,By_Loss.range_10000_100000.Number,By_Loss.range_10000_100000.Total_Loss,By_Loss.range_100000_+.Number,By_Loss.range_100000_+.Total_Loss
+Education,0,0,0,0,0,24666052,0,0,138,0,0,24666052,138,0,0,0,0,0,0,0,0,0,0,0
+Infrastructure,0,0,0,0,0,435082056,0,0,171,0,0,8872109,240610,0,0,0,0,0,0,0,0,0,0,0
+Other,0,0,0,0,0,107358286,0,0,4048,0,0,107358286,4048,0,0,0,0,0,0,0,0,0,0,0
+Productive,0,0,0,0,0,320830959,0,0,2746,0,0,295271652,47203,0,0,0,0,0,0,0,0,0,0,0
+Public,0,0,0,0,0,274396160,0,0,1832,0,0,274396160,1832,0,0,0,0,0,0,0,0,0,0,0
+Residential,0,0,0,0,0,1436867606,0,0,28776,0,0,1436867606,28776,0,0,0,0,0,0,0,0,0,0,0
+Unknown,0,0,0,0,0,497977088,0,0,15479,0,0,497977088,15479,0,0,0,0,0,0,0,0,0,0,0

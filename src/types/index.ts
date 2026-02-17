@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon } from 'lucide-react';
 
 export interface Hazard {
   id: string;
@@ -39,7 +39,7 @@ export interface RegionalImpact {
     lat: number;
     lng: number;
   };
-  severity: "low" | "medium" | "high" | "critical";
+  severity: 'low' | 'medium' | 'high' | 'critical';
   affectedPopulation: number;
   economicDamage: number;
   // Sector-specific impacts within this region
@@ -61,22 +61,24 @@ export interface Event {
   date: string;
   hazardId: string;
   countryCode?: string;
-  
+  /** For expanded/regional events: the id of the master event they belong to */
+  parentEventId?: string;
+
   // Aggregated national-level statistics
   totalAffectedPopulation: number;
   totalEconomicDamage: number;
   affectedRegions: number; // Count of regions/districts impacted
-  severity: "low" | "medium" | "high" | "critical";
-  
+  severity: 'low' | 'medium' | 'high' | 'critical';
+
   // Primary location (e.g., landfall point or country center)
   location: {
     lat: number;
     lng: number;
   };
-  
+
   // Optional: Link to detailed regional impacts
   regionalImpacts?: RegionalImpact[];
-  
+
   // DEPRECATED: These fields maintained for backward compatibility
   // Will be removed in future version
   /** @deprecated Use regionalImpacts instead */
@@ -120,7 +122,6 @@ export interface SummaryStats {
   totalEvents: number;
   totalAffectedPopulation: number;
   totalEconomicDamage: number;
-  highRiskAreas: number;
 }
 
 export type AggregationLevel = 'district' | 'province' | 'national';
@@ -158,10 +159,10 @@ export interface DistrictGeoProperties {
  * GeoJSON Feature for a district polygon
  */
 export interface DistrictGeoFeature {
-  type: "Feature";
+  type: 'Feature';
   properties: DistrictGeoProperties;
   geometry: {
-    type: "Polygon" | "MultiPolygon";
+    type: 'Polygon' | 'MultiPolygon';
     coordinates: number[][][] | number[][][][];
   };
 }
@@ -170,7 +171,7 @@ export interface DistrictGeoFeature {
  * GeoJSON FeatureCollection for all districts
  */
 export interface DistrictsGeoJSON {
-  type: "FeatureCollection";
+  type: 'FeatureCollection';
   features: DistrictGeoFeature[];
 }
 
@@ -230,5 +231,4 @@ export interface AggregatedEventData {
   totalEvents: number;
   totalAffectedPopulation: number;
   totalEconomicDamage: number;
-  highRiskAreas: number;
 }

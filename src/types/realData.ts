@@ -1,6 +1,6 @@
 /**
  * Type definitions for real PDIE data structures
- * 
+ *
  * These types provide compile-time safety for data loaded from CSV/GeoJSON files.
  * Gradually expand as more specific structure is needed.
  */
@@ -80,10 +80,13 @@ export interface BuildingProperties {
  * Road Properties (from damaged-roads.geojson)
  */
 export interface RoadProperties {
-  Wind_Loss: number;
-  Exposure: number;
-  Damage_Ratio: number;
-  Total_Loss?: number;
+  road_name?: string;
+  Total_Loss: number;
+  road_type?: string;
+  // Legacy properties (may not be present in database)
+  Wind_Loss?: number;
+  Exposure?: number;
+  Damage_Ratio?: number;
   Road_Type?: string;
   Surface?: string;
   [key: string]: any;

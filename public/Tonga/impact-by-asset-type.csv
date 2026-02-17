@@ -1,0 +1,13 @@
+Asset,Total_Loss,Total_Wind_Loss,Total_Fluvial_Loss,Total_Coastal_Loss,Total_Exposed_Value,Total_Value,Number_Exposed,Number_Damaged,Total_Number,By_Loss.range_<_1.Number,By_Loss.range_<_1.Total_Loss,By_Loss.range_1_100.Number,By_Loss.range_1_100.Total_Loss,By_Loss.range_100_1000.Number,By_Loss.range_100_1000.Total_Loss,By_Loss.range_1000_10000.Number,By_Loss.range_1000_10000.Total_Loss,By_Loss.range_10000_100000.Number,By_Loss.range_10000_100000.Total_Loss,By_Loss.range_100000_+.Number,By_Loss.range_100000_+.Total_Loss
+Water,0,0,0,0,0,2200000,0,0,16,16,0,0,0,0,0,0,0,0,0,0,0
+School,0,0,0,0,0,0,0,0,166,166,0,0,0,0,0,0,0,0,0,0,0
+Airport,0,0,0,0,0,33830690,0,0,6,6,0,0,0,0,0,0,0,0,0,0,0
+Port,0,0,0,0,0,47569349,0,0,623,623,0,0,0,0,0,0,0,0,0,0,0
+Building,0,0,0,0,0,2645408952,0,0,53190,53190,0,0,0,0,0,0,0,0,0,0,0
+Road,0,0,0,0,0,308696620,0,0,239690,239690,0,0,0,0,0,0,0,0,0,0,0
+Evacuation Centre,0,0,0,0,0,0,0,0,42,42,0,0,0,0,0,0,0,0,0,0,0
+Health Facility,0,0,0,0,0,0,0,0,41,41,0,0,0,0,0,0,0,0,0,0,0
+Telecommunication,0,0,0,0,0,10125000,0,0,85,85,0,0,0,0,0,0,0,0,0,0,0
+Power,0,0,0,0,0,17128902,0,0,19,19,0,0,0,0,0,0,0,0,0,0,0
+Crop,0,0,0,0,0,25559307,0,0,44457,44457,0,0,0,0,0,0,0,0,0,0,0
+Bridge,0,0,0,0,0,6659387,0,0,7,7,0,0,0,0,0,0,0,0,0,0,0

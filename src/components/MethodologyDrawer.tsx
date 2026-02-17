@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { X, AlertCircle, Database, TrendingUp } from "lucide-react";
-import { useEffect } from "react";
+import { X, AlertCircle, Database, TrendingUp } from 'lucide-react';
+import { useEffect } from 'react';
 
 interface MethodologyDrawerProps {
   isOpen: boolean;
@@ -12,10 +12,10 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
   // Close on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) onClose();
+      if (e.key === 'Escape' && isOpen) onClose();
     };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -23,14 +23,14 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[55] transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
-      
+
       {/* Drawer */}
-      <div 
+      <div
         className="fixed right-0 top-0 h-full max-h-screen w-full md:w-[600px] lg:w-[700px] max-w-[95vw] glass-panel border-l border-white/10 shadow-2xl z-[60] overflow-y-auto transform transition-transform"
         role="dialog"
         aria-labelledby="methodology-title"
@@ -59,36 +59,27 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Database className="w-5 h-5 text-blue-400" aria-hidden="true" />
-              <h3 className="text-lg font-bold text-slate-100">
-                Data Sources & Timestamps
-              </h3>
+              <h3 className="text-lg font-bold text-slate-100">Data Sources & Timestamps</h3>
             </div>
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-3">
               <div>
-                <p className="text-sm font-semibold text-slate-100 mb-1">
-                  Event Data
-                </p>
+                <p className="text-sm font-semibold text-slate-100 mb-1">Event Data</p>
                 <p className="text-sm text-slate-300">
-                  Cyclone Lola (October 2023) - Track data from Vanuatu Meteorological Service, 
-                  wind field analysis from TC Lola Best Track bulletin
+                  Cyclone Lola (October 2023) - Track data from Vanuatu Meteorological Service, wind
+                  field analysis from TC Lola Best Track bulletin
                 </p>
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-100 mb-1">
-                  Exposure Data
-                </p>
+                <p className="text-sm font-semibold text-slate-100 mb-1">Exposure Data</p>
                 <p className="text-sm text-slate-300">
-                  Population: WorldPop 2023 (100m resolution), Buildings: OpenStreetMap extract (October 2023), 
-                  Infrastructure: Vanuatu Ministry of Infrastructure spatial database
+                  Population: WorldPop 2023 (100m resolution), Buildings: OpenStreetMap extract
+                  (October 2023), Infrastructure: Vanuatu Ministry of Infrastructure spatial
+                  database
                 </p>
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-100 mb-1">
-                  Last Updated
-                </p>
-                <p className="text-sm text-slate-300">
-                  February 7, 2026 14:30 UTC
-                </p>
+                <p className="text-sm font-semibold text-slate-100 mb-1">Last Updated</p>
+                <p className="text-sm text-slate-300">February 7, 2026 14:30 UTC</p>
               </div>
             </div>
           </section>
@@ -97,25 +88,35 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
           <section>
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-red-400" aria-hidden="true" />
-              <h3 className="text-lg font-bold text-slate-100">
-                Risk & Exposure Classifications
-              </h3>
+              <h3 className="text-lg font-bold text-slate-100">Risk & Exposure Classifications</h3>
             </div>
-            
+
             {/* High Risk Definition */}
             <div className="space-y-4">
               <div className="border border-slate-700/60 rounded-lg p-4 bg-slate-800/60">
                 <h4 className="text-base font-bold text-slate-100 mb-2">
-                  "High Risk" Definition
+                  &quot;High Risk&quot; Definition
                 </h4>
                 <p className="text-sm text-slate-300 mb-3">
-                  Districts classified as "High Risk" meet at least one of the following criteria:
+                  Districts classified as &quot;High Risk&quot; meet at least one of the following
+                  criteria:
                 </p>
                 <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside ml-2">
-                  <li><strong>Affected Population:</strong> &gt;5,000 people exposed to wind speeds ≥120 km/h</li>
-                  <li><strong>Economic Damage:</strong> Modelled losses &gt;$5M USD</li>
-                  <li><strong>Building Damage:</strong> &gt;500 structures with damage state D3+ (moderate-severe)</li>
-                  <li><strong>Critical Infrastructure:</strong> ≥3 critical assets (hospitals, schools, evacuation centers) exposed</li>
+                  <li>
+                    <strong>Affected Population:</strong> &gt;5,000 people exposed to wind speeds
+                    ≥120 km/h
+                  </li>
+                  <li>
+                    <strong>Economic Damage:</strong> Modelled losses &gt;$5M USD
+                  </li>
+                  <li>
+                    <strong>Building Damage:</strong> &gt;500 structures with damage state D3+
+                    (moderate-severe)
+                  </li>
+                  <li>
+                    <strong>Critical Infrastructure:</strong> ≥3 critical assets (hospitals,
+                    schools, evacuation centers) exposed
+                  </li>
                 </ul>
               </div>
 
@@ -147,10 +148,11 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
               {/* Affected Population Method */}
               <div className="border border-slate-700/60 rounded-lg p-4 bg-slate-800/60">
                 <h4 className="text-base font-bold text-slate-100 mb-2">
-                  "Affected Population" Methodology
+                  &quot;Affected Population&quot; Methodology
                 </h4>
                 <p className="text-sm text-slate-300 mb-2">
-                  Calculated by intersecting wind speed footprint with population raster (WorldPop 100m):
+                  Calculated by intersecting wind speed footprint with population raster (WorldPop
+                  100m):
                 </p>
                 <ul className="text-sm text-slate-300 space-y-1 list-disc list-inside ml-2">
                   <li>Raster cells within wind hazard polygons identified</li>
@@ -163,18 +165,31 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
               {/* Economic Damage Method */}
               <div className="border border-slate-700/60 rounded-lg p-4 bg-slate-800/60">
                 <h4 className="text-base font-bold text-slate-100 mb-2">
-                  "Economic Damage" Methodology
+                  &quot;Economic Damage&quot; Methodology
                 </h4>
                 <p className="text-sm text-slate-300 mb-2">
                   Direct physical damage only (replacement cost), calculated per asset type:
                 </p>
                 <div className="text-sm text-slate-300 space-y-2 ml-2">
-                  <p><strong>Buildings:</strong> Damage functions by construction type × wind speed, unit costs from Vanuatu National Statistics Office</p>
-                  <p><strong>Roads:</strong> Length of damaged segments × repair cost per km ($150k-$400k by road class)</p>
-                  <p><strong>Agriculture:</strong> Crop loss estimates (coconut, copra, kava) based on wind exposure and growth stage</p>
-                  <p><strong>Infrastructure:</strong> Damage state assessment × replacement value from asset registry</p>
+                  <p>
+                    <strong>Buildings:</strong> Damage functions by construction type × wind speed,
+                    unit costs from Vanuatu National Statistics Office
+                  </p>
+                  <p>
+                    <strong>Roads:</strong> Length of damaged segments × repair cost per km
+                    ($150k-$400k by road class)
+                  </p>
+                  <p>
+                    <strong>Agriculture:</strong> Crop loss estimates (coconut, copra, kava) based
+                    on wind exposure and growth stage
+                  </p>
+                  <p>
+                    <strong>Infrastructure:</strong> Damage state assessment × replacement value
+                    from asset registry
+                  </p>
                   <p className="mt-3 pt-2 border-t border-slate-700/60">
-                    <strong>Not included:</strong> Indirect losses (business interruption, lost wages), reconstruction inflation, cascading impacts
+                    <strong>Not included:</strong> Indirect losses (business interruption, lost
+                    wages), reconstruction inflation, cascading impacts
                   </p>
                 </div>
               </div>
@@ -183,18 +198,19 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
 
           {/* Confidence & Limitations */}
           <section>
-            <h3 className="text-lg font-bold text-slate-100 mb-4">
-              Confidence & Limitations
-            </h3>
+            <h3 className="text-lg font-bold text-slate-100 mb-4">Confidence & Limitations</h3>
             <div className="bg-yellow-500/10 border border-yellow-500/40 rounded-lg p-4 space-y-2">
               <p className="text-sm text-slate-200">
-                <strong>Model Uncertainty:</strong> Economic damage estimates have ±30% uncertainty due to variable construction quality and incomplete asset valuation data.
+                <strong>Model Uncertainty:</strong> Economic damage estimates have ±30% uncertainty
+                due to variable construction quality and incomplete asset valuation data.
               </p>
               <p className="text-sm text-slate-200">
-                <strong>Coverage:</strong> 98% of districts have complete exposure data. Remote islands may have outdated building footprints.
+                <strong>Coverage:</strong> 98% of districts have complete exposure data. Remote
+                islands may have outdated building footprints.
               </p>
               <p className="text-sm text-slate-200">
-                <strong>Scenario Spread:</strong> Best/Forecast/Worst scenarios represent 10th/50th/90th percentile outcomes from ensemble model runs.
+                <strong>Scenario Spread:</strong> Best/Forecast/Worst scenarios represent
+                10th/50th/90th percentile outcomes from ensemble model runs.
               </p>
             </div>
           </section>
@@ -202,8 +218,11 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
           {/* Contact Info */}
           <section className="pt-4 border-t border-slate-700/60">
             <p className="text-xs text-slate-400">
-              For methodology questions or data access requests, contact: 
-              <a href="mailto:data@vanuatu-disaster-risk.gov.vu" className="text-blue-300 hover:underline ml-1">
+              For methodology questions or data access requests, contact:
+              <a
+                href="mailto:data@vanuatu-disaster-risk.gov.vu"
+                className="text-blue-300 hover:underline ml-1"
+              >
                 data@vanuatu-disaster-risk.gov.vu
               </a>
             </p>

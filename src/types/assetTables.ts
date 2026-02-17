@@ -26,6 +26,7 @@ export interface BuildingAsset {
  */
 export interface RoadAsset {
   id: string;
+  name?: string; // Road name from database
   loss: number;
   exposure: number;
   damageRatio: number;

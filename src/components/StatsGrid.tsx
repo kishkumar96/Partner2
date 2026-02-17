@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { GlassStatCard } from "./GlassStatCard";
-import { BarChart3, Building2, Home, Layers, TrendingUp, Users, Heart, School } from "lucide-react";
+import { GlassStatCard } from './GlassStatCard';
+import { BarChart3, Building2, Home, Layers, TrendingUp, Users, Heart, School } from 'lucide-react';
 
 interface StatsGridProps {
   totalEconomicDamage: number;
@@ -46,10 +46,10 @@ export function StatsGrid({
           severity="danger"
           icon={<TrendingUp className="h-4 w-4 text-red-400" />}
           metricInfo={{
-            unit: "USD (millions)",
-            temporalScope: "Cumulative event total",
-            methodology: "Modelled using sector exposure × wind vulnerability curves (PDIE system)",
-            classification: "Impact"
+            unit: 'USD (millions)',
+            temporalScope: 'Cumulative event total',
+            methodology: 'Modelled using sector exposure × wind vulnerability curves (PDIE system)',
+            classification: 'Impact',
           }}
         />
       </div>
@@ -57,9 +57,7 @@ export function StatsGrid({
       {/* Section Label: Exposure */}
       <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/10 border-l-4 border-orange-500 rounded mt-4">
         <Home className="h-3.5 w-3.5 text-orange-400" aria-hidden="true" />
-        <span className="text-xs font-bold uppercase tracking-wide text-orange-400">
-          Exposure
-        </span>
+        <span className="text-xs font-bold uppercase tracking-wide text-orange-400">Exposure</span>
       </div>
 
       {/* Grid of secondary metrics */}
@@ -122,7 +120,7 @@ export function StatsGrid({
               Critical Infrastructure Exposed
             </h3>
           </div>
-          
+
           <div className="grid grid-cols-3 gap-2">
             {assetStats.healthFacilities !== undefined && (
               <div className="bg-slate-800/50 rounded-lg p-3 text-center border border-slate-700/50">
@@ -130,33 +128,25 @@ export function StatsGrid({
                 <p className="text-xl font-bold text-red-400 tabular-nums">
                   {assetStats.healthFacilities}
                 </p>
-                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">
-                  Health
-                </p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">Health</p>
               </div>
             )}
-            
+
             {assetStats.schools !== undefined && (
               <div className="bg-slate-800/50 rounded-lg p-3 text-center border border-slate-700/50">
                 <School className="h-4 w-4 text-blue-400 mx-auto mb-1" />
-                <p className="text-xl font-bold text-blue-400 tabular-nums">
-                  {assetStats.schools}
-                </p>
-                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">
-                  Schools
-                </p>
+                <p className="text-xl font-bold text-blue-400 tabular-nums">{assetStats.schools}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">Schools</p>
               </div>
             )}
-            
+
             {assetStats.evacuationCenters !== undefined && (
               <div className="bg-slate-800/50 rounded-lg p-3 text-center border border-slate-700/50">
                 <Home className="h-4 w-4 text-green-400 mx-auto mb-1" />
                 <p className="text-xl font-bold text-green-400 tabular-nums">
                   {assetStats.evacuationCenters}
                 </p>
-                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">
-                  Shelters
-                </p>
+                <p className="text-xs text-slate-400 uppercase tracking-wide mt-1">Shelters</p>
               </div>
             )}
           </div>

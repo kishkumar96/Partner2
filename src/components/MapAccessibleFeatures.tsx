@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useRef, useEffect, type RefObject } from "react";
-import { List, X, Search } from "lucide-react";
-import { formatNumber, formatCurrency } from "@/utils/formatters";
+import { useState, useRef, useEffect, type RefObject } from 'react';
+import { List, X, Search } from 'lucide-react';
+import { formatNumber, formatCurrency } from '@/utils/formatters';
 
 export interface DistrictFeature {
   id: string;
@@ -43,7 +43,7 @@ export default function MapAccessibleFeatures({
   returnFocusRef,
 }: MapAccessibleFeaturesProps) {
   const [isOpenInternal, setIsOpenInternal] = useState(defaultOpen);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -61,7 +61,7 @@ export default function MapAccessibleFeatures({
   };
 
   // Filter districts by search term
-  const filteredDistricts = districts.filter((d) =>
+  const filteredDistricts = districts.filter(d =>
     d.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -70,24 +70,22 @@ export default function MapAccessibleFeatures({
     if (!resolvedIsOpen) return;
 
     switch (e.key) {
-      case "ArrowDown":
+      case 'ArrowDown':
         e.preventDefault();
-        setFocusedIndex((prev) =>
-          prev < filteredDistricts.length - 1 ? prev + 1 : prev
-        );
+        setFocusedIndex(prev => (prev < filteredDistricts.length - 1 ? prev + 1 : prev));
         break;
-      case "ArrowUp":
+      case 'ArrowUp':
         e.preventDefault();
-        setFocusedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        setFocusedIndex(prev => (prev > 0 ? prev - 1 : 0));
         break;
-      case "Enter":
+      case 'Enter':
         e.preventDefault();
         if (filteredDistricts[focusedIndex]) {
           onDistrictSelect(filteredDistricts[focusedIndex].id);
           setOpen(false);
         }
         break;
-      case "Escape":
+      case 'Escape':
         e.preventDefault();
         setOpen(false);
         break;
@@ -97,12 +95,10 @@ export default function MapAccessibleFeatures({
   // Scroll focused item into view
   useEffect(() => {
     if (resolvedIsOpen && listRef.current) {
-      const focusedElement = listRef.current.querySelector(
-        `[data-index="${focusedIndex}"]`
-      );
+      const focusedElement = listRef.current.querySelector(`[data-index="${focusedIndex}"]`);
       focusedElement?.scrollIntoView({
-        block: "nearest",
-        behavior: "smooth",
+        block: 'nearest',
+        behavior: 'smooth',
       });
     }
   }, [focusedIndex, resolvedIsOpen]);
@@ -133,11 +129,11 @@ export default function MapAccessibleFeatures({
       panelRef.current.querySelectorAll<HTMLElement>(
         'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
       )
-    ).filter((el) => !el.hasAttribute("disabled") && !el.getAttribute("aria-hidden"));
+    ).filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
   };
 
   const trapFocus = (event: React.KeyboardEvent) => {
-    if (inline || event.key !== "Tab") return;
+    if (inline || event.key !== 'Tab') return;
     const focusable = getFocusableElements();
     if (focusable.length === 0) return;
     const first = focusable[0];
@@ -173,15 +169,16 @@ export default function MapAccessibleFeatures({
       {/* Features panel */}
       {resolvedIsOpen && (
         <div
-          className={inline
-            ? "relative w-full glass-panel rounded-xl shadow-lg border border-slate-700/50 overflow-hidden pointer-events-auto"
-            : "fixed top-4 right-4 z-[22] w-96 max-w-[calc(100vw-2rem)] glass-panel rounded-xl shadow-2xl border border-slate-700/50 overflow-hidden pointer-events-auto"
+          className={
+            inline
+              ? 'relative w-full glass-panel rounded-xl shadow-lg border border-slate-700/50 overflow-hidden pointer-events-auto'
+              : 'fixed top-4 right-4 z-[22] w-96 max-w-[calc(100vw-2rem)] glass-panel rounded-xl shadow-2xl border border-slate-700/50 overflow-hidden pointer-events-auto'
           }
           ref={panelRef}
-          role={inline ? "region" : "dialog"}
+          role={inline ? 'region' : 'dialog'}
           aria-modal={inline ? undefined : true}
           aria-label="District features list"
-          onKeyDown={(event) => {
+          onKeyDown={event => {
             handleKeyDown(event);
             trapFocus(event);
           }}
@@ -213,11 +210,13 @@ export default function MapAccessibleFeatures({
                 aria-hidden="true"
               />
               <input
+                id="district-search"
+                name="districtSearch"
                 ref={searchInputRef}
                 type="text"
                 placeholder="Search districts..."
                 value={searchTerm}
-                onChange={(e) => {
+                onChange={e => {
                   setSearchTerm(e.target.value);
                   setFocusedIndex(0);
                 }}
@@ -239,7 +238,7 @@ export default function MapAccessibleFeatures({
           >
             {filteredDistricts.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-400 text-sm">
-                No districts found matching "{searchTerm}"
+                No districts found matching &quot;{searchTerm}&quot;
               </div>
             ) : (
               filteredDistricts.map((district, index) => (
@@ -252,8 +251,8 @@ export default function MapAccessibleFeatures({
                   }}
                   className={`w-full px-4 py-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ${
                     index === focusedIndex
-                      ? "bg-blue-500/20 border-l-2 border-blue-500"
-                      : "hover:bg-white/5 dark:hover:bg-black/10"
+                      ? 'bg-blue-500/20 border-l-2 border-blue-500'
+                      : 'hover:bg-white/5 dark:hover:bg-black/10'
                   }`}
                   role="option"
                   aria-selected={index === focusedIndex}
@@ -265,15 +264,9 @@ export default function MapAccessibleFeatures({
                         {district.name}
                       </h3>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
-                        <span>
-                          Pop: {formatNumber(district.population)}
-                        </span>
-                        <span>
-                          Damage: {formatCurrency(district.economicDamageUSD)}
-                        </span>
-                        <span>
-                          Buildings: {formatNumber(district.buildingCount)}
-                        </span>
+                        <span>Pop: {formatNumber(district.population)}</span>
+                        <span>Damage: {formatCurrency(district.economicDamageUSD)}</span>
+                        <span>Buildings: {formatNumber(district.buildingCount)}</span>
                       </div>
                     </div>
                     <div className="flex-shrink-0">

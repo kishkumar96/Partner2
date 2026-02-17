@@ -1,6 +1,6 @@
 /**
  * Style Constants and Reusable CSS Classes
- * 
+ *
  * World-class style management with:
  * - Consistent design system
  * - Type-safe style composition
@@ -54,7 +54,8 @@ export const GLASS_PANEL = {
 export const CARD_STYLES = {
   base: 'glass-panel rounded-lg',
   hover: 'hover:shadow-lg transition-shadow duration-200',
-  interactive: 'cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200',
+  interactive:
+    'cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200',
 } as const;
 
 /**
@@ -135,13 +136,15 @@ export function cn(...classes: (string | undefined | null | false)[]): string {
  * @param options - Panel options
  * @returns Complete class string
  */
-export function glassPanel(options: {
-  position?: keyof typeof POSITION_PRESETS;
-  zIndex?: keyof typeof Z_INDEX;
-  responsive?: keyof typeof RESPONSIVE_WIDTH;
-  maxHeight?: keyof typeof RESPONSIVE_HEIGHT;
-  additional?: string;
-} = {}): string {
+export function glassPanel(
+  options: {
+    position?: keyof typeof POSITION_PRESETS;
+    zIndex?: keyof typeof Z_INDEX;
+    responsive?: keyof typeof RESPONSIVE_WIDTH;
+    maxHeight?: keyof typeof RESPONSIVE_HEIGHT;
+    additional?: string;
+  } = {}
+): string {
   const { position, zIndex, responsive, maxHeight, additional } = options;
 
   return cn(
@@ -159,18 +162,15 @@ export function glassPanel(options: {
  * @param options - Button options
  * @returns Complete class string
  */
-export function button(options: {
-  variant?: keyof typeof BUTTON_VARIANTS;
-  size?: keyof typeof BUTTON_SIZES;
-  disabled?: boolean;
-  additional?: string;
-} = {}): string {
-  const {
-    variant = 'primary',
-    size = 'md',
-    disabled = false,
-    additional,
-  } = options;
+export function button(
+  options: {
+    variant?: keyof typeof BUTTON_VARIANTS;
+    size?: keyof typeof BUTTON_SIZES;
+    disabled?: boolean;
+    additional?: string;
+  } = {}
+): string {
+  const { variant = 'primary', size = 'md', disabled = false, additional } = options;
 
   return cn(
     'rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',

@@ -31,7 +31,7 @@ export const reportWebVitals = (metric: Metric) => {
 
   // Send to analytics
   analytics.performance(metric.name, metric.value);
-  
+
   // Send to error tracking
   trackPerformance(metric.name, metric.value);
 
@@ -66,7 +66,7 @@ export const measureDataLoad = async <T>(
   loadFn: () => Promise<T>
 ): Promise<T> => {
   const startTime = performance.now();
-  
+
   try {
     const result = await loadFn();
     const duration = performance.now() - startTime;
@@ -87,18 +87,15 @@ export const measureDataLoad = async <T>(
 /**
  * Track API call performance
  */
-export const trackAPICall = async <T>(
-  endpoint: string,
-  fetchFn: () => Promise<T>
-): Promise<T> => {
+export const trackAPICall = async <T>(endpoint: string, fetchFn: () => Promise<T>): Promise<T> => {
   const startTime = performance.now();
-  
+
   try {
     const result = await fetchFn();
     const duration = performance.now() - startTime;
 
     analytics.performance(`api_${endpoint}`, duration);
-    
+
     // Alert if API is slow
     if (duration > 3000) {
       console.warn(`Slow API call: ${endpoint} took ${duration.toFixed(2)}ms`);
@@ -156,13 +153,10 @@ export const observeLongTasks = () => {
   }
 
   try {
-    const observer = new PerformanceObserver((list) => {
+    const observer = new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
         if (entry.duration > 50) {
-          console.warn(
-            `Long task detected: ${entry.duration.toFixed(2)}ms`,
-            entry
-          );
+          console.warn(`Long task detected: ${entry.duration.toFixed(2)}ms`, entry);
           analytics.performance('long_task', entry.duration);
         }
       }
@@ -224,16 +218,18 @@ export const initPerformanceMonitoring = () => {
 
   // Report Web Vitals (requires web-vitals package)
   if (process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === 'true') {
-    import('web-vitals').then(({ onCLS, onFID, onFCP, onLCP, onTTFB, onINP }) => {
-      onCLS(reportWebVitals);
-      onFID(reportWebVitals);
-      onFCP(reportWebVitals);
-      onLCP(reportWebVitals);
-      onTTFB(reportWebVitals);
-      onINP(reportWebVitals);
-    }).catch(() => {
-      console.warn('web-vitals package not available');
-    });
+    import('web-vitals')
+      .then(({ onCLS, onFID, onFCP, onLCP, onTTFB, onINP }) => {
+        onCLS(reportWebVitals);
+        onFID(reportWebVitals);
+        onFCP(reportWebVitals);
+        onLCP(reportWebVitals);
+        onTTFB(reportWebVitals);
+        onINP(reportWebVitals);
+      })
+      .catch(() => {
+        console.warn('web-vitals package not available');
+      });
   }
 };
 

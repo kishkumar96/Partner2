@@ -4,8 +4,7 @@
  */
 
 const isErrorTrackingEnabled =
-  typeof window !== 'undefined' &&
-  process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true';
+  typeof window !== 'undefined' && process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true';
 
 // Error severity levels
 export enum ErrorSeverity {
@@ -35,65 +34,64 @@ export const initErrorTracking = () => {
   if (!isErrorTrackingEnabled) return;
 
   const sentryDSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
-  
+
   if (sentryDSN && typeof window !== 'undefined') {
     // Dynamically import and initialize Sentry
-    import('@sentry/nextjs').then((Sentry) => {
-      Sentry.init({
-        dsn: sentryDSN,
-        environment: process.env.NODE_ENV,
-        tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-        
-        // Performance monitoring - updated for Sentry v8+
-        integrations: [
-          Sentry.browserTracingIntegration(),
-          Sentry.replayIntegration({
-            maskAllText: true,
-            blockAllMedia: true,
-          }),
-        ],
+    import('@sentry/nextjs')
+      .then(Sentry => {
+        Sentry.init({
+          dsn: sentryDSN,
+          environment: process.env.NODE_ENV,
+          tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
 
-        // Session Replay
-        replaysSessionSampleRate: 0.1,
-        replaysOnErrorSampleRate: 1.0,
+          // Performance monitoring - updated for Sentry v8+
+          integrations: [
+            Sentry.browserTracingIntegration(),
+            Sentry.replayIntegration({
+              maskAllText: true,
+              blockAllMedia: true,
+            }),
+          ],
 
-        // Filter out noise
-        beforeSend(event: any, hint: any) {
-          // Don't send console errors in development
-          if (process.env.NODE_ENV === 'development') {
-            return null;
-          }
+          // Session Replay
+          replaysSessionSampleRate: 0.1,
+          replaysOnErrorSampleRate: 1.0,
 
-          // Filter out specific errors
-          const error = hint.originalException;
-          if (error && typeof error === 'object' && 'message' in error) {
-            const message = (error as Error).message;
-            
-            // Ignore certain errors
-            if (
-              message.includes('ResizeObserver loop') ||
-              message.includes('Non-Error promise rejection')
-            ) {
+          // Filter out noise
+          beforeSend(event: any, hint: any) {
+            // Don't send console errors in development
+            if (process.env.NODE_ENV === 'development') {
               return null;
             }
-          }
 
-          return event;
-        },
+            // Filter out specific errors
+            const error = hint.originalException;
+            if (error && typeof error === 'object' && 'message' in error) {
+              const message = (error as Error).message;
+
+              // Ignore certain errors
+              if (
+                message.includes('ResizeObserver loop') ||
+                message.includes('Non-Error promise rejection')
+              ) {
+                return null;
+              }
+            }
+
+            return event;
+          },
+        });
+      })
+      .catch(err => {
+        console.error('Failed to initialize Sentry:', err);
       });
-    }).catch((err) => {
-      console.error('Failed to initialize Sentry:', err);
-    });
   }
 };
 
 /**
  * Log error to tracking service
  */
-export const logError = (
-  error: Error,
-  context?: ErrorContext
-) => {
+export const logError = (error: Error, context?: ErrorContext) => {
   // Always log to console in development
   if (process.env.NODE_ENV === 'development') {
     console.error('Error:', error, context);

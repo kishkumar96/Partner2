@@ -31,12 +31,12 @@ export function formatNumber(value: number | undefined | null): string {
 
 export function getSeverityColor(severity: string): string {
   const colors: Record<string, string> = {
-    low: "bg-green-500/20 text-green-300",
-    medium: "bg-yellow-500/20 text-yellow-300",
-    high: "bg-orange-500/20 text-orange-300",
-    critical: "bg-red-500/20 text-red-300",
+    low: 'bg-green-500/20 text-green-300',
+    medium: 'bg-yellow-500/20 text-yellow-300',
+    high: 'bg-orange-500/20 text-orange-300',
+    critical: 'bg-red-500/20 text-red-300',
   };
-  return colors[severity] || "bg-slate-800/70 text-slate-200";
+  return colors[severity] || 'bg-slate-800/70 text-slate-200';
 }
 
 export function getHazardColor(hazardId: string): string {

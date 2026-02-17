@@ -62,7 +62,7 @@ class OllamaClient {
       const response = await fetch(`${this.host}/api/tags`, {
         method: 'GET',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch models');
       }
@@ -88,7 +88,7 @@ class OllamaClient {
     }
   ): Promise<string> {
     const model = options?.model || this.defaultModel;
-    
+
     const request: OllamaRequest = {
       model,
       prompt,
@@ -144,7 +144,7 @@ class OllamaClient {
     }
   ): AsyncGenerator<string> {
     const model = options?.model || this.defaultModel;
-    
+
     const request: OllamaRequest = {
       model,
       prompt,
@@ -178,12 +178,12 @@ class OllamaClient {
 
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      
+
       buffer = lines.pop() || '';
 
       for (const line of lines) {
@@ -191,7 +191,7 @@ class OllamaClient {
           try {
             const data: OllamaResponse = JSON.parse(line);
             yield data.response;
-            
+
             if (data.done) {
               return;
             }
@@ -274,15 +274,21 @@ Be specific, actionable, and aim for world-class quality!`;
    * Review with multiple models for consensus (Best quality)
    */
   async reviewCodeWithEnsemble(
-    code: string, 
+    code: string,
     language: string = 'typescript'
   ): Promise<{ reviews: Array<{ model: string; review: string }>; consensus: string }> {
     // Get available models
     const models = await this.listModels();
-    
+
     // Select best models for code review (up to 3 for performance)
     const reviewModels = models
-      .filter(m => m.includes('qwen') || m.includes('codellama') || m.includes('deepseek') || m.includes('llama'))
+      .filter(
+        m =>
+          m.includes('qwen') ||
+          m.includes('codellama') ||
+          m.includes('deepseek') ||
+          m.includes('llama')
+      )
       .slice(0, 3);
 
     if (reviewModels.length === 0) {
@@ -293,12 +299,13 @@ Be specific, actionable, and aim for world-class quality!`;
 
     // Get reviews from multiple models
     const reviews = await Promise.all(
-      reviewModels.map(async (model) => {
+      reviewModels.map(async model => {
         console.log(`   Consulting ${model}...`);
-        const review = await this.generate(
-          this.getWorldClassReviewPrompt(code, language),
-          { model, temperature: 0.1, maxTokens: 2000 }
-        );
+        const review = await this.generate(this.getWorldClassReviewPrompt(code, language), {
+          model,
+          temperature: 0.1,
+          maxTokens: 2000,
+        });
         return { model, review };
       })
     );
@@ -315,10 +322,10 @@ ${reviews.map(r => `\n=== ${r.model} ===\n${r.review}`).join('\n')}
 
 Create a UNIFIED WORLD-CLASS REVIEW:`;
 
-    const consensus = await this.generate(consensusPrompt, { 
+    const consensus = await this.generate(consensusPrompt, {
       model: reviewModels[0], // Use best available model for consensus
       temperature: 0.2,
-      maxTokens: 3000 
+      maxTokens: 3000,
     });
 
     return { reviews, consensus };
@@ -345,8 +352,9 @@ Be specific and actionable. Focus on world-class quality.`;
    * Generate documentation
    */
   async generateDocs(code: string, type: 'jsdoc' | 'readme' = 'jsdoc'): Promise<string> {
-    const prompt = type === 'jsdoc' 
-      ? `Generate comprehensive JSDoc documentation for this code. Include descriptions, parameters, return types, and examples.
+    const prompt =
+      type === 'jsdoc'
+        ? `Generate comprehensive JSDoc documentation for this code. Include descriptions, parameters, return types, and examples.
 
 Code:
 \`\`\`typescript
@@ -354,7 +362,7 @@ ${code}
 \`\`\`
 
 Documentation:`
-      : `Generate README documentation for this code. Include overview, usage, examples, and API reference.
+        : `Generate README documentation for this code. Include overview, usage, examples, and API reference.
 
 Code:
 \`\`\`typescript
@@ -477,9 +485,11 @@ export const getAvailableModels = async (): Promise<string[]> => {
 /**
  * Smart model selector - picks best model for the task
  */
-export const selectBestModel = async (task: 'review' | 'docs' | 'test' | 'explain'): Promise<string> => {
+export const selectBestModel = async (
+  task: 'review' | 'docs' | 'test' | 'explain'
+): Promise<string> => {
   const models = await ollama.listModels();
-  
+
   // Priority order for each task
   const preferences = {
     review: ['qwen2.5:14b', 'codellama:13b', 'deepseek-coder', 'qwen2.5:7b', 'codellama:7b'],
@@ -489,7 +499,7 @@ export const selectBestModel = async (task: 'review' | 'docs' | 'test' | 'explai
   };
 
   const taskPrefs = preferences[task];
-  
+
   // Find best available model
   for (const pref of taskPrefs) {
     const found = models.find(m => m.includes(pref));
@@ -503,15 +513,18 @@ export const selectBestModel = async (task: 'review' | 'docs' | 'test' | 'explai
 /**
  * Multi-model review for best quality
  */
-export const getWorldClassReview = async (code: string, language: string = 'typescript'): Promise<string> => {
+export const getWorldClassReview = async (
+  code: string,
+  language: string = 'typescript'
+): Promise<string> => {
   const models = await ollama.listModels();
-  
+
   // Use ensemble if multiple good models available
   if (models.length >= 2) {
     const result = await ollama.reviewCodeWithEnsemble(code, language);
     return result.consensus;
   }
-  
+
   // Single model fallback
   return ollama.reviewCode(code, language);
 };

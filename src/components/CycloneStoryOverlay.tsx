@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Map as MapLibreMap } from "maplibre-gl";
-import { BookOpen, ChevronLeft, ChevronRight, Pause, Play, X, RotateCcw } from "lucide-react";
-import { StoryBeat, getStoryBeatIcon } from "@/utils/cycloneStory";
-import { CycloneForecastPoint } from "@/utils/cycloneAnimationLoader";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { BookOpen, ChevronLeft, ChevronRight, Pause, Play, X, RotateCcw } from 'lucide-react';
+import { StoryBeat, getStoryBeatIcon } from '@/utils/cycloneStory';
+import { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 
 /**
  * Hook to detect if user prefers reduced motion
@@ -13,10 +13,12 @@ function useReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery.matches);
+    Promise.resolve().then(() => {
+      setPrefersReducedMotion(mediaQuery.matches);
+    });
 
     const handler = (event: MediaQueryListEvent) => {
       setPrefersReducedMotion(event.matches);
@@ -39,14 +41,14 @@ function computeBeatDuration(
   baseInterval: number
 ): number {
   if (!currentBeat || !nextBeat) return baseInterval;
-  
+
   const timeDiffMs = nextBeat.time.getTime() - currentBeat.time.getTime();
   const timeDiffHours = timeDiffMs / (60 * 60 * 1000);
-  
+
   // Scale: 1 hour real time = 1 second animation time
   // Clamp between 1-5 seconds
   const scaledDuration = Math.max(1000, Math.min(5000, timeDiffHours * 1000));
-  
+
   return scaledDuration;
 }
 
@@ -91,7 +93,7 @@ export default function CycloneStoryOverlay({
   const prefersReducedMotion = useReducedMotion();
 
   const getContainerMetrics = () => {
-    if (typeof window === "undefined") {
+    if (typeof window === 'undefined') {
       return { left: 0, top: 0, width: 0, height: 0 };
     }
     const rect = containerRef.current?.getBoundingClientRect();
@@ -112,7 +114,7 @@ export default function CycloneStoryOverlay({
   }, [storyBeats, isPlaying]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     if (panelPosition.x !== 0 || panelPosition.y !== 0) return;
     const { width, height } = getContainerMetrics();
     const panelWidth = panelRef.current?.offsetWidth ?? DEFAULT_PANEL_WIDTH;
@@ -144,7 +146,7 @@ export default function CycloneStoryOverlay({
 
   const getNextBeat = (index: number) => {
     if (!storyBeats || storyBeats.length === 0 || typeof index !== 'number') return null;
-    return storyBeats.find((beat) => beat && beat.index > index) || null;
+    return storyBeats.find(beat => beat && beat.index > index) || null;
   };
 
   const getPreviousBeat = (index: number) => {
@@ -167,7 +169,7 @@ export default function CycloneStoryOverlay({
       if (!point) return;
 
       const targetZoom = Math.min((baseZoom ?? map.getZoom()) + 1, MAX_ZOOM);
-      
+
       // Use instant jump if user prefers reduced motion
       if (prefersReducedMotion) {
         map.jumpTo({
@@ -181,7 +183,7 @@ export default function CycloneStoryOverlay({
           zoom: targetZoom,
           duration: 2200,
           pitch: 25,
-          easing: (t) => t * (2 - t),
+          easing: t => t * (2 - t),
         });
       }
     };
@@ -196,10 +198,10 @@ export default function CycloneStoryOverlay({
       runFlyTo();
     };
 
-    map.once("styledata", handleStyleData);
+    map.once('styledata', handleStyleData);
 
     return () => {
-      map.off("styledata", handleStyleData);
+      map.off('styledata', handleStyleData);
     };
   }, [map, forecastTrack, activeBeat, baseZoom, prefersReducedMotion]);
 
@@ -207,12 +209,12 @@ export default function CycloneStoryOverlay({
   useEffect(() => {
     if (!activeBeat) return;
     if (lastBeatIdRef.current === activeBeat.id) return;
-    
+
     setBeatReached(true);
     const timeout = window.setTimeout(() => {
       setBeatReached(false);
     }, 1200);
-    
+
     return () => window.clearTimeout(timeout);
   }, [activeBeat]);
 
@@ -227,7 +229,7 @@ export default function CycloneStoryOverlay({
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
       if (!isDragging) return;
-      if (typeof window === "undefined") return;
+      if (typeof window === 'undefined') return;
       const panelWidth = panelRef.current?.offsetWidth ?? DEFAULT_PANEL_WIDTH;
       const panelHeight = panelRef.current?.offsetHeight ?? DEFAULT_PANEL_HEIGHT;
       const { left, top, width, height } = getContainerMetrics();
@@ -246,7 +248,7 @@ export default function CycloneStoryOverlay({
     const handleUp = () => {
       if (!isDragging) return;
       setIsDragging(false);
-      if (typeof window === "undefined") return;
+      if (typeof window === 'undefined') return;
       const panelWidth = panelRef.current?.offsetWidth ?? DEFAULT_PANEL_WIDTH;
       const panelHeight = panelRef.current?.offsetHeight ?? DEFAULT_PANEL_HEIGHT;
       const { width, height } = getContainerMetrics();
@@ -269,11 +271,11 @@ export default function CycloneStoryOverlay({
       });
     };
 
-    document.addEventListener("pointermove", handleMove);
-    document.addEventListener("pointerup", handleUp);
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleUp);
     return () => {
-      document.removeEventListener("pointermove", handleMove);
-      document.removeEventListener("pointerup", handleUp);
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
     };
   }, [isDragging, dragOffset.x, dragOffset.y, panelPosition.x, panelPosition.y]);
 
@@ -305,7 +307,11 @@ export default function CycloneStoryOverlay({
     };
 
     // Compute time-aware duration for this beat transition
-    const duration = computeBeatDuration(activeBeat, getNextBeat(currentIndexRef.current), PLAY_STEP_MS);
+    const duration = computeBeatDuration(
+      activeBeat,
+      getNextBeat(currentIndexRef.current),
+      PLAY_STEP_MS
+    );
 
     // Use a self-correcting interval to drive the animation.
     let expected = Date.now() + duration;
@@ -347,20 +353,20 @@ export default function CycloneStoryOverlay({
         ref={panelRef}
         className="pointer-events-auto w-full max-w-[520px] rounded-xl border border-slate-700/60 bg-slate-900/95 shadow-2xl backdrop-blur-xl"
         style={{
-          boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
+          boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
           left: `${panelPosition.x}px`,
           top: `${panelPosition.y}px`,
-          position: "absolute",
+          position: 'absolute',
         }}
       >
         <div
           className={`flex items-center justify-between px-4 py-2.5 border-b border-slate-700/50 ${beatReached ? 'bg-blue-500/20 animate-pulse' : ''} ${
-            isDragging ? "cursor-grabbing" : "cursor-grab"
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
           }`}
           role="button"
           tabIndex={0}
           aria-label="Drag cyclone story panel"
-          onPointerDown={(event) => {
+          onPointerDown={event => {
             event.preventDefault();
             const rect = panelRef.current?.getBoundingClientRect();
             const offsetX = rect ? event.clientX - rect.left : 0;
@@ -368,8 +374,8 @@ export default function CycloneStoryOverlay({
             setDragOffset({ x: offsetX, y: offsetY });
             setIsDragging(true);
           }}
-          onKeyDown={(event) => {
-            if (typeof window === "undefined") return;
+          onKeyDown={event => {
+            if (typeof window === 'undefined') return;
             const panelWidth = panelRef.current?.offsetWidth ?? DEFAULT_PANEL_WIDTH;
             const panelHeight = panelRef.current?.offsetHeight ?? DEFAULT_PANEL_HEIGHT;
             const { width, height } = getContainerMetrics();
@@ -380,10 +386,10 @@ export default function CycloneStoryOverlay({
             let nextX = panelPosition.x;
             let nextY = panelPosition.y;
 
-            if (event.key === "ArrowLeft") nextX -= KEY_MOVE_STEP;
-            if (event.key === "ArrowRight") nextX += KEY_MOVE_STEP;
-            if (event.key === "ArrowUp") nextY -= KEY_MOVE_STEP;
-            if (event.key === "ArrowDown") nextY += KEY_MOVE_STEP;
+            if (event.key === 'ArrowLeft') nextX -= KEY_MOVE_STEP;
+            if (event.key === 'ArrowRight') nextX += KEY_MOVE_STEP;
+            if (event.key === 'ArrowUp') nextY -= KEY_MOVE_STEP;
+            if (event.key === 'ArrowDown') nextY += KEY_MOVE_STEP;
 
             if (nextX !== panelPosition.x || nextY !== panelPosition.y) {
               event.preventDefault();
@@ -394,7 +400,7 @@ export default function CycloneStoryOverlay({
             }
           }}
           onDoubleClick={() => {
-            if (typeof window === "undefined") return;
+            if (typeof window === 'undefined') return;
             const { width, height } = getContainerMetrics();
             const panelWidth = panelRef.current?.offsetWidth ?? 360;
             const panelHeight = panelRef.current?.offsetHeight ?? 220;
@@ -433,17 +439,20 @@ export default function CycloneStoryOverlay({
           {hasBeats && activeBeat && (
             <div className="px-4 py-3.5 space-y-3">
               <div className="flex flex-col gap-1.5">
-              <div className="text-lg font-bold text-white">
-                {(() => {
-                  const BeatIcon = getStoryBeatIcon(activeBeat.type);
-                  return <BeatIcon className="w-4 h-4 inline-block mr-2 text-slate-100" aria-hidden="true" />;
-                })()}
-                {activeBeat.title}
-              </div>
-                <div className="text-sm text-slate-200">{activeBeat.description}</div>
-                <div className="text-xs text-slate-400">
-                  {activeBeat.time.toLocaleString()}
+                <div className="text-lg font-bold text-white">
+                  {(() => {
+                    const BeatIcon = getStoryBeatIcon(activeBeat.type);
+                    return (
+                      <BeatIcon
+                        className="w-4 h-4 inline-block mr-2 text-slate-100"
+                        aria-hidden="true"
+                      />
+                    );
+                  })()}
+                  {activeBeat.title}
                 </div>
+                <div className="text-sm text-slate-200">{activeBeat.description}</div>
+                <div className="text-xs text-slate-400">{activeBeat.time.toLocaleString()}</div>
               </div>
 
               {activeBeat.metrics && (
@@ -495,29 +504,29 @@ export default function CycloneStoryOverlay({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setLoopEnabled((prev) => !prev)}
+                    onClick={() => setLoopEnabled(prev => !prev)}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                       loopEnabled
-                        ? "bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500"
-                        : "bg-slate-800/80 text-slate-300 border-slate-700/50 hover:bg-slate-700"
+                        ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700/50 hover:bg-slate-700'
                     }`}
-                    title={loopEnabled ? "Loop enabled" : "Loop disabled"}
+                    title={loopEnabled ? 'Loop enabled' : 'Loop disabled'}
                   >
                     <RotateCcw className={`w-4 h-4 ${loopEnabled ? 'animate-slow-spin' : ''}`} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsPlaying((prev) => !prev)}
+                    onClick={() => setIsPlaying(prev => !prev)}
                     className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-600/20"
                   >
                     {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    {isPlaying ? "Pause" : "Play"}
+                    {isPlaying ? 'Pause' : 'Play'}
                   </button>
                 </div>
               </div>
 
               <div className="flex gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                {storyBeats.map((beat) => {
+                {storyBeats.map(beat => {
                   const isActive = beat.id === activeBeat.id;
                   return (
                     <button
@@ -526,14 +535,19 @@ export default function CycloneStoryOverlay({
                       onClick={() => onSelect(beat.index)}
                       className={`min-w-[140px] text-left rounded-lg border px-3 py-2 text-xs transition-all hover:scale-[1.02] ${
                         isActive
-                          ? "border-blue-500 bg-blue-500/15 text-white shadow-lg shadow-blue-500/20"
-                          : "border-slate-700/60 bg-slate-800/50 text-slate-300 hover:bg-slate-800/80 hover:border-slate-600"
+                          ? 'border-blue-500 bg-blue-500/15 text-white shadow-lg shadow-blue-500/20'
+                          : 'border-slate-700/60 bg-slate-800/50 text-slate-300 hover:bg-slate-800/80 hover:border-slate-600'
                       }`}
                     >
                       <div className="font-semibold truncate">
                         {(() => {
                           const BeatIcon = getStoryBeatIcon(beat.type);
-                          return <BeatIcon className="w-3.5 h-3.5 inline-block mr-1 text-slate-200" aria-hidden="true" />;
+                          return (
+                            <BeatIcon
+                              className="w-3.5 h-3.5 inline-block mr-1 text-slate-200"
+                              aria-hidden="true"
+                            />
+                          );
                         })()}
                         {beat.title}
                       </div>

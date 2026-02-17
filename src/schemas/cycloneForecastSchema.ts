@@ -14,18 +14,18 @@ export const CycloneForecastRowSchema = z.object({
   "Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']": z.string(),
   Latitude: z.coerce.number().min(-90).max(90),
   Longitude: z.coerce.number().min(-180).max(180),
-  
+
   // Intensity metrics
   Symbol: z.coerce.number().nullable().optional(),
   Category: z.coerce.number().min(0).max(5),
   Pressure: z.coerce.number().min(800).max(1020), // hPa
   PressureOCI: z.coerce.number().nullable().optional(), // Outermost closed isobar
-  
+
   // Wind data
   MeanWind: z.coerce.number().min(0).max(200), // knots
   WindGust: z.coerce.number().min(0).max(250), // knots
   P5Wind: z.coerce.number().nullable().optional(), // Alternative wind metric
-  
+
   // Structural metrics
   RadiusOCI: z.coerce.number().nullable().optional(), // km
   Radius1000hPa: z.coerce.number().nullable().optional(),
@@ -33,53 +33,53 @@ export const CycloneForecastRowSchema = z.object({
   EyeRadius: z.coerce.number().nullable().optional(), // km
   UncEyeRadius: z.coerce.number().nullable().optional(), // km
   VerticalExtent: z.coerce.number().nullable().optional(), // scale 1-5
-  
+
   // Forecast uncertainty
   Uncertainty: z.coerce.number().min(0).max(1000), // km
-  
+
   // Professional intensity metrics
   FinalT: z.coerce.number().nullable().optional(), // Dvorak T-number
   CurrentIntensity: z.coerce.number().nullable().optional(),
   DataTNoDvorak: z.coerce.number().nullable().optional(),
   ModelTNoDvorak: z.coerce.number().nullable().optional(),
   PatternTNoDvorak: z.coerce.number().nullable().optional(),
-  
+
   // Wind radii (directional) - Gale force (34kt+)
   GaleRadius: z.coerce.number().nullable().optional(),
   NEGaleRadius: z.coerce.number().min(0).max(500).nullable().optional(),
   SEGaleRadius: z.coerce.number().min(0).max(500).nullable().optional(),
   SWGaleRadius: z.coerce.number().min(0).max(500).nullable().optional(),
   NWGaleRadius: z.coerce.number().min(0).max(500).nullable().optional(),
-  
+
   // Wind radii - Strong gale (50kt+)
   StrongGaleRadius: z.coerce.number().nullable().optional(),
   NEStrongGaleRadius: z.coerce.number().min(0).max(300).nullable().optional(),
   SEStrongGaleRadius: z.coerce.number().min(0).max(300).nullable().optional(),
   SWStrongGaleRadius: z.coerce.number().min(0).max(300).nullable().optional(),
   NWStrongGaleRadius: z.coerce.number().min(0).max(300).nullable().optional(),
-  
+
   // Wind radii - Storm force (64kt+)
   StormRadius: z.coerce.number().nullable().optional(),
   NEStormRadius: z.coerce.number().min(0).max(200).nullable().optional(),
   SEStormRadius: z.coerce.number().min(0).max(200).nullable().optional(),
   SWStormRadius: z.coerce.number().min(0).max(200).nullable().optional(),
   NWStormRadius: z.coerce.number().min(0).max(200).nullable().optional(),
-  
+
   // Wind radii - Hurricane force (96kt+)
   HurricaneRadius: z.coerce.number().nullable().optional(),
   NEHurricaneRadius: z.coerce.number().min(0).max(150).nullable().optional(),
   SEHurricaneRadius: z.coerce.number().min(0).max(150).nullable().optional(),
   SWHurricaneRadius: z.coerce.number().min(0).max(150).nullable().optional(),
   NWHurricaneRadius: z.coerce.number().min(0).max(150).nullable().optional(),
-  
+
   // Metadata fields (optional, for completeness)
   DataSource: z.string().nullable().optional(),
-  "Land/Water": z.string().nullable().optional(),
+  'Land/Water': z.string().nullable().optional(),
   CycloneStatus: z.string().nullable().optional(),
   HowLocation: z.string().nullable().optional(),
   UncPressure: z.coerce.number().nullable().optional(),
   HowPressure: z.string().nullable().optional(),
-  "P/W_Method": z.string().nullable().optional(),
+  'P/W_Method': z.string().nullable().optional(),
   HowMaxWindRadius: z.string().nullable().optional(),
   HowGaleRadius: z.string().nullable().optional(),
   HowStormRadius: z.string().nullable().optional(),
@@ -104,7 +104,7 @@ export const CycloneForecastPointSchema = z.object({
   meanWind: z.number(),
   windGust: z.number(),
   uncertainty: z.number(),
-  
+
   // Directional radii
   galeRadiusNE: z.number(),
   galeRadiusSE: z.number(),
@@ -118,7 +118,7 @@ export const CycloneForecastPointSchema = z.object({
   hurricaneRadiusSE: z.number(),
   hurricaneRadiusSW: z.number(),
   hurricaneRadiusNW: z.number(),
-  
+
   // Enhanced fields
   eyeRadius: z.number(),
   eyeRadiusUncertainty: z.number(),
@@ -161,10 +161,10 @@ export function validateCycloneRow(
 ): ValidationResult<CycloneForecastRow> {
   try {
     const validated = CycloneForecastRowSchema.parse(row);
-    
+
     // Check for warnings (valid but potentially problematic data)
     const warnings: ValidationResult<CycloneForecastRow>['warnings'] = [];
-    
+
     if (validated.EyeRadius === null) {
       warnings.push({
         row: rowIndex,
@@ -172,7 +172,7 @@ export function validateCycloneRow(
         message: 'Missing eye radius data',
       });
     }
-    
+
     if (validated.Uncertainty > 500) {
       warnings.push({
         row: rowIndex,
@@ -180,7 +180,7 @@ export function validateCycloneRow(
         message: 'Very high uncertainty (>500km)',
       });
     }
-    
+
     return {
       success: true,
       data: validated,
@@ -189,27 +189,29 @@ export function validateCycloneRow(
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       const zodError = error as z.ZodError;
-      const errors = zodError.issues.map((err) => ({
+      const errors = zodError.issues.map(err => ({
         row: rowIndex,
         field: err.path.join('.'),
         message: err.message,
         value: (row as any)[err.path[0] || 'unknown'],
       }));
-      
+
       return {
         success: false,
         errors,
       };
     }
-    
+
     return {
       success: false,
-      errors: [{
-        row: rowIndex,
-        field: 'unknown',
-        message: 'Unexpected validation error',
-        value: row,
-      }],
+      errors: [
+        {
+          row: rowIndex,
+          field: 'unknown',
+          message: 'Unexpected validation error',
+          value: row,
+        },
+      ],
     };
   }
 }
@@ -217,29 +219,27 @@ export function validateCycloneRow(
 /**
  * Validate entire forecast track with aggregated results
  */
-export function validateForecastTrack(
-  rows: any[]
-): ValidationResult<CycloneForecastRow[]> {
+export function validateForecastTrack(rows: any[]): ValidationResult<CycloneForecastRow[]> {
   const validatedRows: CycloneForecastRow[] = [];
   const allErrors: ValidationResult<CycloneForecastRow>['errors'] = [];
   const allWarnings: ValidationResult<CycloneForecastRow>['warnings'] = [];
-  
+
   rows.forEach((row, index) => {
     const result = validateCycloneRow(row, index + 1); // 1-based row numbers for user display
-    
+
     if (result.success && result.data) {
       validatedRows.push(result.data);
     }
-    
+
     if (result.errors) {
       allErrors?.push(...result.errors);
     }
-    
+
     if (result.warnings) {
       allWarnings?.push(...result.warnings);
     }
   });
-  
+
   return {
     success: validatedRows.length === rows.length,
     data: validatedRows,

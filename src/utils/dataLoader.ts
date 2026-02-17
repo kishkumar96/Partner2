@@ -1,6 +1,6 @@
 /**
  * Unified Data Loading Utility
- * 
+ *
  * World-class data fetching with:
  * - Consistent error handling
  * - Type safety
@@ -32,6 +32,8 @@ export interface DataLoaderOptions {
   timeout?: number;
   /** Cache the result (default: false) */
   cache?: boolean;
+  /** Optional external abort signal */
+  signal?: AbortSignal;
 }
 
 export interface DataLoaderResult<T> {
@@ -53,12 +55,7 @@ export async function loadData<T>(
   url: string,
   options: DataLoaderOptions = {}
 ): Promise<DataLoaderResult<T>> {
-  const {
-    retries = 0,
-    retryDelay = 1000,
-    timeout = 30000,
-    cache = false,
-  } = options;
+  const { retries = 0, retryDelay = 1000, timeout = 30000, cache = false, signal } = options;
 
   const fullUrl = getFullUrl(url);
 
@@ -73,10 +70,17 @@ export async function loadData<T>(
 
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <=retries; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
+      if (signal) {
+        if (signal.aborted) {
+          controller.abort();
+        } else {
+          signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+      }
 
       const response = await fetch(fullUrl, {
         signal: controller.signal,
@@ -88,7 +92,7 @@ export async function loadData<T>(
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json() as T;
+      const data = (await response.json()) as T;
 
       // Cache if requested
       if (cache) {
@@ -128,12 +132,7 @@ export async function loadTextData(
   url: string,
   options: DataLoaderOptions = {}
 ): Promise<DataLoaderResult<string>> {
-  const {
-    retries = 0,
-    retryDelay = 1000,
-    timeout = 30000,
-    cache = false,
-  } = options;
+  const { retries = 0, retryDelay = 1000, timeout = 30000, cache = false, signal } = options;
 
   const fullUrl = getFullUrl(url);
 
@@ -152,6 +151,13 @@ export async function loadTextData(
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
+      if (signal) {
+        if (signal.aborted) {
+          controller.abort();
+        } else {
+          signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+      }
 
       const response = await fetch(fullUrl, {
         signal: controller.signal,

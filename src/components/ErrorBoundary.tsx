@@ -83,12 +83,8 @@ class ErrorBoundary extends Component<Props, State> {
                 <AlertCircle className="w-8 h-8 text-red-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">
-                  Something went wrong
-                </h1>
-                <p className="text-slate-400 mt-1">
-                  We encountered an unexpected error
-                </p>
+                <h1 className="text-2xl font-bold text-white">Something went wrong</h1>
+                <p className="text-slate-400 mt-1">We encountered an unexpected error</p>
               </div>
             </div>
 
@@ -129,10 +125,7 @@ class ErrorBoundary extends Component<Props, State> {
             <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
               <p className="text-sm text-blue-300">
                 <strong>Need help?</strong> If this problem persists, please{' '}
-                <a
-                  href="mailto:support@example.com"
-                  className="underline hover:text-blue-200"
-                >
+                <a href="mailto:support@example.com" className="underline hover:text-blue-200">
                   contact support
                 </a>{' '}
                 or{' '}

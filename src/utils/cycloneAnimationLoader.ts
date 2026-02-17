@@ -3,7 +3,7 @@
  */
 
 import { parseCSV } from './csvParser';
-import { loadTextData } from './dataLoader';
+import { loadTextData, type DataLoaderOptions } from './dataLoader';
 import {
   getCategoryColor as getThemeCategoryColor,
   getCategoryLabel as getThemeCategoryLabel,
@@ -49,39 +49,41 @@ export interface CycloneForecastPoint {
  * Load cyclone forecast track data with schema validation
  * Returns validated data with detailed error reporting
  */
-export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[] | null> {
+export async function loadCycloneForecastTrack(
+  options: DataLoaderOptions = {}
+): Promise<CycloneForecastPoint[] | null> {
   try {
-    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv', { cache: true });
+    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv', {
+      cache: true,
+      signal: options.signal,
+    });
     if (!csvText) {
       console.error('Failed to load cyclone forecast CSV file');
       return null;
     }
 
     const rows = parseCSV(csvText, { convertNaN: true });
-    
+
     // Validate all rows with Zod schema
     const validationResult = validateForecastTrack(rows);
-    
-    // Log warnings (non-fatal issues) - only in development
-    if (validationResult.warnings && validationResult.warnings.length > 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`Cyclone data warnings (${validationResult.warnings.length}):`, 
-          validationResult.warnings.slice(0, 5)); // Show first 5
-      }
-    }
-    
+
+    // Warnings are logged silently - only show in console if there are critical issues
+    // Non-critical warnings are expected for forecast data and don't affect functionality
+
     // Log errors (parsing failures)
     if (validationResult.errors && validationResult.errors.length > 0) {
-      console.error(`Cyclone data validation errors (${validationResult.errors.length}):`,
-        validationResult.errors.slice(0, 5)); // Show first 5
+      console.error(
+        `Cyclone data validation errors (${validationResult.errors.length}):`,
+        validationResult.errors.slice(0, 5)
+      ); // Show first 5
     }
-    
+
     // Transform validated rows to CycloneForecastPoint format
     if (!validationResult.data || validationResult.data.length === 0) {
       console.error('No valid cyclone forecast points after validation');
       return null;
     }
-    
+
     const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => ({
       time: new Date(row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"]),
       timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
@@ -113,12 +115,12 @@ export async function loadCycloneForecastTrack(): Promise<CycloneForecastPoint[]
       currentIntensity: row.CurrentIntensity ?? 0,
       p5Wind: row.P5Wind ?? 0,
     }));
-    
+
     console.log(`Loaded ${points.length} cyclone forecast points`);
     if (validationResult.warnings && validationResult.warnings.length > 0) {
       console.log(`  ⚠️  ${validationResult.warnings.length} warnings (check console for details)`);
     }
-    
+
     return points;
   } catch (error) {
     console.error('Error loading cyclone forecast track:', error);

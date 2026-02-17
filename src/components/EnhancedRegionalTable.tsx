@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { formatCurrency, formatNumber } from "@/utils/formatters";
+import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface RegionalData {
   id: string;
@@ -30,18 +30,12 @@ export default function EnhancedRegionalTable({
   // Calculate derived metrics
   const calculateDerivedMetrics = (region: RegionalData) => {
     return {
-      damageRate: region.assetsExposed > 0 
-        ? (region.assetsDamaged / region.assetsExposed) * 100 
-        : 0,
-      lossPerCapita: region.populationAffected > 0 
-        ? region.economicLoss / region.populationAffected 
-        : 0,
-      contributionToTotal: nationalTotal > 0 
-        ? (region.economicLoss / nationalTotal) * 100 
-        : 0,
-      populationDensity: region.area > 0 
-        ? region.totalPopulation / region.area 
-        : 0,
+      damageRate:
+        region.assetsExposed > 0 ? (region.assetsDamaged / region.assetsExposed) * 100 : 0,
+      lossPerCapita:
+        region.populationAffected > 0 ? region.economicLoss / region.populationAffected : 0,
+      contributionToTotal: nationalTotal > 0 ? (region.economicLoss / nationalTotal) * 100 : 0,
+      populationDensity: region.area > 0 ? region.totalPopulation / region.area : 0,
     };
   };
 
@@ -55,7 +49,7 @@ export default function EnhancedRegionalTable({
           </p>
         )}
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-white/5 border-b border-white/10">
@@ -77,19 +71,27 @@ export default function EnhancedRegionalTable({
           <tbody>
             {sortedData.map((region, idx) => {
               const metrics = showDerivedMetrics ? calculateDerivedMetrics(region) : null;
-              
+
               return (
-                <tr 
+                <tr
                   key={region.id}
                   className={`border-b border-white/5 hover:bg-white/5 transition-colors ${
                     idx % 2 === 0 ? 'bg-white/0' : 'bg-white/[0.02]'
                   }`}
                 >
                   <td className="p-3 text-white font-medium">{region.name}</td>
-                  <td className="p-3 text-right text-white">{formatCurrency(region.economicLoss)}</td>
-                  <td className="p-3 text-right text-white/80">{formatNumber(region.populationAffected)}</td>
-                  <td className="p-3 text-right text-white/80">{formatNumber(region.assetsExposed)}</td>
-                  <td className="p-3 text-right text-white/80">{formatNumber(region.assetsDamaged)}</td>
+                  <td className="p-3 text-right text-white">
+                    {formatCurrency(region.economicLoss)}
+                  </td>
+                  <td className="p-3 text-right text-white/80">
+                    {formatNumber(region.populationAffected)}
+                  </td>
+                  <td className="p-3 text-right text-white/80">
+                    {formatNumber(region.assetsExposed)}
+                  </td>
+                  <td className="p-3 text-right text-white/80">
+                    {formatNumber(region.assetsDamaged)}
+                  </td>
                   {showDerivedMetrics && metrics && (
                     <>
                       <td className="p-3 text-right text-white/80">
@@ -110,7 +112,9 @@ export default function EnhancedRegionalTable({
           <tfoot className="bg-white/5 border-t border-white/10">
             <tr>
               <td className="p-3 text-white font-semibold">Total</td>
-              <td className="p-3 text-right text-white font-semibold">{formatCurrency(nationalTotal)}</td>
+              <td className="p-3 text-right text-white font-semibold">
+                {formatCurrency(nationalTotal)}
+              </td>
               <td className="p-3 text-right text-white/80 font-semibold">
                 {formatNumber(sortedData.reduce((sum, r) => sum + r.populationAffected, 0))}
               </td>

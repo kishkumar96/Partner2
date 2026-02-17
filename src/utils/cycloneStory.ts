@@ -5,10 +5,10 @@
 
 import { CycloneForecastPoint } from './cycloneAnimationLoader';
 import { CountryCode } from '@/types/thredds';
-import { ArrowUp, Cloud, Flame, MapPin, Wind, Zap } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowUp, Cloud, Flame, MapPin, Wind, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-export type StoryBeatType = 
+export type StoryBeatType =
   | 'peak-intensity'
   | 'rapid-intensification'
   | 'category-upgrade'
@@ -53,10 +53,10 @@ export interface StoryBeat {
 
 // Region center coordinates for closest approach detection
 const REGION_CENTERS: Record<string, { lat: number; lon: number }> = {
-  'VU': { lat: -17.7333, lon: 168.3167 }, // Vanuatu - Port Vila
-  'WS': { lat: -13.8333, lon: -171.7667 }, // Samoa - Apia
-  'TO': { lat: -21.1789, lon: -175.1982 }, // Tonga - Nuku'alofa
-  'CK': { lat: -21.2067, lon: -159.7777 }, // Cook Islands - Avarua
+  VU: { lat: -17.7333, lon: 168.3167 }, // Vanuatu - Port Vila
+  WS: { lat: -13.8333, lon: -171.7667 }, // Samoa - Apia
+  TO: { lat: -21.1789, lon: -175.1982 }, // Tonga - Nuku'alofa
+  CK: { lat: -21.2067, lon: -159.7777 }, // Cook Islands - Avarua
 };
 
 // Default center (Vanuatu) for backwards compatibility
@@ -65,17 +65,16 @@ const VANUATU_CENTER = { lat: -17.7333, lon: 168.3167 };
 /**
  * Calculate Haversine distance between two points (in km)
  */
-function haversineDistance(
-  lat1: number, lon1: number,
-  lat2: number, lon2: number
-): number {
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -111,9 +110,7 @@ export function detectStoryBeats(
   if (forecastTrack.length === 0) return [];
 
   // Determine center point: explicit override > country code > default
-  const center = centerPoint 
-    || (countryCode && REGION_CENTERS[countryCode]) 
-    || VANUATU_CENTER;
+  const center = centerPoint || (countryCode && REGION_CENTERS[countryCode]) || VANUATU_CENTER;
 
   const beats: StoryBeat[] = [];
 
@@ -121,11 +118,10 @@ export function detectStoryBeats(
   let maxWindIndex = 0;
   let maxWind = forecastTrack[0].meanWind;
   let minPressure = forecastTrack[0].pressure;
-  
+
   for (let i = 1; i < forecastTrack.length; i++) {
     const point = forecastTrack[i];
-    if (point.meanWind > maxWind || 
-        (point.meanWind === maxWind && point.pressure < minPressure)) {
+    if (point.meanWind > maxWind || (point.meanWind === maxWind && point.pressure < minPressure)) {
       maxWindIndex = i;
       maxWind = point.meanWind;
       minPressure = point.pressure;
@@ -160,22 +156,15 @@ export function detectStoryBeats(
 
     // Find the point closest to 6 hours prior, without going later than the target time
     let priorIndex = i - 1;
-    while (
-      priorIndex > 0 &&
-      forecastTrack[priorIndex].time.getTime() > targetTimeMs
-    ) {
+    while (priorIndex > 0 && forecastTrack[priorIndex].time.getTime() > targetTimeMs) {
       priorIndex--;
     }
 
     const sixHoursPrior = forecastTrack[priorIndex];
-    const timeDiffHours =
-      (currentTimeMs - sixHoursPrior.time.getTime()) / (60 * 60 * 1000);
+    const timeDiffHours = (currentTimeMs - sixHoursPrior.time.getTime()) / (60 * 60 * 1000);
 
     // Skip if we don't have a point reasonably close to 6 hours prior
-    if (
-      timeDiffHours < 6 - sixHourToleranceHours ||
-      timeDiffHours > 6 + sixHourToleranceHours
-    ) {
+    if (timeDiffHours < 6 - sixHourToleranceHours || timeDiffHours > 6 + sixHourToleranceHours) {
       continue;
     }
 
@@ -211,7 +200,7 @@ export function detectStoryBeats(
   // 3. Category Upgrades (Cat 1, Cat 3, Cat 5)
   const categoryThresholds = [1, 3, 5];
   const seenCategories = new Set<number>();
-  
+
   for (let i = 0; i < forecastTrack.length; i++) {
     const point = forecastTrack[i];
     for (const threshold of categoryThresholds) {
@@ -248,12 +237,7 @@ export function detectStoryBeats(
 
   for (let i = 1; i < forecastTrack.length; i++) {
     const point = forecastTrack[i];
-    const distance = haversineDistance(
-      point.latitude,
-      point.longitude,
-      center.lat,
-      center.lon
-    );
+    const distance = haversineDistance(point.latitude, point.longitude, center.lat, center.lon);
     if (distance < minDistance) {
       minDistance = distance;
       closestIndex = i;
@@ -261,18 +245,18 @@ export function detectStoryBeats(
   }
 
   const closestPoint = forecastTrack[closestIndex];
-  
+
   // Helper to get region name
   const getRegionName = (code?: CountryCode | null): string => {
     const regionNames: Record<string, string> = {
-      'VU': 'Vanuatu',
-      'WS': 'Samoa',
-      'TO': 'Tonga',
-      'CK': 'Cook Islands',
+      VU: 'Vanuatu',
+      WS: 'Samoa',
+      TO: 'Tonga',
+      CK: 'Cook Islands',
     };
     return (code && regionNames[code]) || 'the region';
   };
-  
+
   beats.push({
     id: 'closest-approach',
     index: closestIndex,
@@ -291,7 +275,7 @@ export function detectStoryBeats(
   // 5. Peak Uncertainty
   let maxUncertaintyIndex = 0;
   let maxUncertainty = forecastTrack[0].uncertainty;
-  
+
   for (let i = 1; i < forecastTrack.length; i++) {
     if (forecastTrack[i].uncertainty > maxUncertainty) {
       maxUncertaintyIndex = i;
@@ -326,26 +310,26 @@ export function detectStoryBeats(
   }
 
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  
+
   for (let i = 0; i < beats.length; i++) {
     const current = beats[i];
-    
+
     // Check if we should keep this beat
     let shouldKeep = true;
-    
+
     // Look back at recent beats to see if current is redundant
     for (let j = dedupedBeats.length - 1; j >= 0; j--) {
       const existing = dedupedBeats[j];
-      
+
       // If beats are far apart in index (>5), stop checking
       if (current.index - existing.index > 5) break;
-      
+
       // If different types, both can coexist
       if (current.type !== existing.type) continue;
-      
+
       // Same type - check time separation
       const timeDiff = Math.abs(current.time.getTime() - existing.time.getTime());
-      
+
       if (timeDiff < SIX_HOURS_MS) {
         // Too close in time - keep only higher severity
         if (current.severity > existing.severity) {
@@ -357,7 +341,7 @@ export function detectStoryBeats(
         break;
       }
     }
-    
+
     if (shouldKeep) {
       dedupedBeats.push(current);
     }
@@ -372,21 +356,15 @@ export function detectStoryBeats(
 /**
  * Get the next beat from current index
  */
-export function getNextBeat(
-  beats: StoryBeat[],
-  currentIndex: number
-): StoryBeat | null {
+export function getNextBeat(beats: StoryBeat[], currentIndex: number): StoryBeat | null {
   if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
-  return beats.find((b) => b.index > currentIndex) || null;
+  return beats.find(b => b.index > currentIndex) || null;
 }
 
 /**
  * Get the previous beat from current index
  */
-export function getPreviousBeat(
-  beats: StoryBeat[],
-  currentIndex: number
-): StoryBeat | null {
+export function getPreviousBeat(beats: StoryBeat[], currentIndex: number): StoryBeat | null {
   if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
   for (let i = beats.length - 1; i >= 0; i--) {
     if (beats[i].index < currentIndex) {
@@ -399,10 +377,7 @@ export function getPreviousBeat(
 /**
  * Check if current index is at a beat (within 1 step tolerance for consistency)
  */
-export function isAtBeat(
-  beats: StoryBeat[],
-  currentIndex: number
-): StoryBeat | null {
+export function isAtBeat(beats: StoryBeat[], currentIndex: number): StoryBeat | null {
   if (!beats || beats.length === 0 || typeof currentIndex !== 'number') return null;
-  return beats.find((b) => Math.abs(b.index - currentIndex) <= 1) || null;
+  return beats.find(b => Math.abs(b.index - currentIndex) <= 1) || null;
 }

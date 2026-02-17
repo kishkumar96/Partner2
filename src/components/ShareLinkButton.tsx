@@ -1,6 +1,6 @@
 /**
  * Share Link Button
- * 
+ *
  * Copies current map view URL to clipboard for sharing.
  * Provides visual feedback on successful copy.
  */
@@ -20,8 +20,8 @@ interface ShareLinkButtonProps {
   compact?: boolean;
 }
 
-export default function ShareLinkButton({ 
-  mapState, 
+export default function ShareLinkButton({
+  mapState,
   className = '',
   compact = false,
 }: ShareLinkButtonProps) {
@@ -30,7 +30,7 @@ export default function ShareLinkButton({
 
   const handleShare = async () => {
     const success = await copyShareableUrl(mapState);
-    
+
     if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -54,15 +54,9 @@ export default function ShareLinkButton({
         `}
         aria-label="Copy link to current view"
       >
-        {copied ? (
-          <Check className="w-4 h-4 text-green-400" />
-        ) : (
-          <Share2 className="w-4 h-4" />
-        )}
+        {copied ? <Check className="w-4 h-4 text-green-400" /> : <Share2 className="w-4 h-4" />}
         {!compact && (
-          <span className="text-sm font-medium">
-            {copied ? 'Copied!' : 'Share Link'}
-          </span>
+          <span className="text-sm font-medium">{copied ? 'Copied!' : 'Share Link'}</span>
         )}
       </button>
 

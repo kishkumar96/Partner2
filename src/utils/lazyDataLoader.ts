@@ -1,6 +1,6 @@
 /**
  * Lazy Data Loader with Progressive Loading
- * 
+ *
  * Optimizes large dataset loading by:
  * - Loading only essential data first
  * - Deferring heavy data until needed
@@ -34,7 +34,7 @@ export const DATA_MANIFEST: DataManifest = {
     '/impact-by-sector.csv',
     '/impact-by-asset-type.csv',
   ],
-  
+
   // Load after critical - medium-sized files
   high: [
     '/regional-summary.csv',
@@ -42,7 +42,7 @@ export const DATA_MANIFEST: DataManifest = {
     '/cyclone-lola-forecast.csv',
     '/exposure-by-cluster.geojson',
   ],
-  
+
   // Load on demand - large files
   low: [
     '/regional-impacts-by-sector.geojson',
@@ -66,16 +66,8 @@ class LazyDataLoader {
   /**
    * Load data with specified priority
    */
-  async load(
-    url: string,
-    options: LoadOptions = {}
-  ): Promise<any> {
-    const {
-      priority = 'high',
-      defer = false,
-      useCache = true,
-      onProgress,
-    } = options;
+  async load(url: string, options: LoadOptions = {}): Promise<any> {
+    const { priority = 'high', defer = false, useCache = true, onProgress } = options;
 
     // Return cached if already loaded
     if (this.loadedFiles.has(url)) {
@@ -257,9 +249,9 @@ class LazyDataLoader {
 
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) break;
-      
+
       chunks.push(value);
       loaded += value.length;
       onProgress?.(loaded, total);

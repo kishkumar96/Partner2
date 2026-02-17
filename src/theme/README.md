@@ -28,6 +28,7 @@ import { getCategoryColor, WIND_RADII_COLORS } from '@/theme/colors';
 ### Common Patterns
 
 #### Hazard Colors
+
 ```typescript
 import { getHazardColor } from '@/theme/colors';
 
@@ -35,6 +36,7 @@ const color = getHazardColor('tropical-cyclone'); // Returns '#3B82F6'
 ```
 
 #### Building Damage
+
 ```typescript
 import { getBuildingDamageColor, BUILDING_DAMAGE_COLORS } from '@/theme/colors';
 
@@ -46,6 +48,7 @@ const catastrophicColor = BUILDING_DAMAGE_COLORS.catastrophic;
 ```
 
 #### Cyclone Categories
+
 ```typescript
 import { getCategoryColor, getCategoryLabel } from '@/theme/colors';
 
@@ -54,6 +57,7 @@ const label = getCategoryLabel(5); // "Category 5"
 ```
 
 #### UI Colors
+
 ```typescript
 import { UI_COLORS } from '@/theme/colors';
 
@@ -64,12 +68,14 @@ const borderColor = UI_COLORS.borderSubtle;
 ## Color Palettes
 
 ### Hazard Colors
+
 - Wind/Cyclone: Blue (#3B82F6)
 - Flood/Inundation: Cyan (#06B6D4)
 - Earthquake: Red (#EF4444)
 - Default: Gray (#6B7280)
 
 ### Building Damage Scale
+
 - Minimal: Amber (#FBBF24) - < $10K
 - Moderate: Orange (#F97316) - $10K-$50K
 - Substantial: Dark Orange (#EA580C) - $50K-$100K
@@ -77,6 +83,7 @@ const borderColor = UI_COLORS.borderSubtle;
 - Catastrophic: Dark Red (#991B1B) - > $500K
 
 ### Cyclone Categories (Saffir-Simpson)
+
 - Category 5: Violet (#7C3AED)
 - Category 4: Red (#DC2626)
 - Category 3: Orange (#FB923C)
@@ -85,6 +92,7 @@ const borderColor = UI_COLORS.borderSubtle;
 - Tropical Storm: Sky Blue (#7DD3FC)
 
 ### Wind Radii
+
 - Gale Force (34-47 kt): Gold (#FFD700)
 - Storm Force (48-63 kt): Orange (#FFA500)
 - Hurricane Force (≥64 kt): Red (#FF0000)
@@ -92,6 +100,7 @@ const borderColor = UI_COLORS.borderSubtle;
 ## Accessibility Features
 
 ### Color Contrast Checking
+
 ```typescript
 import { hasAccessibleContrast } from '@/theme/colors';
 
@@ -100,6 +109,7 @@ const isAccessible = hasAccessibleContrast('#FFFFFF', '#3B82F6');
 ```
 
 ### Alpha Channel Support
+
 ```typescript
 import { colorWithAlpha, hexToRGBA } from '@/theme/colors';
 
@@ -110,6 +120,7 @@ const semiTransparent = colorWithAlpha('#3B82F6', 0.5);
 ### Future Modes (Planned)
 
 The theme system is designed to support:
+
 - **Color-blind safe mode** (`CATEGORY_COLORS_COLORBLIND`)
 - **High contrast mode** (`CATEGORY_COLORS_HIGH_CONTRAST`)
 - **Dark mode** (all colors are already dark-mode compatible)
@@ -117,6 +128,7 @@ The theme system is designed to support:
 ## Migration Guide
 
 ### Before (Hardcoded)
+
 ```typescript
 // ❌ Don't do this
 const markerColor = '#3B82F6';
@@ -124,6 +136,7 @@ const damageColor = lossUSD > 100000 ? '#dc2626' : '#f97316';
 ```
 
 ### After (Theme System)
+
 ```typescript
 // ✅ Do this instead
 import { HAZARD_COLORS, getBuildingDamageColor } from '@/theme/colors';

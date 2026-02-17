@@ -104,11 +104,11 @@ class DataParserWorker {
 
       const blob = new Blob([workerCode], { type: 'application/javascript' });
       const workerUrl = URL.createObjectURL(blob);
-      
+
       this.worker = new Worker(workerUrl);
       this.worker.onmessage = this.handleMessage.bind(this);
       this.worker.onerror = this.handleError.bind(this);
-      
+
       console.log('Data parser worker initialized');
     } catch (error) {
       console.error('Failed to initialize worker:', error);
@@ -149,7 +149,7 @@ class DataParserWorker {
    */
   private handleError(error: ErrorEvent): void {
     console.error('Worker error:', error);
-    
+
     // Reject all pending requests
     for (const [id, request] of this.pendingRequests) {
       request.reject(new Error('Worker crashed'));
@@ -187,15 +187,12 @@ class DataParserWorker {
   /**
    * Parse GeoJSON string in worker
    */
-  async parseGeoJSON(
-    jsonString: string,
-    options: ParseOptions = {}
-  ): Promise<any> {
+  async parseGeoJSON(jsonString: string, options: ParseOptions = {}): Promise<any> {
     // Fallback to main thread if worker not available
     if (!this.worker) {
       console.warn('Worker not available, parsing on main thread');
       const result = JSON.parse(jsonString);
-      
+
       // Apply filter on main thread if needed
       if (options.filter && result.features) {
         result.features = result.features.filter((feature: any) => {
@@ -207,7 +204,7 @@ class DataParserWorker {
           return true;
         });
       }
-      
+
       return result;
     }
 

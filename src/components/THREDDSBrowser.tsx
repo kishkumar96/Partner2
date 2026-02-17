@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { Download, RefreshCw, FileText, Map, AlertCircle, Wind } from "lucide-react";
-import { 
-  fetchVanuatuTCLolaCatalog, 
+import { useState, useEffect } from 'react';
+import { Download, RefreshCw, FileText, Map, AlertCircle, Wind } from 'lucide-react';
+import {
+  fetchVanuatuTCLolaCatalog,
   fetchCycloneTrack,
   buildFileUrl,
-  THREDDSDataset 
-} from "@/utils/threddsLoader";
-import { CycloneTrack } from "@/types/thredds";
+  THREDDSDataset,
+} from '@/utils/threddsLoader';
+import { CycloneTrack } from '@/types/thredds';
 
 /**
  * THREDDS Data Browser Component
@@ -29,18 +29,18 @@ export default function THREDDSBrowser() {
   async function loadCatalog() {
     setLoading(true);
     setError(null);
-    
+
     try {
       const catalog = await fetchVanuatuTCLolaCatalog();
       setDatasets(catalog.datasets);
-      
+
       // Auto-load first CSV track file if available
       const csvFile = catalog.datasets.find(d => d.type === 'csv');
       if (csvFile) {
         loadTrackData(csvFile.name);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load catalog");
+      setError(err instanceof Error ? err.message : 'Failed to load catalog');
     } finally {
       setLoading(false);
     }
@@ -48,15 +48,15 @@ export default function THREDDSBrowser() {
 
   async function loadTrackData(filename: string) {
     try {
-      const track = await fetchCycloneTrack("VU", filename);
+      const track = await fetchCycloneTrack('VU', filename);
       setTrackData(track);
     } catch (err) {
-      console.error("Error loading track:", err);
+      console.error('Error loading track:', err);
     }
   }
 
   function downloadDataset(dataset: THREDDSDataset) {
-    const url = buildFileUrl("VU", "TC/Lola", dataset.name);
+    const url = buildFileUrl('VU', 'TC/Lola', dataset.name);
     window.open(url, '_blank');
   }
 
@@ -69,12 +69,8 @@ export default function THREDDSBrowser() {
             <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-100">
-              THREDDS Data Browser
-            </h2>
-            <p className="text-sm text-slate-400">
-              TC Lola - Vanuatu Hazard Data
-            </p>
+            <h2 className="text-lg font-bold text-slate-100">THREDDS Data Browser</h2>
+            <p className="text-sm text-slate-400">TC Lola - Vanuatu Hazard Data</p>
           </div>
         </div>
         <button
@@ -92,12 +88,8 @@ export default function THREDDSBrowser() {
         <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-              Error loading data
-            </p>
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-              {error}
-            </p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">Error loading data</p>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
           </div>
         </div>
       )}
@@ -119,9 +111,7 @@ export default function THREDDSBrowser() {
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="bg-slate-800/60 rounded-lg p-4">
               <p className="text-sm text-slate-400">Total Files</p>
-              <p className="text-2xl font-bold text-slate-100">
-                {datasets.length}
-              </p>
+              <p className="text-2xl font-bold text-slate-100">{datasets.length}</p>
             </div>
             <div className="bg-slate-800/60 rounded-lg p-4">
               <p className="text-sm text-slate-400">NetCDF Files</p>
@@ -158,7 +148,7 @@ export default function THREDDSBrowser() {
               </thead>
               <tbody className="glass-panel divide-y divide-slate-700/60">
                 {datasets.map((dataset, index) => (
-                  <tr 
+                  <tr
                     key={index}
                     className={`hover:bg-white/5 transition-colors ${
                       selectedDataset?.name === dataset.name ? 'bg-blue-50 dark:bg-blue-900/20' : ''
@@ -175,18 +165,21 @@ export default function THREDDSBrowser() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase ${
-                        dataset.type === 'nc' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                        dataset.type === 'tif' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                        dataset.type === 'csv' ? 'bg-blue-500/20 text-blue-300' :
-                        'bg-slate-800/70 text-slate-200'
-                      }`}>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase ${
+                          dataset.type === 'nc'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            : dataset.type === 'tif'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : dataset.type === 'csv'
+                                ? 'bg-blue-500/20 text-blue-300'
+                                : 'bg-slate-800/70 text-slate-200'
+                        }`}
+                      >
                         {dataset.type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">
-                      {dataset.size}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-400">{dataset.size}</td>
                     <td className="px-4 py-3">
                       <button
                         onClick={() => downloadDataset(dataset)}
@@ -210,7 +203,7 @@ export default function THREDDSBrowser() {
                 Cyclone Track Loaded
               </h3>
               <div className="text-sm text-blue-800 dark:text-blue-300">
-                <p>Name: {trackData.features[0]?.properties?.name || "TC Lola"}</p>
+                <p>Name: {trackData.features[0]?.properties?.name || 'TC Lola'}</p>
                 <p>Track Points: {trackData.features[0]?.geometry?.coordinates?.length || 0}</p>
                 <p>Type: {trackData.features[0]?.geometry?.type}</p>
               </div>
@@ -223,9 +216,7 @@ export default function THREDDSBrowser() {
       {!loading && datasets.length === 0 && !error && (
         <div className="text-center py-12">
           <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-          <p className="text-slate-400">
-            No datasets found. Try refreshing the catalog.
-          </p>
+          <p className="text-slate-400">No datasets found. Try refreshing the catalog.</p>
         </div>
       )}
     </div>

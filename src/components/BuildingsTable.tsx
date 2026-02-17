@@ -1,6 +1,6 @@
 /**
  * BuildingsTable - Interactive table of damaged buildings with zoom functionality
- * 
+ *
  * Features:
  * - Sortable columns (loss, damage level, type, region)
  * - Search and filter capabilities
@@ -10,13 +10,13 @@
  * - Responsive design
  */
 
-"use client";
+'use client';
 
 import { useCallback, useMemo } from 'react';
 import { Building2, Search, ChevronDown, ChevronUp, MapPin, X } from 'lucide-react';
 import type { BuildingAsset } from '@/types/assetTables';
 import { useAssetTableData, transformBuildingData } from '@/hooks/useAssetTableData';
-import { BUILDING_DAMAGE_COLORS, getBuildingDamageColor } from '@/theme/colors';
+import { getBuildingDamageColor } from '@/theme/colors';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface BuildingsTableProps {
@@ -25,14 +25,39 @@ interface BuildingsTableProps {
   maxHeight?: string;
 }
 
-export default function BuildingsTable({
-  data,
-  onZoom,
-  maxHeight = '600px',
-}: BuildingsTableProps) {
+// Sort indicator component (moved outside to avoid recreation on every render)
+function SortIndicator({
+  columnKey,
+  sortConfig,
+}: {
+  columnKey: keyof BuildingAsset;
+  sortConfig: { key: keyof BuildingAsset; direction: 'asc' | 'desc' } | null;
+}) {
+  if (sortConfig?.key !== columnKey) {
+    return <ChevronDown className="w-3 h-3 opacity-30" />;
+  }
+  return sortConfig.direction === 'desc' ? (
+    <ChevronDown className="w-3 h-3" />
+  ) : (
+    <ChevronUp className="w-3 h-3" />
+  );
+}
+
+// Damage indicator component (moved outside to avoid recreation on every render)
+function DamageIndicator({ level, loss }: { level: string; loss: number }) {
+  const color = getBuildingDamageColor(loss);
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-xs capitalize">{level}</span>
+    </div>
+  );
+}
+
+export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: BuildingsTableProps) {
   // Transform and manage data
   const buildings = useMemo(() => transformBuildingData(data), [data]);
-  
+
   const {
     data: displayData,
     totalCount,
@@ -49,44 +74,19 @@ export default function BuildingsTable({
   } = useAssetTableData<BuildingAsset>(buildings);
 
   // Handle row click to zoom
-  const handleRowClick = useCallback((building: BuildingAsset) => {
-    onZoom(building.coordinates, 16);
-  }, [onZoom]);
-
-  // Render sort indicator
-  const SortIndicator = ({ columnKey }: { columnKey: keyof BuildingAsset }) => {
-    if (sortConfig?.key !== columnKey) {
-      return <ChevronDown className="w-3 h-3 opacity-30" />;
-    }
-    return sortConfig.direction === 'desc' ? (
-      <ChevronDown className="w-3 h-3" />
-    ) : (
-      <ChevronUp className="w-3 h-3" />
-    );
-  };
-
-  // Render damage indicator badge
-  const DamageIndicator = ({ level, loss }: { level: string; loss: number }) => {
-    const color = getBuildingDamageColor(loss);
-    return (
-      <div className="flex items-center gap-2">
-        <div
-          className="w-3 h-3 rounded-full flex-shrink-0"
-          style={{ backgroundColor: color }}
-        />
-        <span className="text-xs capitalize">{level}</span>
-      </div>
-    );
-  };
+  const handleRowClick = useCallback(
+    (building: BuildingAsset) => {
+      onZoom(building.coordinates, 16);
+    },
+    [onZoom]
+  );
 
   if (!data || buildings.length === 0) {
     return (
       <div className="bg-slate-800/40 backdrop-blur-sm border border-white/10 rounded-lg p-8 text-center">
         <Building2 className="w-12 h-12 mx-auto mb-3 text-slate-400" />
         <p className="text-slate-300 font-medium">No building damage data available</p>
-        <p className="text-sm text-slate-400 mt-1">
-          Building data will appear here when loaded
-        </p>
+        <p className="text-sm text-slate-400 mt-1">Building data will appear here when loaded</p>
       </div>
     );
   }
@@ -111,10 +111,12 @@ export default function BuildingsTable({
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
+              id="buildings-search"
+              name="buildingsSearch"
               type="text"
               placeholder="Search by ID, region, type..."
               value={filter.searchTerm}
-              onChange={(e) => handleFilterChange({ searchTerm: e.target.value })}
+              onChange={e => handleFilterChange({ searchTerm: e.target.value })}
               className="w-full pl-9 pr-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -123,7 +125,7 @@ export default function BuildingsTable({
           {uniqueRegions.length > 1 && (
             <select
               value={filter.region?.[0] || ''}
-              onChange={(e) =>
+              onChange={e =>
                 handleFilterChange({
                   region: e.target.value ? [e.target.value] : undefined,
                 })
@@ -131,7 +133,7 @@ export default function BuildingsTable({
               className="px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Regions</option>
-              {uniqueRegions.map((region) => (
+              {uniqueRegions.map(region => (
                 <option key={region} value={region}>
                   {region}
                 </option>
@@ -163,19 +165,17 @@ export default function BuildingsTable({
               >
                 <div className="flex items-center gap-1">
                   Loss (USD)
-                  <SortIndicator columnKey="loss" />
+                  <SortIndicator columnKey="loss" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-left p-3 text-white/80 font-medium">
-                Damage Level
-              </th>
+              <th className="text-left p-3 text-white/80 font-medium">Damage Level</th>
               <th
                 onClick={() => handleSort('buildingType')}
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-1">
                   Type
-                  <SortIndicator columnKey="buildingType" />
+                  <SortIndicator columnKey="buildingType" sortConfig={sortConfig} />
                 </div>
               </th>
               <th
@@ -184,7 +184,7 @@ export default function BuildingsTable({
               >
                 <div className="flex items-center gap-1">
                   Occupancy
-                  <SortIndicator columnKey="occupancy" />
+                  <SortIndicator columnKey="occupancy" sortConfig={sortConfig} />
                 </div>
               </th>
               <th
@@ -193,12 +193,10 @@ export default function BuildingsTable({
               >
                 <div className="flex items-center gap-1">
                   Region
-                  <SortIndicator columnKey="region" />
+                  <SortIndicator columnKey="region" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-center p-3 text-white/80 font-medium">
-                Actions
-              </th>
+              <th className="text-center p-3 text-white/80 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -210,9 +208,7 @@ export default function BuildingsTable({
                   idx % 2 === 0 ? 'bg-white/0' : 'bg-white/[0.02]'
                 }`}
               >
-                <td className="p-3 text-white font-mono">
-                  {formatCurrency(building.loss)}
-                </td>
+                <td className="p-3 text-white font-mono">{formatCurrency(building.loss)}</td>
                 <td className="p-3 text-white/80">
                   <DamageIndicator level={building.damageLevel} loss={building.loss} />
                 </td>
@@ -221,7 +217,7 @@ export default function BuildingsTable({
                 <td className="p-3 text-white/80">{building.region}</td>
                 <td className="p-3 text-center">
                   <button
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation();
                       handleRowClick(building);
                     }}
@@ -245,7 +241,7 @@ export default function BuildingsTable({
             <span className="text-slate-300">Rows per page:</span>
             <select
               value={pagination.pageSize}
-              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              onChange={e => handlePageSizeChange(Number(e.target.value))}
               className="px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value={25}>25</option>
@@ -260,7 +256,7 @@ export default function BuildingsTable({
               {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} of{' '}
               {pagination.totalItems}
             </span>
-            
+
             <div className="flex gap-1 ml-2">
               <button
                 onClick={() => handlePageChange(pagination.currentPage - 1)}

@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { X, CheckCircle2, Info, AlertCircle } from "lucide-react";
+import { useEffect } from 'react';
+import { X, CheckCircle2, Info, AlertCircle } from 'lucide-react';
 
 interface ToastProps {
   message: string;
-  type?: "success" | "info" | "warning";
+  type?: 'success' | 'info' | 'warning';
   action?: {
     label: string;
     onClick: () => void;
@@ -14,12 +14,12 @@ interface ToastProps {
   duration?: number;
 }
 
-export default function Toast({ 
-  message, 
-  type = "info", 
-  action, 
-  onClose, 
-  duration = 5000 
+export default function Toast({
+  message,
+  type = 'info',
+  action,
+  onClose,
+  duration = 5000,
 }: ToastProps) {
   useEffect(() => {
     if (duration > 0) {
@@ -35,9 +35,11 @@ export default function Toast({
   };
 
   const colors = {
-    success: "bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-500/50 text-green-800 dark:text-green-300",
-    info: "bg-blue-100 dark:bg-blue-900/30 border-blue-500 dark:border-blue-500/50 text-blue-800 dark:text-blue-300",
-    warning: "bg-amber-100 dark:bg-amber-900/30 border-amber-500 dark:border-amber-500/50 text-amber-800 dark:text-amber-300",
+    success:
+      'bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-500/50 text-green-800 dark:text-green-300',
+    info: 'bg-blue-100 dark:bg-blue-900/30 border-blue-500 dark:border-blue-500/50 text-blue-800 dark:text-blue-300',
+    warning:
+      'bg-amber-100 dark:bg-amber-900/30 border-amber-500 dark:border-amber-500/50 text-amber-800 dark:text-amber-300',
   };
 
   const Icon = icons[type];

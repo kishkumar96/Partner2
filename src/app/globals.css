@@ -1,50 +1,50 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Semantic Color System for Dashboard */
 :root {
   color-scheme: dark;
   --background: #0a0a0a;
   --foreground: #ededed;
-  
+
   /* Semantic Colors - Danger/Risk Indicators */
-  --color-danger: #ef4444;        /* Red for catastrophic/severe */
-  --color-warning: #f97316;       /* Orange for high risk */
-  --color-caution: #eab308;       /* Yellow/Amber for moderate */
-  
+  --color-danger: #ef4444; /* Red for catastrophic/severe */
+  --color-warning: #f97316; /* Orange for high risk */
+  --color-caution: #eab308; /* Yellow/Amber for moderate */
+
   /* UI Element Colors - Muted Blue/Gray */
-  --color-primary: #3b82f6;       /* Single accent blue for primary actions */
-  --color-ui-base: #1e293b;       /* Slate-800 for panels */
-  --color-ui-elevated: #334155;   /* Slate-700 for elevated elements */
-  --color-ui-border: #475569;     /* Slate-600 for borders */
-  --color-ui-muted: #64748b;      /* Slate-500 for secondary text */
-  
+  --color-primary: #3b82f6; /* Single accent blue for primary actions */
+  --color-ui-base: #1e293b; /* Slate-800 for panels */
+  --color-ui-elevated: #334155; /* Slate-700 for elevated elements */
+  --color-ui-border: #475569; /* Slate-600 for borders */
+  --color-ui-muted: #64748b; /* Slate-500 for secondary text */
+
   /* Success/Safe Indicators */
-  --color-success: #10b981;       /* Green for safe/minimal */
-  
+  --color-success: #10b981; /* Green for safe/minimal */
+
   /* Grid System */
-  --spacing-unit: 8px;            /* 8px grid system base */
-  
+  --spacing-unit: 8px; /* 8px grid system base */
+
   /* Typography Scale - Enforced Minimum 13px */
-  --text-xs: 13px;                /* Labels, captions - MINIMUM */
-  --text-sm: 14px;                /* Body text, secondary */
-  --text-base: 16px;              /* Primary body text */
-  --text-lg: 18px;                /* Section headings */
-  --text-xl: 24px;                /* Page titles */
-  --text-2xl: 32px;               /* Hero metrics */
-  
+  --text-xs: 13px; /* Labels, captions - MINIMUM */
+  --text-sm: 14px; /* Body text, secondary */
+  --text-base: 16px; /* Primary body text */
+  --text-lg: 18px; /* Section headings */
+  --text-xl: 24px; /* Page titles */
+  --text-2xl: 32px; /* Hero metrics */
+
   /* Unified Dark Glass System */
-  --glass-bg: rgba(15, 23, 42, 0.85);           /* Base glass background */
-  --glass-bg-hover: rgba(30, 41, 59, 0.90);     /* Hover state */
-  --glass-border: rgba(148, 163, 184, 0.15);    /* Subtle borders */
+  --glass-bg: rgba(15, 23, 42, 0.85); /* Base glass background */
+  --glass-bg-hover: rgba(30, 41, 59, 0.9); /* Hover state */
+  --glass-border: rgba(148, 163, 184, 0.15); /* Subtle borders */
   --glass-border-bright: rgba(148, 163, 184, 0.3); /* Emphasized borders */
-  --glass-text-primary: rgb(241, 245, 249);     /* White text */
-  --glass-text-secondary: rgb(203, 213, 225);   /* Muted text */
-  --glass-text-tertiary: rgb(148, 163, 184);    /* Dimmed text */
-  
+  --glass-text-primary: rgb(241, 245, 249); /* White text */
+  --glass-text-secondary: rgb(203, 213, 225); /* Muted text */
+  --glass-text-tertiary: rgb(148, 163, 184); /* Dimmed text */
+
   /* Neon Accents - Use Sparingly */
-  --neon-cyan: #06b6d4;           /* Primary accent only */
+  --neon-cyan: #06b6d4; /* Primary accent only */
   --neon-cyan-glow: rgba(6, 182, 212, 0.4);
-  
+
   /* Spacing Scale - Consistent increments */
   --space-1: 4px;
   --space-2: 8px;
@@ -62,8 +62,8 @@ body {
 /* Mission-control background (use on page wrapper) */
 .bg-atmosphere {
   background:
-    radial-gradient(circle at 65% 25%, rgba(0,224,255,0.10), transparent 42%),
-    radial-gradient(circle at 20% 80%, rgba(255,59,122,0.07), transparent 55%),
+    radial-gradient(circle at 65% 25%, rgba(0, 224, 255, 0.1), transparent 42%),
+    radial-gradient(circle at 20% 80%, rgba(255, 59, 122, 0.07), transparent 55%),
     linear-gradient(180deg, #0b1220, #070a12);
 }
 
@@ -73,14 +73,16 @@ body {
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.05);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.05);
   color: var(--glass-text-primary);
 }
 
 .glass-panel-interactive:hover {
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-bright);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   transform: translateY(-2px);
   transition: all 0.2s ease;
 }
@@ -93,7 +95,7 @@ body {
 
 /* Pulse ring */
 .event-marker::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: -8px;
   border-radius: 999px;
@@ -115,9 +117,17 @@ body {
 
 /* Keyframes for pulse animation */
 @keyframes pulseRing {
-  0% { transform: scale(0.75); opacity: 0.65; }
-  70% { transform: scale(1.9); opacity: 0; }
-  100% { opacity: 0; }
+  0% {
+    transform: scale(0.75);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Keyframes for toast slide-up animation */
@@ -147,11 +157,17 @@ body {
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   border: 1px solid rgba(148, 163, 184, 0.2) !important;
   border-radius: 12px !important;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
   padding: 0 !important;
   min-width: 240px;
   max-width: 320px;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   overflow: hidden;
 }
 
@@ -326,7 +342,11 @@ body {
    ============================================ */
 
 /* Enforced Minimum Sizes for Readability & Accessibility */
-button, a, input, select, textarea {
+button,
+a,
+input,
+select,
+textarea {
   min-height: 44px; /* WCAG 2.1 touch target */
 }
 
@@ -367,7 +387,7 @@ button, a, input, select, textarea {
 /* Ensure all interactive elements show focus */
 button:focus-visible,
 a:focus-visible,
-[role="button"]:focus-visible {
+[role='button']:focus-visible {
   outline: 2px solid rgb(59 130 246 / 1);
   outline-offset: 2px;
 }
@@ -375,7 +395,7 @@ a:focus-visible,
 /* Improved hover states for better affordance */
 button:not(:disabled):hover,
 a:hover,
-[role="button"]:hover {
+[role='button']:hover {
   transition: all 0.2s ease-in-out;
 }
 
@@ -408,12 +428,12 @@ button:disabled,
   .text-gray-600 {
     color: rgb(0 0 0 / 1);
   }
-  
+
   .dark .text-gray-500,
   .dark .text-gray-600 {
     color: rgb(255 255 255 / 1);
   }
-  
+
   button,
   a {
     border: 2px solid currentColor;
@@ -452,7 +472,7 @@ button:disabled,
     background: #000000;
     color: #ffffff;
   }
-  
+
   .glass-panel {
     background: rgba(0, 0, 0, 0.95);
     border: 2px solid #ffffff;
@@ -500,17 +520,20 @@ button:disabled,
 
 /* Summary Panel Pulse Animation */
 @keyframes summaryPanelPulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5),
-                0 0 0 0 rgba(59, 130, 246, 0),
-                0 0 20px rgba(59, 130, 246, 0);
+    box-shadow:
+      0 20px 50px rgba(0, 0, 0, 0.5),
+      0 0 0 0 rgba(59, 130, 246, 0),
+      0 0 20px rgba(59, 130, 246, 0);
   }
   50% {
     transform: scale(1.015);
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6),
-                0 0 0 8px rgba(59, 130, 246, 0.15),
-                0 0 40px rgba(59, 130, 246, 0.5);
+    box-shadow:
+      0 25px 60px rgba(0, 0, 0, 0.6),
+      0 0 0 8px rgba(59, 130, 246, 0.15),
+      0 0 40px rgba(59, 130, 246, 0.5);
     filter: brightness(1.05) drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));
   }
 }
@@ -601,15 +624,18 @@ button:disabled,
 
 /* Enhanced Glow Effects */
 @keyframes glow {
-  0%, 100% {
-    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3),
-                0 0 10px rgba(59, 130, 246, 0.2),
-                0 0 15px rgba(59, 130, 246, 0.1);
+  0%,
+  100% {
+    box-shadow:
+      0 0 5px rgba(59, 130, 246, 0.3),
+      0 0 10px rgba(59, 130, 246, 0.2),
+      0 0 15px rgba(59, 130, 246, 0.1);
   }
   50% {
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5),
-                0 0 20px rgba(59, 130, 246, 0.3),
-                0 0 30px rgba(59, 130, 246, 0.2);
+    box-shadow:
+      0 0 10px rgba(59, 130, 246, 0.5),
+      0 0 20px rgba(59, 130, 246, 0.3),
+      0 0 30px rgba(59, 130, 246, 0.2);
   }
 }
 

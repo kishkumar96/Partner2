@@ -8,16 +8,16 @@ export default function Loading() {
         <div className="relative">
           {/* Outer ring */}
           <div className="w-20 h-20 border-4 border-slate-700 rounded-full"></div>
-          
+
           {/* Spinning ring */}
           <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-          
+
           {/* Inner pulse */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
           </div>
         </div>
-        
+
         <p className="mt-6 text-slate-400 font-medium">Loading Climate Risk Dashboard...</p>
         <p className="mt-2 text-sm text-slate-500">Please wait while we prepare your data</p>
       </div>

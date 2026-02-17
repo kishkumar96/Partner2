@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useMemo, useEffect } from "react";
-import { District, Event, Hazard } from "@/types";
-import { Search, X, CheckSquare, Square } from "lucide-react";
+import { useState, useMemo, useEffect } from 'react';
+import { District, Event, Hazard } from '@/types';
+import { Search, X, CheckSquare, Square } from 'lucide-react';
 
 interface SearchableEventSelectorProps {
   events: Event[];
@@ -25,23 +25,23 @@ export default function SearchableEventSelector({
   districts = [],
   hazards = [],
 }: SearchableEventSelectorProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const districtNameById = useMemo(() => {
-    return new Map(districts.map((district) => [district.id, district.name]));
+    return new Map(districts.map(district => [district.id, district.name]));
   }, [districts]);
 
   const hazardNameById = useMemo(() => {
-    return new Map(hazards.map((hazard) => [hazard.id, hazard.name]));
+    return new Map(hazards.map(hazard => [hazard.id, hazard.name]));
   }, [hazards]);
 
   // Filter events by search query
   const filteredEvents = useMemo(() => {
     if (!searchQuery.trim()) return events;
     const query = searchQuery.toLowerCase();
-    return events.filter((event) => {
+    return events.filter(event => {
       const districtName = districtNameById.get(event.districtId || '');
       const hazardName = hazardNameById.get(event.hazardId);
       const searchableText = [
@@ -53,7 +53,7 @@ export default function SearchableEventSelector({
         event.date,
       ]
         .filter(Boolean)
-        .join(" ")
+        .join(' ')
         .toLowerCase();
       return searchableText.includes(query);
     });
@@ -66,17 +66,29 @@ export default function SearchableEventSelector({
     return filteredEvents.slice(start, start + itemsPerPage);
   }, [filteredEvents, currentPage]);
 
+  // Clamp current page to valid range (derived value)
+  const validCurrentPage = useMemo(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      return totalPages;
+    }
+    return currentPage;
+  }, [totalPages, currentPage]);
+
   // Reset to page 1 when search changes
   useEffect(() => {
-    setCurrentPage(1);
+    Promise.resolve().then(() => {
+      setCurrentPage(1);
+    });
   }, [searchQuery]);
 
-  // Clamp current page when filtered events change (prevent out-of-range page)
+  // Update state if clamping occurred
   useEffect(() => {
-    if (totalPages > 0 && currentPage > totalPages) {
-      setCurrentPage(totalPages);
+    if (validCurrentPage !== currentPage) {
+      Promise.resolve().then(() => {
+        setCurrentPage(validCurrentPage);
+      });
     }
-  }, [filteredEvents.length, currentPage, totalPages]);
+  }, [validCurrentPage, currentPage]);
 
   return (
     <div className="space-y-3">
@@ -88,7 +100,7 @@ export default function SearchableEventSelector({
           name="eventSearch"
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search events by name, district, hazard..."
           aria-label="Search events by name, district, or hazard"
           className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border-2 border-slate-600 rounded-xl text-sm font-medium text-white placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 backdrop-blur-sm hover:border-slate-500"
@@ -96,7 +108,7 @@ export default function SearchableEventSelector({
         {searchQuery && (
           <button
             type="button"
-            onClick={() => setSearchQuery("")}
+            onClick={() => setSearchQuery('')}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-600 rounded-lg p-1 transition-all duration-200 hover:scale-110 active:scale-95"
             aria-label="Clear search"
           >
@@ -108,7 +120,7 @@ export default function SearchableEventSelector({
       {/* Results Summary & Actions */}
       <div className="flex items-center justify-between text-xs bg-gradient-to-r from-slate-800/60 to-slate-700/40 rounded-xl px-3 py-2.5 border border-slate-700/50">
         <span aria-live="polite" aria-atomic="true" className="font-semibold text-slate-300">
-          {filteredEvents.length} district{filteredEvents.length !== 1 ? "s" : ""}{" "}
+          {filteredEvents.length} district{filteredEvents.length !== 1 ? 's' : ''}{' '}
           {searchQuery && `(filtered from ${events.length})`}
           {selectedEvents.length > 0 && (
             <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30">
@@ -129,11 +141,13 @@ export default function SearchableEventSelector({
               }
             }}
             className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 px-2 py-1 rounded-lg transition-all duration-200 font-bold hover:scale-105 active:scale-95"
-            title={searchQuery || filteredEvents.length < events.length 
-              ? "Select all filtered events" 
-              : "Select all events"}
+            title={
+              searchQuery || filteredEvents.length < events.length
+                ? 'Select all filtered events'
+                : 'Select all events'
+            }
           >
-            Select {searchQuery || filteredEvents.length < events.length ? "filtered" : "all"}
+            Select {searchQuery || filteredEvents.length < events.length ? 'filtered' : 'all'}
           </button>
           <span className="text-slate-600">|</span>
           <button
@@ -148,7 +162,9 @@ export default function SearchableEventSelector({
 
       {/* Premium Event List */}
       <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-        <span>Showing {paginatedEvents.length} of {filteredEvents.length}</span>
+        <span>
+          Showing {paginatedEvents.length} of {filteredEvents.length}
+        </span>
         <span className="font-semibold text-slate-300">Selected: {selectedEvents.length}</span>
       </div>
       <div className="max-h-64 max-h-[min(16rem,calc(100vh-400px))] overflow-y-auto border-2 border-slate-700 rounded-xl bg-slate-900/30 backdrop-blur-sm custom-scrollbar">
@@ -161,7 +177,7 @@ export default function SearchableEventSelector({
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => setSearchQuery('')}
                 className="mt-2 text-xs text-blue-400 hover:text-blue-300 font-bold hover:bg-blue-500/10 px-3 py-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 Clear search
@@ -170,7 +186,7 @@ export default function SearchableEventSelector({
           </div>
         ) : (
           <div className="divide-y divide-slate-700/50">
-            {paginatedEvents.map((event) => {
+            {paginatedEvents.map(event => {
               const isSelected = selectedEvents.includes(event.id);
               return (
                 <label
@@ -188,9 +204,13 @@ export default function SearchableEventSelector({
                     className="mt-1 sr-only peer"
                     aria-label={`Select ${event.name}`}
                   />
-                  <div className={`mt-0.5 transition-all duration-200 ${
-                    isSelected ? 'text-blue-400 scale-110' : 'text-slate-500 group-hover:text-slate-400'
-                  }`}>
+                  <div
+                    className={`mt-0.5 transition-all duration-200 ${
+                      isSelected
+                        ? 'text-blue-400 scale-110'
+                        : 'text-slate-500 group-hover:text-slate-400'
+                    }`}
+                  >
                     {isSelected ? (
                       <CheckSquare className="w-5 h-5 flex-shrink-0" />
                     ) : (
@@ -207,13 +227,13 @@ export default function SearchableEventSelector({
                   </div>
                   <div
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold flex-shrink-0 border transition-all duration-200 group-hover:scale-105 ${
-                      event.severity === "critical"
-                        ? "bg-red-500/20 text-red-300 border-red-500/30"
-                        : event.severity === "high"
-                        ? "bg-orange-500/20 text-orange-300 border-orange-500/30"
-                        : event.severity === "medium"
-                        ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
-                        : "bg-slate-700 text-slate-300 border-slate-600"
+                      event.severity === 'critical'
+                        ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                        : event.severity === 'high'
+                          ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                          : event.severity === 'medium'
+                            ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                            : 'bg-slate-700 text-slate-300 border-slate-600'
                     }`}
                   >
                     {event.severity}
@@ -230,7 +250,7 @@ export default function SearchableEventSelector({
         <div className="flex items-center justify-between pt-2">
           <button
             type="button"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
             className="px-4 py-2 text-sm bg-gradient-to-br from-slate-800 to-slate-700 text-slate-200 font-bold rounded-xl hover:from-slate-700 hover:to-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-slate-600 hover:border-slate-500 hover:scale-105 active:scale-95 disabled:scale-100"
           >
@@ -241,7 +261,7 @@ export default function SearchableEventSelector({
           </span>
           <button
             type="button"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
             className="px-4 py-2 text-sm bg-gradient-to-br from-slate-800 to-slate-700 text-slate-200 font-bold rounded-xl hover:from-slate-700 hover:to-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 border border-slate-600 hover:border-slate-500 hover:scale-105 active:scale-95 disabled:scale-100"
           >

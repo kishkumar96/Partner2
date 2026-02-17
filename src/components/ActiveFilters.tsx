@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, type ReactNode } from "react";
-import { FilterState, Hazard, Sector } from "@/types";
-import { Calendar, Filter, X } from "lucide-react";
+import { useState, type ReactNode } from 'react';
+import { FilterState, Hazard, Sector } from '@/types';
+import { Calendar, Filter, X } from 'lucide-react';
 
 interface ActiveFiltersProps {
   filters: FilterState;
@@ -17,16 +17,16 @@ export default function ActiveFilters({
   hazards,
   sectors,
   onClearFilter,
-  className = "",
+  className = '',
 }: ActiveFiltersProps) {
   const [showAllChips, setShowAllChips] = useState(false);
   const activeHazards = filters.selectedHazards;
   const activeSectors = filters.selectedSectors;
   const activeEventCount = filters.selectedEvents.length;
-  
-  const hasActiveFilters = 
-    activeHazards.length > 0 || 
-    activeSectors.length > 0 || 
+
+  const hasActiveFilters =
+    activeHazards.length > 0 ||
+    activeSectors.length > 0 ||
     activeEventCount > 0 ||
     filters.dateRange.start ||
     filters.dateRange.end;
@@ -42,7 +42,7 @@ export default function ActiveFilters({
 
   const chips: ReactNode[] = [];
 
-  activeHazards.forEach((hazardId) => {
+  activeHazards.forEach(hazardId => {
     const hazard = hazards.find(h => h.id === hazardId);
     if (!hazard) return;
     const HazardIcon = hazard.icon;
@@ -60,7 +60,7 @@ export default function ActiveFilters({
     );
   });
 
-  activeSectors.forEach((sectorId) => {
+  activeSectors.forEach(sectorId => {
     const sector = sectors.find(s => s.id === sectorId);
     if (!sector) return;
     const SectorIcon = sector.icon;
@@ -86,7 +86,9 @@ export default function ActiveFilters({
         className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs font-medium border border-blue-500/30 hover:bg-blue-500/30 transition-colors group"
         title="Clear event selection"
       >
-        <span>{activeEventCount} event{activeEventCount !== 1 ? 's' : ''}</span>
+        <span>
+          {activeEventCount} event{activeEventCount !== 1 ? 's' : ''}
+        </span>
         <X className="w-3 h-3 opacity-60 group-hover:opacity-100" />
       </button>
     );
@@ -116,7 +118,7 @@ export default function ActiveFilters({
         <Filter className="w-3.5 h-3.5" />
         <span>Active:</span>
       </div>
-      
+
       <div className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto overscroll-x-contain">
         {visibleChips}
         {hiddenCount > 0 && (
@@ -140,16 +142,14 @@ export default function ActiveFilters({
         )}
       </div>
 
-      {hasActiveFilters && (
-        <button
-          onClick={() => onClearFilter('all')}
-          className="inline-flex items-center gap-1 px-2 py-1 bg-slate-800/70 text-slate-300 rounded-full text-xs font-medium border border-slate-700/60 hover:bg-slate-700/70 transition-colors flex-shrink-0"
-          title="Clear all filters"
-        >
-          <span>Clear all</span>
-          <X className="w-3 h-3" />
-        </button>
-      )}
+      <button
+        onClick={() => onClearFilter('all')}
+        className="inline-flex items-center gap-1 px-2 py-1 bg-slate-800/70 text-slate-300 rounded-full text-xs font-medium border border-slate-700/60 hover:bg-slate-700/70 transition-colors flex-shrink-0"
+        title="Clear all filters"
+      >
+        <span>Clear all</span>
+        <X className="w-3 h-3" />
+      </button>
     </div>
   );
 }
