@@ -39,15 +39,13 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
 };
 
-// Suppress console errors during tests (optional)
+// Keep console.error intact so real errors surface in test output.
+// Suppress only the JSDOM "Not implemented" noise which is never actionable.
 const originalError = console.error;
 beforeAll(() => {
   console.error = (...args) => {
-    if (
-      typeof args[0] === 'string' &&
-      (args[0].includes('Warning: ReactDOM.render') ||
-        args[0].includes('Not implemented: HTMLFormElement.prototype.submit'))
-    ) {
+    const msg = typeof args[0] === 'string' ? args[0] : '';
+    if (msg.includes('Not implemented: HTMLFormElement.prototype.submit')) {
       return;
     }
     originalError.call(console, ...args);
@@ -56,4 +54,27 @@ beforeAll(() => {
 
 afterAll(() => {
   console.error = originalError;
+});
+
+// ---------------------------------------------------------------------------
+// Fetch mock – prevents real network calls in tests.
+// Components that need a specific response can override per-test:
+//   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: () => ... })
+// ---------------------------------------------------------------------------
+beforeEach(() => {
+  global.fetch = jest.fn(() =>
+    Promise.reject(
+      new Error(
+        'fetch() was called but is not mocked. ' +
+          'Provide a test-specific mock: global.fetch = jest.fn().mockResolvedValue(...)',
+      ),
+    ),
+  );
+});
+
+afterEach(() => {
+  // Restore so mocks do not bleed across test files
+  if (jest.isMockFunction(global.fetch)) {
+    jest.restoreAllMocks();
+  }
 });

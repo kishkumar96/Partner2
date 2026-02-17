@@ -27,7 +27,8 @@ const customJestConfig = {
   },
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
   transformIgnorePatterns: [
-    '/node_modules/',
+    // Allow transpilation of ESM-only packages; next/jest handles CSS/image transforms
+    '/node_modules/(?!(georaster|georaster-to-canvas|geotiff|geotiff-palette|ieee754|kdbush|nanoid|pbf|quickselect|supercluster|uuid|@mapbox).*/)',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
   reporters: [
@@ -46,7 +47,7 @@ const customJestConfig = {
     '!src/**/*.stories.{js,jsx,ts,tsx}',
     '!src/**/__tests__/**',
   ],
-  coverageThresholds: {
+  coverageThreshold: {
     global: {
       branches: 50,
       functions: 50,
