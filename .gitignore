@@ -111,6 +111,12 @@ lerna-debug.log*
 lighthouse-report.html
 lighthouse-report.json
 .lighthouseci
+reports/lighthouse/
+reports/perf/
+
+# Playwright
+playwright-report/
+test-results/
 
 # Bundle analyzer
 .analyze

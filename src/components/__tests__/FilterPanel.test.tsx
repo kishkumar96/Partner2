@@ -20,12 +20,12 @@ const EMPTY_FILTERS: FilterState = {
 
 const sampleHazards: Hazard[] = [
   { id: 'TC', name: 'Tropical Cyclone', color: '#00aaff', icon: MockIcon as any },
-  { id: 'FL', name: 'Flood',            color: '#0044ff', icon: MockIcon as any },
+  { id: 'FL', name: 'Flood', color: '#0044ff', icon: MockIcon as any },
 ];
 
 const sampleSectors: Sector[] = [
   { id: 'AGR', name: 'Agriculture', color: '#22c55e', icon: MockIcon as any },
-  { id: 'HSG', name: 'Housing',     color: '#f59e0b', icon: MockIcon as any },
+  { id: 'HSG', name: 'Housing', color: '#f59e0b', icon: MockIcon as any },
 ];
 
 /**
@@ -33,7 +33,14 @@ const sampleSectors: Sector[] = [
  * FilterPanel derives activeSectorIds from exposureData.sectorId, not from events.
  */
 const sampleExposureData: ExposureData[] = [
-  { id: 'ex1', hazardId: 'TC', sectorId: 'AGR', population: 1000, assets: 500, infrastructure: 200 },
+  {
+    id: 'ex1',
+    hazardId: 'TC',
+    sectorId: 'AGR',
+    population: 1000,
+    assets: 500,
+    infrastructure: 200,
+  },
   { id: 'ex2', hazardId: 'FL', sectorId: 'HSG', population: 800, assets: 400, infrastructure: 100 },
 ];
 
@@ -42,15 +49,25 @@ const sampleExposureData: ExposureData[] = [
  */
 const sampleEvents = [
   {
-    id: 'e1', name: 'TC Lola', date: '2023-10-01', hazardId: 'TC',
-    totalAffectedPopulation: 1000, totalEconomicDamage: 5_000_000,
-    affectedRegions: 3, severity: 'high' as const,
+    id: 'e1',
+    name: 'TC Lola',
+    date: '2023-10-01',
+    hazardId: 'TC',
+    totalAffectedPopulation: 1000,
+    totalEconomicDamage: 5_000_000,
+    affectedRegions: 3,
+    severity: 'high' as const,
     location: { lat: -15, lng: 167 },
   },
   {
-    id: 'e2', name: 'Flood 2024', date: '2024-03-01', hazardId: 'FL',
-    totalAffectedPopulation: 500, totalEconomicDamage: 2_000_000,
-    affectedRegions: 1, severity: 'medium' as const,
+    id: 'e2',
+    name: 'Flood 2024',
+    date: '2024-03-01',
+    hazardId: 'FL',
+    totalAffectedPopulation: 500,
+    totalEconomicDamage: 2_000_000,
+    affectedRegions: 1,
+    severity: 'medium' as const,
     location: { lat: -15, lng: 167 },
     sectorId: 'AGR',
   },
@@ -122,9 +139,7 @@ describe('FilterPanel Component', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
-    expect(onFilterChange).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedHazards: [] })
-    );
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ selectedHazards: [] }));
   });
 
   // 4. Sector toggle

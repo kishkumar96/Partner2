@@ -548,7 +548,10 @@ export default function SummaryPanel({
   }
 
   return (
-    <div className="w-80 max-w-[min(320px,calc(100vw-40px))] h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50">
+    <div
+      className="w-80 max-w-[min(320px,calc(100vw-40px))] h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50"
+      data-testid="summary-panel"
+    >
       {/* Header */}
       <div className="p-4 space-y-3 border-b border-borderGlow bg-surface/95 backdrop-blur-sm flex-shrink-0">
         <div>

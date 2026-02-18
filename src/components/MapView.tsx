@@ -767,7 +767,7 @@ export default function MapView({
   // Note: Mock hazard zones and event markers removed - now using real data from THREDDS server via RealData Layers
 
   return (
-    <div className="relative flex-1 h-full">
+    <div className="relative flex-1 h-full" data-testid="map-container">
       <div ref={mapContainer} className="w-full h-full" />
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 

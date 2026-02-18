@@ -30,7 +30,7 @@ class RedisCache {
       this.client = createClient({
         url: REDIS_URL,
         socket: {
-          reconnectStrategy: retries => {
+          reconnectStrategy: (retries: number) => {
             if (retries > 10) {
               console.error('Redis: Max reconnection attempts reached');
               return new Error('Max reconnection attempts');
@@ -40,7 +40,7 @@ class RedisCache {
         },
       });
 
-      this.client.on('error', err => {
+      this.client.on('error', (err: Error) => {
         console.error('Redis client error:', err);
       });
 

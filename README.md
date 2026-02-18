@@ -320,6 +320,70 @@ test('renders button with label', () => {
 });
 ```
 
+## ⚡ Performance Testing
+
+The project includes a full-stack performance pipeline built on **Lighthouse CI** and **Playwright**.  Reports are written to `reports/lighthouse/` and `reports/perf/`.
+
+### Prerequisites
+
+```bash
+# Install Playwright's Chromium browser bundle (one-time per machine)
+npx playwright install chromium
+```
+
+### Running Performance Tests Locally
+
+```bash
+# 1. Build the production bundle first (required)
+npm run build
+
+# 2a. Lighthouse CI only – audits http://localhost:3002 and the Vanuatu map route
+#     LHCI manages the server internally.
+npm run perf:lighthouse
+
+# 2b. Playwright user-flow tests only
+#     You must have a server running on port 3002 before calling this.
+npm run start   # in a separate terminal
+npm run perf:playwright
+
+# 3. Full suite (build check → LHCI → Playwright) in one command
+npm run perf:ci
+```
+
+### Enforcing Hard Failures
+
+By default the suite runs in **soft-gate mode**: budget violations are printed as warnings and the script exits `0`.  To convert warnings into build failures:
+
+```bash
+HARD_GATE=true npm run perf:ci
+```
+
+### Performance Budgets
+
+| Metric | Desktop | Mobile |
+|--------|---------|--------|
+| Lighthouse Performance | ≥ 90 | ≥ 80 |
+| Largest Contentful Paint | ≤ 2.5 s | ≤ 3.5 s |
+| Cumulative Layout Shift | ≤ 0.10 | ≤ 0.10 |
+| Interaction to Next Paint | ≤ 200 ms | ≤ 300 ms |
+| Total Blocking Time | ≤ 200 ms | ≤ 400 ms |
+
+### What the Tests Cover
+
+| Test | Tool | What it measures |
+|------|------|-----------------|
+| Home route audit | Lighthouse CI | All Core Web Vitals on `/` |
+| Vanuatu map route audit | Lighthouse CI | Core Web Vitals on the map query-param route |
+| Map Load flow | Playwright | FCP, LCP, long-task total, navigation timing |
+| Home baseline | Playwright | FCP, load event, long tasks |
+| Heavy Layer Load | Playwright | Time to fetch `damaged-buildings.geojson` and `damaged-roads.geojson` after zoom |
+
+### Interpreting Reports
+
+- **`reports/lighthouse/`** – Lighthouse HTML and JSON reports per run.  Open `*.html` in a browser for the full waterfall.
+- **`reports/perf/*.json`** – Playwright timing JSON with `metrics`, `violations`, `timestamp`, and the tested URL.
+- **Jenkins** – Reports are archived as build artifacts; the Playwright HTML report is published via the HTML Publisher plugin.
+
 ## 📚 Documentation
 
 - **[Deployment Guide](DEPLOYMENT.md)** - Complete deployment instructions
