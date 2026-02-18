@@ -85,7 +85,7 @@ async function queryAvailableTimestamps(countryCode: CountryCode): Promise<strin
 
     // Sort by date descending (newest first)
     return timestamps.sort().reverse();
-  } catch (error) {
+  } catch (_error) {
     return [];
   }
 }
@@ -185,7 +185,7 @@ export async function loadCycloneTrack(countryCode: CountryCode) {
           break;
         }
       }
-    } catch (error) {
+    } catch (_error) {
       consecutiveFailures++;
 
       // Abort if too many failures
@@ -364,7 +364,7 @@ async function loadHistoricalTCLolaTrack() {
           return geojson;
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Try next file
       continue;
     }
@@ -445,7 +445,7 @@ function parseCSVToGeoJSON(csvText: string, name: string) {
         },
       ],
     };
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }

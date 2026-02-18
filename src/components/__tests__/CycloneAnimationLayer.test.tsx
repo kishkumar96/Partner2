@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import CycloneAnimationLayer from '../CycloneAnimationLayer';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 

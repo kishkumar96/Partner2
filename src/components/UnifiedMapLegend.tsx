@@ -11,7 +11,6 @@ import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 interface UnifiedMapLegendProps {
   mode: 'loss' | 'wind';
   visible?: boolean;
-  isPanelOpen?: boolean;
   hasSelection?: boolean;
   dataSource?: string;
   temporalScope?: string;
@@ -19,7 +18,6 @@ interface UnifiedMapLegendProps {
   dataValues?: number[];
   // Sidebar state for responsive positioning
   isLeftPanelOpen?: boolean;
-  isRightPanelOpen?: boolean;
   // Active layers visibility
   showBuildings?: boolean;
   showRoads?: boolean;
@@ -119,13 +117,11 @@ function getSeverityLabel(index: number, total: number, mode: 'loss' | 'wind'): 
 export default function UnifiedMapLegend({
   mode,
   visible = true,
-  isPanelOpen = false,
   hasSelection = false,
   dataSource = 'Real Data',
   temporalScope = 'Event Total',
   dataValues = [],
   isLeftPanelOpen = false,
-  isRightPanelOpen = false,
   showBuildings = false,
   showRoads = false,
   showCyclone = false,
@@ -143,7 +139,6 @@ export default function UnifiedMapLegend({
       const breaks = computeQuantileBreaks(dataValues, numClasses);
 
       if (breaks.length > 0) {
-        const min = Math.min(...dataValues);
         const max = Math.max(...dataValues);
 
         return breaks.map((breakValue, index) => {
@@ -252,10 +247,6 @@ export default function UnifiedMapLegend({
   // - Responsive width that adapts to available space
 
   const getResponsiveStyles = () => {
-    // Calculate available horizontal space
-    const leftOffset = isLeftPanelOpen ? 304 : 32; // 288px panel + 16px gap OR 32px margin
-    const rightReserved = isRightPanelOpen ? 340 : 120; // Reserve space for right panel + controls
-
     return {
       width: isExpanded
         ? 'clamp(280px, calc(100vw - 2rem), 340px)' // Responsive width: min 280px, max 340px, adapts with 2rem margin
@@ -421,7 +412,6 @@ export default function UnifiedMapLegend({
                     const range = layer.styleConfig?.colorScaleRange?.split(',').map(Number) || [
                       0, 100,
                     ];
-                    const numBands = layer.styleConfig?.numColorBands || 8;
                     const isWind = layer.hazardType === 'wind';
                     const isFlood =
                       layer.hazardType === 'flood' || layer.hazardType === 'inundation';

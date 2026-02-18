@@ -8,7 +8,6 @@
  * /map?lat=-17.7&lng=168.3&zoom=10&country=VU&hazards=cyclone&layers=buildings,roads&cyclone=15&story=true
  */
 
-import { FilterState } from '@/types';
 import { CountryCode } from '@/types/thredds';
 
 /**

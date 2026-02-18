@@ -151,7 +151,7 @@ class DataParserWorker {
     console.error('Worker error:', error);
 
     // Reject all pending requests
-    for (const [id, request] of this.pendingRequests) {
+    for (const [, request] of this.pendingRequests) {
       request.reject(new Error('Worker crashed'));
     }
     this.pendingRequests.clear();

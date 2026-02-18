@@ -15,7 +15,7 @@ import {
 import { Chart } from 'react-chartjs-2';
 import { CycloneForecastPoint } from '../utils/cycloneAnimationLoader';
 import { StoryBeat } from '../utils/cycloneStory';
-import { getCategoryColor, getBeatColor, CHART_COLORS, hexToRGBA } from '@/theme/cycloneScale';
+import { getCategoryColor, getBeatColor, CHART_COLORS } from '@/theme/cycloneScale';
 
 ChartJS.register(
   CategoryScale,
@@ -182,10 +182,10 @@ export default function CycloneIntensityChart({
         },
       },
       tooltip: {
-        backgroundColor: 'rgba(30, 40, 60, 0.95)',
+        backgroundColor: CHART_COLORS.tooltipBackground,
         titleColor: '#ffffff',
         bodyColor: '#ffffff',
-        borderColor: '#4B5563',
+        borderColor: CHART_COLORS.tooltipBorder,
         borderWidth: 1,
         padding: 10,
         displayColors: true,

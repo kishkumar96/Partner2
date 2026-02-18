@@ -20,7 +20,6 @@ const DATABASE_URL = process.env.DATABASE_URL ||
 
 // Data file paths
 const DATA_DIR = path.join(__dirname, '..', 'public', 'samoa');
-const TRACK_FILE = path.join(DATA_DIR, 'cyclone-track-gita.geojson');
 const FORECAST_FILE = path.join(DATA_DIR, 'Official_Forecast_Track_GITA_SA.csv');
 
 class SamoaDataImporter {
@@ -55,7 +54,7 @@ class SamoaDataImporter {
         DELETE FROM cyclone_track 
         WHERE cyclone_id = 'TC_GITA_2018' OR cyclone_name = 'Gita'
       `);
-    } catch (err) {
+    } catch (_err) {
       // If ALTER fails, just truncate the table
       await this.client.query(`TRUNCATE TABLE cyclone_track RESTART IDENTITY`);
     }
@@ -174,7 +173,7 @@ class SamoaDataImporter {
       console.log(`  Time range: ${stats.first_point} to ${stats.last_point}`);
       console.log(`  Min pressure: ${stats.min_pressure} hPa`);
       console.log(`  Max wind speed: ${stats.max_wind_speed} knots`);
-    } catch (err) {
+    } catch (_err) {
       // Fallback if cyclone_id column doesn't exist
       const countResult = await this.client.query(`
         SELECT 

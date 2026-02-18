@@ -77,7 +77,6 @@ export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsT
     filter,
     pagination,
     uniqueRegions,
-    uniqueDamageLevels,
     handleSort,
     handleFilterChange,
     handlePageChange,

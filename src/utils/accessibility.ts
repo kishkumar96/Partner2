@@ -253,7 +253,7 @@ export const createSkipLink = (targetId: string, label: string): HTMLAnchorEleme
   return skipLink;
 };
 
-export default {
+const accessibilityUtils = {
   announceToScreenReader,
   trapFocus,
   isElementVisible,
@@ -266,3 +266,5 @@ export default {
   formatAccessibleDate,
   createSkipLink,
 };
+
+export default accessibilityUtils;

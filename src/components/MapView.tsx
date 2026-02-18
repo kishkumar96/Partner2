@@ -14,7 +14,6 @@ import { debugLogger } from '@/utils/debugLogger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
 import RealDataLayers from './RealDataLayers';
-import { RealWMSLayer } from '@/data/realThreddsLayers';
 import RegionalImpactsLayer from './RegionalImpactsLayer';
 import IntensityHeatmapLayer from './IntensityHeatmapLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
@@ -207,7 +206,6 @@ interface MapViewProps {
   showWindLayer?: boolean;
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
-  onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
@@ -243,10 +241,9 @@ export default function MapView({
   selectedCountry = null,
   mapStyle = 'loss',
   basemapStyle = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-  showWindLayer = false,
-  showInundationLayer = false,
+  showWindLayer = true,
+  showInundationLayer = true,
   onLayersLoadingChange,
-  onActiveWmsLayersChange,
   damagedBuildings,
   damagedRoads,
   cycloneForecast,
@@ -767,7 +764,7 @@ export default function MapView({
   // Note: Mock hazard zones and event markers removed - now using real data from THREDDS server via RealData Layers
 
   return (
-    <div className="relative flex-1 h-full" data-testid="map-container">
+    <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 
@@ -803,7 +800,6 @@ export default function MapView({
             showWindLayer={showWindLayer}
             showInundationLayer={showInundationLayer}
             onLoadingChange={onLayersLoadingChange}
-            onActiveLayersChange={onActiveWmsLayersChange}
           />
           <RegionalImpactsLayer
             map={map.current}

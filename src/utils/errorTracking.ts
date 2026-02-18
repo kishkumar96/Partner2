@@ -202,10 +202,12 @@ declare global {
   }
 }
 
-export default {
+const errorTracking = {
   init: initErrorTracking,
   logError,
   logMessage,
   trackPerformance,
   createErrorHandler,
 };
+
+export default errorTracking;

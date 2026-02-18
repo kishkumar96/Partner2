@@ -7,8 +7,6 @@
  * Solution: Type-safe parsing + automatic aggregation + data quality validation
  */
 
-import { parseCSV } from './csvParser';
-
 // ============================================================================
 // TYPE-SAFE SCHEMAS
 // ============================================================================

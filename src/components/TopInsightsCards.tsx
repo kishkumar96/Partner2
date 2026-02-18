@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  TrendingUp,
-  Users,
-  DollarSign,
-  Home,
-  AlertTriangle,
-  MapPin,
-  ChevronRight,
-} from 'lucide-react';
+import { Users, DollarSign, AlertTriangle, ChevronRight } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { AggregatedEventData } from '@/types';
 

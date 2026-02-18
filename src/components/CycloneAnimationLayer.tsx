@@ -8,7 +8,6 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  Timer,
   X,
   Minimize2,
   Maximize2,
@@ -39,7 +38,8 @@ import {
   StoryBeat,
 } from '../utils/cycloneStory';
 import { useCycloneTrackPlayback } from '@/hooks/useCycloneTrackPlayback';
-import { WIND_RADII_COLORS, MAP_COLORS } from '@/theme/colors';
+import { WIND_RADII_COLORS } from '@/theme/colors';
+import { CATEGORY_COLORS, CHART_COLORS } from '@/theme/cycloneScale';
 import CycloneIntensityChart from './CycloneIntensityChart';
 import CycloneShareCard from './CycloneShareCard';
 import StoryBeatAnnotation from './StoryBeatAnnotation';
@@ -76,6 +76,10 @@ const QUALITY_SETTINGS = {
     glowRings: 2,
     trailLength: 2,
     glowOpacity: [0.45, 0.2, 0.08],
+    stormEye: false,
+    rainBands: 0,
+    windShear: false,
+    noiseDetail: 2,
   },
   high: {
     maxParticles: 1400,
@@ -83,6 +87,21 @@ const QUALITY_SETTINGS = {
     glowRings: 3,
     trailLength: 5,
     glowOpacity: [0.6, 0.35, 0.18],
+    stormEye: true,
+    rainBands: 3,
+    windShear: false,
+    noiseDetail: 3,
+  },
+  cinematic: {
+    maxParticles: 2200,
+    spawnRate: 12,
+    glowRings: 5,
+    trailLength: 8,
+    glowOpacity: [0.75, 0.5, 0.3, 0.15, 0.08],
+    stormEye: true,
+    rainBands: 5,
+    windShear: true,
+    noiseDetail: 4,
   },
 } as const;
 
@@ -114,7 +133,7 @@ export default function CycloneAnimationLayer({
   const [storyBeatsInternal, setStoryBeatsInternal] = useState<StoryBeat[]>([]);
   const [showShareCard, setShowShareCard] = useState(false);
   const [currentScenario, setCurrentScenario] = useState<'forecast' | 'best' | 'worst'>('forecast');
-  const [qualityMode, setQualityMode] = useState<'balanced' | 'high'>('balanced');
+  const [qualityMode, setQualityMode] = useState<'balanced' | 'high' | 'cinematic'>('balanced');
   const [panelPosition, setPanelPosition] = useState({ x: 20, y: 80 }); // Will be set correctly on mount
   const [beatFeedbackEnabled, setBeatFeedbackEnabled] = useState(false);
   const [isLooping, setIsLooping] = useState(true); // Loop animation by default
@@ -160,13 +179,18 @@ export default function CycloneAnimationLayer({
   const windGlowCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const glowAnimationFrameRef = useRef<number | undefined>(undefined);
   const glowPhase = useRef<number>(0);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const styleDataTimeoutRef = useRef<number | null>(null);
   const lastNotifiedRef = useRef<{ category: number; index: number } | null>(null);
   const storyModeEnabled = typeof storyModeProp === 'boolean' ? storyModeProp : storyModeInternal;
   const storyBeats = storyBeatsProp ?? storyBeatsInternal;
   const displayedPositionRef = useRef<[number, number] | null>(null);
+  const storyBeatActiveRef = useRef<{ startTime: number; type: string } | null>(null);
   const isDocked = alwaysDocked || !!controlsContainer;
+
+  // Performance monitoring refs
+  const frameTimesRef = useRef<number[]>([]);
+  const lastFrameTimeRef = useRef<number>(0);
+  const performanceCheckIntervalRef = useRef<number | null>(null);
 
   const { state: playbackState, controls: playbackControls } = useCycloneTrackPlayback({
     forecastTrack,
@@ -221,38 +245,6 @@ export default function CycloneAnimationLayer({
       x: Math.max(minX, Math.min(x, maxX)),
       y: Math.max(minY, Math.min(y, maxY)),
     };
-  }, []);
-
-  const playBeatTick = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const AudioContextCtor = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextCtor) return;
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContextCtor();
-      }
-      const ctx = audioContextRef.current;
-      if (!ctx) return;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => undefined);
-      }
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = 'triangle';
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.08;
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.08);
-      oscillator.stop(ctx.currentTime + 0.09);
-      oscillator.onended = () => {
-        gain.disconnect();
-        oscillator.disconnect();
-      };
-    } catch (e) {
-      // Ignore audio errors in restricted environments
-    }
   }, []);
 
   const clampChartPosition = useCallback((x: number, y: number, width: number, height: number) => {
@@ -570,6 +562,119 @@ export default function CycloneAnimationLayer({
   // Story mode is handled entirely by CycloneStoryOverlay to avoid conflicts
   // No auto-pause or beat feedback here - keeps animation smooth
 
+  // Simplex-like noise function for organic wind field variation
+  const noise2D = useCallback((x: number, y: number, seed: number = 0) => {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+
+    x -= Math.floor(x);
+    y -= Math.floor(y);
+
+    const u = x * x * x * (x * (x * 6 - 15) + 10);
+    const v = y * y * y * (y * (y * 6 - 15) + 10);
+
+    // Simple deterministic hash
+    const hash = (i: number, j: number) => {
+      const h = (i * 374761393 + j * 668265263 + seed) & 0x7fffffff;
+      return ((h ^ (h >> 13)) * 1274126177) & 0x7fffffff;
+    };
+
+    const a = hash(X, Y) / 0x7fffffff;
+    const b = hash(X + 1, Y) / 0x7fffffff;
+    const c = hash(X, Y + 1) / 0x7fffffff;
+    const d = hash(X + 1, Y + 1) / 0x7fffffff;
+
+    const x1 = a + u * (b - a);
+    const x2 = c + u * (d - c);
+
+    return x1 + v * (x2 - x1);
+  }, []);
+
+  // Camera easing function for smooth tracking
+  const easeInOutCubic = useCallback((t: number): number => {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }, []);
+
+  // Detect and track story beat hits for visual effects
+  useEffect(() => {
+    if (!storyModeEnabled || !storyBeats || storyBeats.length === 0) {
+      storyBeatActiveRef.current = null;
+      return;
+    }
+
+    const currentBeat = storyBeats.find(beat => beat.index === currentIndex);
+    if (currentBeat) {
+      // Trigger beat visual effect for 2.5 seconds
+      storyBeatActiveRef.current = {
+        startTime: Date.now(),
+        type: currentBeat.type,
+      };
+
+      // Clear after duration
+      setTimeout(() => {
+        if (storyBeatActiveRef.current?.startTime === storyBeatActiveRef.current?.startTime) {
+          storyBeatActiveRef.current = null;
+        }
+      }, 2500);
+    }
+  }, [currentIndex, storyBeats, storyModeEnabled]);
+
+  // Performance monitoring and adaptive quality
+  useEffect(() => {
+    if (!isPlaying || qualityMode === 'balanced') return; // Skip monitoring at lowest quality
+
+    const checkPerformance = () => {
+      const now = performance.now();
+      if (lastFrameTimeRef.current > 0) {
+        const frameTime = now - lastFrameTimeRef.current;
+        frameTimesRef.current.push(frameTime);
+
+        // Keep only last 60 frames (1 second at 60fps)
+        if (frameTimesRef.current.length > 60) {
+          frameTimesRef.current.shift();
+        }
+
+        // Check average FPS every 60 frames
+        if (frameTimesRef.current.length === 60) {
+          const avgFrameTime = frameTimesRef.current.reduce((a, b) => a + b) / 60;
+          const fps = 1000 / avgFrameTime;
+
+          // Auto-downgrade if FPS drops below 30 and we're not already at balanced
+          if (fps < 30) {
+            if (qualityMode === 'cinematic') {
+              console.log(
+                '📉 Performance: Downgrading from Cinematic to High quality (FPS:',
+                fps.toFixed(1),
+                ')'
+              );
+              setQualityMode('high');
+            } else if (qualityMode === 'high') {
+              console.log(
+                '📉 Performance: Downgrading from High to Balanced quality (FPS:',
+                fps.toFixed(1),
+                ')'
+              );
+              setQualityMode('balanced');
+            }
+          }
+
+          // Clear array after check
+          frameTimesRef.current = [];
+        }
+      }
+      lastFrameTimeRef.current = now;
+    };
+
+    // Check performance every 16ms (60fps)
+    performanceCheckIntervalRef.current = window.setInterval(checkPerformance, 16);
+
+    return () => {
+      if (performanceCheckIntervalRef.current) {
+        clearInterval(performanceCheckIntervalRef.current);
+      }
+    };
+  }, [isPlaying, qualityMode]);
+
   // Wind Field Glow & Particle Flow Effect
   useEffect(() => {
     if (!uiVisible || !map || !forecastTrack || !windGlowCanvasRef.current) return;
@@ -668,11 +773,28 @@ export default function CycloneAnimationLayer({
         const swirlAngle = angle + Math.PI / 2;
         const swirlSpeed = (currentPoint.meanWind / 100) * 2;
 
+        // Add noise-driven organic flow (cinematic quality)
+        const noiseScale = 0.02;
+        const noiseX = noise2D(particle.x * noiseScale, particle.y * noiseScale, glowPhase.current);
+        const noiseY = noise2D(
+          particle.x * noiseScale + 100,
+          particle.y * noiseScale + 100,
+          glowPhase.current
+        );
+        const noiseStrength = activeQuality.noiseDetail * 0.3;
+
         // Add radial wobble
         const radialSpeed = Math.sin(particle.life * 0.1) * 0.5;
 
-        particle.vx = Math.cos(swirlAngle) * swirlSpeed + Math.cos(angle) * radialSpeed;
-        particle.vy = Math.sin(swirlAngle) * swirlSpeed + Math.sin(angle) * radialSpeed;
+        // Combine swirl, noise, and radial motion
+        particle.vx =
+          Math.cos(swirlAngle) * swirlSpeed +
+          Math.cos(angle) * radialSpeed +
+          (noiseX - 0.5) * noiseStrength;
+        particle.vy =
+          Math.sin(swirlAngle) * swirlSpeed +
+          Math.sin(angle) * radialSpeed +
+          (noiseY - 0.5) * noiseStrength;
 
         // Update position
         particle.x += particle.vx;
@@ -778,6 +900,128 @@ export default function CycloneAnimationLayer({
         ctx.restore();
       }
 
+      // Draw rain bands (spiral arcs with rotation drift)
+      if (activeQuality.rainBands > 0 && currentPoint.category >= 1) {
+        const bandCount = activeQuality.rainBands;
+        const bandRotationSpeed = 0.003;
+        const bandPhase = phase * bandRotationSpeed;
+
+        for (let band = 0; band < bandCount; band++) {
+          const bandRadius = radiusPixels * (0.3 + band * 0.25);
+          const bandAngleOffset = (band * Math.PI * 2) / bandCount + bandPhase;
+          const bandOpacity = 0.15 - band * 0.02;
+
+          ctx.save();
+          ctx.globalAlpha = bandOpacity;
+          ctx.strokeStyle = color.replace(/[\d.]+\)$/, '0.4)');
+          ctx.lineWidth = radiusPixels * 0.08;
+          ctx.lineCap = 'round';
+
+          // Draw spiral arc
+          ctx.beginPath();
+          for (let a = 0; a < Math.PI * 1.5; a += 0.1) {
+            const spiralRadius = bandRadius * (1 + a * 0.15);
+            const x = cyclonePos.x + Math.cos(a + bandAngleOffset) * spiralRadius;
+            const y = cyclonePos.y + Math.sin(a + bandAngleOffset) * spiralRadius;
+            if (a === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Draw storm eye (dark void with subtle shimmer) for high intensity storms
+      if (activeQuality.stormEye && currentPoint.category >= 2) {
+        const eyeRadius = radiusPixels * 0.12; // Eye is ~12% of gale radius
+
+        // Dark void center
+        const eyeGradient = ctx.createRadialGradient(
+          cyclonePos.x,
+          cyclonePos.y,
+          0,
+          cyclonePos.x,
+          cyclonePos.y,
+          eyeRadius
+        );
+
+        eyeGradient.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+        eyeGradient.addColorStop(0.7, 'rgba(20, 20, 30, 0.7)');
+        eyeGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = eyeGradient;
+        ctx.beginPath();
+        ctx.arc(cyclonePos.x, cyclonePos.y, eyeRadius, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Subtle shimmer on eye wall (animated)
+        const shimmerPhase = phase * 2;
+        ctx.save();
+        ctx.globalAlpha = 0.15 + Math.sin(shimmerPhase) * 0.08;
+        ctx.strokeStyle = 'rgba(200, 220, 255, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -shimmerPhase * 5;
+        ctx.beginPath();
+        ctx.arc(cyclonePos.x, cyclonePos.y, eyeRadius * 0.95, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Story beat visual triggers (lightning/surge pulses)
+      const beatActive = storyBeatActiveRef.current;
+      if (beatActive && storyModeEnabled) {
+        const elapsed = Date.now() - beatActive.startTime;
+        const beatProgress = Math.min(elapsed / 2500, 1); // 2.5 second duration
+        const beatIntensity = Math.sin(beatProgress * Math.PI); // Peak at middle
+
+        // Lightning flash effect for intensity-related beats
+        if (
+          ['peak-intensity', 'rapid-intensification', 'category-upgrade'].includes(beatActive.type)
+        ) {
+          const flashPhase = (elapsed % 400) / 400; // Flash every 400ms
+          if (flashPhase < 0.15) {
+            // Quick flash
+            ctx.save();
+            ctx.globalAlpha = (0.15 - flashPhase) * beatIntensity * 0.4;
+
+            // Radial flash
+            const flashGradient = ctx.createRadialGradient(
+              cyclonePos.x,
+              cyclonePos.y,
+              0,
+              cyclonePos.x,
+              cyclonePos.y,
+              radiusPixels * 2
+            );
+            flashGradient.addColorStop(0, 'rgba(255, 255, 200, 0.6)');
+            flashGradient.addColorStop(0.5, 'rgba(255, 255, 150, 0.2)');
+            flashGradient.addColorStop(1, 'rgba(255, 255, 100, 0)');
+
+            ctx.fillStyle = flashGradient;
+            ctx.fillRect(0, 0, width, height);
+            ctx.restore();
+          }
+        }
+
+        // Surge pulse for approach-related beats
+        if (['closest-approach'].includes(beatActive.type)) {
+          ctx.save();
+          const pulseRadius = radiusPixels * (1 + beatProgress * 0.5);
+          ctx.globalAlpha = beatIntensity * 0.3;
+          ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([10, 5]);
+          ctx.beginPath();
+          ctx.arc(cyclonePos.x, cyclonePos.y, pulseRadius, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       // Draw particles with glow
       particlesRef.current.forEach(particle => {
         ctx.save();
@@ -792,10 +1036,51 @@ export default function CycloneAnimationLayer({
         ctx.lineCap = 'round';
 
         // Draw particle as a longer streak
+        const streakLength = activeQuality.trailLength;
         ctx.beginPath();
         ctx.moveTo(particle.x, particle.y);
-        ctx.lineTo(particle.x - particle.vx * 5, particle.y - particle.vy * 5);
+        ctx.lineTo(
+          particle.x - particle.vx * streakLength,
+          particle.y - particle.vy * streakLength
+        );
         ctx.stroke();
+
+        // Draw wind shear streaks (cinematic quality only)
+        if (activeQuality.windShear && particle.opacity > 0.5) {
+          ctx.save();
+          ctx.globalAlpha = particle.opacity * 0.3;
+          ctx.strokeStyle = `rgba(${particleColor[0]}, ${particleColor[1]}, ${particleColor[2]}, 0.4)`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+
+          // Draw additional shear streaks offset to sides
+          const perpAngle = Math.atan2(particle.vy, particle.vx) + Math.PI / 2;
+          const shearOffset = 4;
+
+          ctx.beginPath();
+          ctx.moveTo(
+            particle.x + Math.cos(perpAngle) * shearOffset,
+            particle.y + Math.sin(perpAngle) * shearOffset
+          );
+          ctx.lineTo(
+            particle.x - particle.vx * streakLength * 0.7 + Math.cos(perpAngle) * shearOffset,
+            particle.y - particle.vy * streakLength * 0.7 + Math.sin(perpAngle) * shearOffset
+          );
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(
+            particle.x - Math.cos(perpAngle) * shearOffset,
+            particle.y - Math.sin(perpAngle) * shearOffset
+          );
+          ctx.lineTo(
+            particle.x - particle.vx * streakLength * 0.7 - Math.cos(perpAngle) * shearOffset,
+            particle.y - particle.vy * streakLength * 0.7 - Math.sin(perpAngle) * shearOffset
+          );
+          ctx.stroke();
+
+          ctx.restore();
+        }
 
         // Draw bright core
         ctx.shadowBlur = 4;
@@ -852,7 +1137,16 @@ export default function CycloneAnimationLayer({
         cancelAnimationFrame(animationId);
       }
     };
-  }, [map, forecastTrack, currentIndex, isPlaying, activeQuality, uiVisible, storyModeEnabled]);
+  }, [
+    map,
+    forecastTrack,
+    currentIndex,
+    isPlaying,
+    activeQuality,
+    uiVisible,
+    storyModeEnabled,
+    noise2D,
+  ]);
 
   useEffect(() => {
     if (!map || !forecastTrack || forecastTrack.length === 0) return;
@@ -1190,7 +1484,7 @@ export default function CycloneAnimationLayer({
         // Clean up trail markers
         trailMarkersRef.current.forEach(marker => marker.remove());
         trailMarkersRef.current = [];
-      } catch (e) {
+      } catch (_e) {
         // Silently ignore cleanup errors when map is destroyed
       }
 
@@ -1695,13 +1989,17 @@ export default function CycloneAnimationLayer({
       const elapsed = timestamp - lastUpdateRef.current;
       const progress = Math.min(elapsed / interval, 1);
 
+      // Apply easing for smoother motion
+      const easedProgress = easeInOutCubic(progress);
+
       const baseIndex = currentIndex;
       const nextIndex = Math.min(baseIndex + 1, forecastTrack.length - 1);
       const basePoint = forecastTrack[baseIndex];
       const nextPoint = forecastTrack[nextIndex];
       if (markerRef.current && basePoint && nextPoint) {
-        const lng = basePoint.longitude + (nextPoint.longitude - basePoint.longitude) * progress;
-        const lat = basePoint.latitude + (nextPoint.latitude - basePoint.latitude) * progress;
+        const lng =
+          basePoint.longitude + (nextPoint.longitude - basePoint.longitude) * easedProgress;
+        const lat = basePoint.latitude + (nextPoint.latitude - basePoint.latitude) * easedProgress;
         displayedPositionRef.current = [lng, lat];
         markerRef.current.setLngLat([lng, lat]);
       }
@@ -1727,6 +2025,7 @@ export default function CycloneAnimationLayer({
     controlsContainer,
     uiVisible,
     storyModeEnabled,
+    easeInOutCubic,
   ]);
 
   const toggleChart = useCallback(() => {
@@ -1846,6 +2145,7 @@ export default function CycloneAnimationLayer({
     onClose,
     handleShare,
     toggleStoryMode,
+    toggleChart,
     next,
     previous,
     seekTo,
@@ -2575,7 +2875,7 @@ export default function CycloneAnimationLayer({
           {/* Quality Toggle */}
           <div className="flex items-center justify-center gap-1.5">
             <span className="text-white text-[10px] font-medium">Quality:</span>
-            {(['balanced', 'high'] as const).map(mode => (
+            {(['balanced', 'high', 'cinematic'] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setQualityMode(mode)}
@@ -2584,9 +2884,15 @@ export default function CycloneAnimationLayer({
                     ? 'bg-emerald-500/80 text-white'
                     : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/60 hover:text-slate-300'
                 }`}
-                title={`${mode === 'balanced' ? 'Balanced' : 'High'} quality`}
+                title={`${mode === 'balanced' ? 'Balanced' : mode === 'high' ? 'High' : 'Cinematic'} quality - ${
+                  mode === 'balanced'
+                    ? '500 particles, basic effects'
+                    : mode === 'high'
+                      ? '1400 particles, enhanced effects'
+                      : '2200 particles, full visual fidelity with storm eye, rain bands, wind shear'
+                }`}
               >
-                {mode === 'balanced' ? 'Balanced' : 'High'}
+                {mode === 'balanced' ? 'Balanced' : mode === 'high' ? 'High' : 'Cinematic'}
               </button>
             ))}
           </div>
@@ -2635,42 +2941,60 @@ export default function CycloneAnimationLayer({
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#8B0000', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category5,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 5</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FF0000', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category4,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 4</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FF6600', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category3,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 3</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FFA500', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category2,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 2</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FFD700', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category1,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 1</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#4169E1', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.tropicalStorm,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Tropical Storm</div>
                 </div>
@@ -2931,42 +3255,60 @@ export default function CycloneAnimationLayer({
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#8B0000', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category5,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 5</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FF0000', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category4,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 4</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FF6600', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category3,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 3</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FFA500', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category2,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 2</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#FFD700', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.category1,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Category 1</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div
                     className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: '#4169E1', border: '2px solid white' }}
+                    style={{
+                      backgroundColor: CATEGORY_COLORS.tropicalStorm,
+                      border: '2px solid white',
+                    }}
                   ></div>
                   <div className="text-xs text-white">Tropical Storm</div>
                 </div>
@@ -2978,7 +3320,10 @@ export default function CycloneAnimationLayer({
               <div className="flex items-center gap-2">
                 <div
                   className="w-4 h-4 rounded border-2"
-                  style={{ backgroundColor: '#FF000040', borderColor: '#FF0000' }}
+                  style={{
+                    backgroundColor: `${WIND_RADII_COLORS.hurricane.stroke}40`,
+                    borderColor: WIND_RADII_COLORS.hurricane.stroke,
+                  }}
                 ></div>
                 <div className="text-xs text-white">
                   <div className="font-medium">Hurricane Force</div>
@@ -2991,7 +3336,10 @@ export default function CycloneAnimationLayer({
               <div className="flex items-center gap-2">
                 <div
                   className="w-4 h-4 rounded border-2"
-                  style={{ backgroundColor: '#FFA50040', borderColor: '#FFA500' }}
+                  style={{
+                    backgroundColor: `${WIND_RADII_COLORS.storm.stroke}40`,
+                    borderColor: WIND_RADII_COLORS.storm.stroke,
+                  }}
                 ></div>
                 <div className="text-xs text-white">
                   <div className="font-medium">Storm Force</div>
@@ -3004,7 +3352,10 @@ export default function CycloneAnimationLayer({
               <div className="flex items-center gap-2">
                 <div
                   className="w-4 h-4 rounded border-2"
-                  style={{ backgroundColor: '#FFD70040', borderColor: '#FFD700' }}
+                  style={{
+                    backgroundColor: `${WIND_RADII_COLORS.gale.stroke}40`,
+                    borderColor: WIND_RADII_COLORS.gale.stroke,
+                  }}
                 ></div>
                 <div className="text-xs text-white">
                   <div className="font-medium">Gale Force</div>
@@ -3017,7 +3368,7 @@ export default function CycloneAnimationLayer({
               <div className="flex items-center gap-2">
                 <div
                   className="w-4 h-4 rounded border-2 border-dashed"
-                  style={{ backgroundColor: '#88888820', borderColor: '#666' }}
+                  style={{ backgroundColor: '#88888826', borderColor: '#666666' }}
                 ></div>
                 <div className="text-xs text-white">
                   <div className="font-medium">Uncertainty Cone</div>
@@ -3028,7 +3379,10 @@ export default function CycloneAnimationLayer({
 
             <div className="pt-2 border-t border-slate-700">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-1 rounded" style={{ backgroundColor: '#9333ea' }}></div>
+                <div
+                  className="w-4 h-1 rounded"
+                  style={{ backgroundColor: CHART_COLORS.pressure }}
+                ></div>
                 <div className="text-xs text-white">
                   <div className="font-medium">Forecast Track</div>
                 </div>

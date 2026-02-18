@@ -8,7 +8,7 @@
  * - Streaming for huge files
  */
 
-import { fetchWithCache, dataCache } from './dataCache';
+import { dataCache } from './dataCache';
 import { dataParserWorker } from './dataParserClient';
 import { lazyLoader } from './lazyDataLoader';
 

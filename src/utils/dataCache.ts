@@ -71,7 +71,7 @@ class DataCache {
       await this.init();
       if (!this.db) return null;
 
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         const transaction = this.db!.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.get(url);
@@ -124,7 +124,7 @@ class DataCache {
 
       const size = JSON.stringify(data).length;
 
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
 
@@ -163,7 +163,7 @@ class DataCache {
 
       const cutoff = Date.now() - CACHE_DURATION;
 
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const index = store.index('timestamp');
@@ -206,7 +206,7 @@ class DataCache {
       await this.init();
       if (!this.db) return;
 
-      return new Promise((resolve, reject) => {
+      return new Promise(resolve => {
         const transaction = this.db!.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.clear();

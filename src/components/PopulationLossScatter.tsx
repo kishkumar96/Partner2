@@ -36,7 +36,6 @@ export default function PopulationLossScatter({ data }: PopulationLossScatterPro
 
     // Calculate average for quadrant lines
     const avgPop = points.reduce((sum, p) => sum + p.x, 0) / points.length || 0;
-    const avgLoss = points.reduce((sum, p) => sum + p.y, 0) / points.length || 0;
 
     return {
       datasets: [

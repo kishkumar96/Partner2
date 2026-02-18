@@ -195,7 +195,7 @@ class OllamaClient {
             if (data.done) {
               return;
             }
-          } catch (e) {
+          } catch (_e) {
             // Skip invalid JSON
           }
         }

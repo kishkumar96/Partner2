@@ -78,7 +78,6 @@ export const measureDataLoad = async <T>(
     analytics.performance(`data_load_${operation}`, duration);
     return result;
   } catch (error) {
-    const duration = performance.now() - startTime;
     analytics.error(`${operation}_load_failed`, String(error));
     throw error;
   }
@@ -163,7 +162,7 @@ export const observeLongTasks = () => {
     });
 
     observer.observe({ entryTypes: ['longtask'] });
-  } catch (e) {
+  } catch (_e) {
     // PerformanceObserver may not be fully supported
     console.warn('Long task observer not available');
   }
@@ -233,7 +232,7 @@ export const initPerformanceMonitoring = () => {
   }
 };
 
-export default {
+const performanceUtils = {
   reportWebVitals,
   measureRenderTime,
   measureDataLoad,
@@ -241,3 +240,5 @@ export default {
   monitorMemory,
   initPerformanceMonitoring,
 };
+
+export default performanceUtils;

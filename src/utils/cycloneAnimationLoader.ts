@@ -53,12 +53,15 @@ export async function loadCycloneForecastTrack(
   options: DataLoaderOptions = {}
 ): Promise<CycloneForecastPoint[] | null> {
   try {
-    const { data: csvText } = await loadTextData('/cyclone-lola-forecast.csv', {
+    const { data: csvText, error } = await loadTextData('/cyclone-lola-forecast.csv', {
       cache: true,
       signal: options.signal,
     });
     if (!csvText) {
-      console.error('Failed to load cyclone forecast CSV file');
+      // Don't log error if request was aborted (expected behavior during cleanup)
+      if (error && error.name !== 'AbortError') {
+        console.error('Failed to load cyclone forecast CSV file:', error.message);
+      }
       return null;
     }
 

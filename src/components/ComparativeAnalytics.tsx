@@ -2,25 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
-import { BarChart3, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
-
-interface RegionalData {
-  region: string;
-  totalLoss: number;
-  buildingDamage: number;
-  populationExposed: number;
-  infrastructureLoss: number;
-  cropLoss: number;
-}
-
-interface SectorData {
-  sector: string;
-  totalLoss: number;
-  windLoss: number;
-  floodLoss: number;
-  buildingsExposed: number;
-  buildingsDamaged: number;
-}
+import { BarChart3, AlertTriangle } from 'lucide-react';
 
 interface ComparativeAnalyticsProps {
   regionalData?: any[];

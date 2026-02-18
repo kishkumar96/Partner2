@@ -166,7 +166,6 @@ export async function fetchCycloneTrack(
  */
 function parseCSVTrack(csvText: string): CycloneTrack {
   const lines = csvText.trim().split('\n');
-  const headers = lines[0].split(',').map(h => h.trim());
 
   const coordinates: number[][] = [];
   const features = [];

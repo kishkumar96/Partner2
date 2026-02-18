@@ -19,7 +19,7 @@ export default function NotFound() {
         <h2 className="text-4xl font-bold text-white mb-4">Page Not Found</h2>
 
         <p className="text-xl text-slate-400 mb-8">
-          We couldn't find the climate data you're looking for.
+          We couldn&apos;t find the climate data you&apos;re looking for.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">

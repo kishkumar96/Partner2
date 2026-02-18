@@ -157,7 +157,7 @@ function log(level: LogLevel, category: LogCategory, message: string, details?: 
         originalConsole.error(formattedMessage, details || '');
         break;
     }
-  } catch (err) {
+  } catch (_err) {
     // Failsafe: If logging itself fails, use bare console.log
     // This should never happen, but prevents any possible crash
     try {
@@ -224,7 +224,7 @@ export const debugLogger = {
 
         // Use our warning handler
         debugLogger.warn(message, category, args.length > 1 ? args.slice(1) : undefined);
-      } catch (error) {
+      } catch (_error) {
         // Fallback to original warn if our handler fails
         originalWarn(...args);
       } finally {

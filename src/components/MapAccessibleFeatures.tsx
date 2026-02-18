@@ -111,7 +111,7 @@ export default function MapAccessibleFeatures({
       }
       searchInputRef.current.focus();
     }
-  }, [resolvedIsOpen]);
+  }, [resolvedIsOpen, inline]);
 
   useEffect(() => {
     if (!resolvedIsOpen && !inline) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Download, RefreshCw, FileText, Map, AlertCircle, Wind } from 'lucide-react';
 import {
   fetchVanuatuTCLolaCatalog,
@@ -21,12 +21,7 @@ export default function THREDDSBrowser() {
   const [trackData, setTrackData] = useState<CycloneTrack | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<THREDDSDataset | null>(null);
 
-  // Load catalog on mount
-  useEffect(() => {
-    loadCatalog();
-  }, []);
-
-  async function loadCatalog() {
+  const loadCatalog = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -44,7 +39,12 @@ export default function THREDDSBrowser() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  // Load catalog on mount
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
 
   async function loadTrackData(filename: string) {
     try {
@@ -150,6 +150,7 @@ export default function THREDDSBrowser() {
                 {datasets.map((dataset, index) => (
                   <tr
                     key={index}
+                    onClick={() => setSelectedDataset(dataset)}
                     className={`hover:bg-white/5 transition-colors ${
                       selectedDataset?.name === dataset.name ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}

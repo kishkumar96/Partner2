@@ -8,8 +8,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Share2, Check, Copy } from 'lucide-react';
-import { MapURLState, buildShareableUrl, copyShareableUrl } from '@/utils/urlState';
+import { Share2, Check } from 'lucide-react';
+import { MapURLState, copyShareableUrl } from '@/utils/urlState';
 
 interface ShareLinkButtonProps {
   /** Current map state to share */

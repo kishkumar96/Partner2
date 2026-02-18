@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import maplibregl, { Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import { BUILDING_DAMAGE_COLORS } from '@/theme/colors';
-import { getBeforeLayerId } from '@/utils/layerOrder';
 import type { BuildingProperties } from '@/types/realData';
 
 interface DamagedBuildingsLayerProps {
@@ -307,7 +306,7 @@ export default function DamagedBuildingsLayer({
         if (map.getSource(sourceId)) {
           map.removeSource(sourceId);
         }
-      } catch (e) {
+      } catch (_e) {
         // Silently ignore cleanup errors when map is destroyed
       }
     };

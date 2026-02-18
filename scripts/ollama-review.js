@@ -146,7 +146,7 @@ function getProjectContext() {
     if (fs.existsSync(contextPath)) {
       return fs.readFileSync(contextPath, 'utf-8');
     }
-  } catch (e) {
+  } catch (_e) {
     // Context file not found, continue without it
   }
   return '';
@@ -346,7 +346,7 @@ Create UNIFIED REVIEW:
       
       return result;
     }
-  } catch (error) {
+  } catch (_error) {
     console.log(`   ⚠️  Consensus failed, using first review`);
   }
 

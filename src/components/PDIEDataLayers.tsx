@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { CountryCode } from '@/types/thredds';
 import { loadPDIEOutputData } from '@/utils/geotiffLoader';
@@ -12,15 +12,11 @@ interface PDIEDataLayersProps {
 }
 
 export default function PDIEDataLayers({ map, countryCode, visible }: PDIEDataLayersProps) {
-  const [loading, setLoading] = useState(false);
-
   // Load PDIE output data layers
   useEffect(() => {
     if (!map || !visible || !countryCode) return;
 
     const loadPDIELayers = async () => {
-      setLoading(true);
-
       try {
         // Wait for map style to load
         if (!map.isStyleLoaded()) {
@@ -44,7 +40,7 @@ export default function PDIEDataLayers({ map, countryCode, visible }: PDIEDataLa
           try {
             if (map.getLayer(layerId)) map.removeLayer(layerId);
             if (map.getSource(sourceId)) map.removeSource(sourceId);
-          } catch (e) {
+          } catch (_e) {
             /* ignore */
           }
 
@@ -107,7 +103,7 @@ export default function PDIEDataLayers({ map, countryCode, visible }: PDIEDataLa
             if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
             if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
             if (map.getSource(sourceId)) map.removeSource(sourceId);
-          } catch (e) {
+          } catch (_e) {
             /* ignore */
           }
 
@@ -168,8 +164,6 @@ export default function PDIEDataLayers({ map, countryCode, visible }: PDIEDataLa
         console.log(`PDIE output layers loaded successfully`);
       } catch (error) {
         console.error(`Error loading PDIE layers:`, error);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -195,7 +189,7 @@ export default function PDIEDataLayers({ map, countryCode, visible }: PDIEDataLa
         sources.forEach(sourceId => {
           if (map.getSource(sourceId)) map.removeSource(sourceId);
         });
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     };

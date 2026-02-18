@@ -21,16 +21,10 @@ import { aggregateEventsByLevel } from '@/utils/filterUtils';
 import {
   AlertCircle,
   AlertTriangle,
-  BarChart3,
   Building2,
-  CheckCircle2,
-  Circle,
-  DollarSign,
   Download,
   Info,
-  Lightbulb,
   MapPin,
-  Users,
   Construction,
 } from 'lucide-react';
 
@@ -141,53 +135,9 @@ export default function BottomTabs({
     return filters.aggregationLevel === 'province' ? 'Province' : 'National';
   };
 
-  const getSeverityBadge = (highRisk: number, total: number) => {
-    if (total === 0) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-gray-100 text-gray-600">
-          <Circle className="w-3 h-3" aria-hidden="true" />
-          N/A
-        </span>
-      );
-    }
-
-    const percentage = (highRisk / total) * 100;
-    if (percentage > 50) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-red-100 text-red-700">
-          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
-          HIGH
-        </span>
-      );
-    }
-    if (percentage > 20) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-700">
-          <AlertCircle className="w-3 h-3" aria-hidden="true" />
-          MED
-        </span>
-      );
-    }
-    if (percentage > 0) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-green-100 text-green-700">
-          <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-          LOW
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">
-        <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
-        SAFE
-      </span>
-    );
-  };
-
   const {
     filteredEvents,
     filteredExposureData,
-    filteredEconomicDamageData,
     filteredSectorEconomicData,
     filteredAssetEconomicData,
   } = useMemo(() => {
@@ -308,56 +258,6 @@ export default function BottomTabs({
     const totalEvents = impactData.reduce((sum, d) => sum + d.totalEvents, 0);
     return { totalPopulation, totalLoss, totalEvents, regionCount: impactData.length };
   }, [impactData]);
-
-  // Breakdown by sector
-  const sectorBreakdown = useMemo(() => {
-    const breakdown = new Map<string, { events: number; population: number; loss: number }>();
-    filteredEvents.forEach(event => {
-      const sectorId = event.sectorId || 'unknown';
-      const current = breakdown.get(sectorId) || { events: 0, population: 0, loss: 0 };
-      current.events += 1;
-      // Use totalAffectedPopulation and totalEconomicDamage for aggregated events
-      current.population += event.totalAffectedPopulation || 0;
-      current.loss += event.totalEconomicDamage || 0;
-      breakdown.set(sectorId, current);
-    });
-    return Array.from(breakdown.entries())
-      .filter(([sectorId]) => sectorId !== 'unknown')
-      .map(([sectorId, data]) => ({
-        id: sectorId,
-        name: getSectorName(sectorId),
-        totalEvents: data.events,
-        totalAffectedPopulation: data.population,
-        totalEconomicDamage: data.loss,
-        percentage:
-          nationalSummary.totalLoss > 0 ? (data.loss / nationalSummary.totalLoss) * 100 : 0,
-      }))
-      .sort((a, b) => b.totalEconomicDamage - a.totalEconomicDamage);
-  }, [filteredEvents, nationalSummary.totalLoss]);
-
-  // Breakdown by hazard
-  const hazardBreakdown = useMemo(() => {
-    const breakdown = new Map<string, { events: number; population: number; loss: number }>();
-    filteredEvents.forEach(event => {
-      const hazardId = event.hazardId;
-      const current = breakdown.get(hazardId) || { events: 0, population: 0, loss: 0 };
-      current.events += 1;
-      current.population += event.totalAffectedPopulation || 0;
-      current.loss += event.totalEconomicDamage || 0;
-      breakdown.set(hazardId, current);
-    });
-    return Array.from(breakdown.entries())
-      .map(([hazardId, data]) => ({
-        id: hazardId,
-        name: getHazardName(hazardId),
-        totalEvents: data.events,
-        totalAffectedPopulation: data.population,
-        totalEconomicDamage: data.loss,
-        percentage:
-          nationalSummary.totalLoss > 0 ? (data.loss / nationalSummary.totalLoss) * 100 : 0,
-      }))
-      .sort((a, b) => b.totalEconomicDamage - a.totalEconomicDamage);
-  }, [filteredEvents, nationalSummary.totalLoss]);
 
   // Display data is always the impactData (aggregated by FilterPanel's aggregation level)
   const displayData = impactData;
@@ -780,8 +680,8 @@ export default function BottomTabs({
           <div className="space-y-4">
             <div className="flex items-center justify-between px-4 py-2">
               <div className="text-sm text-slate-400">
-                Economic losses aggregated by sector. For asset-specific details, see the "Economic
-                by Asset" tab.
+                Economic losses aggregated by sector. For asset-specific details, see the
+                &ldquo;Economic by Asset&rdquo; tab.
                 {(filters.selectedHazards.length > 0 ||
                   filters.dateRange.start ||
                   filters.dateRange.end) && (
@@ -878,7 +778,7 @@ export default function BottomTabs({
             <div className="flex items-center justify-between px-4 py-2">
               <div className="text-sm text-slate-400">
                 Economic losses by individual asset type. For sector-level aggregates, see the
-                "Economic by Sector" tab.
+                &ldquo;Economic by Sector&rdquo; tab.
                 {(filters.selectedHazards.length > 0 ||
                   filters.dateRange.start ||
                   filters.dateRange.end) && (
@@ -1093,8 +993,8 @@ export default function BottomTabs({
                 </span>{' '}
                 This tab shows regional damage totals (buildings, roads, roads) from pre-aggregated
                 CSV data. <strong>Sector, hazard, and date filters do not apply</strong> as the
-                source data doesn't contain that granularity. Shows total damage across all sectors
-                and hazards for each region.
+                source data doesn&apos;t contain that granularity. Shows total damage across all
+                sectors and hazards for each region.
               </div>
               <button
                 onClick={() => {

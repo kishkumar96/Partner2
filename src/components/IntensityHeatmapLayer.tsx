@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
+import { Map as MapLibreMap } from 'maplibre-gl';
 import { Event } from '@/types';
 import { getBeforeLayerId } from '@/utils/layerOrder';
 import { LAYER_OPACITY } from '@/utils/colorSystem';
@@ -148,7 +148,7 @@ export default function IntensityHeatmapLayer({
         if (map.getSource('intensity-heatmap-source')) {
           map.removeSource('intensity-heatmap-source');
         }
-      } catch (e) {
+      } catch (_e) {
         // Layer might not exist
       }
     };

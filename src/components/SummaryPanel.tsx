@@ -17,7 +17,7 @@
  * and improved maintainability.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   BarChart3,
@@ -48,7 +48,6 @@ import {
 } from 'chart.js';
 import {
   Event,
-  Hazard,
   SummaryStats,
   FilterState,
   District,
@@ -64,6 +63,7 @@ import AdvancedCharts from './AdvancedCharts';
 import HeroMetric from './HeroMetric';
 import TopInsightsCards, { createDistrictInsights } from './TopInsightsCards';
 import RankedDistrictsChart from './RankedDistrictsChart';
+import { SECTOR_COLORS, UI_COLORS } from '@/theme/colors';
 
 ChartJS.register(
   CategoryScale,
@@ -265,47 +265,29 @@ export default function SummaryPanel({
     [filteredEvents]
   );
 
-  const analyticsHighlights = useMemo(() => {
-    if (!displayAggregatedData || displayAggregatedData.length === 0) return null;
-    const totalLoss = displayAggregatedData.reduce((sum, d) => sum + d.totalEconomicDamage, 0);
-    const totalPop = displayAggregatedData.reduce((sum, d) => sum + d.totalAffectedPopulation, 0);
-    const topDistrict = [...displayAggregatedData].sort(
-      (a, b) => b.totalEconomicDamage - a.totalEconomicDamage
-    )[0];
-    const top5Share = (() => {
-      const top5 = [...displayAggregatedData]
-        .sort((a, b) => b.totalEconomicDamage - a.totalEconomicDamage)
-        .slice(0, 5)
-        .reduce((sum, d) => sum + d.totalEconomicDamage, 0);
-      return totalLoss > 0 ? (top5 / totalLoss) * 100 : 0;
-    })();
+  // Define sector colors using the centralized theme system
+  // These colors complement the application's blue/purple/slate aesthetic
+  const sectorColors: { [key: string]: string } = useMemo(
+    () => ({
+      Residential: SECTOR_COLORS.residential,
+      Infrastructure: SECTOR_COLORS.infrastructure,
+      Public: SECTOR_COLORS.government,
+      Productive: SECTOR_COLORS.agriculture,
+      Education: SECTOR_COLORS.education,
+      Health: SECTOR_COLORS.health,
+      Commercial: SECTOR_COLORS.commercial,
+      Industrial: SECTOR_COLORS.industrial,
+      Other: UI_COLORS.textMuted,
+    }),
+    []
+  );
 
-    return {
-      totalLoss,
-      totalPop,
-      topDistrict,
-      top5Share,
-      lossPerPerson: totalPop > 0 ? totalLoss / totalPop : 0,
-    };
-  }, [displayAggregatedData]);
-
-  // Define sector colors (shared across all sector charts)
-  // Optimized for dark glass-panel aesthetic with vibrant, complementary colors
-  const sectorColors: { [key: string]: string } = {
-    Residential: '#f43f5e', // Rose-500 - Warm red for residential impact
-    Infrastructure: '#fb923c', // Orange-400 - Bright orange for critical infrastructure
-    Public: '#60a5fa', // Blue-400 - Clear blue for public services
-    Productive: '#34d399', // Emerald-400 - Vibrant green for economic sectors
-    Education: '#a78bfa', // Violet-400 - Clear purple for education
-    Other: '#94a3b8', // Slate-400 - Neutral gray for miscellaneous
-  };
-
-  // Shared doughnut chart tooltip configuration
+  // Shared doughnut chart tooltip configuration using theme colors
   const doughnutTooltipConfig = {
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    titleColor: 'rgba(241, 245, 249, 1)',
-    bodyColor: 'rgba(203, 213, 225, 1)',
-    borderColor: 'rgba(148, 163, 184, 0.3)',
+    backgroundColor: UI_COLORS.glassDark,
+    titleColor: UI_COLORS.textPrimary,
+    bodyColor: UI_COLORS.textSecondary,
+    borderColor: UI_COLORS.borderMedium,
     borderWidth: 1,
     padding: 12,
     displayColors: true,
@@ -315,30 +297,33 @@ export default function SummaryPanel({
   };
 
   // Helper function to create doughnut chart data
-  const createDoughnutData = (data: any[], valueField: string) => {
-    if (!data || data.length === 0) return null;
+  const createDoughnutData = useCallback(
+    (data: any[], valueField: string) => {
+      if (!data || data.length === 0) return null;
 
-    const validSectors = data.filter(s => s.Sector !== 'Unknown' && (s[valueField] || 0) > 0);
+      const validSectors = data.filter(s => s.Sector !== 'Unknown' && (s[valueField] || 0) > 0);
 
-    if (validSectors.length === 0) return null;
+      if (validSectors.length === 0) return null;
 
-    const total = validSectors.reduce((sum, s) => sum + (s[valueField] || 0), 0);
+      const total = validSectors.reduce((sum, s) => sum + (s[valueField] || 0), 0);
 
-    return {
-      labels: validSectors.map(s => s.Sector),
-      datasets: [
-        {
-          data: validSectors.map(s => (s[valueField] || 0) / 1000000),
-          backgroundColor: validSectors.map(s => sectorColors[s.Sector] || '#94a3b8'),
-          borderWidth: 3,
-          borderColor: 'rgba(15, 23, 42, 0.95)',
-          hoverBorderColor: 'rgba(148, 163, 184, 0.5)',
-          hoverBorderWidth: 3,
-        },
-      ],
-      total: total / 1000000,
-    };
-  };
+      return {
+        labels: validSectors.map(s => s.Sector),
+        datasets: [
+          {
+            data: validSectors.map(s => (s[valueField] || 0) / 1000000),
+            backgroundColor: validSectors.map(s => sectorColors[s.Sector] || UI_COLORS.textMuted),
+            borderWidth: 3,
+            borderColor: UI_COLORS.glassDark,
+            hoverBorderColor: UI_COLORS.borderMedium,
+            hoverBorderWidth: 3,
+          },
+        ],
+        total: total / 1000000,
+      };
+    },
+    [sectorColors]
+  );
 
   const realSectorChartData = useMemo(() => {
     if (!filteredImpactBySector || filteredImpactBySector.length === 0) {
@@ -356,23 +341,23 @@ export default function SummaryPanel({
         {
           label: 'Economic Loss (Millions USD)',
           data: sortedSectors.map(s => (s.Total_Loss || 0) / 1000000),
-          backgroundColor: sortedSectors.map(s => sectorColors[s.Sector] || '#6b7280'),
+          backgroundColor: sortedSectors.map(s => sectorColors[s.Sector] || UI_COLORS.textMuted),
           borderRadius: 6,
         },
       ],
     };
-  }, [filteredImpactBySector]);
+  }, [filteredImpactBySector, sectorColors]);
 
   // Doughnut chart data for Total Exposed Value by Sector
   const exposureDoughnutData = useMemo(
     () => createDoughnutData(filteredImpactBySector, 'Total_Exposed_Value'),
-    [filteredImpactBySector]
+    [filteredImpactBySector, createDoughnutData]
   );
 
   // Doughnut chart data for Total Loss by Sector
   const damageDoughnutData = useMemo(
     () => createDoughnutData(filteredImpactBySector, 'Total_Loss'),
-    [filteredImpactBySector]
+    [filteredImpactBySector, createDoughnutData]
   );
 
   // Asset type breakdown chart data
@@ -390,7 +375,14 @@ export default function SummaryPanel({
       .sort(([, a]: any, [, b]: any) => b - a)
       .slice(0, 5); // Top 5 asset types
 
-    const colors = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6'];
+    // Use theme colors for asset types
+    const colors = [
+      SECTOR_COLORS.agriculture,
+      SECTOR_COLORS.residential,
+      SECTOR_COLORS.commercial,
+      SECTOR_COLORS.infrastructure,
+      SECTOR_COLORS.industrial,
+    ];
 
     return {
       labels: assetTypes.map(([type]) => type),
@@ -399,7 +391,7 @@ export default function SummaryPanel({
           data: assetTypes.map(([, count]) => count),
           backgroundColor: colors,
           borderWidth: 2,
-          borderColor: '#fff',
+          borderColor: UI_COLORS.glassDark,
         },
       ],
     };
@@ -443,7 +435,7 @@ export default function SummaryPanel({
         {
           label: 'Population',
           data: ranges.map(r => r.population),
-          backgroundColor: '#8b5cf6',
+          backgroundColor: SECTOR_COLORS.industrial, // Purple-500 from theme
           borderRadius: 4,
         },
       ],
@@ -467,12 +459,12 @@ export default function SummaryPanel({
           label: 'Economic Loss (Millions USD)',
           data: sortedRegions.map((r: RegionalSummary) => (r.Total_Loss || 0) / 1000000),
           backgroundColor: [
-            'rgba(239, 68, 68, 0.8)',
-            'rgba(249, 115, 22, 0.8)',
-            'rgba(251, 191, 36, 0.8)',
-            'rgba(59, 130, 246, 0.8)',
-            'rgba(34, 197, 94, 0.8)',
-            'rgba(168, 85, 247, 0.8)',
+            SECTOR_COLORS.residential,
+            SECTOR_COLORS.infrastructure,
+            SECTOR_COLORS.commercial,
+            SECTOR_COLORS.agriculture,
+            SECTOR_COLORS.education,
+            SECTOR_COLORS.health,
           ],
           borderRadius: 4,
         },
@@ -492,7 +484,7 @@ export default function SummaryPanel({
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(0,0,0,0.05)',
+          color: UI_COLORS.borderSubtle,
         },
       },
       x: {
@@ -1287,7 +1279,7 @@ export default function SummaryPanel({
                     scales: {
                       y: {
                         beginAtZero: true,
-                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        grid: { color: UI_COLORS.borderSubtle },
                         ticks: {
                           font: { size: 9 },
                           callback: function (value) {
@@ -1298,7 +1290,7 @@ export default function SummaryPanel({
                           display: true,
                           text: 'Economic Loss (USD)',
                           font: { size: 10 },
-                          color: 'rgba(255,255,255,0.6)',
+                          color: UI_COLORS.textTertiary,
                         },
                       },
                       x: {
@@ -1337,7 +1329,7 @@ export default function SummaryPanel({
                       x: {
                         beginAtZero: true,
                         grid: {
-                          color: 'rgba(255,255,255,0.05)',
+                          color: UI_COLORS.borderSubtle,
                         },
                         ticks: {
                           font: { size: 9 },
@@ -1455,7 +1447,7 @@ export default function SummaryPanel({
                       y: {
                         beginAtZero: true,
                         grid: {
-                          color: 'rgba(255,255,255,0.05)',
+                          color: UI_COLORS.borderSubtle,
                         },
                         ticks: {
                           font: { size: 9 },
@@ -1551,11 +1543,11 @@ export default function SummaryPanel({
                       totalData.range_100000_plus,
                     ],
                     backgroundColor: [
-                      'rgba(34, 197, 94, 0.8)',
-                      'rgba(59, 130, 246, 0.8)',
-                      'rgba(251, 191, 36, 0.8)',
-                      'rgba(249, 115, 22, 0.8)',
-                      'rgba(239, 68, 68, 0.8)',
+                      SECTOR_COLORS.agriculture, // Green for low damage
+                      SECTOR_COLORS.commercial, // Blue for moderate
+                      SECTOR_COLORS.education, // Amber for medium
+                      SECTOR_COLORS.infrastructure, // Orange for high
+                      SECTOR_COLORS.residential, // Red for critical
                     ],
                     borderRadius: 4,
                   },
@@ -1620,9 +1612,9 @@ export default function SummaryPanel({
                       unaffectedBuildings,
                     ],
                     backgroundColor: [
-                      'rgba(239, 68, 68, 0.8)',
-                      'rgba(251, 191, 36, 0.8)',
-                      'rgba(34, 197, 94, 0.8)',
+                      SECTOR_COLORS.residential, // Red for damaged
+                      SECTOR_COLORS.infrastructure, // Orange for exposed
+                      SECTOR_COLORS.agriculture, // Green for unaffected
                     ],
                     borderRadius: 4,
                   },

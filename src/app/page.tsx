@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { X, Map as MapIcon, BookOpen, AlertCircle, Globe2 } from 'lucide-react';
+import { X, Map as MapIcon, AlertCircle, Globe2 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import ActiveFilters from '@/components/ActiveFilters';
 import { MapControls } from '@/components/MapControls';
@@ -227,7 +227,7 @@ export default function Home() {
     }
 
     setHasRestoredMapView(true);
-  }, [mapInstance, hasRestoredMapView]);
+  }, [mapInstance, hasRestoredMapView, urlState.center, urlState.zoom]);
 
   /**
    * Update URL when map state changes (debounced to avoid spam)
@@ -326,9 +326,9 @@ export default function Home() {
   // Cleanup in-flight data requests on unmount
   useEffect(() => {
     return () => {
-      dataLoadAbortRef.current?.abort();
-      damageLoadAbortRef.current.buildings?.abort();
-      damageLoadAbortRef.current.roads?.abort();
+      dataLoadAbortRef.current?.abort('Component unmounted');
+      damageLoadAbortRef.current.buildings?.abort('Component unmounted');
+      damageLoadAbortRef.current.roads?.abort('Component unmounted');
     };
   }, []);
 
@@ -421,7 +421,7 @@ export default function Home() {
 
       const controller = new AbortController();
       if (damageLoadAbortRef.current[type]) {
-        damageLoadAbortRef.current[type]?.abort();
+        damageLoadAbortRef.current[type]?.abort('New damage data load requested');
       }
       damageLoadAbortRef.current[type] = controller;
 
@@ -585,7 +585,7 @@ export default function Home() {
 
     // Filter by region/district if one is selected
     if (selectedRegion) {
-      filtered = filtered.filter(e => e.districtId === selectedRegion);
+      filtered = filtered.filter(e => e.regionalImpacts?.[0]?.regionId === selectedRegion);
     }
 
     return filtered;
@@ -655,7 +655,7 @@ export default function Home() {
     }
 
     if (dataLoadAbortRef.current) {
-      dataLoadAbortRef.current.abort();
+      dataLoadAbortRef.current.abort('New data load requested');
     }
     const controller = new AbortController();
     dataLoadAbortRef.current = controller;
@@ -816,7 +816,7 @@ export default function Home() {
       });
       setShowToast(true);
     }
-  }, [selectedRegion, districts]);
+  }, [selectedRegion]);
 
   useEffect(() => {
     if (!damageLoadError) return;
@@ -1116,7 +1116,6 @@ export default function Home() {
           <div className="flex-1 min-h-0 relative">
             {/* Determine if panels are open or selections are active */}
             {(() => {
-              const isPanelOpen = showFilters || showSummary || showCountrySelector;
               const hasSelection = !!selectedEvent || !!selectedRegion;
 
               return (
@@ -1141,13 +1140,11 @@ export default function Home() {
                     <UnifiedMapLegend
                       mode={mapStyle}
                       visible={true}
-                      isPanelOpen={isPanelOpen}
                       hasSelection={hasSelection}
                       dataSource="PDIE Real Data"
                       temporalScope="Cumulative"
                       dataValues={legendDataValues}
                       isLeftPanelOpen={showFilters}
-                      isRightPanelOpen={showSummary}
                       showBuildings={!!damagedBuildings}
                       showRoads={!!damagedRoads}
                       showCyclone={isCyclonePlaying || currentCycloneIndex > 0}
@@ -1179,7 +1176,6 @@ export default function Home() {
               showWindLayer={showWindLayer}
               showInundationLayer={showInundationLayer}
               onLayersLoadingChange={setIsLoadingLayers}
-              onActiveWmsLayersChange={setActiveWmsLayers}
               damagedBuildings={damagedBuildings}
               damagedRoads={damagedRoads}
               cycloneForecast={cycloneForecast}

@@ -92,7 +92,7 @@ export function highlightPoint(
           map.setPaintProperty(layerId, 'circle-opacity', opacity * 0.3);
           map.setPaintProperty(layerId, 'circle-stroke-opacity', opacity);
         }
-      } catch (e) {
+      } catch (_e) {
         // Layer removed, stop animation
         cleanup();
         return;
@@ -121,7 +121,7 @@ export function highlightPoint(
       if (map.getSource(sourceId)) {
         map.removeSource(sourceId);
       }
-    } catch (e) {
+    } catch (_e) {
       // Already removed
     }
   };
@@ -188,7 +188,7 @@ export function highlightLine(
           map.setPaintProperty(layerId, 'line-width', width);
           map.setPaintProperty(layerId, 'line-opacity', opacity);
         }
-      } catch (e) {
+      } catch (_e) {
         cleanup();
         return;
       }
@@ -214,7 +214,7 @@ export function highlightLine(
       if (map.getSource(sourceId)) {
         map.removeSource(sourceId);
       }
-    } catch (e) {
+    } catch (_e) {
       // Already removed
     }
   };
@@ -301,7 +301,7 @@ export function highlightPolygon(
           map.setPaintProperty(lineLayerId, 'line-opacity', opacity);
           map.setPaintProperty(fillLayerId, 'fill-opacity', fillOpacity);
         }
-      } catch (e) {
+      } catch (_e) {
         cleanup();
         return;
       }
@@ -330,7 +330,7 @@ export function highlightPolygon(
       if (map.getSource(sourceId)) {
         map.removeSource(sourceId);
       }
-    } catch (e) {
+    } catch (_e) {
       // Already removed
     }
   };

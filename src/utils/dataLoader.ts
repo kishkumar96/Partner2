@@ -73,12 +73,18 @@ export async function loadData<T>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
       if (signal) {
         if (signal.aborted) {
-          controller.abort();
+          controller.abort(signal.reason || new Error('Request cancelled'));
         } else {
-          signal.addEventListener('abort', () => controller.abort(), { once: true });
+          signal.addEventListener(
+            'abort',
+            () => {
+              controller.abort(signal.reason || new Error('Request cancelled'));
+            },
+            { once: true }
+          );
         }
       }
 
@@ -114,7 +120,10 @@ export async function loadData<T>(
     }
   }
 
-  console.error(`Failed to load data from ${url}:`, lastError);
+  // Don't log AbortErrors as they are expected during component cleanup
+  if (lastError && lastError.name !== 'AbortError') {
+    console.error(`Failed to load data from ${url}:`, lastError);
+  }
   return {
     data: null,
     error: lastError,
@@ -150,12 +159,18 @@ export async function loadTextData(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
       if (signal) {
         if (signal.aborted) {
-          controller.abort();
+          controller.abort(signal.reason || new Error('Request cancelled'));
         } else {
-          signal.addEventListener('abort', () => controller.abort(), { once: true });
+          signal.addEventListener(
+            'abort',
+            () => {
+              controller.abort(signal.reason || new Error('Request cancelled'));
+            },
+            { once: true }
+          );
         }
       }
 
@@ -190,7 +205,10 @@ export async function loadTextData(
     }
   }
 
-  console.error(`Failed to load text data from ${url}:`, lastError);
+  // Don't log AbortErrors as they are expected during component cleanup
+  if (lastError && lastError.name !== 'AbortError') {
+    console.error(`Failed to load text data from ${url}:`, lastError);
+  }
   return {
     data: null,
     error: lastError,

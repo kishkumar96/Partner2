@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
-import cache, { cacheKey, CachePrefix, CacheTTL } from '@/lib/cache';
+import cache, { cacheKey, CacheTTL } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {

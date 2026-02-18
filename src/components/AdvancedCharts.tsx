@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 
 import { RegionalSummary, RegionalSummaryBySector } from '@/types';
+import { SEVERITY_COLORS, UI_COLORS } from '@/theme/colors';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -131,7 +132,7 @@ export default function AdvancedCharts({
         {
           label: 'Total Loss (Millions USD)',
           data: regionTotals.map(r => r.total / 1000000),
-          backgroundColor: 'rgba(239, 68, 68, 0.8)',
+          backgroundColor: SEVERITY_COLORS.critical.border,
           borderRadius: 4,
         },
       ],
@@ -156,7 +157,7 @@ export default function AdvancedCharts({
       },
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(255,255,255,0.05)' },
+        grid: { color: UI_COLORS.borderSubtle },
         ticks: {
           font: { size: 9 },
           callback: (value: any) => `$${value.toFixed(1)}M`,
@@ -167,12 +168,12 @@ export default function AdvancedCharts({
 
   const getHeatmapColor = (value: number, maxValue: number) => {
     const intensity = value / maxValue;
-    if (intensity === 0) return 'rgba(15, 23, 42, 0.5)'; // slate-900 for zero
-    if (intensity < 0.2) return 'rgba(34, 197, 94, 0.3)'; // green-500
-    if (intensity < 0.4) return 'rgba(251, 191, 36, 0.5)'; // amber-400
-    if (intensity < 0.6) return 'rgba(249, 115, 22, 0.7)'; // orange-500
-    if (intensity < 0.8) return 'rgba(239, 68, 68, 0.8)'; // red-500
-    return 'rgba(185, 28, 28, 0.9)'; // red-700
+    if (intensity === 0) return UI_COLORS.glassDark; // Dark background for zero
+    if (intensity < 0.2) return 'rgba(34, 197, 94, 0.25)'; // green-500 (low)
+    if (intensity < 0.4) return 'rgba(251, 191, 36, 0.45)'; // amber-400 (medium-low)
+    if (intensity < 0.6) return 'rgba(249, 115, 22, 0.65)'; // orange-500 (medium)
+    if (intensity < 0.8) return 'rgba(239, 68, 68, 0.8)'; // red-500 (high)
+    return 'rgba(220, 38, 38, 0.9)'; // red-600 (critical)
   };
 
   return (

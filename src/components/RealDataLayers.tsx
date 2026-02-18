@@ -102,7 +102,7 @@ export default function RealDataLayers({
           if (map.getLayer(id)) {
             map.setPaintProperty(id, 'raster-opacity', pulse);
           }
-        } catch (e) {
+        } catch (_e) {
           // Layer might have been removed, filter it out
           windLayerIds.current = windLayerIds.current.filter(layerId => layerId !== id);
         }
@@ -341,7 +341,7 @@ export default function RealDataLayers({
       if (onStyleLoad) {
         try {
           map.off('styledata', onStyleLoad);
-        } catch (e) {
+        } catch (_e) {
           // Silently ignore cleanup errors for event listener
         }
       }
@@ -374,7 +374,7 @@ export default function RealDataLayers({
         if (map.getSource(sourceId)) {
           map.removeSource(sourceId);
         }
-      } catch (e) {
+      } catch (_e) {
         // Silently ignore cleanup errors
       }
     };
@@ -401,7 +401,7 @@ export default function RealDataLayers({
             if (map.getSource(sourceId)) {
               map.removeSource(sourceId);
             }
-          } catch (e) {
+          } catch (_e) {
             // Silently ignore cleanup errors
           }
         });
@@ -544,7 +544,7 @@ export default function RealDataLayers({
               if (map.getSource(sourceId)) {
                 map.removeSource(sourceId);
               }
-            } catch (e) {
+            } catch (_e) {
               // Layer/source doesn't exist, continue
             }
 
@@ -563,8 +563,6 @@ export default function RealDataLayers({
                   // Progressive loading: 256→512→1024 for optimal speed/quality balance
                   // 256×256 matches THREDDS tile size for instant display
                   const tileSize = 256; // Initial: instant display
-                  const mediumRes = 512; // Medium upgrade after 1s
-                  const highRes = 1024; // Final quality after 3s
 
                   map.addSource(sourceId, {
                     type: 'image',
@@ -669,7 +667,7 @@ export default function RealDataLayers({
                         source.setUrl(mediumResUrl);
                         console.log(`📈 Upgraded to medium-res: ${layer.name}`);
                       }
-                    } catch (e) {
+                    } catch (_e) {
                       // Silently fail if upgrade doesn't work
                     }
                   }, 1000);
@@ -684,7 +682,7 @@ export default function RealDataLayers({
                         source.setUrl(highResUrl);
                         console.log(`🔍 Upgraded to high-res: ${layer.name}`);
                       }
-                    } catch (e) {
+                    } catch (_e) {
                       // Silently fail if upgrade doesn't work
                       // Silently fail if upgrade doesn't work
                     }
@@ -752,7 +750,7 @@ export default function RealDataLayers({
       if (wmsStyleLoadListener) {
         try {
           map.off('styledata', wmsStyleLoadListener);
-        } catch (e) {
+        } catch (_e) {
           // Silently ignore if already removed
         }
       }
@@ -780,6 +778,9 @@ export default function RealDataLayers({
     selectedHazardsKey,
     showWindLayer,
     showInundationLayer,
+    filters,
+    onActiveLayersChange,
+    onLoadingChange,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
 
   // Update wind layer opacity dynamically when mapStyle changes
@@ -796,7 +797,7 @@ export default function RealDataLayers({
         if (map.getLayer(layerId)) {
           map.setPaintProperty(layerId, 'raster-opacity', windOpacity);
         }
-      } catch (e) {
+      } catch (_e) {
         // Layer might not exist yet, ignore
       }
     });

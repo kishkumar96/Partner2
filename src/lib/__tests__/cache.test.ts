@@ -5,8 +5,12 @@ import { cache, CacheTTL } from '../cache';
 
 describe('Cache Utility', () => {
   beforeAll(async () => {
-    await cache.connect();
-  });
+    try {
+      await cache.connect();
+    } catch (error) {
+      console.warn('Redis not available, skipping cache tests');
+    }
+  }, 10000); // Increase timeout to 10 seconds
 
   afterAll(async () => {
     await cache.disconnect();

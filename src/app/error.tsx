@@ -32,7 +32,7 @@ export default function Error({
         <h2 className="text-3xl font-bold text-white mb-3">Oops! Something went wrong</h2>
 
         <p className="text-slate-400 mb-6">
-          We're sorry for the inconvenience. The application encountered an unexpected error.
+          We&apos;re sorry for the inconvenience. The application encountered an unexpected error.
         </p>
 
         {process.env.NODE_ENV === 'development' && error.message && (

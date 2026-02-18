@@ -1,9 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="120" failures="13" errors="0" time="4.356">
-  <testsuite name="CycloneStoryOverlay playback" errors="0" failures="1" skipped="0" timestamp="2026-02-17T23:58:00" time="0.742" tests="3">
-    <testcase classname="CycloneStoryOverlay playback clears timers when paused" name="CycloneStoryOverlay playback clears timers when paused" time="0.175">
+<testsuites name="jest tests" tests="127" failures="20" errors="0" time="9.263">
+  <testsuite name="Data Flow Integration Tests" errors="0" failures="1" skipped="0" timestamp="2026-02-18T04:21:20" time="1.621" tests="5">
+    <testcase classname="Data Flow Integration Tests loads and displays dashboard data" name="Data Flow Integration Tests loads and displays dashboard data" time="1.011">
+      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
+
+Expected number of calls: &gt;= 1
+Received number of calls:    0
+
+Ignored nodes: comments, script, style
+&lt;html&gt;
+  &lt;head /&gt;
+  &lt;body /&gt;
+&lt;/html&gt;
+    at toHaveBeenCalled (/home/kishank/Partner2/src/__tests__/integration.test.ts:27:28)
+    at runWithExpensiveErrorDiagnosticsDisabled (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/home/kishank/Partner2/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:581:17)
+    at processTimers (node:internal/timers:519:7)</failure>
     </testcase>
-    <testcase classname="CycloneStoryOverlay playback cleans up and reschedules on dependency changes" name="CycloneStoryOverlay playback cleans up and reschedules on dependency changes" time="0.044">
+    <testcase classname="Data Flow Integration Tests handles API errors gracefully" name="Data Flow Integration Tests handles API errors gracefully" time="0.001">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests filters data across components" name="Data Flow Integration Tests filters data across components" time="0">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests exports data in correct format" name="Data Flow Integration Tests exports data in correct format" time="0.001">
+    </testcase>
+    <testcase classname="Data Flow Integration Tests maintains state consistency across updates" name="Data Flow Integration Tests maintains state consistency across updates" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="CycloneStoryOverlay playback" errors="0" failures="1" skipped="0" timestamp="2026-02-18T04:21:22" time="1.264" tests="3">
+    <testcase classname="CycloneStoryOverlay playback clears timers when paused" name="CycloneStoryOverlay playback clears timers when paused" time="0.375">
+    </testcase>
+    <testcase classname="CycloneStoryOverlay playback cleans up and reschedules on dependency changes" name="CycloneStoryOverlay playback cleans up and reschedules on dependency changes" time="0.075">
       <failure>Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)
 
 Expected number of calls: 1
@@ -11,11 +40,89 @@ Received number of calls: 0
     at Object.toHaveBeenCalledTimes (/home/kishank/Partner2/src/components/__tests__/CycloneStoryOverlay.test.tsx:76:25)
     at processTicksAndRejections (node:internal/process/task_queues:95:5)</failure>
     </testcase>
-    <testcase classname="CycloneStoryOverlay playback clears timers on unmount" name="CycloneStoryOverlay playback clears timers on unmount" time="0.036">
+    <testcase classname="CycloneStoryOverlay playback clears timers on unmount" name="CycloneStoryOverlay playback clears timers on unmount" time="0.073">
     </testcase>
   </testsuite>
-  <testsuite name="SummaryPanel Component" errors="0" failures="4" skipped="0" timestamp="2026-02-17T23:58:01" time="0.172" tests="5">
-    <testcase classname="SummaryPanel Component renders summary panel" name="SummaryPanel Component renders summary panel" time="0.015">
+  <testsuite name="MapView Component" errors="0" failures="3" skipped="0" timestamp="2026-02-18T04:21:20" time="3.556" tests="4">
+    <testcase classname="MapView Component renders without crashing" name="MapView Component renders without crashing" time="0.07">
+    </testcase>
+    <testcase classname="MapView Component initializes map container" name="MapView Component initializes map container" time="0.011">
+      <failure>Error: expect(received).toBeTruthy()
+
+Received: null
+    at Object.toBeTruthy (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:47:26)
+    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="MapView Component handles map initialization errors gracefully" name="MapView Component handles map initialization errors gracefully" time="1.016">
+      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
+
+Expected number of calls: &gt;= 1
+Received number of calls:    0
+
+Ignored nodes: comments, script, style
+&lt;html&gt;
+  &lt;head /&gt;
+  &lt;body&gt;
+    &lt;div&gt;
+      &lt;div
+        class=&quot;relative flex-1 h-full&quot;
+        data-testid=&quot;map-container&quot;
+      &gt;
+        &lt;div
+          class=&quot;w-full h-full&quot;
+        /&gt;
+        &lt;div
+          class=&quot;absolute inset-0 z-[60] pointer-events-none&quot;
+          id=&quot;map-overlay-root&quot;
+        /&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+    at toHaveBeenCalled (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:62:26)
+    at runWithExpensiveErrorDiagnosticsDisabled (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/config.js:47:12)
+    at checkCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
+    at checkRealTimersCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
+    at Timeout.task [as _onTimeout] (/home/kishank/Partner2/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
+    at listOnTimeout (node:internal/timers:581:17)
+    at processTimers (node:internal/timers:519:7)</failure>
+    </testcase>
+    <testcase classname="MapView Component cleans up map on unmount" name="MapView Component cleans up map on unmount" time="0.008">
+      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
+
+Expected number of calls: &gt;= 1
+Received number of calls:    0
+    at Object.toHaveBeenCalled (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:86:24)
+    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="SummaryPanel Component" errors="0" failures="4" skipped="0" timestamp="2026-02-18T04:21:23" time="0.848" tests="5">
+    <testcase classname="SummaryPanel Component renders summary panel" name="SummaryPanel Component renders summary panel" time="0.02">
       <failure>TestingLibraryElementError: Unable to find an element with the text: /summary/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
 
 Ignored nodes: comments, script, style
@@ -98,7 +205,7 @@ Ignored nodes: comments, script, style
     at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="SummaryPanel Component displays key metrics" name="SummaryPanel Component displays key metrics" time="0.004">
+    <testcase classname="SummaryPanel Component displays key metrics" name="SummaryPanel Component displays key metrics" time="0.007">
       <failure>TestingLibraryElementError: Unable to find an element with the text: /1,000,000|50,000|1,500/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
 
 Ignored nodes: comments, script, style
@@ -181,7 +288,7 @@ Ignored nodes: comments, script, style
     at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="SummaryPanel Component handles missing data gracefully" name="SummaryPanel Component handles missing data gracefully" time="0.003">
+    <testcase classname="SummaryPanel Component handles missing data gracefully" name="SummaryPanel Component handles missing data gracefully" time="0.007">
       <failure>Error: expect(received).toBeTruthy()
 
 Received: null
@@ -201,9 +308,9 @@ Received: null
     at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="SummaryPanel Component formats large numbers correctly" name="SummaryPanel Component formats large numbers correctly" time="0.023">
+    <testcase classname="SummaryPanel Component formats large numbers correctly" name="SummaryPanel Component formats large numbers correctly" time="0.049">
     </testcase>
-    <testcase classname="SummaryPanel Component updates when data prop changes" name="SummaryPanel Component updates when data prop changes" time="0.015">
+    <testcase classname="SummaryPanel Component updates when data prop changes" name="SummaryPanel Component updates when data prop changes" time="0.023">
       <failure>TestingLibraryElementError: Unable to find an element with the text: /2,000,000/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
 
 Ignored nodes: comments, script, style
@@ -560,12 +667,39 @@ Ignored nodes: comments, script, style
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
   </testsuite>
-  <testsuite name="ErrorBoundary" errors="0" failures="1" skipped="0" timestamp="2026-02-17T23:58:01" time="0.154" tests="4">
-    <testcase classname="ErrorBoundary renders children when there is no error" name="ErrorBoundary renders children when there is no error" time="0.005">
+  <testsuite name="ExportButtons Component" errors="0" failures="1" skipped="0" timestamp="2026-02-18T04:21:24" time="0.272" tests="2">
+    <testcase classname="ExportButtons Component renders PDF and Excel export buttons" name="ExportButtons Component renders PDF and Excel export buttons" time="0.042">
     </testcase>
-    <testcase classname="ErrorBoundary renders error UI when child component throws" name="ErrorBoundary renders error UI when child component throws" time="0.025">
+    <testcase classname="ExportButtons Component disables export when no data available" name="ExportButtons Component disables export when no data available" time="0.016">
+      <failure>Error: expect(element).toBeDisabled()
+
+Received element is not disabled:
+  &lt;button aria-label=&quot;Export data as PDF report&quot; class=&quot;group inline-flex items-center gap-2 px-3.5 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-white rounded-xl border transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 shadow-[0_12px_28px_-14px_rgba(239,68,68,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-16px_rgba(239,68,68,1)] hover:border-red-300/60 focus-visible:ring-red-300/70&quot; title=&quot;Export as PDF&quot; /&gt;
+    at toBeDisabled (/home/kishank/Partner2/src/components/__tests__/ExportButtons.test.tsx:76:22)
+    at Array.forEach (&lt;anonymous&gt;)
+    at Object.forEach (/home/kishank/Partner2/src/components/__tests__/ExportButtons.test.tsx:75:13)
+    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="ErrorBoundary can reset error boundary" name="ErrorBoundary can reset error boundary" time="0.047">
+  </testsuite>
+  <testsuite name="ErrorBoundary" errors="0" failures="1" skipped="0" timestamp="2026-02-18T04:21:24" time="0.51" tests="4">
+    <testcase classname="ErrorBoundary renders children when there is no error" name="ErrorBoundary renders children when there is no error" time="0.016">
+    </testcase>
+    <testcase classname="ErrorBoundary renders error UI when child component throws" name="ErrorBoundary renders error UI when child component throws" time="0.055">
+    </testcase>
+    <testcase classname="ErrorBoundary can reset error boundary" name="ErrorBoundary can reset error boundary" time="0.142">
       <failure>TestingLibraryElementError: Unable to find an element with the text: Working!. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
 
 Ignored nodes: comments, script, style
@@ -667,51 +801,24 @@ Ignored nodes: comments, script, style
     at /home/kishank/Partner2/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
     at Object.getByText (/home/kishank/Partner2/src/components/__tests__/ErrorBoundary.test.tsx:72:19)</failure>
     </testcase>
-    <testcase classname="ErrorBoundary calls onError callback when error occurs" name="ErrorBoundary calls onError callback when error occurs" time="0.011">
+    <testcase classname="ErrorBoundary calls onError callback when error occurs" name="ErrorBoundary calls onError callback when error occurs" time="0.014">
     </testcase>
     <testcase classname=" Test execution failure: could be caused by test hooks like &apos;afterAll&apos;." name=" Test execution failure: could be caused by test hooks like &apos;afterAll&apos;." time="0">
       <failure>{&quot;message&quot;:&quot;&quot;,&quot;stack&quot;:&quot;TypeError: console.error.mockRestore is not a function\n    at Object.mockRestore (/home/kishank/Partner2/src/components/__tests__/ErrorBoundary.test.tsx:25:34)\n    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)\n    at new Promise (&lt;anonymous&gt;)\n    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)\n    at _callCircusHook (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:281:40)\n    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:154:7)\n    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)\n    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)\n    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)\n    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)\n    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)\n    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)\n    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)&quot;}</failure>
     </testcase>
   </testsuite>
-  <testsuite name="ExportButtons Component" errors="0" failures="1" skipped="0" timestamp="2026-02-17T23:58:01" time="0.089" tests="2">
-    <testcase classname="ExportButtons Component renders PDF and Excel export buttons" name="ExportButtons Component renders PDF and Excel export buttons" time="0.016">
+  <testsuite name="useCycloneTrackPlayback Hook" errors="0" failures="2" skipped="0" timestamp="2026-02-18T04:21:24" time="0.182" tests="8">
+    <testcase classname="useCycloneTrackPlayback Hook initializes with default state" name="useCycloneTrackPlayback Hook initializes with default state" time="0.007">
     </testcase>
-    <testcase classname="ExportButtons Component disables export when no data available" name="ExportButtons Component disables export when no data available" time="0.008">
-      <failure>Error: expect(element).toBeDisabled()
-
-Received element is not disabled:
-  &lt;button aria-label=&quot;Export data as PDF report&quot; class=&quot;group inline-flex items-center gap-2 px-3.5 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-white rounded-xl border transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 shadow-[0_12px_28px_-14px_rgba(239,68,68,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-16px_rgba(239,68,68,1)] hover:border-red-300/60 focus-visible:ring-red-300/70&quot; title=&quot;Export as PDF&quot; /&gt;
-    at toBeDisabled (/home/kishank/Partner2/src/components/__tests__/ExportButtons.test.tsx:76:22)
-    at Array.forEach (&lt;anonymous&gt;)
-    at Object.forEach (/home/kishank/Partner2/src/components/__tests__/ExportButtons.test.tsx:75:13)
-    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
-    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="useCycloneTrackPlayback Hook starts playback" name="useCycloneTrackPlayback Hook starts playback" time="0.004">
     </testcase>
-  </testsuite>
-  <testsuite name="useCycloneTrackPlayback Hook" errors="0" failures="2" skipped="0" timestamp="2026-02-17T23:58:01" time="0.074" tests="8">
-    <testcase classname="useCycloneTrackPlayback Hook initializes with default state" name="useCycloneTrackPlayback Hook initializes with default state" time="0.004">
+    <testcase classname="useCycloneTrackPlayback Hook pauses playback" name="useCycloneTrackPlayback Hook pauses playback" time="0.01">
     </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook starts playback" name="useCycloneTrackPlayback Hook starts playback" time="0.002">
+    <testcase classname="useCycloneTrackPlayback Hook resets playback to start" name="useCycloneTrackPlayback Hook resets playback to start" time="0.005">
     </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook pauses playback" name="useCycloneTrackPlayback Hook pauses playback" time="0.001">
+    <testcase classname="useCycloneTrackPlayback Hook advances to next position" name="useCycloneTrackPlayback Hook advances to next position" time="0.006">
     </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook resets playback to start" name="useCycloneTrackPlayback Hook resets playback to start" time="0.002">
-    </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook advances to next position" name="useCycloneTrackPlayback Hook advances to next position" time="0.002">
-    </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook goes back to previous position" name="useCycloneTrackPlayback Hook goes back to previous position" time="0.002">
+    <testcase classname="useCycloneTrackPlayback Hook goes back to previous position" name="useCycloneTrackPlayback Hook goes back to previous position" time="0.01">
       <failure>Error: expect(received).toBe(expected) // Object.is equality
 
 Expected: 2
@@ -732,7 +839,7 @@ Received: 1
     at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook loops back to start when reaching end" name="useCycloneTrackPlayback Hook loops back to start when reaching end" time="0.002">
+    <testcase classname="useCycloneTrackPlayback Hook loops back to start when reaching end" name="useCycloneTrackPlayback Hook loops back to start when reaching end" time="0.005">
       <failure>Error: expect(received).toBe(expected) // Object.is equality
 
 Expected: 0
@@ -753,316 +860,323 @@ Received: 1
     at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
     at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
-    <testcase classname="useCycloneTrackPlayback Hook provides playback controls" name="useCycloneTrackPlayback Hook provides playback controls" time="0.002">
+    <testcase classname="useCycloneTrackPlayback Hook provides playback controls" name="useCycloneTrackPlayback Hook provides playback controls" time="0.004">
     </testcase>
   </testsuite>
-  <testsuite name="Data Flow Integration Tests" errors="0" failures="1" skipped="0" timestamp="2026-02-17T23:58:00" time="1.465" tests="5">
-    <testcase classname="Data Flow Integration Tests loads and displays dashboard data" name="Data Flow Integration Tests loads and displays dashboard data" time="1.01">
-      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
-
-Expected number of calls: &gt;= 1
-Received number of calls:    0
-
-Ignored nodes: comments, script, style
-&lt;html&gt;
-  &lt;head /&gt;
-  &lt;body /&gt;
-&lt;/html&gt;
-    at toHaveBeenCalled (/home/kishank/Partner2/src/__tests__/integration.test.ts:27:28)
-    at runWithExpensiveErrorDiagnosticsDisabled (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/config.js:47:12)
-    at checkCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
-    at checkRealTimersCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
-    at Timeout.task [as _onTimeout] (/home/kishank/Partner2/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
-    at listOnTimeout (node:internal/timers:581:17)
-    at processTimers (node:internal/timers:519:7)</failure>
+  <testsuite name="CycloneAnimationLayer" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:25" time="0.616" tests="4">
+    <testcase classname="CycloneAnimationLayer renders without crashing when forecastTrack is null" name="CycloneAnimationLayer renders without crashing when forecastTrack is null" time="0.017">
     </testcase>
-    <testcase classname="Data Flow Integration Tests handles API errors gracefully" name="Data Flow Integration Tests handles API errors gracefully" time="0.001">
+    <testcase classname="CycloneAnimationLayer renders without crashing with a valid forecastTrack" name="CycloneAnimationLayer renders without crashing with a valid forecastTrack" time="0.148">
     </testcase>
-    <testcase classname="Data Flow Integration Tests filters data across components" name="Data Flow Integration Tests filters data across components" time="0.001">
+    <testcase classname="CycloneAnimationLayer calls onClose when close button is clicked" name="CycloneAnimationLayer calls onClose when close button is clicked" time="0.047">
     </testcase>
-    <testcase classname="Data Flow Integration Tests exports data in correct format" name="Data Flow Integration Tests exports data in correct format" time="0.001">
-    </testcase>
-    <testcase classname="Data Flow Integration Tests maintains state consistency across updates" name="Data Flow Integration Tests maintains state consistency across updates" time="0">
+    <testcase classname="CycloneAnimationLayer calls onPlayingChange when play state changes externally" name="CycloneAnimationLayer calls onPlayingChange when play state changes externally" time="0.067">
     </testcase>
   </testsuite>
-  <testsuite name="MapView Component" errors="0" failures="3" skipped="0" timestamp="2026-02-17T23:58:00" time="1.643" tests="4">
-    <testcase classname="MapView Component renders without crashing" name="MapView Component renders without crashing" time="0.021">
+  <testsuite name="FilterPanel Component" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:25" time="1.079" tests="8">
+    <testcase classname="FilterPanel Component renders the filter panel container" name="FilterPanel Component renders the filter panel container" time="0.045">
     </testcase>
-    <testcase classname="MapView Component initializes map container" name="MapView Component initializes map container" time="0.007">
-      <failure>Error: expect(received).toBeTruthy()
-
-Received: null
-    at Object.toBeTruthy (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:47:26)
-    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
-    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="FilterPanel Component displays hazard options sourced from the hazards prop" name="FilterPanel Component displays hazard options sourced from the hazards prop" time="0.128">
     </testcase>
-    <testcase classname="MapView Component handles map initialization errors gracefully" name="MapView Component handles map initialization errors gracefully" time="1.011">
-      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
-
-Expected number of calls: &gt;= 1
-Received number of calls:    0
-
-Ignored nodes: comments, script, style
-&lt;html&gt;
-  &lt;head /&gt;
-  &lt;body&gt;
-    &lt;div&gt;
-      &lt;div
-        class=&quot;relative flex-1 h-full&quot;
-        data-testid=&quot;map-container&quot;
-      &gt;
-        &lt;div
-          class=&quot;w-full h-full&quot;
-        /&gt;
-        &lt;div
-          class=&quot;absolute inset-0 z-[60] pointer-events-none&quot;
-          id=&quot;map-overlay-root&quot;
-        /&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
-  &lt;/body&gt;
-&lt;/html&gt;
-    at toHaveBeenCalled (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:62:26)
-    at runWithExpensiveErrorDiagnosticsDisabled (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/config.js:47:12)
-    at checkCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:124:77)
-    at checkRealTimersCallback (/home/kishank/Partner2/node_modules/@testing-library/dom/dist/wait-for.js:118:16)
-    at Timeout.task [as _onTimeout] (/home/kishank/Partner2/node_modules/jsdom/lib/jsdom/browser/Window.js:520:19)
-    at listOnTimeout (node:internal/timers:581:17)
-    at processTimers (node:internal/timers:519:7)</failure>
+    <testcase classname="FilterPanel Component displays sector options sourced from the sectors prop after expanding the Sectors section" name="FilterPanel Component displays sector options sourced from the sectors prop after expanding the Sectors section" time="0.214">
     </testcase>
-    <testcase classname="MapView Component cleans up map on unmount" name="MapView Component cleans up map on unmount" time="0.004">
-      <failure>Error: expect(jest.fn()).toHaveBeenCalled()
-
-Expected number of calls: &gt;= 1
-Received number of calls:    0
-    at Object.toHaveBeenCalled (/home/kishank/Partner2/src/components/__tests__/MapView.test.tsx:86:24)
-    at Promise.then.completed (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/home/kishank/Partner2/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:121:9)
-    at run (/home/kishank/Partner2/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="FilterPanel Component calls onFilterChange with the checked hazard when a hazard checkbox is toggled on" name="FilterPanel Component calls onFilterChange with the checked hazard when a hazard checkbox is toggled on" time="0.065">
+    </testcase>
+    <testcase classname="FilterPanel Component calls onFilterChange with the hazard removed when a selected hazard is toggled off" name="FilterPanel Component calls onFilterChange with the hazard removed when a selected hazard is toggled off" time="0.05">
+    </testcase>
+    <testcase classname="FilterPanel Component calls onFilterChange with the checked sector when a sector checkbox is toggled on" name="FilterPanel Component calls onFilterChange with the checked sector when a sector checkbox is toggled on" time="0.089">
+    </testcase>
+    <testcase classname="FilterPanel Component calls onFilterChange with the new aggregation level when a radio is selected" name="FilterPanel Component calls onFilterChange with the new aggregation level when a radio is selected" time="0.068">
+    </testcase>
+    <testcase classname="FilterPanel Component resets filters to defaults when &quot;Clear all filters&quot; is clicked from a non-empty state" name="FilterPanel Component resets filters to defaults when &quot;Clear all filters&quot; is clicked from a non-empty state" time="0.052">
     </testcase>
   </testsuite>
-  <testsuite name="FilterPanel Component" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:01" time="0.579" tests="8">
-    <testcase classname="FilterPanel Component renders the filter panel container" name="FilterPanel Component renders the filter panel container" time="0.019">
+  <testsuite name="BuildingsTable" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:25" time="0.277" tests="7">
+    <testcase classname="BuildingsTable renders empty state when data is null" name="BuildingsTable renders empty state when data is null" time="0.006">
     </testcase>
-    <testcase classname="FilterPanel Component displays hazard options sourced from the hazards prop" name="FilterPanel Component displays hazard options sourced from the hazards prop" time="0.067">
+    <testcase classname="BuildingsTable renders empty state when feature collection has no matching buildings" name="BuildingsTable renders empty state when feature collection has no matching buildings" time="0.008">
     </testcase>
-    <testcase classname="FilterPanel Component displays sector options sourced from the sectors prop after expanding the Sectors section" name="FilterPanel Component displays sector options sourced from the sectors prop after expanding the Sectors section" time="0.122">
+    <testcase classname="BuildingsTable renders the correct building count" name="BuildingsTable renders the correct building count" time="0.015">
     </testcase>
-    <testcase classname="FilterPanel Component calls onFilterChange with the checked hazard when a hazard checkbox is toggled on" name="FilterPanel Component calls onFilterChange with the checked hazard when a hazard checkbox is toggled on" time="0.029">
+    <testcase classname="BuildingsTable renders region names from the GeoJSON" name="BuildingsTable renders region names from the GeoJSON" time="0.012">
     </testcase>
-    <testcase classname="FilterPanel Component calls onFilterChange with the hazard removed when a selected hazard is toggled off" name="FilterPanel Component calls onFilterChange with the hazard removed when a selected hazard is toggled off" time="0.03">
+    <testcase classname="BuildingsTable renders building type from properties" name="BuildingsTable renders building type from properties" time="0.017">
     </testcase>
-    <testcase classname="FilterPanel Component calls onFilterChange with the checked sector when a sector checkbox is toggled on" name="FilterPanel Component calls onFilterChange with the checked sector when a sector checkbox is toggled on" time="0.119">
+    <testcase classname="BuildingsTable column header click does not throw" name="BuildingsTable column header click does not throw" time="0.026">
     </testcase>
-    <testcase classname="FilterPanel Component calls onFilterChange with the new aggregation level when a radio is selected" name="FilterPanel Component calls onFilterChange with the new aggregation level when a radio is selected" time="0.076">
-    </testcase>
-    <testcase classname="FilterPanel Component resets filters to defaults when &quot;Clear all filters&quot; is clicked from a non-empty state" name="FilterPanel Component resets filters to defaults when &quot;Clear all filters&quot; is clicked from a non-empty state" time="0.055">
+    <testcase classname="BuildingsTable calls onZoom when a zoom/location button is clicked" name="BuildingsTable calls onZoom when a zoom/location button is clicked" time="0.025">
     </testcase>
   </testsuite>
-  <testsuite name="CycloneAnimationLayer" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:01" time="0.438" tests="4">
-    <testcase classname="CycloneAnimationLayer renders without crashing when forecastTrack is null" name="CycloneAnimationLayer renders without crashing when forecastTrack is null" time="0.018">
+  <testsuite name="Accordion" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.214" tests="21">
+    <testcase classname="Accordion renders the title" name="Accordion renders the title" time="0.006">
     </testcase>
-    <testcase classname="CycloneAnimationLayer renders without crashing with a valid forecastTrack" name="CycloneAnimationLayer renders without crashing with a valid forecastTrack" time="0.186">
+    <testcase classname="Accordion hides content by default (defaultOpen=false)" name="Accordion hides content by default (defaultOpen=false)" time="0.002">
     </testcase>
-    <testcase classname="CycloneAnimationLayer calls onClose when close button is clicked" name="CycloneAnimationLayer calls onClose when close button is clicked" time="0.027">
+    <testcase classname="Accordion shows content when defaultOpen is true" name="Accordion shows content when defaultOpen is true" time="0.002">
     </testcase>
-    <testcase classname="CycloneAnimationLayer calls onPlayingChange when play state changes externally" name="CycloneAnimationLayer calls onPlayingChange when play state changes externally" time="0.048">
+    <testcase classname="Accordion renders children content" name="Accordion renders children content" time="0.003">
     </testcase>
-  </testsuite>
-  <testsuite name="Accordion" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.339" tests="21">
-    <testcase classname="Accordion renders the title" name="Accordion renders the title" time="0.013">
+    <testcase classname="Accordion renders a badge when provided" name="Accordion renders a badge when provided" time="0.002">
     </testcase>
-    <testcase classname="Accordion hides content by default (defaultOpen=false)" name="Accordion hides content by default (defaultOpen=false)" time="0.004">
+    <testcase classname="Accordion renders a string badge" name="Accordion renders a string badge" time="0.003">
     </testcase>
-    <testcase classname="Accordion shows content when defaultOpen is true" name="Accordion shows content when defaultOpen is true" time="0.004">
+    <testcase classname="Toast renders the message" name="Toast renders the message" time="0.003">
     </testcase>
-    <testcase classname="Accordion renders children content" name="Accordion renders children content" time="0.005">
+    <testcase classname="Toast renders as an alert region" name="Toast renders as an alert region" time="0.006">
     </testcase>
-    <testcase classname="Accordion renders a badge when provided" name="Accordion renders a badge when provided" time="0.006">
+    <testcase classname="Toast calls onClose after the default duration (5000ms)" name="Toast calls onClose after the default duration (5000ms)" time="0.003">
     </testcase>
-    <testcase classname="Accordion renders a string badge" name="Accordion renders a string badge" time="0.004">
-    </testcase>
-    <testcase classname="Toast renders the message" name="Toast renders the message" time="0.005">
-    </testcase>
-    <testcase classname="Toast renders as an alert region" name="Toast renders as an alert region" time="0.038">
-    </testcase>
-    <testcase classname="Toast calls onClose after the default duration (5000ms)" name="Toast calls onClose after the default duration (5000ms)" time="0.004">
-    </testcase>
-    <testcase classname="Toast calls onClose after a custom duration" name="Toast calls onClose after a custom duration" time="0.005">
+    <testcase classname="Toast calls onClose after a custom duration" name="Toast calls onClose after a custom duration" time="0.004">
     </testcase>
     <testcase classname="Toast does NOT auto-dismiss when duration is 0" name="Toast does NOT auto-dismiss when duration is 0" time="0.003">
     </testcase>
-    <testcase classname="Toast renders with success type" name="Toast renders with success type" time="0.017">
+    <testcase classname="Toast renders with success type" name="Toast renders with success type" time="0.005">
     </testcase>
-    <testcase classname="Toast renders with warning type" name="Toast renders with warning type" time="0.007">
+    <testcase classname="Toast renders with warning type" name="Toast renders with warning type" time="0.006">
     </testcase>
-    <testcase classname="Toast renders an action button when action prop is provided" name="Toast renders an action button when action prop is provided" time="0.018">
+    <testcase classname="Toast renders an action button when action prop is provided" name="Toast renders an action button when action prop is provided" time="0.013">
     </testcase>
-    <testcase classname="MetricTooltip renders the trigger button" name="MetricTooltip renders the trigger button" time="0.009">
+    <testcase classname="MetricTooltip renders the trigger button" name="MetricTooltip renders the trigger button" time="0.011">
     </testcase>
     <testcase classname="MetricTooltip tooltip content is not visible before hover/click" name="MetricTooltip tooltip content is not visible before hover/click" time="0.002">
     </testcase>
-    <testcase classname="MetricTooltip shows tooltip content after clicking the trigger" name="MetricTooltip shows tooltip content after clicking the trigger" time="0.013">
+    <testcase classname="MetricTooltip shows tooltip content after clicking the trigger" name="MetricTooltip shows tooltip content after clicking the trigger" time="0.009">
     </testcase>
-    <testcase classname="MetricTooltip shows tooltip content on mouse enter" name="MetricTooltip shows tooltip content on mouse enter" time="0.008">
+    <testcase classname="MetricTooltip shows tooltip content on mouse enter" name="MetricTooltip shows tooltip content on mouse enter" time="0.012">
     </testcase>
-    <testcase classname="MetricTooltip hides tooltip on mouse leave" name="MetricTooltip hides tooltip on mouse leave" time="0.008">
+    <testcase classname="MetricTooltip hides tooltip on mouse leave" name="MetricTooltip hides tooltip on mouse leave" time="0.009">
     </testcase>
-    <testcase classname="MetricTooltip renders the classification badge when provided" name="MetricTooltip renders the classification badge when provided" time="0.012">
+    <testcase classname="MetricTooltip renders the classification badge when provided" name="MetricTooltip renders the classification badge when provided" time="0.007">
     </testcase>
     <testcase classname="MetricTooltip does not render classification when omitted" name="MetricTooltip does not render classification when omitted" time="0.007">
     </testcase>
   </testsuite>
-  <testsuite name="BuildingsTable" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.156" tests="7">
-    <testcase classname="BuildingsTable renders empty state when data is null" name="BuildingsTable renders empty state when data is null" time="0.006">
-    </testcase>
-    <testcase classname="BuildingsTable renders empty state when feature collection has no matching buildings" name="BuildingsTable renders empty state when feature collection has no matching buildings" time="0.002">
-    </testcase>
-    <testcase classname="BuildingsTable renders the correct building count" name="BuildingsTable renders the correct building count" time="0.014">
-    </testcase>
-    <testcase classname="BuildingsTable renders region names from the GeoJSON" name="BuildingsTable renders region names from the GeoJSON" time="0.01">
-    </testcase>
-    <testcase classname="BuildingsTable renders building type from properties" name="BuildingsTable renders building type from properties" time="0.021">
-    </testcase>
-    <testcase classname="BuildingsTable column header click does not throw" name="BuildingsTable column header click does not throw" time="0.022">
-    </testcase>
-    <testcase classname="BuildingsTable calls onZoom when a zoom/location button is clicked" name="BuildingsTable calls onZoom when a zoom/location button is clicked" time="0.019">
-    </testcase>
-  </testsuite>
-  <testsuite name="SearchableEventSelector" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.26" tests="8">
-    <testcase classname="SearchableEventSelector renders all events when search is empty" name="SearchableEventSelector renders all events when search is empty" time="0.017">
-    </testcase>
-    <testcase classname="SearchableEventSelector filters events by name when search query is entered" name="SearchableEventSelector filters events by name when search query is entered" time="0.064">
-    </testcase>
-    <testcase classname="SearchableEventSelector filters events by district name" name="SearchableEventSelector filters events by district name" time="0.017">
-    </testcase>
-    <testcase classname="SearchableEventSelector shows no results message on non-matching search" name="SearchableEventSelector shows no results message on non-matching search" time="0.02">
-    </testcase>
-    <testcase classname="SearchableEventSelector calls onToggleEvent with the event id when an event checkbox is changed" name="SearchableEventSelector calls onToggleEvent with the event id when an event checkbox is changed" time="0.025">
-    </testcase>
-    <testcase classname="SearchableEventSelector calls onSelectAll when &quot;Select all&quot; button is clicked" name="SearchableEventSelector calls onSelectAll when &quot;Select all&quot; button is clicked" time="0.013">
-    </testcase>
-    <testcase classname="SearchableEventSelector calls onClearAll when &quot;Clear selection&quot; button is clicked" name="SearchableEventSelector calls onClearAll when &quot;Clear selection&quot; button is clicked" time="0.008">
-    </testcase>
-    <testcase classname="SearchableEventSelector renders correctly with empty event list" name="SearchableEventSelector renders correctly with empty event list" time="0.008">
-    </testcase>
-  </testsuite>
-  <testsuite name="BottomTabs" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.214" tests="6">
+  <testsuite name="BottomTabs" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.295" tests="6">
     <testcase classname="BottomTabs renders without crashing" name="BottomTabs renders without crashing" time="0.011">
     </testcase>
-    <testcase classname="BottomTabs renders the Impact tab as the default active tab" name="BottomTabs renders the Impact tab as the default active tab" time="0.031">
+    <testcase classname="BottomTabs renders the Impact tab as the default active tab" name="BottomTabs renders the Impact tab as the default active tab" time="0.028">
     </testcase>
-    <testcase classname="BottomTabs renders all expected tabs" name="BottomTabs renders all expected tabs" time="0.021">
+    <testcase classname="BottomTabs renders all expected tabs" name="BottomTabs renders all expected tabs" time="0.013">
     </testcase>
     <testcase classname="BottomTabs switching to Exposure tab changes active tab styling" name="BottomTabs switching to Exposure tab changes active tab styling" time="0.018">
     </testcase>
-    <testcase classname="BottomTabs switching tabs does not crash" name="BottomTabs switching tabs does not crash" time="0.041">
+    <testcase classname="BottomTabs switching tabs does not crash" name="BottomTabs switching tabs does not crash" time="0.026">
     </testcase>
-    <testcase classname="BottomTabs calls onRequestDamageData when buildings data is missing and buildings tab is clicked" name="BottomTabs calls onRequestDamageData when buildings data is missing and buildings tab is clicked" time="0.024">
-    </testcase>
-  </testsuite>
-  <testsuite name="UnifiedMapLegend" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.155" tests="9">
-    <testcase classname="UnifiedMapLegend renders nothing when visible is false" name="UnifiedMapLegend renders nothing when visible is false" time="0.006">
-    </testcase>
-    <testcase classname="UnifiedMapLegend renders nothing when hasSelection is true" name="UnifiedMapLegend renders nothing when hasSelection is true" time="0.001">
-    </testcase>
-    <testcase classname="UnifiedMapLegend renders the legend region when visible and no selection" name="UnifiedMapLegend renders the legend region when visible and no selection" time="0.014">
-    </testcase>
-    <testcase classname="UnifiedMapLegend expand/collapse toggle is present" name="UnifiedMapLegend expand/collapse toggle is present" time="0.009">
-    </testcase>
-    <testcase classname="UnifiedMapLegend clicking the toggle button expands the legend" name="UnifiedMapLegend clicking the toggle button expands the legend" time="0.009">
-    </testcase>
-    <testcase classname="UnifiedMapLegend clicking the toggle button a second time collapses the legend" name="UnifiedMapLegend clicking the toggle button a second time collapses the legend" time="0.009">
-    </testcase>
-    <testcase classname="UnifiedMapLegend renders in wind mode without crashing" name="UnifiedMapLegend renders in wind mode without crashing" time="0.003">
-    </testcase>
-    <testcase classname="UnifiedMapLegend shows building damage rows when showBuildings is true and expanded" name="UnifiedMapLegend shows building damage rows when showBuildings is true and expanded" time="0.014">
-    </testcase>
-    <testcase classname="UnifiedMapLegend shows road damage rows when showRoads is true and expanded" name="UnifiedMapLegend shows road damage rows when showRoads is true and expanded" time="0.015">
+    <testcase classname="BottomTabs calls onRequestDamageData when buildings data is missing and buildings tab is clicked" name="BottomTabs calls onRequestDamageData when buildings data is missing and buildings tab is clicked" time="0.013">
     </testcase>
   </testsuite>
-  <testsuite name="useAssetTableData Hook" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.103" tests="5">
-    <testcase classname="useAssetTableData Hook returns initial data structure" name="useAssetTableData Hook returns initial data structure" time="0.005">
+  <testsuite name="SearchableEventSelector" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.179" tests="8">
+    <testcase classname="SearchableEventSelector renders all events when search is empty" name="SearchableEventSelector renders all events when search is empty" time="0.019">
     </testcase>
-    <testcase classname="useAssetTableData Hook returns filtered data" name="useAssetTableData Hook returns filtered data" time="0.002">
+    <testcase classname="SearchableEventSelector filters events by name when search query is entered" name="SearchableEventSelector filters events by name when search query is entered" time="0.035">
     </testcase>
-    <testcase classname="useAssetTableData Hook handles sorting" name="useAssetTableData Hook handles sorting" time="0.006">
+    <testcase classname="SearchableEventSelector filters events by district name" name="SearchableEventSelector filters events by district name" time="0.012">
     </testcase>
-    <testcase classname="useAssetTableData Hook handles pagination" name="useAssetTableData Hook handles pagination" time="0.003">
+    <testcase classname="SearchableEventSelector shows no results message on non-matching search" name="SearchableEventSelector shows no results message on non-matching search" time="0.011">
     </testcase>
-    <testcase classname="useAssetTableData Hook handles search filtering" name="useAssetTableData Hook handles search filtering" time="0.002">
+    <testcase classname="SearchableEventSelector calls onToggleEvent with the event id when an event checkbox is changed" name="SearchableEventSelector calls onToggleEvent with the event id when an event checkbox is changed" time="0.012">
     </testcase>
-  </testsuite>
-  <testsuite name="BasemapSwitcher" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.081" tests="5">
-    <testcase classname="BasemapSwitcher renders three basemap buttons" name="BasemapSwitcher renders three basemap buttons" time="0.011">
+    <testcase classname="SearchableEventSelector calls onSelectAll when &quot;Select all&quot; button is clicked" name="SearchableEventSelector calls onSelectAll when &quot;Select all&quot; button is clicked" time="0.006">
     </testcase>
-    <testcase classname="BasemapSwitcher renders Light, Detailed, and Dark options" name="BasemapSwitcher renders Light, Detailed, and Dark options" time="0.003">
+    <testcase classname="SearchableEventSelector calls onClearAll when &quot;Clear selection&quot; button is clicked" name="SearchableEventSelector calls onClearAll when &quot;Clear selection&quot; button is clicked" time="0.006">
     </testcase>
-    <testcase classname="BasemapSwitcher calls onBasemapChange with the Voyager URL when Detailed is clicked" name="BasemapSwitcher calls onBasemapChange with the Voyager URL when Detailed is clicked" time="0.003">
-    </testcase>
-    <testcase classname="BasemapSwitcher calls onBasemapChange with the Dark URL when Dark is clicked" name="BasemapSwitcher calls onBasemapChange with the Dark URL when Dark is clicked" time="0.002">
-    </testcase>
-    <testcase classname="BasemapSwitcher highlights the currently active basemap button" name="BasemapSwitcher highlights the currently active basemap button" time="0.003">
+    <testcase classname="SearchableEventSelector renders correctly with empty event list" name="SearchableEventSelector renders correctly with empty event list" time="0.009">
     </testcase>
   </testsuite>
-  <testsuite name="MapControls" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.1" tests="5">
-    <testcase classname="MapControls renders without crashing" name="MapControls renders without crashing" time="0.004">
+  <testsuite name="UnifiedMapLegend" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.276" tests="9">
+    <testcase classname="UnifiedMapLegend renders nothing when visible is false" name="UnifiedMapLegend renders nothing when visible is false" time="0.012">
     </testcase>
-    <testcase classname="MapControls opens the settings/basemap panel on button click" name="MapControls opens the settings/basemap panel on button click" time="0.012">
+    <testcase classname="UnifiedMapLegend renders nothing when hasSelection is true" name="UnifiedMapLegend renders nothing when hasSelection is true" time="0.002">
+    </testcase>
+    <testcase classname="UnifiedMapLegend renders the legend region when visible and no selection" name="UnifiedMapLegend renders the legend region when visible and no selection" time="0.019">
+    </testcase>
+    <testcase classname="UnifiedMapLegend expand/collapse toggle is present" name="UnifiedMapLegend expand/collapse toggle is present" time="0.007">
+    </testcase>
+    <testcase classname="UnifiedMapLegend clicking the toggle button expands the legend" name="UnifiedMapLegend clicking the toggle button expands the legend" time="0.017">
+    </testcase>
+    <testcase classname="UnifiedMapLegend clicking the toggle button a second time collapses the legend" name="UnifiedMapLegend clicking the toggle button a second time collapses the legend" time="0.01">
+    </testcase>
+    <testcase classname="UnifiedMapLegend renders in wind mode without crashing" name="UnifiedMapLegend renders in wind mode without crashing" time="0.004">
+    </testcase>
+    <testcase classname="UnifiedMapLegend shows building damage rows when showBuildings is true and expanded" name="UnifiedMapLegend shows building damage rows when showBuildings is true and expanded" time="0.017">
+    </testcase>
+    <testcase classname="UnifiedMapLegend shows road damage rows when showRoads is true and expanded" name="UnifiedMapLegend shows road damage rows when showRoads is true and expanded" time="0.016">
+    </testcase>
+  </testsuite>
+  <testsuite name="MapStyleToggle" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.085" tests="5">
+    <testcase classname="MapStyleToggle renders both style buttons" name="MapStyleToggle renders both style buttons" time="0.006">
+    </testcase>
+    <testcase classname="MapStyleToggle calls onStyleChange with &quot;wind&quot; when Wind Hazard is clicked" name="MapStyleToggle calls onStyleChange with &quot;wind&quot; when Wind Hazard is clicked" time="0.003">
+    </testcase>
+    <testcase classname="MapStyleToggle calls onStyleChange with &quot;loss&quot; when Economic Loss is clicked" name="MapStyleToggle calls onStyleChange with &quot;loss&quot; when Economic Loss is clicked" time="0.002">
+    </testcase>
+    <testcase classname="MapStyleToggle highlights the active button (loss mode)" name="MapStyleToggle highlights the active button (loss mode)" time="0.002">
+    </testcase>
+    <testcase classname="MapStyleToggle highlights the active button (wind mode)" name="MapStyleToggle highlights the active button (wind mode)" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="MapControls" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.116" tests="5">
+    <testcase classname="MapControls renders without crashing" name="MapControls renders without crashing" time="0.005">
+    </testcase>
+    <testcase classname="MapControls opens the settings/basemap panel on button click" name="MapControls opens the settings/basemap panel on button click" time="0.009">
     </testcase>
     <testcase classname="MapControls calls onBasemapChange when a basemap option is selected" name="MapControls calls onBasemapChange when a basemap option is selected" time="0.004">
     </testcase>
     <testcase classname="MapControls calls onMapStyleChange with &quot;wind&quot; when Wind style button is clicked" name="MapControls calls onMapStyleChange with &quot;wind&quot; when Wind style button is clicked" time="0.007">
     </testcase>
-    <testcase classname="MapControls calls onMapStyleChange with &quot;loss&quot; when Economic Loss button is clicked" name="MapControls calls onMapStyleChange with &quot;loss&quot; when Economic Loss button is clicked" time="0.012">
+    <testcase classname="MapControls calls onMapStyleChange with &quot;loss&quot; when Economic Loss button is clicked" name="MapControls calls onMapStyleChange with &quot;loss&quot; when Economic Loss button is clicked" time="0.007">
     </testcase>
   </testsuite>
-  <testsuite name="MapStyleToggle" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.078" tests="5">
-    <testcase classname="MapStyleToggle renders both style buttons" name="MapStyleToggle renders both style buttons" time="0.005">
-    </testcase>
-    <testcase classname="MapStyleToggle calls onStyleChange with &quot;wind&quot; when Wind Hazard is clicked" name="MapStyleToggle calls onStyleChange with &quot;wind&quot; when Wind Hazard is clicked" time="0.003">
-    </testcase>
-    <testcase classname="MapStyleToggle calls onStyleChange with &quot;loss&quot; when Economic Loss is clicked" name="MapStyleToggle calls onStyleChange with &quot;loss&quot; when Economic Loss is clicked" time="0.003">
-    </testcase>
-    <testcase classname="MapStyleToggle highlights the active button (loss mode)" name="MapStyleToggle highlights the active button (loss mode)" time="0.002">
-    </testcase>
-    <testcase classname="MapStyleToggle highlights the active button (wind mode)" name="MapStyleToggle highlights the active button (wind mode)" time="0.002">
-    </testcase>
-  </testsuite>
-  <testsuite name="RealDataLayers" errors="0" failures="0" skipped="0" timestamp="2026-02-17T23:58:02" time="0.112" tests="6">
-    <testcase classname="RealDataLayers renders nothing (null) regardless of props" name="RealDataLayers renders nothing (null) regardless of props" time="0.01">
+  <testsuite name="RealDataLayers" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.099" tests="6">
+    <testcase classname="RealDataLayers renders nothing (null) regardless of props" name="RealDataLayers renders nothing (null) regardless of props" time="0.016">
     </testcase>
     <testcase classname="RealDataLayers renders without crashing when map is null" name="RealDataLayers renders without crashing when map is null" time="0.001">
     </testcase>
-    <testcase classname="RealDataLayers renders without crashing when countryCode is null" name="RealDataLayers renders without crashing when countryCode is null" time="0.004">
+    <testcase classname="RealDataLayers renders without crashing when countryCode is null" name="RealDataLayers renders without crashing when countryCode is null" time="0.011">
     </testcase>
     <testcase classname="RealDataLayers renders without crashing when visible is false" name="RealDataLayers renders without crashing when visible is false" time="0.002">
     </testcase>
-    <testcase classname="RealDataLayers calls onLoadingChange when provided" name="RealDataLayers calls onLoadingChange when provided" time="0.01">
+    <testcase classname="RealDataLayers calls onLoadingChange when provided" name="RealDataLayers calls onLoadingChange when provided" time="0.003">
     </testcase>
-    <testcase classname="RealDataLayers accepts all optional props without crashing" name="RealDataLayers accepts all optional props without crashing" time="0.003">
+    <testcase classname="RealDataLayers accepts all optional props without crashing" name="RealDataLayers accepts all optional props without crashing" time="0.006">
+    </testcase>
+  </testsuite>
+  <testsuite name="BasemapSwitcher" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.111" tests="5">
+    <testcase classname="BasemapSwitcher renders three basemap buttons" name="BasemapSwitcher renders three basemap buttons" time="0.015">
+    </testcase>
+    <testcase classname="BasemapSwitcher renders Light, Detailed, and Dark options" name="BasemapSwitcher renders Light, Detailed, and Dark options" time="0.006">
+    </testcase>
+    <testcase classname="BasemapSwitcher calls onBasemapChange with the Voyager URL when Detailed is clicked" name="BasemapSwitcher calls onBasemapChange with the Voyager URL when Detailed is clicked" time="0.006">
+    </testcase>
+    <testcase classname="BasemapSwitcher calls onBasemapChange with the Dark URL when Dark is clicked" name="BasemapSwitcher calls onBasemapChange with the Dark URL when Dark is clicked" time="0.005">
+    </testcase>
+    <testcase classname="BasemapSwitcher highlights the currently active basemap button" name="BasemapSwitcher highlights the currently active basemap button" time="0.007">
+    </testcase>
+  </testsuite>
+  <testsuite name="useAssetTableData Hook" errors="0" failures="0" skipped="0" timestamp="2026-02-18T04:21:26" time="0.097" tests="5">
+    <testcase classname="useAssetTableData Hook returns initial data structure" name="useAssetTableData Hook returns initial data structure" time="0.005">
+    </testcase>
+    <testcase classname="useAssetTableData Hook returns filtered data" name="useAssetTableData Hook returns filtered data" time="0.002">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles sorting" name="useAssetTableData Hook handles sorting" time="0.002">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles pagination" name="useAssetTableData Hook handles pagination" time="0.001">
+    </testcase>
+    <testcase classname="useAssetTableData Hook handles search filtering" name="useAssetTableData Hook handles search filtering" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="Cache Utility" errors="0" failures="7" skipped="0" timestamp="2026-02-18T04:21:20" time="6.477" tests="7">
+    <testcase classname="Cache Utility stores and retrieves values" name="Cache Utility stores and retrieves values" time="0.003">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility returns null for non-existent keys" name="Cache Utility returns null for non-existent keys" time="0.001">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility handles cache expiration" name="Cache Utility handles cache expiration" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility deletes specific cache entries" name="Cache Utility deletes specific cache entries" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility checks if key exists" name="Cache Utility checks if key exists" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility deletes keys by pattern" name="Cache Utility deletes keys by pattern" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    </testcase>
+    <testcase classname="Cache Utility handles complex objects" name="Cache Utility handles complex objects" time="0">
+      <failure>Error: thrown: &quot;Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
+    at beforeAll (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:7:3)
+    at _dispatchDescribe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:91:26)
+    at describe (/home/kishank/Partner2/node_modules/jest-circus/build/index.js:55:5)
+    at Object.describe (/home/kishank/Partner2/src/lib/__tests__/cache.test.ts:6:1)
+    at Runtime._execModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1439:24)
+    at Runtime._loadModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:1022:12)
+    at Runtime.requireModule (/home/kishank/Partner2/node_modules/jest-runtime/build/index.js:882:12)
+    at jestAdapter (/home/kishank/Partner2/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at runTestInternal (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/kishank/Partner2/node_modules/jest-runner/build/runTest.js:444:34)
+    at Object.worker (/home/kishank/Partner2/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
     </testcase>
   </testsuite>
 </testsuites>

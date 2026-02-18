@@ -32,7 +32,11 @@ const customJestConfig = {
     // This wider regex catches both the package root AND the rewritten paths.
     '^lucide-react(/.*)?$': '<rootDir>/__mocks__/lucide-react.js',
   },
-  testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/.next/',
+    '<rootDir>/node_modules/',
+    '<rootDir>/tests/perf/',
+  ],
   transformIgnorePatterns: [
     // Allow transpilation of ESM-only packages; next/jest handles CSS/image transforms
     '/node_modules/(?!(georaster|georaster-to-canvas|geotiff|geotiff-palette|ieee754|kdbush|lucide-react|nanoid|pbf|quickselect|supercluster|uuid|@mapbox).*/)',

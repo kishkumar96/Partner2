@@ -46,17 +46,46 @@ export default function RegionalImpactsLayer({
     sectorGeojson?: any;
   }>({});
 
+  // Track if we're currently loading to prevent race conditions
+  const isLoadingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const loadEventListenerRef = useRef<(() => void) | null>(null);
+  const layersAddedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!map || !visible) {
       console.log(`❌ RegionalImpactsLayer: Skipping load (map: ${!!map}, visible: ${visible})`);
       return;
     }
 
+    // Prevent concurrent loading
+    if (isLoadingRef.current) {
+      console.log('⏳ RegionalImpactsLayer: Already loading, skipping...');
+      return;
+    }
+
     const loadRegionalImpacts = async () => {
+      if (!mountedRef.current) {
+        console.log('🚫 Component unmounted, aborting load');
+        return;
+      }
+
+      isLoadingRef.current = true;
+
       try {
         debugLogger.info('Loading regional impacts layer', 'map-source');
         console.log(
           `📊 Loading RegionalImpactsLayer (mapStyle: ${mapStyle}, selectedRegion: ${selectedRegion})`
+        );
+        console.log(
+          `🗺️ Map instance exists: ${!!map}, Map loaded: ${map.loaded()}, Style loaded: ${map.isStyleLoaded()}`
         );
 
         // Load both regional impacts and sector-specific data with caching
@@ -64,16 +93,46 @@ export default function RegionalImpactsLayer({
         let geojson, sectorGeojson;
 
         if (dataCache.current.geojson && dataCache.current.sectorGeojson) {
+          console.log('✅ Using cached regional impacts data');
           geojson = dataCache.current.geojson;
           sectorGeojson = dataCache.current.sectorGeojson;
         } else {
+          if (!mountedRef.current) {
+            console.log('🚫 Component unmounted during load, aborting');
+            isLoadingRef.current = false;
+            return;
+          }
+
+          console.log('🔄 Fetching regional impacts data from server...');
           const [regionalResult, sectorResult] = await Promise.all([
             loadGeoJSON('/regional-impacts.geojson', { cache: true }),
             loadGeoJSON('/regional-impacts-by-sector.geojson', { cache: true }),
           ]);
 
+          if (!mountedRef.current) {
+            console.log('🚫 Component unmounted after fetch, aborting');
+            isLoadingRef.current = false;
+            return;
+          }
+
+          console.log('📥 Regional impacts fetch result:', {
+            hasData: !!regionalResult.data,
+            error: regionalResult.error?.message,
+            cached: regionalResult.cached,
+            featureCount: regionalResult.data?.features?.length || 0,
+          });
+
+          console.log('📥 Sector impacts fetch result:', {
+            hasData: !!sectorResult.data,
+            error: sectorResult.error?.message,
+            cached: sectorResult.cached,
+            featureCount: sectorResult.data?.features?.length || 0,
+          });
+
           if (!regionalResult.data) {
+            console.error('❌ Failed to load regional impacts data:', regionalResult.error);
             debugLogger.warn('Could not load regional impacts data', 'map-source');
+            isLoadingRef.current = false;
             return;
           }
 
@@ -82,6 +141,7 @@ export default function RegionalImpactsLayer({
 
           // Cache for future use
           dataCache.current = { geojson, sectorGeojson };
+          console.log(`✅ Cached regional impacts data (${geojson.features?.length || 0} regions)`);
         }
 
         const sourceId = 'regional-impacts';
@@ -116,22 +176,42 @@ export default function RegionalImpactsLayer({
 
         // Function to add layers
         const addLayers = () => {
+          // Prevent multiple simultaneous additions
+          if (layersAddedRef.current) {
+            console.log('⏭️ Layers already added, skipping duplicate add');
+            return;
+          }
+
+          console.log(
+            '🎨 addLayers() called - Map loaded:',
+            map.loaded(),
+            ', Style loaded:',
+            map.isStyleLoaded()
+          );
+
           // Check if source already exists and remove it first to prevent "already exists" error
           if (map.getSource(sourceId)) {
+            console.log('⚠️ Source already exists, removing...');
             try {
               if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
               if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
               map.removeSource(sourceId);
+              console.log('✅ Removed existing layers and source');
             } catch (e) {
+              console.error('❌ Error removing existing source:', e);
               debugLogger.warn('Error removing existing source before re-adding', 'map-source', e);
             }
           }
 
           // Add source
+          console.log(
+            `📦 Adding source '${sourceId}' with ${geojson.features?.length || 0} features`
+          );
           map.addSource(sourceId, {
             type: 'geojson',
             data: geojson,
           });
+          console.log('✅ Source added successfully');
 
           // Define color expressions using unified color system
           const lossColorExpression = createLossColorExpression();
@@ -146,25 +226,30 @@ export default function RegionalImpactsLayer({
           console.log(
             `🗺️ Adding regional-impacts-fill layer (mapStyle: ${mapStyle}, beforeId: ${fillBeforeId})`
           );
-          map.addLayer(
-            {
-              id: 'regional-impacts-fill',
-              type: 'fill',
-              source: sourceId,
-              paint: {
-                'fill-color': mapStyle === 'wind' ? windColorExpression : lossColorExpression,
-                // Use unified opacity system from colorSystem.ts
-                'fill-opacity': createRegionalFillOpacity(
-                  mapStyle as 'wind' | 'loss',
-                  selectedRegion
-                ) as any,
+          try {
+            map.addLayer(
+              {
+                id: 'regional-impacts-fill',
+                type: 'fill',
+                source: sourceId,
+                paint: {
+                  'fill-color': mapStyle === 'wind' ? windColorExpression : lossColorExpression,
+                  // Use unified opacity system from colorSystem.ts
+                  'fill-opacity': createRegionalFillOpacity(
+                    mapStyle as 'wind' | 'loss',
+                    selectedRegion
+                  ) as any,
+                },
               },
-            },
-            fillBeforeId
-          );
-          console.log(
-            `✅ Regional impacts layer added successfully (${geojson.features?.length || 0} features)`
-          );
+              fillBeforeId
+            );
+            console.log(
+              `✅ Regional impacts FILL layer added successfully (${geojson.features?.length || 0} features)`
+            );
+          } catch (e) {
+            console.error('❌ Error adding fill layer:', e);
+            throw e;
+          }
 
           // Enable smooth transitions for animated region updates
           map.setPaintProperty(fillLayerId, 'fill-color-transition', {
@@ -179,24 +264,31 @@ export default function RegionalImpactsLayer({
           // Add outline layer with selection highlighting
           // World-class design: Crisp boundaries for professional choropleth visualization
           const lineBeforeId = getBeforeLayerId(map, 'regional-impacts-line');
-          map.addLayer(
-            {
-              id: 'regional-impacts-line',
-              type: 'line',
-              source: sourceId,
-              paint: {
-                'line-color': createRegionalLineColor(selectedRegion) as any,
-                'line-width': createRegionalLineWidth(selectedRegion) as any,
-                'line-opacity': [
-                  'case',
-                  ['==', ['get', 'Region.Region'], selectedRegion || ''],
-                  1.0, // Fully visible selected
-                  LAYER_OPACITY.regional.outline, // Crisp visible boundaries
-                ],
+          console.log(`🗺️ Adding regional-impacts-line layer (beforeId: ${lineBeforeId})`);
+          try {
+            map.addLayer(
+              {
+                id: 'regional-impacts-line',
+                type: 'line',
+                source: sourceId,
+                paint: {
+                  'line-color': createRegionalLineColor(selectedRegion) as any,
+                  'line-width': createRegionalLineWidth(selectedRegion) as any,
+                  'line-opacity': [
+                    'case',
+                    ['==', ['get', 'Region.Region'], selectedRegion || ''],
+                    1.0, // Fully visible selected
+                    LAYER_OPACITY.regional.outline, // Crisp visible boundaries
+                  ],
+                },
               },
-            },
-            lineBeforeId
-          );
+              lineBeforeId
+            );
+            console.log('✅ Regional impacts LINE layer added successfully');
+          } catch (e) {
+            console.error('❌ Error adding line layer:', e);
+            throw e;
+          }
 
           // Store event handlers for proper cleanup
           handlersRef.current.handleClick = (e: any) => {
@@ -306,35 +398,74 @@ export default function RegionalImpactsLayer({
           handlersRef.current.handleMouseLeave = () => {
             map.getCanvas().style.cursor = '';
           };
-
-          // Add event listeners
-          map.on('click', fillLayerId, handlersRef.current.handleClick);
-          map.on('mouseenter', fillLayerId, handlersRef.current.handleMouseEnter);
-          map.on('mouseleave', fillLayerId, handlersRef.current.handleMouseLeave);
-
-          console.log('Loaded regional impacts layer successfully');
+          layersAddedRef.current = true;
+          console.log('✅ Regional impacts layer loaded successfully with all event listeners');
+          isLoadingRef.current = false;
         };
 
         // Check if style is loaded before adding layers
+        console.log('🔍 Checking map style status...');
+        console.log(`   - Map isStyleLoaded(): ${map.isStyleLoaded()}`);
+        console.log(`   - Map loaded(): ${map.loaded()}`);
+
+        if (!mountedRef.current) {
+          console.log('🚫 Component unmounted before adding layers, aborting');
+          isLoadingRef.current = false;
+          return;
+        }
+
         if (map.isStyleLoaded()) {
+          console.log('✅ Map style is loaded, adding layers immediately');
           addLayers();
         } else {
-          map.once('load', addLayers);
+          console.log('⏳ Map style not loaded yet, waiting for "load" event');
+
+          // Remove any existing load listener to prevent duplicates
+          if (loadEventListenerRef.current) {
+            console.log('🧹 Removing previous load listener');
+            map.off('load', loadEventListenerRef.current);
+          }
+
+          // Create and store the listener
+          loadEventListenerRef.current = () => {
+            if (!mountedRef.current) {
+              console.log('🚫 Component unmounted before load event, skipping');
+              isLoadingRef.current = false;
+              return;
+            }
+            console.log('🎉 Map "load" event fired, now adding layers');
+            addLayers();
+          };
+
+          map.once('load', loadEventListenerRef.current);
         }
       } catch (error) {
-        console.error('Error loading regional impacts:', error);
+        console.error('❌ CRITICAL ERROR loading regional impacts:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        debugLogger.error('Failed to load regional impacts layer', 'map-layer', error);
+        isLoadingRef.current = false;
       }
     };
 
     // Wait for map to be fully loaded before adding layers
     let styleLoadListener: (() => void) | null = null;
 
+    console.log('🔍 Setting up regional impacts layer loader...');
+    console.log(`   - Map exists: ${!!map}`);
+    console.log(`   - Visible: ${visible}`);
+    console.log(`   - Map isStyleLoaded: ${map.isStyleLoaded()}`);
+    console.log(`   - Map loaded: ${map.loaded()}`);
+
     if (!map.isStyleLoaded()) {
+      console.log('⏳ Map not ready, attaching styledata listener (ONCE)');
       styleLoadListener = () => {
+        console.log('🎉 Map styledata event fired, calling loadRegionalImpacts');
         loadRegionalImpacts();
       };
-      map.on('styledata', styleLoadListener);
+      // Use 'once' instead of 'on' to prevent multiple calls
+      map.once('styledata', styleLoadListener);
     } else {
+      console.log('✅ Map is ready, calling loadRegionalImpacts immediately');
       loadRegionalImpacts();
     }
 
@@ -342,9 +473,17 @@ export default function RegionalImpactsLayer({
     return () => {
       if (!map) return;
 
+      console.log('🧹 Cleaning up RegionalImpactsLayer');
+
       // Remove styledata listener if it was registered
       if (styleLoadListener) {
         map.off('styledata', styleLoadListener);
+      }
+
+      // Remove load listener if it was registered
+      if (loadEventListenerRef.current) {
+        map.off('load', loadEventListenerRef.current);
+        loadEventListenerRef.current = null;
       }
 
       const sourceId = 'regional-impacts';
@@ -373,11 +512,15 @@ export default function RegionalImpactsLayer({
         if (map.getSource(sourceId)) {
           map.removeSource(sourceId);
         }
+
+        // Reset flags
+        layersAddedRef.current = false;
+        isLoadingRef.current = false;
       } catch (e) {
         console.warn('Error cleaning up regional impacts layers:', e);
       }
     };
-  }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect]); // styleChangeCounter needed to recreate layers after basemap changes
+  }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect, mapStyle]); // styleChangeCounter needed to recreate layers after basemap changes
 
   // Separate effect to update colors when style changes (without recreating layers)
   useEffect(() => {

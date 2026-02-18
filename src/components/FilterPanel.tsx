@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 import {
   FilterState,
@@ -17,16 +17,13 @@ import {
   Calendar,
   ChevronDown,
   Database,
-  Globe2,
   Keyboard,
   Target,
   Wind,
   Play,
   Pause,
   BookOpen,
-  Zap,
   Check,
-  Clock,
 } from 'lucide-react';
 import SearchableEventSelector from './SearchableEventSelector';
 import MapAccessibleFeatures, { type DistrictFeature } from './MapAccessibleFeatures';
@@ -218,37 +215,6 @@ export default function FilterPanel({
     { value: 'province', label: 'Province' },
     { value: 'national', label: 'National' },
   ];
-
-  const filterPresets = [
-    { id: 'all', label: 'All Data', icon: Globe2 },
-    { id: 'high-risk', label: 'High Risk', icon: AlertTriangle },
-    { id: 'recent', label: 'Recent (2024)', icon: Calendar },
-  ];
-
-  const applyPreset = (presetId: string) => {
-    switch (presetId) {
-      case 'all':
-        clearAllFilters();
-        break;
-      case 'high-risk':
-        onFilterChange({
-          ...filters,
-          selectedEvents: events
-            .filter(e => e.severity === 'high' || e.severity === 'critical')
-            .map(e => e.id),
-        });
-        break;
-      case 'recent':
-        onFilterChange({
-          ...filters,
-          dateRange: { start: '2024-01-01', end: '2024-12-31' },
-        });
-        break;
-      default:
-        console.warn(`applyPreset: unknown presetId "${presetId}"`);
-        break;
-    }
-  };
 
   // Track which hazards and sectors have data available in actual events
   const activeHazardIds = useMemo(() => new Set(events.map(event => event.hazardId)), [events]);

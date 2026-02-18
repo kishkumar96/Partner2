@@ -41,8 +41,10 @@ export const LiveRegion: React.FC<{
   );
 };
 
-export default {
+const AccessibilityComponents = {
   SkipToContent,
   VisuallyHidden,
   LiveRegion,
 };
+
+export default AccessibilityComponents;

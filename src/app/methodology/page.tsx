@@ -458,7 +458,7 @@ export default function MethodologyPage() {
                         <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                           <li>Predict future cyclone probabilities</li>
                           <li>Assess multi-hazard cumulative risk</li>
-                          <li>Model "what-if" scenarios with different intensities</li>
+                          <li>Model &ldquo;what-if&rdquo; scenarios with different intensities</li>
                           <li>Provide probabilistic return period analysis</li>
                           <li>Evaluate climate change scenarios</li>
                           <li>Track temporal recovery dynamics</li>
@@ -523,8 +523,8 @@ export default function MethodologyPage() {
                         <strong>License:</strong> Open Data Commons Open Database License (ODbL)
                       </li>
                       <li>
-                        <strong>Attribution:</strong> "Climate Risk Dashboard, powered by RiskScape,
-                        Pacific Disaster Center, 2024"
+                        <strong>Attribution:</strong> &ldquo;Climate Risk Dashboard, powered by
+                        RiskScape, Pacific Disaster Center, 2024&rdquo;
                       </li>
                       <li>
                         <strong>Commercial use:</strong> Permitted with attribution

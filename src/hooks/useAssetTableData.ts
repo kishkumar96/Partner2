@@ -11,7 +11,6 @@ import type {
   AssetFilter,
   PaginationState,
 } from '@/types/assetTables';
-import { getBuildingDamageColor, getRoadDamageColor } from '@/theme/colors';
 
 type Asset = BuildingAsset | RoadAsset;
 

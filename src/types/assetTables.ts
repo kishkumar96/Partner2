@@ -3,8 +3,6 @@
  * Provides type safety for buildings and roads damage tables
  */
 
-import type { GeoJSON } from 'geojson';
-
 /**
  * Building asset data for table display
  */

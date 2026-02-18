@@ -205,7 +205,7 @@ export default function DamagedRoadsLayer({
         if (map.getSource(sourceId)) {
           map.removeSource(sourceId);
         }
-      } catch (e) {
+      } catch (_e) {
         // Layers/sources might not exist
       }
     };

@@ -65,7 +65,6 @@ export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: Bu
     filter,
     pagination,
     uniqueRegions,
-    uniqueDamageLevels,
     handleSort,
     handleFilterChange,
     handlePageChange,

@@ -205,10 +205,7 @@ export function buildRealWMSUrl(
  * Get WMS tile URL template for MapLibre
  * MapLibre expects {bbox-epsg-4326} to be replaced, but we need to provide proper tile coordinates
  */
-export function buildWMSTileUrl(
-  layer: RealWMSLayer,
-  styles: string = 'default-scalar/default'
-): string {
+export function buildWMSTileUrl(layer: RealWMSLayer): string {
   const baseUrl = 'https://gemthreddshpc.spc.int/thredds/wms';
 
   // Build country-specific path

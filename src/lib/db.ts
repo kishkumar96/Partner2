@@ -81,8 +81,6 @@ export function buildBBoxQuery(
   bbox: [number, number, number, number],
   additionalWhere?: string
 ): string {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-
   let query = `
     SELECT *, ST_AsGeoJSON(${geomColumn})::json as geometry
     FROM ${tableName}
@@ -223,7 +221,7 @@ export async function closePool(): Promise<void> {
 export { pool };
 
 // Default export
-export default {
+const db = {
   query,
   getClient,
   transaction,
@@ -235,3 +233,5 @@ export default {
   closePool,
   pool,
 };
+
+export default db;

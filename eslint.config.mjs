@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Additional build artifacts and reports:
+    "reports/**",
+    "__mocks__/**",
+    "docs/examples/**",
   ]),
   {
     rules: {

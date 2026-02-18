@@ -139,11 +139,11 @@ export const LAYER_OPACITY = {
     outlineHover: 0.95, // Clear hover feedback (reduced from 1.0)
   },
   regional: {
-    fill: 0.08, // Base fill for loss mode
-    fillSelected: 0.32, // Selected region in loss mode
-    fillWind: 0.1, // Base fill for wind mode
-    fillWindSelected: 0.35, // Selected region in wind mode
-    outline: 0.75, // Clear boundaries (reduced from 0.85)
+    fill: 0.65, // Base fill for loss mode - INCREASED for better visibility
+    fillSelected: 0.85, // Selected region in loss mode
+    fillWind: 0.5, // Base fill for wind mode - INCREASED for better visibility
+    fillWindSelected: 0.7, // Selected region in wind mode
+    outline: 1.0, // Clear boundaries - FULL opacity for maximum visibility
   },
   heatmap: {
     base: 0.4, // Reduced for better visual hierarchy
@@ -230,10 +230,9 @@ export function createRegionalLineWidth(selectedRegion: string | null): any {
 /**
  * Ensure color has sufficient contrast for accessibility
  * @param color - Hex color code
- * @param onDark - Whether color will be on dark background
  * @returns Adjusted color with better contrast
  */
-export function ensureContrast(color: string, onDark: boolean = true): string {
+export function ensureContrast(color: string): string {
   // For now, return original - could implement luminance calculation
   // and adjustment if needed for WCAG AA compliance
   return color;

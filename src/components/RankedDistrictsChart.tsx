@@ -13,6 +13,7 @@ import {
 } from 'chart.js';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { AggregatedEventData } from '@/types';
+import { UI_COLORS } from '@/theme/colors';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -46,14 +47,15 @@ export default function RankedDistrictsChart({
       return d.totalAffectedPopulation || 0;
     });
 
-    // Color gradient based on rank
+    // Color gradient based on rank using theme colors
     const backgroundColors = values.map((_, index) => {
+      const opacity = 1 - (index / topN) * 0.5;
       if (metric === 'loss') {
-        const opacity = 1 - (index / topN) * 0.6;
-        return `rgba(220, 38, 38, ${opacity})`;
+        // Use critical red from theme for economic loss
+        return `rgba(239, 68, 68, ${opacity})`; // SEVERITY_COLORS.critical
       } else {
-        const opacity = 1 - (index / topN) * 0.6;
-        return `rgba(249, 115, 22, ${opacity})`;
+        // Use high orange from theme for population
+        return `rgba(249, 115, 22, ${opacity})`; // SEVERITY_COLORS.high
       }
     });
 
@@ -89,10 +91,10 @@ export default function RankedDistrictsChart({
         display: false,
       },
       tooltip: {
-        backgroundColor: 'rgba(17, 24, 39, 0.95)',
-        titleColor: 'rgba(255, 255, 255, 1)',
-        bodyColor: 'rgba(255, 255, 255, 0.9)',
-        borderColor: 'rgba(59, 130, 246, 0.5)',
+        backgroundColor: UI_COLORS.glassDark,
+        titleColor: UI_COLORS.textPrimary,
+        bodyColor: UI_COLORS.textSecondary,
+        borderColor: UI_COLORS.borderMedium,
         borderWidth: 1,
         padding: 12,
         displayColors: false,
