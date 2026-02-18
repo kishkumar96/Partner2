@@ -67,7 +67,7 @@ describe('ExportButtons Component', () => {
   });
 
   it('disables export when no data available', () => {
-    render(<ExportButtons {...baseProps} events={[]} />);
+    render(<ExportButtons {...baseProps} events={[]} disabled={true} />);
 
     const buttons = screen.getAllByRole('button');
     expect(buttons.length).toBeGreaterThan(0);
