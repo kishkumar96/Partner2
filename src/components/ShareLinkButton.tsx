@@ -12,16 +12,15 @@ import { Share2, Check } from 'lucide-react';
 import { MapURLState, copyShareableUrl } from '@/utils/urlState';
 
 interface ShareLinkButtonProps {
-  /** Current map state to share */
   mapState: MapURLState;
-  /** Optional className for styling */
+  path: string;
   className?: string;
-  /** Show icon only (compact mode) */
   compact?: boolean;
 }
 
 export default function ShareLinkButton({
   mapState,
+  path,
   className = '',
   compact = false,
 }: ShareLinkButtonProps) {
@@ -29,7 +28,7 @@ export default function ShareLinkButton({
   const [showTooltip, setShowTooltip] = useState(false);
 
   const handleShare = async () => {
-    const success = await copyShareableUrl(mapState);
+    const success = await copyShareableUrl(mapState, path);
 
     if (success) {
       setCopied(true);
@@ -55,16 +54,12 @@ export default function ShareLinkButton({
         aria-label="Copy link to current view"
       >
         {copied ? <Check className="w-4 h-4 text-green-400" /> : <Share2 className="w-4 h-4" />}
-        {!compact && (
-          <span className="text-sm font-medium">{copied ? 'Copied!' : 'Share Link'}</span>
-        )}
+        {!compact && <span className="text-sm font-medium">{copied ? 'Copied!' : 'Share'}</span>}
       </button>
 
-      {/* Tooltip */}
       {showTooltip && !copied && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-xs rounded-lg shadow-lg whitespace-nowrap pointer-events-none z-50 border border-slate-700">
-          Copy link to current view
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-slate-200 text-xs rounded whitespace-nowrap">
+          Copy shareable link
         </div>
       )}
     </div>
