@@ -222,6 +222,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     }
 
     setHasRestoredMapView(true);
+    hasLoadedFromUrl.current = true;
   }, [mapInstance, hasRestoredMapView, urlState.center, urlState.zoom]);
 
   /**

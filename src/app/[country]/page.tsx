@@ -5,15 +5,16 @@ import { COUNTRIES } from '@/types/thredds';
 import { SLUG_TO_CODE, CODE_TO_SLUG } from '@/utils/countrySlug';
 
 interface CountryPageProps {
-  params: { country: string };
+  params: Promise<{ country: string }>;
 }
 
 export function generateStaticParams() {
   return Object.values(CODE_TO_SLUG).map(country => ({ country }));
 }
 
-export function generateMetadata({ params }: CountryPageProps): Metadata {
-  const countryCode = SLUG_TO_CODE[params.country];
+export async function generateMetadata({ params }: CountryPageProps): Promise<Metadata> {
+  const { country } = await params;
+  const countryCode = SLUG_TO_CODE[country];
 
   if (!countryCode) {
     return {
@@ -22,16 +23,17 @@ export function generateMetadata({ params }: CountryPageProps): Metadata {
     };
   }
 
-  const country = COUNTRIES[countryCode];
+  const countryInfo = COUNTRIES[countryCode];
 
   return {
-    title: `${country.name} Climate Risk Dashboard`,
-    description: `Climate risk analytics, hazards, and impact view for ${country.fullName}.`,
+    title: `${countryInfo.name} Climate Risk Dashboard`,
+    description: `Climate risk analytics, hazards, and impact view for ${countryInfo.fullName}.`,
   };
 }
 
-export default function CountryPage({ params }: CountryPageProps) {
-  const countryCode = SLUG_TO_CODE[params.country];
+export default async function CountryPage({ params }: CountryPageProps) {
+  const { country } = await params;
+  const countryCode = SLUG_TO_CODE[country];
 
   if (!countryCode) {
     notFound();
