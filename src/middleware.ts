@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { CODE_TO_SLUG } from '@/utils/countrySlug';
-import type { CountryCode } from '@/types/thredds';
+import { getCountrySlugFromCode } from '@/utils/countrySlug';
 
 export function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
   if (pathname === '/') {
     const country = searchParams.get('country');
-    const isValidCountry = country !== null && country in CODE_TO_SLUG;
-    const slug = isValidCountry ? CODE_TO_SLUG[country as CountryCode] : 'vanuatu';
+    const slug = country !== null ? getCountrySlugFromCode(country) : null;
 
     const nextUrl = request.nextUrl.clone();
-    nextUrl.pathname = `/${slug}`;
+    nextUrl.pathname = `/${slug ?? 'vanuatu'}`;
     nextUrl.searchParams.delete('country');
     return NextResponse.redirect(nextUrl);
   }

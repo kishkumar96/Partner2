@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import DashboardView from '@/components/DashboardView';
 import { COUNTRIES } from '@/types/thredds';
-import { SLUG_TO_CODE, CODE_TO_SLUG } from '@/utils/countrySlug';
+import { CODE_TO_SLUG, getCountryCodeFromSlug } from '@/utils/countrySlug';
 
 interface CountryPageProps {
   params: Promise<{ country: string }>;
@@ -14,9 +14,9 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: CountryPageProps): Promise<Metadata> {
   const { country } = await params;
-  const countryCode = SLUG_TO_CODE[country];
+  const countryCode = getCountryCodeFromSlug(country);
 
-  if (!countryCode) {
+  if (!countryCode || !Object.prototype.hasOwnProperty.call(COUNTRIES, countryCode)) {
     return {
       title: 'Country Not Found',
       description: 'Requested country route was not found.',
@@ -33,9 +33,9 @@ export async function generateMetadata({ params }: CountryPageProps): Promise<Me
 
 export default async function CountryPage({ params }: CountryPageProps) {
   const { country } = await params;
-  const countryCode = SLUG_TO_CODE[country];
+  const countryCode = getCountryCodeFromSlug(country);
 
-  if (!countryCode) {
+  if (!countryCode || !Object.prototype.hasOwnProperty.call(COUNTRIES, countryCode)) {
     notFound();
   }
 
