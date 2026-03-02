@@ -1,35 +1,27 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getCountrySlugFromCode } from '@/utils/countrySlug';
 
-/**
- * Middleware for optimizing data file delivery
- * - Adds aggressive caching headers for static data
- * - Enables compression hints
- * - Adds performance headers
- */
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
 
-  // Handle data file requests
+  if (pathname === '/') {
+    const country = searchParams.get('country');
+    const slug = country !== null ? getCountrySlugFromCode(country) : null;
+
+    const nextUrl = request.nextUrl.clone();
+    nextUrl.pathname = `/${slug ?? 'vanuatu'}`;
+    nextUrl.searchParams.delete('country');
+    return NextResponse.redirect(nextUrl);
+  }
+
   if (pathname.endsWith('.geojson') || pathname.endsWith('.csv')) {
     const response = NextResponse.next();
-
-    // Aggressive caching for data files (1 hour, revalidate in background for 24 hours)
     response.headers.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
-
-    // Enable compression
-    response.headers.set('Content-Encoding', 'gzip');
-
-    // CORS for data access
     response.headers.set('Access-Control-Allow-Origin', '*');
     response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-
-    // Performance hints
     response.headers.set('X-Content-Type-Options', 'nosniff');
-
-    // Timing headers to help debug performance
-    response.headers.set('Server-Timing', `middleware;dur=0`);
-
+    response.headers.set('Server-Timing', 'middleware;dur=0');
     return response;
   }
 
