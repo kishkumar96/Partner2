@@ -17,7 +17,13 @@ export function middleware(request: NextRequest) {
 
   if (pathname.endsWith('.geojson') || pathname.endsWith('.csv')) {
     const response = NextResponse.next();
-    response.headers.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    // In dev, never cache data files — prevents the browser from serving stale 404s
+    // after files are added to public/. In production, cache for 1 hour.
+    const isDev = process.env.NODE_ENV === 'development';
+    response.headers.set(
+      'Cache-Control',
+      isDev ? 'no-store' : 'public, max-age=3600, stale-while-revalidate=86400'
+    );
     response.headers.set('Access-Control-Allow-Origin', '*');
     response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     response.headers.set('X-Content-Type-Options', 'nosniff');

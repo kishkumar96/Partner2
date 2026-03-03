@@ -24,6 +24,7 @@ import {
   VolumeX,
   Repeat,
 } from 'lucide-react';
+import { unwrapAntimeridianLine } from '@/utils/realDataLoader';
 import {
   CycloneForecastPoint,
   getCategoryColor,
@@ -1184,7 +1185,9 @@ export default function CycloneAnimationLayer({
               properties: {},
               geometry: {
                 type: 'LineString',
-                coordinates: forecastTrack.map(p => [p.longitude, p.latitude]),
+                coordinates: unwrapAntimeridianLine(
+                  forecastTrack.map(p => [p.longitude, p.latitude]) as [number, number][]
+                ),
               },
             },
           });

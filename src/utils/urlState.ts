@@ -159,10 +159,7 @@ export function buildShareableUrl(state: MapURLState, path: string, baseUrl?: st
   return `${base}${path}${query ? `?${query}` : ''}`;
 }
 
-export async function copyShareableUrl(
-  state: MapURLState,
-  path: string
-): Promise<boolean> {
+export async function copyShareableUrl(state: MapURLState, path: string): Promise<boolean> {
   if (typeof window === 'undefined' || !navigator.clipboard) {
     return false;
   }

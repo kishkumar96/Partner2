@@ -6,7 +6,7 @@ import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { FilterState } from '@/types';
 import { buildWMSImageUrl, getLayersForCountry, RealWMSLayer } from '@/data/realThreddsLayers';
 import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
-import { loadCycloneTrackData } from '@/utils/realDataLoader';
+import { loadCycloneTrackData, DATA_PATH, COUNTRY_CYCLONE_CONFIG } from '@/utils/realDataLoader';
 import { generateForecastCone } from '@/utils/forecastCone';
 
 // Mapping between filter hazard IDs and WMS layer hazard types
@@ -140,8 +140,13 @@ export default function RealDataLayers({
       try {
         console.log(`Loading cyclone tracks from real data...`);
 
+        // Build country-specific file paths
+        const effectiveCountry = countryCode ?? 'VU';
+        const trackFile = `${DATA_PATH[effectiveCountry]}/${COUNTRY_CYCLONE_CONFIG[effectiveCountry].trackFile}`;
+        const forecastFile = `${DATA_PATH[effectiveCountry]}/${COUNTRY_CYCLONE_CONFIG[effectiveCountry].forecastFile}`;
+
         // Load from public directory using dataLoader (handles basePath)
-        const geojson = await loadCycloneTrackData();
+        const geojson = await loadCycloneTrackData({ trackFile });
         if (!geojson) {
           console.warn('Could not load cyclone track data');
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
@@ -152,7 +157,7 @@ export default function RealDataLayers({
         const layerId = 'cyclone-tracks-layer-real';
 
         // Also load forecast data for cone visualization
-        const forecastData = await loadCycloneForecastTrack();
+        const forecastData = await loadCycloneForecastTrack({ forecastFile });
         const forecastConeData = forecastData ? generateForecastCone(forecastData) : null;
 
         // Remove existing layers and source if present

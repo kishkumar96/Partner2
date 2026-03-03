@@ -7,25 +7,133 @@ import type { RealDataLoadResult } from '@/types/realData';
 import { loadCycloneForecastTrack } from './cycloneAnimationLoader';
 import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
+import { CountryCode } from '@/types/thredds';
+
+// ---------------------------------------------------------------------------
+// Per-country public/ subdirectory paths (must match folder names under public/)
+// ---------------------------------------------------------------------------
+export const DATA_PATH: Record<CountryCode, string> = {
+  VU: '/vanuatu',
+  WS: '/samoa',
+  TO: '/tonga',
+  CK: '/cook-islands',
+};
+
+interface CountryCycloneConfig {
+  trackFile: string; // relative to its country DATA_PATH
+  forecastFile: string; // relative to its country DATA_PATH
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  bbox: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
+  center: { lat: number; lng: number };
+}
+
+export const COUNTRY_CYCLONE_CONFIG: Record<CountryCode, CountryCycloneConfig> = {
+  VU: {
+    trackFile: 'cyclone-track.geojson',
+    forecastFile: 'cyclone-lola-forecast.csv',
+    eventId: 'tc-lola-2024',
+    eventName: 'Tropical Cyclone Lola',
+    eventDate: '2024-01-30',
+    bbox: [165, -21, 170, -13],
+    center: { lat: -17.7333, lng: 168.3167 },
+  },
+  WS: {
+    trackFile: 'cyclone-track-gita.geojson',
+    forecastFile: 'Official_Forecast_Track_GITA_SA.csv',
+    eventId: 'tc-gita-samoa-2018',
+    eventName: 'Tropical Cyclone Gita',
+    eventDate: '2018-02-09',
+    bbox: [-173, -15, -171, -13],
+    center: { lat: -13.759, lng: -172.1046 },
+  },
+  TO: {
+    trackFile: 'cyclone-track.geojson',
+    forecastFile: 'cyclone-forecast.csv',
+    eventId: 'tc-gita-tonga-2018',
+    eventName: 'Tropical Cyclone Gita',
+    eventDate: '2018-02-12',
+    bbox: [-177, -23, -173, -18],
+    center: { lat: -21.179, lng: -175.198 },
+  },
+  CK: {
+    trackFile: 'cyclone-track.geojson',
+    forecastFile: 'cyclone-forecast.csv',
+    eventId: 'tc-ck-event',
+    eventName: 'Tropical Cyclone Event',
+    eventDate: '2024-01-01',
+    bbox: [-161, -23, -157, -18],
+    center: { lat: -21.2367, lng: -159.7777 },
+  },
+};
 
 /**
- * Load cyclone track data from the geojson file
+ * Unwraps a LineString's longitude coordinates across the antimeridian.
+ * When adjacent points differ by more than 180°, adjusts by ±360° to keep
+ * the path continuous — prevents MapLibre from drawing a line across the globe.
  */
-export async function loadCycloneTrackData(options: DataLoaderOptions = {}) {
-  const { data } = await loadGeoJSON('/cyclone-track.geojson', {
+export function unwrapAntimeridianLine(coords: [number, number][]): [number, number][] {
+  if (coords.length < 2) return coords;
+  const result: [number, number][] = [[...coords[0]] as [number, number]];
+  let offset = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const prevUnwrapped = result[i - 1][0];
+    const rawLon = coords[i][0];
+    const currWithOffset = rawLon + offset;
+    const diff = currWithOffset - prevUnwrapped;
+    if (diff > 180) {
+      offset -= 360;
+    } else if (diff < -180) {
+      offset += 360;
+    }
+    result.push([rawLon + offset, coords[i][1]]);
+  }
+  return result;
+}
+
+/**
+ * Load cyclone track data from the geojson file.
+ * Automatically unwraps antimeridian crossings so MapLibre renders
+ * the track as a continuous line rather than a globe-spanning artifact.
+ * @param options.trackFile - Full relative path to the track file (e.g. '/vanuatu/cyclone-track.geojson')
+ */
+export async function loadCycloneTrackData(
+  options: DataLoaderOptions & { trackFile?: string } = {}
+) {
+  const { trackFile = '/vanuatu/cyclone-track.geojson', ...loaderOptions } = options;
+  const { data } = await loadGeoJSON(trackFile, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
+
+  // Unwrap antimeridian crossings in LineString/MultiLineString geometries
+  if (data) {
+    const unwrapped = JSON.parse(JSON.stringify(data));
+    for (const feature of unwrapped.features ?? []) {
+      if (feature.geometry?.type === 'LineString') {
+        feature.geometry.coordinates = unwrapAntimeridianLine(
+          feature.geometry.coordinates as [number, number][]
+        );
+      } else if (feature.geometry?.type === 'MultiLineString') {
+        feature.geometry.coordinates = (feature.geometry.coordinates as [number, number][][]).map(
+          unwrapAntimeridianLine
+        );
+      }
+    }
+    return unwrapped;
+  }
   return data;
 }
 
 /**
  * Load regional impacts from geojson file (9.2MB - cached)
  */
-export async function loadRegionalImpacts(options: DataLoaderOptions = {}) {
-  const { data } = await loadGeoJSON('/regional-impacts.geojson', {
+export async function loadRegionalImpacts(options: DataLoaderOptions & { basePath?: string } = {}) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data } = await loadGeoJSON(`${basePath}/regional-impacts.geojson`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return data;
 }
@@ -33,10 +141,13 @@ export async function loadRegionalImpacts(options: DataLoaderOptions = {}) {
 /**
  * Load regional impacts by sector from geojson file (2.6MB - cached)
  */
-export async function loadRegionalImpactsBySector(options: DataLoaderOptions = {}) {
-  const { data } = await loadGeoJSON('/regional-impacts-by-sector.geojson', {
+export async function loadRegionalImpactsBySector(
+  options: DataLoaderOptions & { basePath?: string } = {}
+) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data } = await loadGeoJSON(`${basePath}/regional-impacts-by-sector.geojson`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return data;
 }
@@ -44,10 +155,13 @@ export async function loadRegionalImpactsBySector(options: DataLoaderOptions = {
 /**
  * Load exposure by cluster data
  */
-export async function loadExposureByCluster(options: DataLoaderOptions = {}) {
-  const { data } = await loadGeoJSON('/exposure-by-cluster.geojson', {
+export async function loadExposureByCluster(
+  options: DataLoaderOptions & { basePath?: string } = {}
+) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data } = await loadGeoJSON(`${basePath}/exposure-by-cluster.geojson`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return data;
 }
@@ -57,10 +171,11 @@ export async function loadExposureByCluster(options: DataLoaderOptions = {}) {
 /**
  * Load national summary CSV data
  */
-export async function loadNationalSummary(options: DataLoaderOptions = {}) {
-  const { data: csvText } = await loadTextData('/national-summary.csv', {
+export async function loadNationalSummary(options: DataLoaderOptions & { basePath?: string } = {}) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data: csvText } = await loadTextData(`${basePath}/national-summary.csv`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
 }
@@ -68,10 +183,13 @@ export async function loadNationalSummary(options: DataLoaderOptions = {}) {
 /**
  * Load impact by asset type CSV data
  */
-export async function loadImpactByAssetType(options: DataLoaderOptions = {}) {
-  const { data: csvText } = await loadTextData('/impact-by-asset-type.csv', {
+export async function loadImpactByAssetType(
+  options: DataLoaderOptions & { basePath?: string } = {}
+) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data: csvText } = await loadTextData(`${basePath}/impact-by-asset-type.csv`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
 }
@@ -79,10 +197,11 @@ export async function loadImpactByAssetType(options: DataLoaderOptions = {}) {
 /**
  * Load impact by sector CSV data
  */
-export async function loadImpactBySector(options: DataLoaderOptions = {}) {
-  const { data: csvText } = await loadTextData('/impact-by-sector.csv', {
+export async function loadImpactBySector(options: DataLoaderOptions & { basePath?: string } = {}) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data: csvText } = await loadTextData(`${basePath}/impact-by-sector.csv`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
 }
@@ -90,10 +209,11 @@ export async function loadImpactBySector(options: DataLoaderOptions = {}) {
 /**
  * Load regional summary CSV data
  */
-export async function loadRegionalSummary(options: DataLoaderOptions = {}) {
-  const { data: csvText } = await loadTextData('/regional-summary.csv', {
+export async function loadRegionalSummary(options: DataLoaderOptions & { basePath?: string } = {}) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data: csvText } = await loadTextData(`${basePath}/regional-summary.csv`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
 }
@@ -101,10 +221,13 @@ export async function loadRegionalSummary(options: DataLoaderOptions = {}) {
 /**
  * Load regional summary by sector CSV data
  */
-export async function loadRegionalSummaryBySector(options: DataLoaderOptions = {}) {
-  const { data: csvText } = await loadTextData('/regional-summary-by-sector.csv', {
+export async function loadRegionalSummaryBySector(
+  options: DataLoaderOptions & { basePath?: string } = {}
+) {
+  const { basePath = '/vanuatu', ...loaderOptions } = options;
+  const { data: csvText } = await loadTextData(`${basePath}/regional-summary-by-sector.csv`, {
     cache: true,
-    signal: options.signal,
+    signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
 }
@@ -175,8 +298,10 @@ export function convertRegionalImpactsToRegionalImpacts(
 
   const regionalImpacts: RegionalImpact[] = geojson.features
     .filter((feature: any) => {
+      // GeoJSON spec permits null geometry (feature exists but has no spatial extent).
+      // RiskScape outputs sometimes include summary/total rows as null-geometry features.
+      // Silently skip these — they carry no renderable geometry.
       if (!feature || !feature.geometry || !feature.properties) {
-        console.warn('Skipping feature with missing geometry or properties');
         return false;
       }
       return true;
@@ -459,14 +584,20 @@ function processAssetExposureData(exposureByCluster: any) {
 export interface RealDataLoadOptions {
   signal?: AbortSignal;
   includeDamagedAssets?: boolean;
+  /** Country to load data for. Defaults to 'VU' (Vanuatu). */
+  countryCode?: CountryCode;
 }
 
 export async function loadAllRealData(
   options: RealDataLoadOptions = {}
 ): Promise<RealDataLoadResult> {
-  const { signal, includeDamagedAssets = true } = options;
+  const { signal, includeDamagedAssets = true, countryCode = 'VU' } = options;
+  const basePath = DATA_PATH[countryCode];
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
+  const trackFile = `${basePath}/${cycloneConfig.trackFile}`;
+  const forecastFile = `${basePath}/${cycloneConfig.forecastFile}`;
   if (process.env.NODE_ENV !== 'production') {
-    console.log('Loading real data from files...');
+    console.log(`Loading real data for ${countryCode} from ${basePath}...`);
   }
 
   const [
@@ -483,26 +614,26 @@ export async function loadAllRealData(
     damagedBuildings,
     damagedRoads,
   ] = await Promise.all([
-    loadCycloneTrackData({ signal }),
-    loadCycloneForecastTrack({ signal }),
-    loadRegionalImpacts({ signal }),
-    loadRegionalImpactsBySector({ signal }), // Load sector-specific regional data
-    loadExposureByCluster({ signal }),
-    loadNationalSummary({ signal }),
-    loadImpactByAssetType({ signal }),
-    loadImpactBySector({ signal }),
-    loadRegionalSummary({ signal }),
-    loadRegionalSummaryBySector({ signal }),
-    includeDamagedAssets ? loadDamagedBuildings({ signal }) : Promise.resolve(null),
-    includeDamagedAssets ? loadDamagedRoads({ signal }) : Promise.resolve(null),
+    loadCycloneTrackData({ signal, trackFile }),
+    loadCycloneForecastTrack({ signal, forecastFile }),
+    loadRegionalImpacts({ signal, basePath }),
+    loadRegionalImpactsBySector({ signal, basePath }), // Load sector-specific regional data
+    loadExposureByCluster({ signal, basePath }),
+    loadNationalSummary({ signal, basePath }),
+    loadImpactByAssetType({ signal, basePath }),
+    loadImpactBySector({ signal, basePath }),
+    loadRegionalSummary({ signal, basePath }),
+    loadRegionalSummaryBySector({ signal, basePath }),
+    includeDamagedAssets ? loadDamagedBuildings({ signal, countryCode }) : Promise.resolve(null),
+    includeDamagedAssets ? loadDamagedRoads({ signal, countryCode }) : Promise.resolve(null),
   ]);
 
-  // Create a SINGLE event for TC Lola (the actual cyclone event)
-  const tcLolaEventId = 'tc-lola-2024';
+  // Create a SINGLE event for the country's primary cyclone event
+  const primaryEventId = cycloneConfig.eventId;
 
   // Convert regional impacts to RegionalImpact objects
   const regionalImpactsData = regionalImpacts
-    ? convertRegionalImpactsToRegionalImpacts(regionalImpacts, tcLolaEventId)
+    ? convertRegionalImpactsToRegionalImpacts(regionalImpacts, primaryEventId)
     : [];
 
   // Calculate national aggregated statistics from regional impacts
@@ -525,26 +656,23 @@ export async function loadAllRealData(
           ? 'medium'
           : 'low';
 
-  // Create the single TC Lola event
-  const tcLolaEvent: Event = {
-    id: tcLolaEventId,
-    name: 'Tropical Cyclone Lola',
-    date: '2024-01-30',
+  // Create the single primary cyclone event
+  const primaryEvent: Event = {
+    id: primaryEventId,
+    name: cycloneConfig.eventName,
+    date: cycloneConfig.eventDate,
     hazardId: 'tropical-cyclone',
-    countryCode: 'VU',
+    countryCode,
     totalAffectedPopulation,
     totalEconomicDamage,
     affectedRegions,
     severity: overallSeverity,
-    location: {
-      lat: -17.7333, // Vanuatu center (or could use landfall point)
-      lng: 168.3167,
-    },
+    location: cycloneConfig.center,
     regionalImpacts: regionalImpactsData,
   };
 
   // Events array now contains only ONE event
-  const events = [tcLolaEvent];
+  const events = [primaryEvent];
 
   // Also create sector-specific events for filtering (backward compatibility)
   // This allows sector filtering to work correctly
@@ -566,7 +694,7 @@ export async function loadAllRealData(
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Loaded ${events.length} event(s) from real data`);
     console.log(
-      `   - TC Lola: ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`
+      `   - ${cycloneConfig.eventName} (${countryCode}): ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`
     );
     console.log(`Loaded ${regionalImpactsData.length} regional impacts for TC Lola`);
     console.log(`Loaded ${exposureData.length} exposure records (sector-specific)`);
@@ -785,9 +913,13 @@ export function processWindIntensityData(nationalSummary: any): any {
  * Load damaged buildings from database API (preferred) or geojson file (fallback)
  * The database provides better performance for large datasets
  */
-export async function loadDamagedBuildings(options: { signal?: AbortSignal } = {}) {
-  const { signal } = options;
-  // Try API first (database) - Vanuatu bounding box
+export async function loadDamagedBuildings(
+  options: { signal?: AbortSignal; countryCode?: CountryCode } = {}
+) {
+  const { signal, countryCode = 'VU' } = options;
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
+  const basePath = DATA_PATH[countryCode];
+  // Try API first (database)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -798,11 +930,11 @@ export async function loadDamagedBuildings(options: { signal?: AbortSignal } = {
         signal.addEventListener('abort', () => controller.abort(), { once: true });
       }
     }
-    const bbox = [165, -21, 170, -13]; // Vanuatu bounds
+    const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
     let response: Response;
     try {
       response = await fetch(
-        `/partner2/api/buildings?bbox=${bbox.join(',')}&country=VU&limit=100000`,
+        `/partner2/api/buildings?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=100000`,
         { signal: controller.signal }
       );
     } finally {
@@ -821,8 +953,11 @@ export async function loadDamagedBuildings(options: { signal?: AbortSignal } = {
     );
   }
 
-  // Fallback to file (35MB - LARGE FILE - cached)
-  const { data } = await loadGeoJSON('/damaged-buildings.geojson', { cache: true, signal });
+  // Fallback to file (cached)
+  const { data } = await loadGeoJSON(`${basePath}/damaged-buildings.geojson`, {
+    cache: true,
+    signal,
+  });
   console.log('📁 Loaded buildings from FILE');
   return data;
 }
@@ -830,12 +965,16 @@ export async function loadDamagedBuildings(options: { signal?: AbortSignal } = {
 /**
  * Load damaged roads from database API (preferred) or geojson file (fallback)
  */
-export async function loadDamagedRoads(options: { signal?: AbortSignal } = {}) {
-  const { signal } = options;
-  // Try API first (database) - Vanuatu bounding box
+export async function loadDamagedRoads(
+  options: { signal?: AbortSignal; countryCode?: CountryCode } = {}
+) {
+  const { signal, countryCode = 'VU' } = options;
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
+  const basePath = DATA_PATH[countryCode];
+  // Try API first (database)
   try {
-    const bbox = [165, -21, 170, -13]; // Vanuatu bounds
-    const url = `/partner2/api/roads?bbox=${bbox.join(',')}&country=VU&limit=10000`;
+    const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
+    const url = `/partner2/api/roads?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=10000`;
     console.log('🔍 Attempting to load roads from API:', url);
 
     const controller = new AbortController();
@@ -876,7 +1015,10 @@ export async function loadDamagedRoads(options: { signal?: AbortSignal } = {}) {
 
   // Fallback to file (cached)
   console.log('📁 Falling back to damaged-roads.geojson file');
-  const { data } = await loadGeoJSON('/damaged-roads.geojson', { cache: true, signal });
+  const { data } = await loadGeoJSON(`${basePath}/damaged-roads.geojson`, {
+    cache: true,
+    signal,
+  });
   console.log(`📁 Loaded ${data?.features?.length || 0} roads from FILE`);
   return data;
 }

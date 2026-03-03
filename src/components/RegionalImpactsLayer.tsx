@@ -502,22 +502,31 @@ export default function RegionalImpactsLayer({
           map.off('mouseleave', fillLayerId, handlersRef.current.handleMouseLeave);
         }
 
-        // Remove layers and source
-        if (map.getLayer(fillLayerId)) {
-          map.removeLayer(fillLayerId);
-        }
-        if (map.getLayer(lineLayerId)) {
-          map.removeLayer(lineLayerId);
-        }
-        if (map.getSource(sourceId)) {
-          map.removeSource(sourceId);
+        // Remove layers and source — only when the style is still accessible.
+        // On full page unmount the map can be partially destroyed; isStyleLoaded()
+        // returns false (or throws) in that state, so we skip layer removal safely.
+        if (map.isStyleLoaded()) {
+          if (map.getLayer(fillLayerId)) {
+            map.removeLayer(fillLayerId);
+          }
+          if (map.getLayer(lineLayerId)) {
+            map.removeLayer(lineLayerId);
+          }
+          if (map.getSource(sourceId)) {
+            map.removeSource(sourceId);
+          }
         }
 
-        // Reset flags
+        // Reset flags regardless
         layersAddedRef.current = false;
         isLoadingRef.current = false;
       } catch (e) {
-        console.warn('Error cleaning up regional impacts layers:', e);
+        // Any error here means the map was destroyed or style removed before cleanup ran.
+        // MapLibre throws 'There is no style added to the map.' (a plain Error, not TypeError)
+        // when isStyleLoaded() is called after the style has been torn down. This is expected
+        // on full page unmount and is not actionable — suppress all cleanup errors silently.
+        layersAddedRef.current = false;
+        isLoadingRef.current = false;
       }
     };
   }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect, mapStyle]); // styleChangeCounter needed to recreate layers after basemap changes

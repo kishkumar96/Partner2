@@ -48,14 +48,17 @@ export interface CycloneForecastPoint {
 /**
  * Load cyclone forecast track data with schema validation
  * Returns validated data with detailed error reporting
+ * @param options.forecastFile - Full relative path to the forecast CSV
+ *   (e.g. '/vanuatu/cyclone-lola-forecast.csv'). Defaults to Vanuatu.
  */
 export async function loadCycloneForecastTrack(
-  options: DataLoaderOptions = {}
+  options: DataLoaderOptions & { forecastFile?: string } = {}
 ): Promise<CycloneForecastPoint[] | null> {
+  const { forecastFile = '/vanuatu/cyclone-lola-forecast.csv', ...loaderOptions } = options;
   try {
-    const { data: csvText, error } = await loadTextData('/cyclone-lola-forecast.csv', {
+    const { data: csvText, error } = await loadTextData(forecastFile, {
       cache: true,
-      signal: options.signal,
+      signal: loaderOptions.signal,
     });
     if (!csvText) {
       // Don't log error if request was aborted (expected behavior during cleanup)
@@ -83,41 +86,50 @@ export async function loadCycloneForecastTrack(
 
     // Transform validated rows to CycloneForecastPoint format
     if (!validationResult.data || validationResult.data.length === 0) {
-      console.error('No valid cyclone forecast points after validation');
+      // Expected for stub/empty CSVs (e.g. countries with no cyclone data yet)
+      console.warn('No cyclone forecast data available (empty or header-only CSV)');
       return null;
     }
 
-    const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => ({
-      time: new Date(row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"]),
-      timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
-      latitude: row.Latitude,
-      longitude: row.Longitude,
-      category: row.Category,
-      pressure: row.Pressure,
-      meanWind: row.MeanWind,
-      windGust: row.WindGust,
-      uncertainty: row.Uncertainty,
-      galeRadiusNE: row.NEGaleRadius ?? 0,
-      galeRadiusSE: row.SEGaleRadius ?? 0,
-      galeRadiusSW: row.SWGaleRadius ?? 0,
-      galeRadiusNW: row.NWGaleRadius ?? 0,
-      stormRadiusNE: row.NEStormRadius ?? 0,
-      stormRadiusSE: row.SEStormRadius ?? 0,
-      stormRadiusSW: row.SWStormRadius ?? 0,
-      stormRadiusNW: row.NWStormRadius ?? 0,
-      hurricaneRadiusNE: row.NEHurricaneRadius ?? 0,
-      hurricaneRadiusSE: row.SEHurricaneRadius ?? 0,
-      hurricaneRadiusSW: row.SWHurricaneRadius ?? 0,
-      hurricaneRadiusNW: row.NWHurricaneRadius ?? 0,
-      eyeRadius: row.EyeRadius ?? 0,
-      eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
-      verticalExtent: row.VerticalExtent ?? 0,
-      pressureOCI: row.PressureOCI ?? 0,
-      radiusOCI: row.RadiusOCI ?? 0,
-      dvorakTNumber: row.FinalT ?? 0,
-      currentIntensity: row.CurrentIntensity ?? 0,
-      p5Wind: row.P5Wind ?? 0,
-    }));
+    const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => {
+      // RSMC Nadi uses 0-360° longitude convention for Pacific tracks.
+      // Normalise values >180 to negative so MapLibre renders them correctly.
+      const rawLon = row.Longitude;
+      const longitude = rawLon > 180 ? rawLon - 360 : rawLon;
+      return {
+        time: new Date(
+          row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"].replace(' ', 'T').replace(/Z?$/, 'Z')
+        ),
+        timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
+        latitude: row.Latitude,
+        longitude,
+        category: row.Category,
+        pressure: row.Pressure,
+        meanWind: row.MeanWind,
+        windGust: row.WindGust,
+        uncertainty: row.Uncertainty,
+        galeRadiusNE: row.NEGaleRadius ?? 0,
+        galeRadiusSE: row.SEGaleRadius ?? 0,
+        galeRadiusSW: row.SWGaleRadius ?? 0,
+        galeRadiusNW: row.NWGaleRadius ?? 0,
+        stormRadiusNE: row.NEStormRadius ?? 0,
+        stormRadiusSE: row.SEStormRadius ?? 0,
+        stormRadiusSW: row.SWStormRadius ?? 0,
+        stormRadiusNW: row.NWStormRadius ?? 0,
+        hurricaneRadiusNE: row.NEHurricaneRadius ?? 0,
+        hurricaneRadiusSE: row.SEHurricaneRadius ?? 0,
+        hurricaneRadiusSW: row.SWHurricaneRadius ?? 0,
+        hurricaneRadiusNW: row.NWHurricaneRadius ?? 0,
+        eyeRadius: row.EyeRadius ?? 0,
+        eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
+        verticalExtent: row.VerticalExtent ?? 0,
+        pressureOCI: row.PressureOCI ?? 0,
+        radiusOCI: row.RadiusOCI ?? 0,
+        dvorakTNumber: row.FinalT ?? 0,
+        currentIntensity: row.CurrentIntensity ?? 0,
+        p5Wind: row.P5Wind ?? 0,
+      };
+    });
 
     console.log(`Loaded ${points.length} cyclone forecast points`);
     if (validationResult.warnings && validationResult.warnings.length > 0) {

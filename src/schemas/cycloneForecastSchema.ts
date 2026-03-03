@@ -13,11 +13,16 @@ export const CycloneForecastRowSchema = z.object({
   // Core temporal and spatial data
   "Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']": z.string(),
   Latitude: z.coerce.number().min(-90).max(90),
-  Longitude: z.coerce.number().min(-180).max(180),
+  // Pacific cyclone tracks from RSMC Nadi use the 0-360° convention (e.g. Tonga at
+  // ~185°, Samoa at ~188° crossing the antimeridian). Allow up to 360; the loader
+  // normalises values >180 to negative before rendering.
+  Longitude: z.coerce.number().min(-180).max(360),
 
   // Intensity metrics
   Symbol: z.coerce.number().nullable().optional(),
-  Category: z.coerce.number().min(0).max(5),
+  // Negative categories represent pre-tropical-storm phases (disturbances/depressions)
+  // e.g. Samoa TC Gita CSV uses -3 before the storm develops
+  Category: z.coerce.number().min(-10).max(5),
   Pressure: z.coerce.number().min(800).max(1020), // hPa
   PressureOCI: z.coerce.number().nullable().optional(), // Outermost closed isobar
 

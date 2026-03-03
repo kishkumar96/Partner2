@@ -23,6 +23,18 @@ function getFullUrl(url: string): string {
   return url;
 }
 
+/**
+ * Ensure any abort reason becomes a DOMException with name 'AbortError'.
+ * When abort() is called with a plain string (e.g. 'Component unmounted'),
+ * fetch rejects with that string wrapped as a generic Error whose name is 'Error',
+ * bypassing the lastError.name !== 'AbortError' filter.  Wrapping it here keeps
+ * the filtering consistent across all callers.
+ */
+function toAbortReason(reason: unknown): DOMException {
+  if (reason instanceof DOMException) return reason;
+  return new DOMException(String(reason ?? 'Request cancelled'), 'AbortError');
+}
+
 export interface DataLoaderOptions {
   /** Number of retry attempts (default: 0) */
   retries?: number;
@@ -76,15 +88,11 @@ export async function loadData<T>(
       const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
       if (signal) {
         if (signal.aborted) {
-          controller.abort(signal.reason || new Error('Request cancelled'));
+          controller.abort(toAbortReason(signal.reason));
         } else {
-          signal.addEventListener(
-            'abort',
-            () => {
-              controller.abort(signal.reason || new Error('Request cancelled'));
-            },
-            { once: true }
-          );
+          signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
+            once: true,
+          });
         }
       }
 
@@ -162,15 +170,11 @@ export async function loadTextData(
       const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
       if (signal) {
         if (signal.aborted) {
-          controller.abort(signal.reason || new Error('Request cancelled'));
+          controller.abort(toAbortReason(signal.reason));
         } else {
-          signal.addEventListener(
-            'abort',
-            () => {
-              controller.abort(signal.reason || new Error('Request cancelled'));
-            },
-            { once: true }
-          );
+          signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
+            once: true,
+          });
         }
       }
 

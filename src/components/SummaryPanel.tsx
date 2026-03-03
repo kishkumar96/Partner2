@@ -1799,10 +1799,16 @@ export default function SummaryPanel({
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
               Sector and Regional Structure
             </h4>
-            <AdvancedCharts
-              regionalSummary={derivedRegionalSummary}
-              regionalSummaryBySector={filteredRegionalSummaryBySector}
-            />
+            {derivedRegionalSummary.length > 0 || filteredRegionalSummaryBySector.length > 0 ? (
+              <AdvancedCharts
+                regionalSummary={derivedRegionalSummary}
+                regionalSummaryBySector={filteredRegionalSummaryBySector}
+              />
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-6 italic">
+                No regional sector data available
+              </p>
+            )}
           </div>
         </div>
 

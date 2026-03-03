@@ -147,8 +147,12 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
 
-  const { hazards: allHazards, sectors: allSectors, provinces, districts } =
-    COUNTRY_CONFIGS[selectedCountry];
+  const {
+    hazards: allHazards,
+    sectors: allSectors,
+    provinces,
+    districts,
+  } = COUNTRY_CONFIGS[selectedCountry];
 
   // Real data state
   const [events, setEvents] = useState<Event[]>([]); // Master events (e.g., 1 for TC Lola)
@@ -649,6 +653,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
       const realData = await loadAllRealData({
         signal: controller.signal,
         includeDamagedAssets: false,
+        countryCode: selectedCountry,
       });
 
       // Check if this request is still current (not superseded by a newer request)
@@ -1243,7 +1248,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
                   </button>
                   <CountrySelector
                     selectedCountry={selectedCountry}
-                    onCountryChange={(newCountry) => {
+                    onCountryChange={newCountry => {
                       const params = new URLSearchParams(searchParams.toString());
                       const query = params.toString();
                       router.push(`/${CODE_TO_SLUG[newCountry]}${query ? `?${query}` : ''}`);
