@@ -808,6 +808,7 @@ export default function MapView({
             styleChangeCounter={styleChangeCounter}
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
+            countryCode={selectedCountry}
           />
           <IntensityHeatmapLayer
             map={map.current}

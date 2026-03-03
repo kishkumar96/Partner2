@@ -15,6 +15,8 @@ import {
 import { getBeforeLayerId } from '@/utils/layerOrder';
 import { debugLogger } from '@/utils/debugLogger';
 import { loadGeoJSON } from '@/utils/dataLoader';
+import { CountryCode } from '@/types/thredds';
+import { DATA_PATH } from '@/utils/realDataLoader';
 
 interface RegionalImpactsLayerProps {
   map: MapLibreMap | null;
@@ -23,6 +25,7 @@ interface RegionalImpactsLayerProps {
   selectedRegion?: string | null;
   onRegionSelect?: (regionId: string | null) => void;
   styleChangeCounter?: number;
+  countryCode?: CountryCode | null;
 }
 
 export default function RegionalImpactsLayer({
@@ -32,6 +35,7 @@ export default function RegionalImpactsLayer({
   selectedRegion = null,
   onRegionSelect,
   styleChangeCounter = 0,
+  countryCode = null,
 }: RegionalImpactsLayerProps) {
   // Store event handlers as refs to enable proper cleanup
   const handlersRef = useRef<{
@@ -44,6 +48,7 @@ export default function RegionalImpactsLayer({
   const dataCache = useRef<{
     geojson?: any;
     sectorGeojson?: any;
+    cachedCountry?: CountryCode | null;
   }>({});
 
   // Track if we're currently loading to prevent race conditions
@@ -92,7 +97,14 @@ export default function RegionalImpactsLayer({
         // Use cached data if available to avoid refetching on style changes
         let geojson, sectorGeojson;
 
-        if (dataCache.current.geojson && dataCache.current.sectorGeojson) {
+        const effectiveCountry = countryCode ?? 'VU';
+        const basePath = DATA_PATH[effectiveCountry];
+
+        if (
+          dataCache.current.geojson &&
+          dataCache.current.sectorGeojson &&
+          dataCache.current.cachedCountry === effectiveCountry
+        ) {
           console.log('✅ Using cached regional impacts data');
           geojson = dataCache.current.geojson;
           sectorGeojson = dataCache.current.sectorGeojson;
@@ -105,8 +117,8 @@ export default function RegionalImpactsLayer({
 
           console.log('🔄 Fetching regional impacts data from server...');
           const [regionalResult, sectorResult] = await Promise.all([
-            loadGeoJSON('/regional-impacts.geojson', { cache: true }),
-            loadGeoJSON('/regional-impacts-by-sector.geojson', { cache: true }),
+            loadGeoJSON(`${basePath}/regional-impacts.geojson`, { cache: true }),
+            loadGeoJSON(`${basePath}/regional-impacts-by-sector.geojson`, { cache: true }),
           ]);
 
           if (!mountedRef.current) {
@@ -140,7 +152,7 @@ export default function RegionalImpactsLayer({
           sectorGeojson = sectorResult.data || null;
 
           // Cache for future use
-          dataCache.current = { geojson, sectorGeojson };
+          dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
           console.log(`✅ Cached regional impacts data (${geojson.features?.length || 0} regions)`);
         }
 
@@ -529,7 +541,7 @@ export default function RegionalImpactsLayer({
         isLoadingRef.current = false;
       }
     };
-  }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect, mapStyle]); // styleChangeCounter needed to recreate layers after basemap changes
+  }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect, mapStyle, countryCode]); // styleChangeCounter needed to recreate layers after basemap changes
 
   // Separate effect to update colors when style changes (without recreating layers)
   useEffect(() => {
