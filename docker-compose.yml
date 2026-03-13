@@ -8,6 +8,10 @@ services:
       - "3112:3112"
     environment:
       - NODE_ENV=production
+      - PORT=3112
+      - HOSTNAME=0.0.0.0
+      # Copy .env.example → .env.production and update these values before deploying
+      - NEXT_PUBLIC_APP_URL=http://localhost:3112/partner2
     restart: unless-stopped
     networks:
       - app-network
