@@ -11,11 +11,60 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { resolveCountryCode } from '@/lib/countryAuth';
+import { ensureCountryApiAccessEnhanced } from '@/lib/countryApiAuth';
+import type { CountryCode } from '@/types/thredds';
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
 
+const DB_CONNECT_TIMEOUT_MS = 2000;
+const DB_QUERY_TIMEOUT_MS = 5000;
+const DB_FAILURE_COOLDOWN_MS = 30_000;
+const DB_LOG_THROTTLE_MS = 10_000;
+
+let dbUnavailableUntil = 0;
+let lastDbErrorLogAt = 0;
+
+interface RoadRow {
+  id: number | string;
+  road_name: string | null;
+  damage: number | null;
+  road_type: string | null;
+  start_lat: number;
+  start_lon: number;
+  end_lat: number;
+  end_lon: number;
+}
+
+function isDbConnectivityError(error: unknown): boolean {
+  const err = error as NodeJS.ErrnoException | { code?: string; message?: string };
+  const code = err?.code;
+  const message = (err?.message || '').toLowerCase();
+  return (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'EHOSTUNREACH' ||
+    code === 'ECONNRESET' ||
+    // pg can surface timeout without an errno code
+    message.includes('timeout expired') ||
+    message.includes('connection timeout')
+  );
+}
+
+function maybeLogDbError(error: unknown): void {
+  const now = Date.now();
+  if (now - lastDbErrorLogAt >= DB_LOG_THROTTLE_MS) {
+    lastDbErrorLogAt = now;
+    console.error('Roads API DB connectivity error:', error);
+  }
+}
+
 export async function GET(request: NextRequest) {
+  let bbox: [number, number, number, number] | null = null;
+  let countryCode: CountryCode | null = null;
+
   try {
     const { searchParams } = new URL(request.url);
 
@@ -25,7 +74,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing bbox parameter' }, { status: 400 });
     }
 
-    const bbox = bboxStr.split(',').map(Number) as [number, number, number, number];
+    bbox = bboxStr.split(',').map(Number) as [number, number, number, number];
     if (bbox.length !== 4 || bbox.some(isNaN)) {
       return NextResponse.json({ error: 'Invalid bbox format' }, { status: 400 });
     }
@@ -34,10 +83,42 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '1000'), 5000);
 
     // Parse country code (default to VU for backward compatibility)
-    const country = (searchParams.get('country') || 'VU').toUpperCase();
+    countryCode = resolveCountryCode(searchParams.get('country') || 'VU');
+    if (!countryCode) {
+      return NextResponse.json({ error: 'Invalid country code' }, { status: 400 });
+    }
+
+    // If DB recently failed, short-circuit to avoid repeated timeouts and log spam.
+    if (Date.now() < dbUnavailableUntil) {
+      return NextResponse.json(
+        {
+          type: 'FeatureCollection',
+          features: [],
+          count: 0,
+          bbox,
+          country: countryCode,
+          degraded: true,
+          message: 'Road data temporarily unavailable',
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-Data-Status': 'degraded',
+          },
+        }
+      );
+    }
+
+    const authResponse = await ensureCountryApiAccessEnhanced(request, countryCode, '/api/roads');
+    if (authResponse) return authResponse;
 
     // Connect to database
-    const client = new Client({ connectionString: DATABASE_URL });
+    const client = new Client({
+      connectionString: DATABASE_URL,
+      connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+      query_timeout: DB_QUERY_TIMEOUT_MS,
+      statement_timeout: DB_QUERY_TIMEOUT_MS,
+    });
     await client.connect();
 
     try {
@@ -55,11 +136,11 @@ export async function GET(request: NextRequest) {
            )
          ORDER BY damage DESC NULLS LAST
          LIMIT $6`,
-        [country, minLat, maxLat, minLng, maxLng, limit]
+        [countryCode, minLat, maxLat, minLng, maxLng, limit]
       );
 
       // Transform to GeoJSON LineString features
-      const features = result.rows.map((row: any) => ({
+      const features = result.rows.map((row: RoadRow) => ({
         type: 'Feature',
         id: row.id,
         geometry: {
@@ -82,12 +163,35 @@ export async function GET(request: NextRequest) {
         features,
         count: features.length,
         bbox,
-        country: country,
+        country: countryCode,
       });
     } finally {
       await client.end();
     }
   } catch (error) {
+    if (isDbConnectivityError(error)) {
+      dbUnavailableUntil = Date.now() + DB_FAILURE_COOLDOWN_MS;
+      maybeLogDbError(error);
+
+      return NextResponse.json(
+        {
+          type: 'FeatureCollection',
+          features: [],
+          count: 0,
+          bbox: bbox ?? undefined,
+          country: countryCode ?? undefined,
+          degraded: true,
+          message: 'Road data temporarily unavailable',
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-Data-Status': 'degraded',
+          },
+        }
+      );
+    }
+
     console.error('Roads API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

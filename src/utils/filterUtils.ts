@@ -7,6 +7,7 @@ import {
   Province,
   AggregationLevel,
 } from '@/types';
+import { normalizeHazardId, normalizeHazardIds } from '@/utils/hazardIds';
 
 /**
  * Aggregated data structure for events grouped by region
@@ -24,7 +25,10 @@ export interface AggregatedEventData {
  * Returns true if no hazards are selected (show all) or if the item's hazardId is in the selection.
  */
 function matchesHazardFilter(hazardId: string, selectedHazards: string[]): boolean {
-  return selectedHazards.length === 0 || selectedHazards.includes(hazardId);
+  if (selectedHazards.length === 0) return true;
+  const normalizedHazardId = normalizeHazardId(hazardId);
+  const normalizedSelectedHazards = normalizeHazardIds(selectedHazards);
+  return normalizedSelectedHazards.includes(normalizedHazardId);
 }
 
 /**

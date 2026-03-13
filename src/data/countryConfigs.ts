@@ -19,7 +19,8 @@ export interface CountryConfig {
 
 const emptyConfig = (country: CountryCode): CountryConfig => ({
   hazards: [],
-  sectors: [],
+  // Use the standard PDIE sector taxonomy across countries.
+  sectors: vanuatuSectors,
   provinces: [],
   districts: [],
   defaultMapCenter: COUNTRIES[country].center,
@@ -27,9 +28,13 @@ const emptyConfig = (country: CountryCode): CountryConfig => ({
   dataAvailable: false,
 });
 
+const coreHazardsForWmsCountries = vanuatuHazards.filter(
+  hazard => hazard.id === 'tropical-cyclone' || hazard.id === 'flood'
+);
+
 export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
   VU: {
-    hazards: vanuatuHazards,
+    hazards: coreHazardsForWmsCountries,
     sectors: vanuatuSectors,
     provinces: vanuatuProvinces,
     districts: vanuatuDistricts,
@@ -38,6 +43,9 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     dataAvailable: true,
   },
   WS: emptyConfig('WS'),
-  TO: emptyConfig('TO'),
+  TO: {
+    ...emptyConfig('TO'),
+    hazards: coreHazardsForWmsCountries,
+  },
   CK: emptyConfig('CK'),
 };

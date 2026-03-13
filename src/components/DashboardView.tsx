@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { X, Map as MapIcon, AlertCircle, Globe2 } from 'lucide-react';
+import { X, Map as MapIcon, AlertCircle, Globe2, LogOut } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
+import ReactCountryFlag from 'react-country-flag';
 import ActiveFilters from '@/components/ActiveFilters';
 import { MapControls } from '@/components/MapControls';
 import ShareLinkButton from '@/components/ShareLinkButton';
@@ -13,23 +14,19 @@ import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
 import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
 import {
+  COUNTRY_CYCLONE_CONFIG,
   loadAllRealData,
+  loadSupplementaryRealData,
   expandEventsToRegionalEntries,
   loadDamagedBuildings,
   loadDamagedRoads,
 } from '@/utils/realDataLoader';
+import { computeFilteredData } from '@/utils/filteredData';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
 import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
-
-// Country flag emoji mapping
-const COUNTRY_FLAGS: Record<CountryCode, string> = {
-  VU: '🇻🇺',
-  WS: '🇼🇸',
-  TO: '🇹🇴',
-  CK: '🇨🇰',
-};
+import { normalizeHazardIds } from '@/utils/hazardIds';
 
 // Loading component for panels
 const PanelLoader = () => (
@@ -86,21 +83,29 @@ const Toast = dynamic(() => import('@/components/Toast'), {
 
 interface DashboardViewProps {
   countryCode: CountryCode;
+  allowCountrySwitch?: boolean;
+  showLogout?: boolean;
 }
 
-export default function DashboardView({ countryCode }: DashboardViewProps) {
+export default function DashboardView({
+  countryCode,
+  allowCountrySwitch = true,
+  showLogout = true,
+}: DashboardViewProps) {
   // Next.js router for URL state management
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const hasLoadedFromUrl = useRef(false);
   const urlUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastReplacedUrlRef = useRef<string>('');
 
   // Restore URL state synchronously to prevent flash of unfiltered data
   const urlState = deserializeMapState(searchParams);
+  const normalizedUrlHazards = normalizeHazardIds(urlState.hazards || []);
 
   const [filters, setFilters] = useState<FilterState>({
-    selectedHazards: urlState.hazards || [],
+    selectedHazards: normalizedUrlHazards,
     selectedSectors: urlState.sectors || [],
     selectedEvents: urlState.events || [],
     dateRange: {
@@ -115,21 +120,37 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
   const selectedCountry: CountryCode = countryCode;
   const [showCountrySelector, setShowCountrySelector] = useState(false);
   const [mapStyle, setMapStyle] = useState<'loss' | 'wind'>(urlState.mapStyle || 'loss');
+  const [is3DView, setIs3DView] = useState(false);
+  const [extrusionMode, setExtrusionMode] = useState<'none' | 'loss' | 'wind'>('none');
   const [basemapStyle, setBasemapStyle] = useState(
     urlState.basemap || 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
   );
-  const [showWindLayer, setShowWindLayer] = useState(false);
-  const [showInundationLayer, setShowInundationLayer] = useState(false);
+  const initialHazards = new Set(normalizedUrlHazards);
+  const [showWindLayer, setShowWindLayer] = useState(
+    initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
+  );
+  const [showInundationLayer, setShowInundationLayer] = useState(
+    initialHazards.size === 0 ||
+      initialHazards.has('flood') ||
+      initialHazards.has('inundation') ||
+      initialHazards.has('storm-surge')
+  );
+  const [showBuildingsLayer, setShowBuildingsLayer] = useState(false);
+  const [showRoadsLayer, setShowRoadsLayer] = useState(false);
+  const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
   const [showFilters, setShowFilters] = useState(urlState.showFilters || false);
   const [showSummary, setShowSummary] = useState(urlState.showSummary || false);
-  const [showCycloneControls, setShowCycloneControls] = useState(true);
+  const [showCycloneControls, setShowCycloneControls] = useState(false);
   const [isCyclonePlaying, setIsCyclonePlaying] = useState(false);
   const [storyMode, setStoryMode] = useState(urlState.storyMode || false);
   const [currentCycloneIndex, setCurrentCycloneIndex] = useState(
     urlState.cycloneIndex !== undefined ? urlState.cycloneIndex : 0
   );
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
+  const [isDownloadingMap, setIsDownloadingMap] = useState(false);
+  const [devDataSourceLabel, setDevDataSourceLabel] = useState<string>('');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'info' | 'warning'>('info');
@@ -169,9 +190,18 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
   const [damagedRoads, setDamagedRoads] = useState<any>(null);
   const [isLoadingDamage, setIsLoadingDamage] = useState({ buildings: false, roads: false });
   const [damageLoadError, setDamageLoadError] = useState<string | null>(null);
+  const isLoadingDamageRef = useRef(isLoadingDamage);
+  const damagedBuildingsRef = useRef<any>(null);
+  const damagedRoadsRef = useRef<any>(null);
+  const damageAutoLoadRequestedRef = useRef<{ buildings: boolean; roads: boolean }>({
+    buildings: false,
+    roads: false,
+  });
   const [regionalSummary, setRegionalSummary] = useState<any[]>([]);
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
+  const activeCycloneName =
+    events[0]?.name || COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventName || 'Tropical Cyclone';
   const storyBeats = useMemo(
     () => (cycloneForecast ? detectStoryBeats(cycloneForecast, selectedCountry) : []),
     [cycloneForecast, selectedCountry]
@@ -187,7 +217,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
           return parseFloat(r.Max_Wind_Gusts) || 0;
         }
       })
-      .filter((v: number) => v > 0);
+      .filter((v: number) => Number.isFinite(v) && v >= 0);
   }, [regionalSummary, mapStyle]);
 
   // Stable story beats to prevent empty-state flashing during recomputation
@@ -276,6 +306,14 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
 
         const params = serializeMapState(fullState);
         const newUrl = `${pathname}?${params.toString()}`;
+        const currentUrl = `${window.location.pathname}${window.location.search}`;
+
+        // Skip redundant replaces; these can trigger unnecessary route work and log spam.
+        if (newUrl === currentUrl || newUrl === lastReplacedUrlRef.current) {
+          return;
+        }
+
+        lastReplacedUrlRef.current = newUrl;
 
         // Use replace to avoid cluttering browser history
         router.replace(newUrl, { scroll: false });
@@ -324,6 +362,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
   useEffect(() => {
     return () => {
       dataLoadAbortRef.current?.abort('Component unmounted');
+      supplementaryLoadAbortRef.current?.abort('Component unmounted');
       damageLoadAbortRef.current.buildings?.abort('Component unmounted');
       damageLoadAbortRef.current.roads?.abort('Component unmounted');
     };
@@ -408,9 +447,9 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
 
   const loadDamageLayer = useCallback(
     async (type: 'buildings' | 'roads') => {
-      if (isLoadingDamage[type]) return null;
-      if (type === 'buildings' && damagedBuildings) return damagedBuildings;
-      if (type === 'roads' && damagedRoads) return damagedRoads;
+      if (isLoadingDamageRef.current[type]) return null;
+      if (type === 'buildings' && damagedBuildingsRef.current) return damagedBuildingsRef.current;
+      if (type === 'roads' && damagedRoadsRef.current) return damagedRoadsRef.current;
       setIsLoadingDamage(prev => ({ ...prev, [type]: true }));
       setDamageLoadError(null);
 
@@ -423,8 +462,11 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
       try {
         const data =
           type === 'buildings'
-            ? await loadDamagedBuildings({ signal: controller.signal })
-            : await loadDamagedRoads({ signal: controller.signal });
+            ? await loadDamagedBuildings({
+                signal: controller.signal,
+                countryCode: selectedCountry,
+              })
+            : await loadDamagedRoads({ signal: controller.signal, countryCode: selectedCountry });
 
         if (controller.signal.aborted) return null;
 
@@ -448,8 +490,20 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
         setIsLoadingDamage(prev => ({ ...prev, [type]: false }));
       }
     },
-    [damagedBuildings, damagedRoads, isLoadingDamage]
+    [selectedCountry]
   );
+
+  useEffect(() => {
+    isLoadingDamageRef.current = isLoadingDamage;
+  }, [isLoadingDamage]);
+
+  useEffect(() => {
+    damagedBuildingsRef.current = damagedBuildings;
+  }, [damagedBuildings]);
+
+  useEffect(() => {
+    damagedRoadsRef.current = damagedRoads;
+  }, [damagedRoads]);
 
   const handleZoomToBuildings = useCallback(() => {
     const zoom = async () => {
@@ -464,6 +518,16 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     void zoom();
   }, [zoomToData, damagedBuildings, loadDamageLayer]);
 
+  const handleBuildingsLayerToggle = useCallback(
+    (visible: boolean) => {
+      setShowBuildingsLayer(visible);
+      if (visible && !damagedBuildings) {
+        void loadDamageLayer('buildings');
+      }
+    },
+    [damagedBuildings, loadDamageLayer]
+  );
+
   const handleZoomToRoads = useCallback(() => {
     const zoom = async () => {
       const data = damagedRoads ?? (await loadDamageLayer('roads'));
@@ -476,6 +540,41 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     };
     void zoom();
   }, [zoomToData, damagedRoads, loadDamageLayer]);
+
+  const handleRoadsLayerToggle = useCallback(
+    (visible: boolean) => {
+      setShowRoadsLayer(visible);
+      if (visible && !damagedRoads) {
+        void loadDamageLayer('roads');
+      }
+    },
+    [damagedRoads, loadDamageLayer]
+  );
+
+  // Ensure visible damage layers have data loaded, including initial page load.
+  useEffect(() => {
+    if (
+      showBuildingsLayer &&
+      !damagedBuildings &&
+      !isLoadingDamage.buildings &&
+      !damageAutoLoadRequestedRef.current.buildings
+    ) {
+      damageAutoLoadRequestedRef.current.buildings = true;
+      void loadDamageLayer('buildings');
+    }
+  }, [showBuildingsLayer, damagedBuildings, isLoadingDamage.buildings, loadDamageLayer]);
+
+  useEffect(() => {
+    if (
+      showRoadsLayer &&
+      !damagedRoads &&
+      !isLoadingDamage.roads &&
+      !damageAutoLoadRequestedRef.current.roads
+    ) {
+      damageAutoLoadRequestedRef.current.roads = true;
+      void loadDamageLayer('roads');
+    }
+  }, [showRoadsLayer, damagedRoads, isLoadingDamage.roads, loadDamageLayer]);
 
   /**
    * Zoom to specific asset coordinates (for table row clicks)
@@ -533,6 +632,22 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     };
   }, [mapInstance, updateUrl]);
 
+  // Keep current zoom available for UI hints (e.g., WMS zoom threshold).
+  useEffect(() => {
+    if (!mapInstance) return;
+
+    const updateZoom = () => {
+      setMapZoom(mapInstance.getZoom());
+    };
+
+    updateZoom();
+    mapInstance.on('zoomend', updateZoom);
+
+    return () => {
+      mapInstance.off('zoomend', updateZoom);
+    };
+  }, [mapInstance]);
+
   // Cleanup toast timeout on unmount
   useEffect(() => {
     return () => {
@@ -541,6 +656,256 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
       }
     };
   }, []);
+
+  const showToastNotification = useCallback(
+    (
+      message: string,
+      type: 'success' | 'info' | 'warning' = 'info',
+      action?: { label: string; onClick: () => void }
+    ) => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+      setToastMessage(message);
+      setToastType(type);
+      setToastAction(action);
+      setShowToast(true);
+    },
+    []
+  );
+
+  const encodeCanvasToBlob = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob> => {
+    if (typeof canvas.toBlob === 'function') {
+      const blob = await new Promise<Blob | null>(resolve => {
+        canvas.toBlob(resolve, 'image/png');
+      });
+      if (blob) {
+        return blob;
+      }
+    }
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const [header, encoded] = dataUrl.split(',');
+    if (!header || !encoded) {
+      throw new Error('Canvas export fallback failed.');
+    }
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mime = mimeMatch?.[1] || 'image/png';
+    const binary = window.atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  }, []);
+
+  const waitForMapIdle = useCallback((map: maplibregl.Map, timeoutMs: number): Promise<boolean> => {
+    return new Promise(resolve => {
+      let settled = false;
+
+      const finish = (isIdle: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        map.off('idle', onIdle);
+        resolve(isIdle);
+      };
+
+      const onIdle = () => finish(true);
+      const timeoutId = window.setTimeout(() => finish(false), timeoutMs);
+
+      map.on('idle', onIdle);
+
+      if (map.loaded()) {
+        window.setTimeout(() => {
+          if (map.loaded()) {
+            finish(true);
+          }
+        }, 350);
+      }
+    });
+  }, []);
+
+  const handleDownloadMap = useCallback(async () => {
+    if (!mapInstance || isDownloadingMap) {
+      return;
+    }
+
+    setIsDownloadingMap(true);
+    showToastNotification('Preparing high-fidelity map export...', 'info');
+
+    let exportMap: maplibregl.Map | null = null;
+    let exportContainer: HTMLDivElement | null = null;
+
+    try {
+      const sourceContainer = mapInstance.getContainer();
+      const exportWidth = Math.max(sourceContainer.clientWidth, 640);
+      const exportHeight = Math.max(sourceContainer.clientHeight, 480);
+
+      const styleSnapshot = JSON.parse(JSON.stringify(mapInstance.getStyle()));
+      const center = mapInstance.getCenter();
+      const zoom = mapInstance.getZoom();
+      const bearing = mapInstance.getBearing();
+      const pitch = mapInstance.getPitch();
+
+      exportContainer = document.createElement('div');
+      exportContainer.setAttribute('aria-hidden', 'true');
+      exportContainer.style.position = 'fixed';
+      exportContainer.style.left = '-10000px';
+      exportContainer.style.top = '0';
+      exportContainer.style.width = `${exportWidth}px`;
+      exportContainer.style.height = `${exportHeight}px`;
+      exportContainer.style.opacity = '0';
+      exportContainer.style.pointerEvents = 'none';
+      document.body.appendChild(exportContainer);
+
+      exportMap = new maplibregl.Map({
+        container: exportContainer,
+        style: styleSnapshot,
+        center: [center.lng, center.lat],
+        zoom,
+        bearing,
+        pitch,
+        interactive: false,
+        attributionControl: false,
+        fadeDuration: 0,
+        maxTileCacheSize: 50,
+        canvasContextAttributes: { preserveDrawingBuffer: true },
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          reject(new Error('Timed out while initializing export map.'));
+        }, 15000);
+
+        exportMap!.once('load', () => {
+          window.clearTimeout(timeoutId);
+          resolve();
+        });
+      });
+
+      exportMap.resize();
+      const reachedIdle = await waitForMapIdle(exportMap, 12000);
+
+      const exportedCanvas = exportMap.getCanvas();
+      const footerHeight = Math.max(64, Math.round(exportedCanvas.height * 0.1));
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = exportedCanvas.width;
+      compositeCanvas.height = exportedCanvas.height + footerHeight;
+
+      const context = compositeCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to create export image context.');
+      }
+
+      context.drawImage(exportedCanvas, 0, 0);
+      context.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      context.fillRect(0, exportedCanvas.height, compositeCanvas.width, footerHeight);
+
+      const selectedHazardNames =
+        filters.selectedHazards.length > 0
+          ? filters.selectedHazards
+              .map(id => allHazards.find((hazard: any) => hazard.id === id)?.name || id)
+              .join(', ')
+          : 'All';
+      const exportedAt = new Date();
+      const timestampText = exportedAt.toLocaleString();
+      const headerText = `${COUNTRIES[selectedCountry].name} Disaster Risk Map`;
+      const contextText = `${mapStyle.toUpperCase()} view | Hazards: ${selectedHazardNames} | Opacity: ${layerOpacity}%`;
+      const attributionText = 'Data: PDIE/THREDDS | Basemap: OpenStreetMap contributors';
+
+      const leftX = Math.max(16, Math.round(compositeCanvas.width * 0.015));
+      const bottomY = exportedCanvas.height + footerHeight;
+      context.fillStyle = '#f8fafc';
+      context.font = `600 ${Math.max(14, Math.round(footerHeight * 0.24))}px system-ui, -apple-system, sans-serif`;
+      context.fillText(headerText, leftX, bottomY - Math.round(footerHeight * 0.62));
+      context.font = `400 ${Math.max(12, Math.round(footerHeight * 0.2))}px system-ui, -apple-system, sans-serif`;
+      context.fillStyle = '#cbd5e1';
+      context.fillText(contextText, leftX, bottomY - Math.round(footerHeight * 0.34));
+      context.fillStyle = '#94a3b8';
+      context.fillText(
+        `Exported: ${timestampText}`,
+        leftX,
+        bottomY - Math.round(footerHeight * 0.12)
+      );
+      context.textAlign = 'right';
+      context.fillText(
+        attributionText,
+        compositeCanvas.width - leftX,
+        bottomY - Math.round(footerHeight * 0.12)
+      );
+      context.textAlign = 'left';
+
+      const blob = await encodeCanvasToBlob(compositeCanvas);
+      const fileDate = new Intl.DateTimeFormat('en-CA').format(exportedAt);
+      const filename = `pdie-map-${selectedCountry.toLowerCase()}-${fileDate}.png`;
+
+      const navigatorWithMsSave = navigator as Navigator & {
+        msSaveOrOpenBlob?: (blobData: Blob, defaultName?: string) => boolean;
+      };
+      if (typeof navigatorWithMsSave.msSaveOrOpenBlob === 'function') {
+        navigatorWithMsSave.msSaveOrOpenBlob(blob, filename);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+
+      if (!reachedIdle) {
+        showToastNotification(
+          'Map downloaded, but some remote layers were still loading. Re-export for a fully complete frame.',
+          'warning'
+        );
+      } else {
+        showToastNotification(`Map downloaded successfully: ${filename}`, 'success');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      showToastNotification(`Map export failed: ${message}`, 'warning', {
+        label: 'Retry',
+        onClick: () => {
+          setShowToast(false);
+          void handleDownloadMap();
+        },
+      });
+    } finally {
+      if (exportMap) {
+        exportMap.remove();
+      }
+      if (exportContainer && exportContainer.parentNode) {
+        exportContainer.parentNode.removeChild(exportContainer);
+      }
+      setIsDownloadingMap(false);
+    }
+  }, [
+    mapInstance,
+    isDownloadingMap,
+    showToastNotification,
+    waitForMapIdle,
+    filters.selectedHazards,
+    allHazards,
+    selectedCountry,
+    mapStyle,
+    layerOpacity,
+    encodeCanvasToBlob,
+  ]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      const countrySlug = CODE_TO_SLUG[selectedCountry];
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ country: countrySlug }),
+      });
+      window.location.href = `/${countrySlug}/login`;
+    } catch (_error) {
+      showToastNotification('Logout failed. Please try again.', 'warning');
+    }
+  }, [selectedCountry, showToastNotification]);
 
   const accessibleDistricts = useMemo(
     () =>
@@ -560,6 +925,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
   // Track load request version to cancel stale data loads
   const loadRequestVersion = useRef(0);
   const dataLoadAbortRef = useRef<AbortController | null>(null);
+  const supplementaryLoadAbortRef = useRef<AbortController | null>(null);
   const damageLoadAbortRef = useRef<{
     buildings: AbortController | null;
     roads: AbortController | null;
@@ -590,17 +956,60 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     // - Tropical Cyclone (maps to cyclone + wind WMS layers)
     // - Flood (maps to flood + inundation WMS layers)
     return allHazards.filter((h: any) => h.id === 'tropical-cyclone' || h.id === 'flood');
-  }, []);
+  }, [allHazards]);
 
   const sectors = useMemo(() => {
     // Using real PDIE data - all 4 sectors available from CSV output
     return allSectors;
-  }, []);
+  }, [allSectors]);
 
-  // Calculate total economic damage for export button state
-  const totalEconomicDamage = useMemo(() => {
-    return countryEvents.reduce((sum, e) => sum + (e.totalEconomicDamage || 0), 0);
-  }, [countryEvents]);
+  // Keep exports aligned with the active filter pipeline used in analytics panels.
+  const {
+    filteredEvents: exportEvents,
+    filteredExposureData: baseExportExposureData,
+    filteredEconomicDamageData: exportEconomicDamageData,
+  } = useMemo(
+    () =>
+      computeFilteredData({
+        events: countryEvents,
+        exposureData,
+        economicDamageData,
+        filters,
+        districts,
+        provinces,
+      }),
+    [countryEvents, exposureData, economicDamageData, filters, districts, provinces]
+  );
+
+  const exportExposureData = useMemo(() => {
+    if (!selectedRegion) {
+      return baseExportExposureData;
+    }
+
+    const selectedDistrict = districts.find((district: any) => district.id === selectedRegion);
+    const selectedProvince = provinces.find((province: any) => province.id === selectedRegion);
+    const selectedRegionName = selectedDistrict?.name || selectedProvince?.name || selectedRegion;
+    const normalizedSelectedIds = new Set([
+      selectedRegion.toLowerCase(),
+      selectedRegionName.toLowerCase(),
+    ]);
+
+    return baseExportExposureData.filter((row: any) => {
+      const rawRegion = row.region;
+      if (!rawRegion) {
+        return false;
+      }
+      const normalizedRegion = String(rawRegion).trim().toLowerCase();
+      return normalizedSelectedIds.has(normalizedRegion);
+    });
+  }, [baseExportExposureData, selectedRegion, districts, provinces]);
+
+  const isExportDisabled = useMemo(() => {
+    const hasFilteredEvents = exportEvents.some(e => (e.totalEconomicDamage || 0) > 0);
+    return (
+      !hasFilteredEvents && exportExposureData.length === 0 && exportEconomicDamageData.length === 0
+    );
+  }, [exportEvents, exportExposureData, exportEconomicDamageData]);
 
   // Load real data function
   const handleCycloneTimestepChange = useCallback(
@@ -619,20 +1028,19 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     [cycloneForecast]
   );
 
+  const handleCycloneVisibilityChange = useCallback((visible: boolean) => {
+    setShowCycloneControls(visible);
+    if (!visible) {
+      setIsCyclonePlaying(false);
+    }
+  }, []);
+
   // Story mode side effects: pause playback and show controls on entry
   useEffect(() => {
     if (storyMode && isCyclonePlaying) {
       setIsCyclonePlaying(false);
     }
   }, [storyMode, isCyclonePlaying]);
-
-  useEffect(() => {
-    if (storyMode && !showCycloneControls) {
-      setShowCycloneControls(true);
-    }
-    // Note: We keep controls visible on exit for now (user can manually hide)
-    // Could optionally restore previous state if needed
-  }, [storyMode, showCycloneControls]);
 
   // Stabilized loadData with useCallback to prevent stale closures
   const loadData = useCallback(async () => {
@@ -642,6 +1050,9 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     if (dataLoadAbortRef.current) {
       dataLoadAbortRef.current.abort('New data load requested');
     }
+    if (supplementaryLoadAbortRef.current) {
+      supplementaryLoadAbortRef.current.abort('New supplementary data load requested');
+    }
     const controller = new AbortController();
     dataLoadAbortRef.current = controller;
 
@@ -649,10 +1060,25 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     setDataLoadError(null);
     setDamagedBuildings(null);
     setDamagedRoads(null);
+    setExposureData([]);
+    setEconomicDamageData([]);
+    setSectorEconomicData([]);
+    setAssetEconomicData([]);
+    setAssetExposureData(null);
+    setImpactByAssetType([]);
+    setImpactBySector(undefined);
+    setNationalSummary(undefined);
+    setRegionalSummary([]);
+    setRegionalSummaryBySector([]);
+    setCycloneForecast(null);
+    setExpandedEvents([]);
+    setEvents([]);
+    damageAutoLoadRequestedRef.current = { buildings: false, roads: false };
     try {
       const realData = await loadAllRealData({
         signal: controller.signal,
         includeDamagedAssets: false,
+        includeSupplementaryData: false,
         countryCode: selectedCountry,
       });
 
@@ -676,6 +1102,20 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
             `   - Expanded to ${expanded.length} regional entries for filtering (with sector data)`
           );
         }
+      }
+
+      if (realData.dataSourceInfo) {
+        const trackSource =
+          realData.dataSourceInfo.cycloneTrackSource === 'partner_api'
+            ? 'Partner API'
+            : 'Local Files';
+        const eventSource =
+          realData.dataSourceInfo.eventMetadataSource === 'partner_api'
+            ? 'Partner API'
+            : 'Local Files';
+        setDevDataSourceLabel(`Track: ${trackSource} | Event: ${eventSource}`);
+      } else {
+        setDevDataSourceLabel('Track: Local Files | Event: Local Files');
       }
 
       if (realData.exposureData && realData.exposureData.length > 0) {
@@ -727,10 +1167,83 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
 
       if (realData.cycloneForecast) {
         setCycloneForecast(realData.cycloneForecast);
+
+        // Start playback at the timestep nearest the selected country's center.
+        // This avoids an "empty/broken" feel for tracks that begin far off-screen
+        // (e.g., TC Harold starts west of Tonga before approaching the islands).
+        const [countryLng, countryLat] = COUNTRIES[selectedCountry].center;
+        const nearestIndex = realData.cycloneForecast.reduce(
+          (bestIndex: number, point: any, index: number, arr: any[]) => {
+            const dx = (point.longitude ?? 0) - countryLng;
+            const dy = (point.latitude ?? 0) - countryLat;
+            const distSq = dx * dx + dy * dy;
+
+            const bestPoint = arr[bestIndex];
+            const bestDx = (bestPoint?.longitude ?? 0) - countryLng;
+            const bestDy = (bestPoint?.latitude ?? 0) - countryLat;
+            const bestDistSq = bestDx * bestDx + bestDy * bestDy;
+
+            return distSq < bestDistSq ? index : bestIndex;
+          },
+          0
+        );
+        setCurrentCycloneIndex(nearestIndex);
+
         if (process.env.NODE_ENV !== 'production') {
           console.log(`Loaded ${realData.cycloneForecast.length} cyclone forecast timesteps`);
         }
       }
+
+      // Load supplementary analytics data in the background.
+      const supplementaryController = new AbortController();
+      supplementaryLoadAbortRef.current = supplementaryController;
+      void loadSupplementaryRealData({
+        signal: supplementaryController.signal,
+        countryCode: selectedCountry,
+        regionalSummary: (realData.regionalSummary || []) as Array<Record<string, unknown>>,
+      })
+        .then(supplementary => {
+          if (
+            supplementaryController.signal.aborted ||
+            currentVersion !== loadRequestVersion.current
+          ) {
+            return;
+          }
+
+          if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
+          if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
+          if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
+          if (supplementary.regionalSummaryBySector) {
+            setRegionalSummaryBySector(supplementary.regionalSummaryBySector);
+          }
+          if (supplementary.exposureData) setExposureData(supplementary.exposureData);
+          if (supplementary.economicDamageData) {
+            setEconomicDamageData(supplementary.economicDamageData);
+          }
+          if (supplementary.sectorEconomicData) {
+            setSectorEconomicData(supplementary.sectorEconomicData);
+          }
+          if (supplementary.assetEconomicData)
+            setAssetEconomicData(supplementary.assetEconomicData);
+          if (supplementary.assetExposureData)
+            setAssetExposureData(supplementary.assetExposureData);
+          if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
+            setExpandedEvents(supplementary.sectorSpecificEvents);
+          }
+        })
+        .catch(error => {
+          if (supplementaryController.signal.aborted) {
+            return;
+          }
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('Supplementary data loading failed:', error);
+          }
+        })
+        .finally(() => {
+          if (supplementaryLoadAbortRef.current === supplementaryController) {
+            supplementaryLoadAbortRef.current = null;
+          }
+        });
     } catch (error) {
       if (controller.signal.aborted) {
         return;
@@ -867,7 +1380,22 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [showFilters, showSummary]);
 
-  const showMapOverlays = !showCountrySelector && !isLoadingData && !dataLoadError;
+  const showMapOverlays =
+    (!allowCountrySwitch || !showCountrySelector) && !isLoadingData && !dataLoadError;
+
+  const isDamageLoading = isLoadingDamage.buildings || isLoadingDamage.roads;
+  const isMapDataLoading = isLoadingData || isDamageLoading || isDownloadingMap;
+  const mapDataLoadingLabel = isDownloadingMap
+    ? 'Preparing map export...'
+    : isLoadingData
+      ? `Loading ${COUNTRIES[selectedCountry].name} data...`
+      : isDamageLoading
+        ? 'Loading damaged assets...'
+        : 'Loading map/data...';
+  const isHazardsLoading = isLoadingLayers;
+  const hazardsLoadingLabel = 'Loading hazard layers...';
+  const hazardZoomBlocked =
+    (showWindLayer || showInundationLayer) && mapZoom !== null && mapZoom < 5;
 
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
@@ -906,7 +1434,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
                   Pacific Disaster Platform
                 </h1>
                 <p className="text-xs text-slate-400 truncate">
-                  {isLoadingData ? 'Loading...' : 'Tropical Cyclone Lola'}
+                  {isLoadingData ? 'Loading...' : activeCycloneName}
                 </p>
               </div>
             </div>
@@ -914,33 +1442,67 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
 
           {/* Actions Group - Right aligned, consistent spacing */}
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap lg:flex-nowrap justify-end">
-            {/* Country Selector Button */}
+            {/* Header Actions */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 rounded-lg border border-slate-700/50">
-              <button
-                onClick={() => setShowCountrySelector(!showCountrySelector)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
-                aria-label={
-                  selectedCountry
-                    ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
-                    : 'Select country'
-                }
-                aria-expanded={showCountrySelector}
-                aria-haspopup="dialog"
-                aria-controls="country-selector-panel"
-                title="Select country"
-              >
-                {selectedCountry ? (
-                  <>
-                    <span className="text-base">{COUNTRY_FLAGS[selectedCountry]}</span>
-                    <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
-                  </>
-                ) : (
-                  <>
-                    <MapIcon className="w-3.5 h-3.5" />
-                    <span>Region</span>
-                  </>
-                )}
-              </button>
+              {allowCountrySwitch ? (
+                <button
+                  onClick={() => setShowCountrySelector(!showCountrySelector)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                  aria-label={
+                    selectedCountry
+                      ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
+                      : 'Select country'
+                  }
+                  aria-expanded={showCountrySelector}
+                  aria-haspopup="dialog"
+                  aria-controls="country-selector-panel"
+                  title="Select country"
+                >
+                  {selectedCountry ? (
+                    <>
+                      <ReactCountryFlag
+                        countryCode={selectedCountry}
+                        svg
+                        aria-label={COUNTRIES[selectedCountry].name}
+                        title={COUNTRIES[selectedCountry].name}
+                        style={{ width: '1.1rem', height: '1.1rem' }}
+                      />
+                      <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <MapIcon className="w-3.5 h-3.5" />
+                      <span>Region</span>
+                    </>
+                  )}
+                </button>
+              ) : selectedCountry ? (
+                <div
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 text-slate-300 rounded text-xs"
+                  aria-label={`Country: ${COUNTRIES[selectedCountry].name}`}
+                >
+                  <ReactCountryFlag
+                    countryCode={selectedCountry}
+                    svg
+                    aria-label={COUNTRIES[selectedCountry].name}
+                    title={COUNTRIES[selectedCountry].name}
+                    style={{ width: '1.1rem', height: '1.1rem' }}
+                  />
+                  <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
+                </div>
+              ) : null}
+
+              {showLogout && (
+                <button
+                  onClick={() => void handleLogout()}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                  aria-label="Log out of country dashboard"
+                  title="Log out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
+              )}
 
               <ShareLinkButton
                 path={`/${CODE_TO_SLUG[selectedCountry]}`}
@@ -971,12 +1533,19 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
               />
 
               <ExportButtons
-                events={countryEvents}
-                exposureData={exposureData}
-                economicDamageData={economicDamageData}
+                events={exportEvents}
+                exposureData={exportExposureData}
+                economicDamageData={exportEconomicDamageData}
                 hazards={hazards}
                 sectors={sectors}
-                disabled={totalEconomicDamage === 0}
+                disabled={isExportDisabled}
+                countryName={COUNTRIES[selectedCountry].name}
+                fullCountryName={COUNTRIES[selectedCountry].fullName}
+                countryCode={selectedCountry}
+                cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
+                impactBySector={impactBySector}
+                nationalSummary={nationalSummary}
+                mapInstance={mapInstance}
               />
             </div>
           </div>
@@ -1081,6 +1650,8 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
             economicDamageData={economicDamageData}
             isCyclonePlaying={isCyclonePlaying}
             onToggleCyclonePlaying={setIsCyclonePlaying}
+            isCycloneVisible={showCycloneControls}
+            onToggleCycloneVisibility={handleCycloneVisibilityChange}
             hasCycloneData={!!cycloneForecast}
             cycloneControlsHostRef={cycloneControlsHostRef}
             accessibleDistricts={accessibleDistricts}
@@ -1107,18 +1678,46 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
               return (
                 <>
                   {/* Unified Map Controls (basemap + future controls) */}
-                  {showMapOverlays && (
+                  {!dataLoadError && (
                     <MapControls
                       currentBasemap={basemapStyle}
                       onBasemapChange={setBasemapStyle}
                       mapStyle={mapStyle}
                       onMapStyleChange={setMapStyle}
+                      is3DView={is3DView}
+                      on3DViewToggle={setIs3DView}
+                      extrusionMode={extrusionMode}
+                      onExtrusionModeChange={setExtrusionMode}
                       showWindLayer={showWindLayer}
                       showInundationLayer={showInundationLayer}
                       onWindLayerToggle={setShowWindLayer}
                       onInundationLayerToggle={setShowInundationLayer}
-                      isLoadingLayers={isLoadingLayers}
+                      showBuildingsLayer={showBuildingsLayer}
+                      showRoadsLayer={showRoadsLayer}
+                      onBuildingsLayerToggle={handleBuildingsLayerToggle}
+                      onRoadsLayerToggle={handleRoadsLayerToggle}
+                      isMapDataLoading={isMapDataLoading}
+                      mapDataLoadingLabel={mapDataLoadingLabel}
+                      isHazardsLoading={isHazardsLoading}
+                      hazardsLoadingLabel={hazardsLoadingLabel}
+                      hazardZoomBlocked={hazardZoomBlocked}
+                      hazardMinZoom={5}
+                      currentZoom={mapZoom ?? undefined}
+                      layerOpacity={layerOpacity}
+                      onLayerOpacityChange={setLayerOpacity}
+                      onDownloadMap={() => void handleDownloadMap()}
+                      isDownloadingMap={isDownloadingMap}
                     />
+                  )}
+
+                  {process.env.NODE_ENV !== 'production' && devDataSourceLabel && (
+                    <div className="absolute top-4 left-[24rem] z-[16] pointer-events-none max-w-[calc(100vw-26rem)]">
+                      <div className="glass-panel rounded-lg px-3 py-2 border border-emerald-500/30 bg-emerald-900/20 shadow-lg">
+                        <p className="text-[11px] text-emerald-200 font-medium truncate">
+                          Data Source: {devDataSourceLabel}
+                        </p>
+                      </div>
+                    </div>
                   )}
 
                   {/* NEW: Unified Map Legend with data-driven breaks */}
@@ -1131,12 +1730,13 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
                       temporalScope="Cumulative"
                       dataValues={legendDataValues}
                       isLeftPanelOpen={showFilters}
-                      showBuildings={!!damagedBuildings}
-                      showRoads={!!damagedRoads}
-                      showCyclone={isCyclonePlaying || currentCycloneIndex > 0}
+                      showBuildings={showBuildingsLayer && !!damagedBuildings}
+                      showRoads={showRoadsLayer && !!damagedRoads}
+                      showCyclone={showCycloneControls && !!cycloneForecast}
                       onZoomToBuildings={handleZoomToBuildings}
                       onZoomToRoads={handleZoomToRoads}
                       activeWmsLayers={activeWmsLayers}
+                      countryCode={selectedCountry}
                     />
                   )}
 
@@ -1159,17 +1759,21 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
               selectedCountry={selectedCountry}
               mapStyle={mapStyle}
               basemapStyle={basemapStyle}
+              is3DView={is3DView}
+              extrusionMode={extrusionMode}
               showWindLayer={showWindLayer}
               showInundationLayer={showInundationLayer}
               onLayersLoadingChange={setIsLoadingLayers}
-              damagedBuildings={damagedBuildings}
-              damagedRoads={damagedRoads}
+              onActiveWmsLayersChange={setActiveWmsLayers}
+              layerOpacity={layerOpacity}
+              damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
+              damagedRoads={showRoadsLayer ? damagedRoads : null}
               cycloneForecast={cycloneForecast}
               aggregationLevel={filters.aggregationLevel}
               showOverlays={showMapOverlays}
               onCycloneTimestepChange={handleCycloneTimestepChange}
               showCycloneAnimation={showCycloneControls}
-              onCycloneAnimationChange={setShowCycloneControls}
+              onCycloneAnimationChange={handleCycloneVisibilityChange}
               isCyclonePlaying={isCyclonePlaying}
               onCyclonePlayingChange={setIsCyclonePlaying}
               showCycloneToggle={false}
@@ -1231,7 +1835,7 @@ export default function DashboardView({ countryCode }: DashboardViewProps) {
             )}
 
             {/* Country Selector Overlay */}
-            {showCountrySelector && (
+            {allowCountrySwitch && showCountrySelector && (
               <div
                 id="country-selector-panel"
                 className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)]"

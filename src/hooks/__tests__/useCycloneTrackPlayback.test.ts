@@ -72,6 +72,9 @@ describe('useCycloneTrackPlayback Hook', () => {
 
     act(() => {
       result.current.controls.next();
+    });
+
+    act(() => {
       result.current.controls.next();
     });
 
@@ -84,18 +87,24 @@ describe('useCycloneTrackPlayback Hook', () => {
     expect(result.current.state.currentIndex).toBe(1);
   });
 
-  it('loops back to start when reaching end', () => {
+  it('stops at end when advancing manually with next()', () => {
     const { result } = renderHook(() =>
       useCycloneTrackPlayback({ forecastTrack: mockTrackData, loop: true })
     );
 
     act(() => {
       result.current.controls.next();
-      result.current.controls.next();
+    });
+
+    act(() => {
       result.current.controls.next();
     });
 
-    expect(result.current.state.currentIndex).toBe(0);
+    act(() => {
+      result.current.controls.next();
+    });
+
+    expect(result.current.state.currentIndex).toBe(2);
   });
 
   it('provides playback controls', () => {

@@ -75,6 +75,9 @@ export function useCycloneTrackPlayback({
   const lastReportedIndexRef = useRef<number | null>(null);
   const lastProcessedExternalIndexRef = useRef<number | null>(null);
   const currentIndexRef = useRef(0);
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  const onIndexChangeRef = useRef(onIndexChange);
+  const onTimestepChangeRef = useRef(onTimestepChange);
 
   // Animation loop refs
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -89,6 +92,18 @@ export function useCycloneTrackPlayback({
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
+
+  useEffect(() => {
+    onPlayingChangeRef.current = onPlayingChange;
+  }, [onPlayingChange]);
+
+  useEffect(() => {
+    onIndexChangeRef.current = onIndexChange;
+  }, [onIndexChange]);
+
+  useEffect(() => {
+    onTimestepChangeRef.current = onTimestepChange;
+  }, [onTimestepChange]);
 
   // ==================== External Control Sync ====================
 
@@ -133,8 +148,8 @@ export function useCycloneTrackPlayback({
       isPlayingSyncRef.current = false;
       return;
     }
-    onPlayingChange?.(isPlaying);
-  }, [isPlaying, onPlayingChange]);
+    onPlayingChangeRef.current?.(isPlaying);
+  }, [isPlaying]);
 
   // Notify parent of index changes
   useEffect(() => {
@@ -145,12 +160,12 @@ export function useCycloneTrackPlayback({
 
     if (lastReportedIndexRef.current !== currentIndex) {
       lastReportedIndexRef.current = currentIndex;
-      onIndexChange?.(currentIndex);
+      onIndexChangeRef.current?.(currentIndex);
 
       const currentPoint = forecastTrack?.[currentIndex] ?? null;
-      onTimestepChange?.(currentPoint, currentIndex, totalSteps);
+      onTimestepChangeRef.current?.(currentPoint, currentIndex, totalSteps);
     }
-  }, [currentIndex, forecastTrack, totalSteps, onIndexChange, onTimestepChange]);
+  }, [currentIndex, forecastTrack, totalSteps]);
 
   // ==================== Animation Loop ====================
 

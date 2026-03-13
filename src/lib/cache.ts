@@ -6,7 +6,7 @@
 import { createClient, RedisClientType } from 'redis';
 
 // Redis connection URL from environment
-const REDIS_URL = process.env.REDIS_URL || 'redis://:redis_secure_2026@localhost:6379';
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 // Cache TTL (Time To Live) settings
 export const CacheTTL = {
@@ -19,6 +19,25 @@ export const CacheTTL = {
 class RedisCache {
   private client: RedisClientType | null = null;
   private connected: boolean = false;
+  private lastErrorLogAt: number = 0;
+  private lastReconnectLogAt: number = 0;
+  private readonly LOG_THROTTLE_MS = 30_000;
+
+  private maybeLogError(prefix: string, error: unknown): void {
+    const now = Date.now();
+    if (now - this.lastErrorLogAt >= this.LOG_THROTTLE_MS) {
+      this.lastErrorLogAt = now;
+      console.error(prefix, error);
+    }
+  }
+
+  private maybeLogReconnect(): void {
+    const now = Date.now();
+    if (now - this.lastReconnectLogAt >= this.LOG_THROTTLE_MS) {
+      this.lastReconnectLogAt = now;
+      console.log('⟳ Redis reconnecting...');
+    }
+  }
 
   /**
    * Initialize Redis connection
@@ -30,18 +49,20 @@ class RedisCache {
       this.client = createClient({
         url: REDIS_URL,
         socket: {
+          connectTimeout: 5000,
           reconnectStrategy: (retries: number) => {
-            if (retries > 10) {
+            if (retries > 5) {
               console.error('Redis: Max reconnection attempts reached');
               return new Error('Max reconnection attempts');
             }
-            return Math.min(retries * 100, 3000);
+            return Math.min(retries * 250, 5000);
           },
         },
       });
 
       this.client.on('error', (err: Error) => {
-        console.error('Redis client error:', err);
+        this.connected = false;
+        this.maybeLogError('Redis client error:', err);
       });
 
       this.client.on('connect', () => {
@@ -49,13 +70,14 @@ class RedisCache {
       });
 
       this.client.on('reconnecting', () => {
-        console.log('⟳ Redis reconnecting...');
+        this.connected = false;
+        this.maybeLogReconnect();
       });
 
       await this.client.connect();
       this.connected = true;
     } catch (error) {
-      console.error('Failed to connect to Redis:', error);
+      this.maybeLogError('Failed to connect to Redis:', error);
       this.connected = false;
     }
   }
@@ -211,6 +233,86 @@ class RedisCache {
     } catch (error) {
       console.error(`Redis expire error for key ${key}:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Read remaining TTL (seconds) for a key.
+   * Returns null if key does not exist or TTL is not available.
+   */
+  async ttl(key: string): Promise<number | null> {
+    if (!this.connected || !this.client) {
+      return null;
+    }
+
+    try {
+      const value = await this.client.ttl(key);
+      if (value < 0) {
+        return null;
+      }
+      return value;
+    } catch (error) {
+      console.error(`Redis ttl error for key ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Push an item to a Redis list and trim it to maxItems.
+   */
+  async listPushHead(key: string, value: any, maxItems: number = 2000): Promise<boolean> {
+    if (!this.connected || !this.client) {
+      return false;
+    }
+
+    try {
+      await this.client.lPush(key, JSON.stringify(value));
+      await this.client.lTrim(key, 0, Math.max(0, maxItems - 1));
+      return true;
+    } catch (error) {
+      console.error(`Redis list push error for key ${key}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Read a range of values from a Redis list and JSON-deserialize each entry.
+   */
+  async listRange<T = any>(key: string, start: number, end: number): Promise<T[]> {
+    if (!this.connected || !this.client) {
+      return [];
+    }
+
+    try {
+      const values = await this.client.lRange(key, start, end);
+      return values
+        .map(item => {
+          try {
+            return JSON.parse(item) as T;
+          } catch {
+            return null;
+          }
+        })
+        .filter((item): item is T => item !== null);
+    } catch (error) {
+      console.error(`Redis list range error for key ${key}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Return keys matching a pattern.
+   */
+  async keys(pattern: string): Promise<string[]> {
+    if (!this.connected || !this.client) {
+      return [];
+    }
+
+    try {
+      return await this.client.keys(pattern);
+    } catch (error) {
+      console.error(`Redis keys error for pattern ${pattern}:`, error);
+      return [];
     }
   }
 

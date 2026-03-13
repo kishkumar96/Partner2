@@ -4,10 +4,11 @@
 
 import { Event, RegionalImpact } from '@/types';
 import type { RealDataLoadResult } from '@/types/realData';
-import { loadCycloneForecastTrack } from './cycloneAnimationLoader';
+import { loadCycloneForecastTrack, type CycloneForecastPoint } from './cycloneAnimationLoader';
 import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
 import { CountryCode } from '@/types/thredds';
+import { mapCountryPartnerApis } from '@/services/partnerApiService';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -19,9 +20,50 @@ export const DATA_PATH: Record<CountryCode, string> = {
   CK: '/cook-islands',
 };
 
+type CountryDataLogicalFile =
+  | 'regional-impacts.geojson'
+  | 'regional-impacts-by-sector.geojson'
+  | 'exposure-by-cluster.geojson'
+  | 'national-summary.csv'
+  | 'impact-by-asset-type.csv'
+  | 'impact-by-sector.csv'
+  | 'regional-summary.csv'
+  | 'regional-summary-by-sector.csv'
+  | 'damaged-buildings.geojson'
+  | 'damaged-roads.geojson';
+
+const COUNTRY_DATA_FILE_OVERRIDES: Partial<
+  Record<CountryCode, Partial<Record<CountryDataLogicalFile, string>>>
+> = {
+  // Tonga dataset currently ships with hashed filenames for some files.
+  TO: {
+    'regional-impacts.geojson': 'regional-impacts_efhScII.geojson',
+    'regional-impacts-by-sector.geojson': 'regional-impacts-by-sector_zprEa4h.geojson',
+    'national-summary.csv': 'national-summary_SCV3LWV.csv',
+    'impact-by-sector.csv': 'impact-by-sector_XQWXONf.csv',
+    'damaged-buildings.geojson': 'damaged-buildings_fn3Gn3X.geojson',
+  },
+};
+
+export function getCountryDataFilePath(
+  countryCode: CountryCode,
+  logicalFile: CountryDataLogicalFile
+): string {
+  const basePath = DATA_PATH[countryCode];
+  const resolvedFile = COUNTRY_DATA_FILE_OVERRIDES[countryCode]?.[logicalFile] ?? logicalFile;
+  return `${basePath}/${resolvedFile}`;
+}
+
+const NEXT_PUBLIC_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
+
+function withBasePath(path: string): string {
+  if (!NEXT_PUBLIC_BASE_PATH) return path;
+  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+}
+
 interface CountryCycloneConfig {
-  trackFile: string; // relative to its country DATA_PATH
-  forecastFile: string; // relative to its country DATA_PATH
+  trackFile?: string; // relative to its country DATA_PATH
+  forecastFile?: string; // relative to its country DATA_PATH
   eventId: string;
   eventName: string;
   eventDate: string;
@@ -40,7 +82,7 @@ export const COUNTRY_CYCLONE_CONFIG: Record<CountryCode, CountryCycloneConfig> =
     center: { lat: -17.7333, lng: 168.3167 },
   },
   WS: {
-    trackFile: 'cyclone-track-gita.geojson',
+    trackFile: 'cyclone-track.geojson',
     forecastFile: 'Official_Forecast_Track_GITA_SA.csv',
     eventId: 'tc-gita-samoa-2018',
     eventName: 'Tropical Cyclone Gita',
@@ -51,9 +93,9 @@ export const COUNTRY_CYCLONE_CONFIG: Record<CountryCode, CountryCycloneConfig> =
   TO: {
     trackFile: 'cyclone-track.geojson',
     forecastFile: 'cyclone-forecast.csv',
-    eventId: 'tc-gita-tonga-2018',
-    eventName: 'Tropical Cyclone Gita',
-    eventDate: '2018-02-12',
+    eventId: 'tc-harold-tonga-2020',
+    eventName: 'Tropical Cyclone Harold',
+    eventDate: '2020-04-09',
     bbox: [-177, -23, -173, -18],
     center: { lat: -21.179, lng: -175.198 },
   },
@@ -126,12 +168,69 @@ export async function loadCycloneTrackData(
   return data;
 }
 
+function hasTrackGeometry(trackData: any): boolean {
+  if (!trackData || !Array.isArray(trackData.features) || trackData.features.length === 0) {
+    return false;
+  }
+
+  return trackData.features.some(
+    (feature: any) =>
+      feature?.geometry?.type === 'LineString' &&
+      Array.isArray(feature?.geometry?.coordinates) &&
+      feature.geometry.coordinates.length > 1
+  );
+}
+
+export function buildCycloneTrackFromForecastPoints(forecastPoints: CycloneForecastPoint[]) {
+  if (!forecastPoints || forecastPoints.length < 2) {
+    return null;
+  }
+
+  const sortedPoints = [...forecastPoints].sort((a, b) => a.time.getTime() - b.time.getTime());
+  const coordinates: [number, number][] = sortedPoints.map(point => [
+    point.longitude,
+    point.latitude,
+  ]);
+
+  if (coordinates.length < 2) {
+    return null;
+  }
+
+  return {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: unwrapAntimeridianLine(coordinates),
+        },
+        properties: {
+          source: 'forecast_fallback',
+        },
+      },
+    ],
+  };
+}
+
 /**
  * Load regional impacts from geojson file (9.2MB - cached)
  */
-export async function loadRegionalImpacts(options: DataLoaderOptions & { basePath?: string } = {}) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data } = await loadGeoJSON(`${basePath}/regional-impacts.geojson`, {
+export async function loadRegionalImpacts(
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
+) {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'regional-impacts.geojson')
+    : `${basePath}/regional-impacts.geojson`;
+  const { data } = await loadGeoJSON(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -142,10 +241,20 @@ export async function loadRegionalImpacts(options: DataLoaderOptions & { basePat
  * Load regional impacts by sector from geojson file (2.6MB - cached)
  */
 export async function loadRegionalImpactsBySector(
-  options: DataLoaderOptions & { basePath?: string } = {}
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
 ) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data } = await loadGeoJSON(`${basePath}/regional-impacts-by-sector.geojson`, {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'regional-impacts-by-sector.geojson')
+    : `${basePath}/regional-impacts-by-sector.geojson`;
+  const { data } = await loadGeoJSON(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -171,9 +280,21 @@ export async function loadExposureByCluster(
 /**
  * Load national summary CSV data
  */
-export async function loadNationalSummary(options: DataLoaderOptions & { basePath?: string } = {}) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data: csvText } = await loadTextData(`${basePath}/national-summary.csv`, {
+export async function loadNationalSummary(
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
+) {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'national-summary.csv')
+    : `${basePath}/national-summary.csv`;
+  const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -197,9 +318,21 @@ export async function loadImpactByAssetType(
 /**
  * Load impact by sector CSV data
  */
-export async function loadImpactBySector(options: DataLoaderOptions & { basePath?: string } = {}) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data: csvText } = await loadTextData(`${basePath}/impact-by-sector.csv`, {
+export async function loadImpactBySector(
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
+) {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'impact-by-sector.csv')
+    : `${basePath}/impact-by-sector.csv`;
+  const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -443,8 +576,14 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
  * Convert regional impacts by sector GeoJSON to sector-specific event data
  * This creates separate events for each sector in each region
  */
-export function convertRegionalImpactsBySectorToEvents(geojson: any): Event[] {
+export function convertRegionalImpactsBySectorToEvents(
+  geojson: any,
+  countryCode: CountryCode = 'VU'
+): Event[] {
   if (!geojson || !geojson.features) return [];
+
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
+  const cycloneLabel = cycloneConfig.eventName.replace(/^Tropical\s+/i, '');
 
   const sectors = [
     'Education',
@@ -487,9 +626,9 @@ export function convertRegionalImpactsBySectorToEvents(geojson: any): Event[] {
 
         events.push({
           id: `${regionId}-${sector.toLowerCase()}`,
-          parentEventId: 'tc-lola-2024', // Links back to the master TC Lola event
-          name: `TC Lola - ${regionName} (${sector})`,
-          date: '2024-01-30', // TC Lola event date
+          parentEventId: cycloneConfig.eventId,
+          name: `${cycloneLabel} - ${regionName} (${sector})`,
+          date: cycloneConfig.eventDate,
           hazardId: 'tropical-cyclone',
           sectorId: sector,
           districtId: regionId,
@@ -506,7 +645,7 @@ export function convertRegionalImpactsBySectorToEvents(geojson: any): Event[] {
           totalAffectedPopulation: exposedBuildings * 4,
           totalEconomicDamage: loss,
           affectedRegions: 1,
-          countryCode: 'VU',
+          countryCode,
         } as Event);
       }
     });
@@ -584,18 +723,344 @@ function processAssetExposureData(exposureByCluster: any) {
 export interface RealDataLoadOptions {
   signal?: AbortSignal;
   includeDamagedAssets?: boolean;
+  includeSupplementaryData?: boolean;
   /** Country to load data for. Defaults to 'VU' (Vanuatu). */
   countryCode?: CountryCode;
+}
+
+function toArrayPayload(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) {
+    return payload.filter(
+      (item): item is Record<string, unknown> => !!item && typeof item === 'object'
+    );
+  }
+
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.results)) {
+      return record.results.filter(
+        (item): item is Record<string, unknown> => !!item && typeof item === 'object'
+      );
+    }
+  }
+
+  return [];
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function buildCycloneTrackFromPartnerPayload(payload: unknown): GeoJSON.FeatureCollection | null {
+  if (payload && typeof payload === 'object') {
+    const direct = payload as { type?: string; features?: unknown[] };
+    if (direct.type === 'FeatureCollection' && Array.isArray(direct.features)) {
+      return payload as GeoJSON.FeatureCollection;
+    }
+  }
+
+  const rows = toArrayPayload(payload);
+  if (rows.length === 0) return null;
+
+  const points: Array<{ lon: number; lat: number; timestamp?: string }> = [];
+
+  rows.forEach(row => {
+    const lon =
+      toNumber(row.longitude) ?? toNumber(row.lon) ?? toNumber(row.lng) ?? toNumber(row.x);
+    const lat = toNumber(row.latitude) ?? toNumber(row.lat) ?? toNumber(row.y);
+
+    if (lon === null || lat === null) return;
+
+    points.push({
+      lon,
+      lat,
+      timestamp:
+        (typeof row.timestamp === 'string' && row.timestamp) ||
+        (typeof row.time === 'string' && row.time) ||
+        (typeof row.date === 'string' && row.date) ||
+        undefined,
+    });
+  });
+
+  if (points.length === 0) return null;
+
+  const pointFeatures: GeoJSON.Feature[] = points.map((point, index) => ({
+    type: 'Feature',
+    geometry: {
+      type: 'Point',
+      coordinates: [point.lon, point.lat],
+    },
+    properties: {
+      source: 'partner_api',
+      sequence: index,
+      timestamp: point.timestamp,
+    },
+  }));
+
+  const lineFeature: GeoJSON.Feature = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: points.map(point => [point.lon, point.lat]),
+    },
+    properties: {
+      source: 'partner_api',
+    },
+  };
+
+  return {
+    type: 'FeatureCollection',
+    features: [lineFeature, ...pointFeatures],
+  };
+}
+
+function selectPartnerPrimaryEvent(payload: unknown): { name?: string; date?: string } | null {
+  const events = toArrayPayload(payload);
+  if (events.length === 0) return null;
+
+  const first = events[0];
+  const name =
+    (typeof first.name === 'string' && first.name) ||
+    (typeof first.event_name === 'string' && first.event_name) ||
+    (typeof first.title === 'string' && first.title) ||
+    undefined;
+  const date =
+    (typeof first.date === 'string' && first.date) ||
+    (typeof first.event_date === 'string' && first.event_date) ||
+    (typeof first.timestamp === 'string' && first.timestamp) ||
+    undefined;
+
+  return { name, date };
+}
+
+function toObjectArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is Record<string, unknown> => !!item && typeof item === 'object'
+  );
+}
+
+function extractPartnerRegionalSummaryRows(
+  riskRows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  for (const row of riskRows) {
+    const geometryRows = toObjectArray(row.geometry);
+    if (geometryRows.length === 0) continue;
+
+    const sample = geometryRows[0];
+    const hasRegion = typeof sample.Region === 'string' && sample.Region.length > 0;
+    const hasSummarySignals =
+      sample.Total_Population !== undefined ||
+      sample.Population_Exposed_To_Any_Hazard !== undefined ||
+      sample.Damaged_Buildings !== undefined;
+
+    if (hasRegion && hasSummarySignals) {
+      return geometryRows;
+    }
+  }
+
+  return [];
+}
+
+function extractPartnerImpactByAssetRows(
+  riskRows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  const assetTotals = new Map<
+    string,
+    {
+      totalLoss: number;
+      totalValue: number;
+      damagedCount: number;
+      exposedCount: number;
+    }
+  >();
+
+  for (const row of riskRows) {
+    if (!row.geometry || typeof row.geometry !== 'object') continue;
+    const geometry = row.geometry as { type?: unknown; features?: unknown[] };
+    if (geometry.type !== 'FeatureCollection' || !Array.isArray(geometry.features)) continue;
+
+    for (const feature of geometry.features) {
+      if (!feature || typeof feature !== 'object') continue;
+      const properties = (feature as { properties?: unknown }).properties;
+      if (!properties || typeof properties !== 'object') continue;
+
+      const props = properties as Record<string, unknown>;
+      const asset =
+        (typeof props.Asset === 'string' && props.Asset.trim()) ||
+        (typeof props.asset === 'string' && props.asset.trim()) ||
+        'Unknown';
+      const totalLoss =
+        toNumber(props.Total_Loss) ?? toNumber(props.Loss) ?? toNumber(props.Wind_Loss) ?? 0;
+      const totalValue =
+        toNumber(props.Total_Exposed_Value) ??
+        toNumber(props.Value) ??
+        toNumber(props.Exposure) ??
+        0;
+
+      if (!assetTotals.has(asset)) {
+        assetTotals.set(asset, {
+          totalLoss: 0,
+          totalValue: 0,
+          damagedCount: 0,
+          exposedCount: 0,
+        });
+      }
+
+      const aggregate = assetTotals.get(asset)!;
+      aggregate.totalLoss += totalLoss;
+      aggregate.totalValue += totalValue;
+      aggregate.exposedCount += 1;
+      if (totalLoss > 0) {
+        aggregate.damagedCount += 1;
+      }
+    }
+  }
+
+  return Array.from(assetTotals.entries()).map(([asset, aggregate]) => ({
+    Asset: asset,
+    Number_Damaged: aggregate.damagedCount,
+    Number_Exposed: aggregate.exposedCount,
+    Total_Loss: aggregate.totalLoss,
+    Total_Exposed_Value: aggregate.totalValue,
+    // Alias expected by existing conversion logic.
+    Total_Wind_Loss: aggregate.totalLoss,
+    Total_Fluvial_Loss: 0,
+    Total_Coastal_Loss: 0,
+  }));
+}
+
+function hasNonZeroLoss(rows: unknown): boolean {
+  if (!Array.isArray(rows)) return false;
+  return rows.some(row => {
+    if (!row || typeof row !== 'object') return false;
+    const record = row as Record<string, unknown>;
+    return (toNumber(record.Total_Loss) ?? 0) > 0;
+  });
+}
+
+function buildNationalSummaryFromRegionalRows(
+  regionalRows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  if (regionalRows.length === 0) return [];
+
+  const sum = (field: string) =>
+    regionalRows.reduce((total, row) => total + (toNumber(row[field]) ?? 0), 0);
+  const max = (field: string) =>
+    regionalRows.reduce((peak, row) => Math.max(peak, toNumber(row[field]) ?? 0), 0);
+
+  return [
+    {
+      Region: 'National',
+      Total_Loss: sum('Total_Loss'),
+      Total_Population: sum('Total_Population'),
+      Population_Exposed_To_Any_Hazard: sum('Population_Exposed_To_Any_Hazard'),
+      Total_Buildings: sum('Total_Buildings'),
+      Damaged_Buildings: sum('Damaged_Buildings'),
+      Exposed_Households: sum('Exposed_Households'),
+      Total_Households: sum('Total_Households'),
+      Damaged_Road_km: sum('Damaged_Road_km'),
+      Total_Road_km: sum('Total_Road_km'),
+      Crop_Loss: sum('Crop_Loss'),
+      Total_Crop_Value: sum('Total_Crop_Value'),
+      Max_Wind_Gusts: max('Max_Wind_Gusts'),
+      Total_Exposed_Value_To_Any_Hazard: sum('Total_Exposed_Value_To_Any_Hazard'),
+      Total_Value: sum('Total_Value'),
+    },
+  ];
+}
+
+async function loadPartnerApiCountryData(
+  countryCode: CountryCode,
+  signal?: AbortSignal
+): Promise<{
+  countryId: number | null;
+  cycloneTrack: GeoJSON.FeatureCollection | null;
+  eventMeta: { name?: string; date?: string } | null;
+  riskRegionalSummary: Array<Record<string, unknown>>;
+  riskImpactByAsset: Array<Record<string, unknown>>;
+}> {
+  // Partner API mapping requested for Samoa and Tonga only.
+  if (countryCode !== 'WS' && countryCode !== 'TO') {
+    return {
+      countryId: null,
+      cycloneTrack: null,
+      eventMeta: null,
+      riskRegionalSummary: [],
+      riskImpactByAsset: [],
+    };
+  }
+
+  try {
+    const mapping = await mapCountryPartnerApis(countryCode);
+
+    if (!mapping.scopedUrls) {
+      return {
+        countryId: mapping.countryId,
+        cycloneTrack: null,
+        eventMeta: null,
+        riskRegionalSummary: [],
+        riskImpactByAsset: [],
+      };
+    }
+
+    const [cycloneResponse, eventResponse, riskResponse] = await Promise.all([
+      fetch(mapping.scopedUrls.cyclone_track, { signal }),
+      fetch(mapping.scopedUrls.event, { signal }),
+      fetch(mapping.scopedUrls.risk_information, { signal }),
+    ]);
+
+    const cyclonePayload = cycloneResponse.ok ? await cycloneResponse.json() : null;
+    const eventPayload = eventResponse.ok ? await eventResponse.json() : null;
+    const riskPayload = riskResponse.ok ? await riskResponse.json() : null;
+    const riskRows = toArrayPayload(riskPayload);
+
+    return {
+      countryId: mapping.countryId,
+      cycloneTrack: buildCycloneTrackFromPartnerPayload(cyclonePayload),
+      eventMeta: selectPartnerPrimaryEvent(eventPayload),
+      riskRegionalSummary: extractPartnerRegionalSummaryRows(riskRows),
+      riskImpactByAsset: extractPartnerImpactByAssetRows(riskRows),
+    };
+  } catch (_error) {
+    // Any partner API failure falls through to existing local-file loaders.
+    return {
+      countryId: null,
+      cycloneTrack: null,
+      eventMeta: null,
+      riskRegionalSummary: [],
+      riskImpactByAsset: [],
+    };
+  }
 }
 
 export async function loadAllRealData(
   options: RealDataLoadOptions = {}
 ): Promise<RealDataLoadResult> {
-  const { signal, includeDamagedAssets = true, countryCode = 'VU' } = options;
+  const {
+    signal,
+    includeDamagedAssets = true,
+    includeSupplementaryData = true,
+    countryCode = 'VU',
+  } = options;
   const basePath = DATA_PATH[countryCode];
   const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
-  const trackFile = `${basePath}/${cycloneConfig.trackFile}`;
-  const forecastFile = `${basePath}/${cycloneConfig.forecastFile}`;
+  const trackFile = cycloneConfig.trackFile ? `${basePath}/${cycloneConfig.trackFile}` : null;
+  const forecastFile = cycloneConfig.forecastFile
+    ? `${basePath}/${cycloneConfig.forecastFile}`
+    : null;
+  const partnerData = await loadPartnerApiCountryData(countryCode, signal);
+  const cycloneTrackSource: 'partner_api' | 'local_files' = partnerData.cycloneTrack
+    ? 'partner_api'
+    : 'local_files';
+  const eventMetadataSource: 'partner_api' | 'local_files' = partnerData.eventMeta
+    ? 'partner_api'
+    : 'local_files';
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Loading real data for ${countryCode} from ${basePath}...`);
   }
@@ -614,19 +1079,59 @@ export async function loadAllRealData(
     damagedBuildings,
     damagedRoads,
   ] = await Promise.all([
-    loadCycloneTrackData({ signal, trackFile }),
-    loadCycloneForecastTrack({ signal, forecastFile }),
-    loadRegionalImpacts({ signal, basePath }),
-    loadRegionalImpactsBySector({ signal, basePath }), // Load sector-specific regional data
-    loadExposureByCluster({ signal, basePath }),
-    loadNationalSummary({ signal, basePath }),
-    loadImpactByAssetType({ signal, basePath }),
-    loadImpactBySector({ signal, basePath }),
+    partnerData.cycloneTrack
+      ? Promise.resolve(partnerData.cycloneTrack)
+      : trackFile
+        ? loadCycloneTrackData({ signal, trackFile })
+        : Promise.resolve(null),
+    forecastFile ? loadCycloneForecastTrack({ signal, forecastFile }) : Promise.resolve(null),
+    loadRegionalImpacts({ signal, basePath, countryCode }),
+    includeSupplementaryData
+      ? loadRegionalImpactsBySector({ signal, basePath, countryCode }) // Load sector-specific regional data
+      : Promise.resolve(null),
+    includeSupplementaryData ? loadExposureByCluster({ signal, basePath }) : Promise.resolve(null),
+    includeSupplementaryData
+      ? loadNationalSummary({ signal, basePath, countryCode })
+      : Promise.resolve(null),
+    includeSupplementaryData ? loadImpactByAssetType({ signal, basePath }) : Promise.resolve(null),
+    includeSupplementaryData
+      ? loadImpactBySector({ signal, basePath, countryCode })
+      : Promise.resolve(null),
     loadRegionalSummary({ signal, basePath }),
-    loadRegionalSummaryBySector({ signal, basePath }),
+    includeSupplementaryData
+      ? loadRegionalSummaryBySector({ signal, basePath })
+      : Promise.resolve(null),
     includeDamagedAssets ? loadDamagedBuildings({ signal, countryCode }) : Promise.resolve(null),
     includeDamagedAssets ? loadDamagedRoads({ signal, countryCode }) : Promise.resolve(null),
   ]);
+
+  // Prefer partner risk_information values when local summary/asset CSVs are empty or zeroed.
+  const regionalSummaryFromPartner = partnerData.riskRegionalSummary;
+  const impactByAssetFromPartner = partnerData.riskImpactByAsset;
+
+  const effectiveRegionalSummary =
+    regionalSummaryFromPartner.length > 0 && !hasNonZeroLoss(regionalSummaryData)
+      ? regionalSummaryFromPartner
+      : regionalSummaryData;
+
+  const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
+    regionalSummaryFromPartner
+  );
+  const effectiveNationalSummary =
+    nationalSummaryFromPartner.length > 0 && !hasNonZeroLoss(nationalSummary)
+      ? nationalSummaryFromPartner
+      : nationalSummary;
+
+  const effectiveImpactByAsset =
+    impactByAssetFromPartner.length > 0 && !hasNonZeroLoss(impactByAsset)
+      ? impactByAssetFromPartner
+      : impactByAsset;
+
+  const effectiveCycloneTrack = hasTrackGeometry(cycloneTrack)
+    ? cycloneTrack
+    : cycloneForecast
+      ? buildCycloneTrackFromForecastPoints(cycloneForecast)
+      : null;
 
   // Create a SINGLE event for the country's primary cyclone event
   const primaryEventId = cycloneConfig.eventId;
@@ -659,8 +1164,8 @@ export async function loadAllRealData(
   // Create the single primary cyclone event
   const primaryEvent: Event = {
     id: primaryEventId,
-    name: cycloneConfig.eventName,
-    date: cycloneConfig.eventDate,
+    name: partnerData.eventMeta?.name || cycloneConfig.eventName,
+    date: partnerData.eventMeta?.date || cycloneConfig.eventDate,
     hazardId: 'tropical-cyclone',
     countryCode,
     totalAffectedPopulation,
@@ -677,16 +1182,16 @@ export async function loadAllRealData(
   // Also create sector-specific events for filtering (backward compatibility)
   // This allows sector filtering to work correctly
   const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
-    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON)
+    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
     : [];
 
   // Convert CSV data to dashboard format
   // Use regional-summary-by-sector for sector-specific exposure data
-  const exposureData = convertToExposureData(regionalSummaryBySector, regionalSummaryData);
+  const exposureData = convertToExposureData(regionalSummaryBySector, effectiveRegionalSummary);
 
   // Separate economic data into sector-level and asset-level
-  const sectorEconomicData = convertSectorEconomicData(impactBySector);
-  const assetEconomicData = convertAssetEconomicData(impactByAsset);
+  const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
+  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
 
   // Process asset-level exposure data
   const assetExposureData = processAssetExposureData(exposureByCluster);
@@ -696,7 +1201,9 @@ export async function loadAllRealData(
     console.log(
       `   - ${cycloneConfig.eventName} (${countryCode}): ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`
     );
-    console.log(`Loaded ${regionalImpactsData.length} regional impacts for TC Lola`);
+    console.log(
+      `Loaded ${regionalImpactsData.length} regional impacts for ${cycloneConfig.eventName}`
+    );
     console.log(`Loaded ${exposureData.length} exposure records (sector-specific)`);
     console.log(`Loaded ${sectorEconomicData.length} sector economic damage records`);
     console.log(`Loaded ${assetEconomicData.length} asset economic damage records`);
@@ -713,14 +1220,14 @@ export async function loadAllRealData(
   }
 
   return {
-    cycloneTrack,
+    cycloneTrack: effectiveCycloneTrack,
     cycloneForecast: (cycloneForecast as any) || null,
     regionalImpacts,
     exposureByCluster,
-    nationalSummary: (nationalSummary || []) as any,
-    impactByAsset: (impactByAsset || []) as any,
+    nationalSummary: (effectiveNationalSummary || []) as any,
+    impactByAsset: (effectiveImpactByAsset || []) as any,
     impactBySector: (impactBySector || []) as any,
-    regionalSummary: (regionalSummaryData || []) as any,
+    regionalSummary: (effectiveRegionalSummary || []) as any,
     regionalSummaryBySector: (regionalSummaryBySector || []) as any,
     damagedBuildings: (damagedBuildings as any) || null,
     damagedRoads: (damagedRoads as any) || null,
@@ -732,6 +1239,87 @@ export async function loadAllRealData(
     assetExposureData,
     regionalImpactsData, // Add regional impacts to the result
     sectorSpecificEvents, // Sector-specific events for filtering
+    dataSourceInfo: {
+      countryCode,
+      cycloneTrackSource,
+      eventMetadataSource,
+    },
+  };
+}
+
+export async function loadSupplementaryRealData(
+  options: Omit<RealDataLoadOptions, 'includeDamagedAssets' | 'includeSupplementaryData'> & {
+    regionalSummary: Array<Record<string, unknown>>;
+  }
+): Promise<
+  Pick<
+    RealDataLoadResult,
+    | 'nationalSummary'
+    | 'impactByAsset'
+    | 'impactBySector'
+    | 'regionalSummaryBySector'
+    | 'exposureByCluster'
+    | 'exposureData'
+    | 'economicDamageData'
+    | 'sectorEconomicData'
+    | 'assetEconomicData'
+    | 'assetExposureData'
+    | 'sectorSpecificEvents'
+  >
+> {
+  const { signal, countryCode = 'VU', regionalSummary } = options;
+  const basePath = DATA_PATH[countryCode];
+  const partnerData = await loadPartnerApiCountryData(countryCode, signal);
+
+  const [
+    regionalImpactsBySectorGeoJSON,
+    exposureByCluster,
+    nationalSummary,
+    impactByAsset,
+    impactBySector,
+    regionalSummaryBySector,
+  ] = await Promise.all([
+    loadRegionalImpactsBySector({ signal, basePath, countryCode }),
+    loadExposureByCluster({ signal, basePath }),
+    loadNationalSummary({ signal, basePath, countryCode }),
+    loadImpactByAssetType({ signal, basePath }),
+    loadImpactBySector({ signal, basePath, countryCode }),
+    loadRegionalSummaryBySector({ signal, basePath }),
+  ]);
+
+  const impactByAssetFromPartner = partnerData.riskImpactByAsset;
+  const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
+    partnerData.riskRegionalSummary
+  );
+  const effectiveNationalSummary =
+    nationalSummaryFromPartner.length > 0 && !hasNonZeroLoss(nationalSummary)
+      ? nationalSummaryFromPartner
+      : nationalSummary;
+  const effectiveImpactByAsset =
+    impactByAssetFromPartner.length > 0 && !hasNonZeroLoss(impactByAsset)
+      ? impactByAssetFromPartner
+      : impactByAsset;
+
+  const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
+    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
+    : [];
+  const exposureData = convertToExposureData(regionalSummaryBySector, regionalSummary);
+  const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
+  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
+  const assetExposureData = processAssetExposureData(exposureByCluster);
+
+  return {
+    nationalSummary: (effectiveNationalSummary || []) as any,
+    impactByAsset: (effectiveImpactByAsset || []) as any,
+    impactBySector: (impactBySector || []) as any,
+    regionalSummaryBySector: (regionalSummaryBySector || []) as any,
+    exposureByCluster: (exposureByCluster as any) || null,
+    exposureData,
+    economicDamageData: [...sectorEconomicData, ...assetEconomicData],
+    sectorEconomicData,
+    assetEconomicData,
+    assetExposureData,
+    sectorSpecificEvents,
   };
 }
 
@@ -818,8 +1406,12 @@ function convertToExposureData(regionalSummaryBySector: any, regionalSummary?: a
 /**
  * Convert impact by sector CSV to EconomicDamageData format (sector-level)
  */
-function convertSectorEconomicData(impactBySector: any): any[] {
+function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode): any[] {
   if (!impactBySector || !Array.isArray(impactBySector)) return [];
+
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
+  const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
+  const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
   return impactBySector.map((row, index) => ({
     id: `damage-sector-${index}`,
@@ -831,8 +1423,8 @@ function convertSectorEconomicData(impactBySector: any): any[] {
     totalLoss: Number(row.Total_Loss) || 0,
     buildingCount:
       Number(row.Number_Damaged_Buildings) || Number(row.Number_Exposed_Buildings) || 0,
-    year: 2023, // TC Lola actual event date: October 2023
-    eventId: 'tc-lola-2023',
+    year: normalizedYear,
+    eventId: cycloneConfig.eventId,
     sector: row.Sector || 'Unknown',
   }));
 }
@@ -840,8 +1432,12 @@ function convertSectorEconomicData(impactBySector: any): any[] {
 /**
  * Convert impact by asset type CSV to AssetDamageData format (asset-level)
  */
-function convertAssetEconomicData(impactByAsset: any): any[] {
+function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode): any[] {
   if (!impactByAsset || !Array.isArray(impactByAsset)) return [];
+
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
+  const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
+  const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
   return impactByAsset.map((row, index) => ({
     id: `damage-asset-${index}`,
@@ -852,8 +1448,8 @@ function convertAssetEconomicData(impactByAsset: any): any[] {
     directLoss: Number(row.Total_Wind_Loss) || 0,
     indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
     totalLoss: Number(row.Total_Loss) || 0,
-    year: 2023, // TC Lola actual event date
-    eventId: 'tc-lola-2023',
+    year: normalizedYear,
+    eventId: cycloneConfig.eventId,
   }));
 }
 
@@ -933,8 +1529,9 @@ export async function loadDamagedBuildings(
     const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
     let response: Response;
     try {
+      const buildingsApiPath = withBasePath('/api/buildings');
       response = await fetch(
-        `/partner2/api/buildings?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=100000`,
+        `${buildingsApiPath}?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=100000`,
         { signal: controller.signal }
       );
     } finally {
@@ -943,23 +1540,120 @@ export async function loadDamagedBuildings(
 
     if (response.ok) {
       const data = await response.json();
-      console.log(`✅ Loaded ${data.features?.length || 0} buildings from DATABASE`);
-      return data;
+      const isDegraded =
+        response.headers.get('X-Data-Status') === 'degraded' || data?.degraded === true;
+      const featureCount = Array.isArray(data?.features) ? data.features.length : 0;
+
+      if (!isDegraded && featureCount > 0) {
+        console.log(`✅ Loaded ${featureCount} buildings from DATABASE`);
+        return data;
+      }
+
+      if (!isDegraded && featureCount === 0) {
+        console.warn('⚠️ Buildings API returned 0 features, falling back to file data');
+      }
+
+      // DB unavailable/empty path from API: continue to file fallback.
     }
   } catch (error) {
-    console.warn(
-      '⚠️ Database API unavailable, falling back to file:',
-      error instanceof Error ? error.message : error
-    );
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (signal?.aborted) {
+        return null;
+      }
+      // Internal timeout abort: continue to local file fallback without warning spam.
+    } else {
+      console.warn(
+        '⚠️ Database API unavailable, falling back to file:',
+        error instanceof Error ? error.message : error
+      );
+    }
   }
 
   // Fallback to file (cached)
-  const { data } = await loadGeoJSON(`${basePath}/damaged-buildings.geojson`, {
+  const filePath = getCountryDataFilePath(countryCode, 'damaged-buildings.geojson');
+  const { data } = await loadGeoJSON(filePath, {
     cache: true,
     signal,
   });
-  console.log('📁 Loaded buildings from FILE');
-  return data;
+
+  const toPointCoordinate = (
+    geometry: GeoJSON.Geometry | null | undefined
+  ): [number, number] | null => {
+    if (!geometry) return null;
+
+    if (geometry.type === 'Point') {
+      const coords = geometry.coordinates as number[];
+      if (coords.length >= 2) return [coords[0], coords[1]];
+      return null;
+    }
+
+    const bounds = {
+      minLng: Infinity,
+      minLat: Infinity,
+      maxLng: -Infinity,
+      maxLat: -Infinity,
+    };
+
+    const visit = (coords: unknown) => {
+      if (!Array.isArray(coords)) return;
+      if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+        const lng = coords[0];
+        const lat = coords[1];
+        if (Number.isFinite(lng) && Number.isFinite(lat)) {
+          bounds.minLng = Math.min(bounds.minLng, lng);
+          bounds.minLat = Math.min(bounds.minLat, lat);
+          bounds.maxLng = Math.max(bounds.maxLng, lng);
+          bounds.maxLat = Math.max(bounds.maxLat, lat);
+        }
+        return;
+      }
+      coords.forEach(visit);
+    };
+
+    if (geometry.type === 'GeometryCollection') {
+      geometry.geometries.forEach(geo =>
+        visit((geo as GeoJSON.Geometry & { coordinates?: unknown }).coordinates)
+      );
+    } else {
+      visit((geometry as GeoJSON.Geometry & { coordinates?: unknown }).coordinates);
+    }
+
+    if (
+      !Number.isFinite(bounds.minLng) ||
+      !Number.isFinite(bounds.minLat) ||
+      !Number.isFinite(bounds.maxLng) ||
+      !Number.isFinite(bounds.maxLat)
+    ) {
+      return null;
+    }
+
+    return [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
+  };
+
+  const pointFeatures =
+    data?.features
+      ?.map(feature => {
+        const point = toPointCoordinate(feature.geometry as GeoJSON.Geometry | null | undefined);
+        if (!point) return null;
+        return {
+          ...feature,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: point,
+          },
+        };
+      })
+      .filter(feature => feature !== null) || [];
+
+  const normalizedData = {
+    type: 'FeatureCollection' as const,
+    features: pointFeatures,
+  };
+
+  console.log(
+    `📁 Loaded buildings from FILE (normalized to ${normalizedData.features.length} points)`
+  );
+  return normalizedData;
 }
 
 /**
@@ -974,7 +1668,8 @@ export async function loadDamagedRoads(
   // Try API first (database)
   try {
     const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
-    const url = `/partner2/api/roads?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=10000`;
+    const roadsApiPath = withBasePath('/api/roads');
+    const url = `${roadsApiPath}?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=10000`;
     console.log('🔍 Attempting to load roads from API:', url);
 
     const controller = new AbortController();
@@ -999,21 +1694,47 @@ export async function loadDamagedRoads(
 
     if (response.ok) {
       const data = await response.json();
-      console.log(`✅ Loaded ${data.features?.length || 0} roads from DATABASE`);
-      console.log(
-        '   Sample Total_Loss values:',
-        data.features?.slice(0, 3).map((f: any) => f.properties?.Total_Loss)
-      );
-      return data;
+      const isDegraded =
+        response.headers.get('X-Data-Status') === 'degraded' || data?.degraded === true;
+      const featureCount = Array.isArray(data?.features) ? data.features.length : 0;
+
+      if (!isDegraded && featureCount > 0) {
+        console.log(`✅ Loaded ${featureCount} roads from DATABASE`);
+        console.log(
+          '   Sample Total_Loss values:',
+          data.features?.slice(0, 3).map((f: any) => f.properties?.Total_Loss)
+        );
+        return data;
+      }
+
+      if (!isDegraded && featureCount === 0) {
+        console.warn('⚠️ Roads API returned 0 features, falling back to file data');
+      }
+
+      if (isDegraded) {
+        console.warn('⚠️ Roads API is degraded, using local file fallback');
+      }
     } else {
       console.warn(`⚠️ API returned ${response.status}: ${response.statusText}`);
     }
   } catch (error) {
-    console.error('❌ Database API error:', error);
-    console.error('   Error details:', error instanceof Error ? error.message : error);
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (signal?.aborted) {
+        return null;
+      }
+      // Internal timeout abort: continue to local file fallback without warning spam.
+    } else {
+      console.warn(
+        '⚠️ Roads API unavailable, falling back to file:',
+        error instanceof Error ? error.message : error
+      );
+    }
   }
 
   // Fallback to file (cached)
+  if (signal?.aborted) {
+    return null;
+  }
   console.log('📁 Falling back to damaged-roads.geojson file');
   const { data } = await loadGeoJSON(`${basePath}/damaged-roads.geojson`, {
     cache: true,

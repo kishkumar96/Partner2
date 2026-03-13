@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import { DollarSign, Wind, ChevronDown, ChevronUp, Info, Droplet } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
-import { LOSS_SEQUENTIAL_COLORS, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSystem';
+import { WIND_SEQUENTIAL_COLORS, getLossSequentialColors } from '@/utils/colorSystem';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
+import { CountryCode } from '@/types/thredds';
 
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 
@@ -26,92 +27,27 @@ interface UnifiedMapLegendProps {
   onZoomToRoads?: () => void;
   // Active THREDDS WMS layers
   activeWmsLayers?: RealWMSLayer[];
+  countryCode?: CountryCode | null;
 }
 
-/**
- * Compute quantile breaks from actual data values
- * @param values Array of numeric values from the dataset
- * @param numClasses Number of classes to create
- * @returns Array of break points
- */
-function computeQuantileBreaks(values: number[], numClasses: number): number[] {
-  if (!values || values.length === 0) return [];
-
-  const sorted = [...values].filter(v => v != null && !isNaN(v)).sort((a, b) => a - b);
-  if (sorted.length === 0) return [];
-
-  const breaks: number[] = [];
-  for (let i = 1; i < numClasses; i++) {
-    const index = Math.floor((sorted.length * i) / numClasses);
-    breaks.push(sorted[Math.min(index, sorted.length - 1)]);
-  }
-
-  return breaks;
-}
-
-/**
- * Format legend label based on mode and value
- */
-function formatLegendLabel(value: number, nextValue: number | null, mode: 'loss' | 'wind'): string {
+function formatContinuousRangeLabel(
+  value: number,
+  nextValue: number | null,
+  mode: 'loss' | 'wind'
+): string {
   if (mode === 'loss') {
-    const formatVal = (v: number) => {
-      if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
-      if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
-      return `$${v.toFixed(0)}`;
-    };
-
+    const current = formatCurrency(value);
     if (nextValue === null) {
-      return `> ${formatVal(value)}`;
+      return `>= ${current}`;
     }
-    return `${formatVal(value)} - ${formatVal(nextValue)}`;
-  } else {
-    const formatVal = (v: number) => Math.round(v);
-
-    if (nextValue === null) {
-      return `> ${formatVal(value)} km/h`;
-    }
-    return `${formatVal(value)}-${formatVal(nextValue)} km/h`;
+    return `${current} - ${formatCurrency(nextValue)}`;
   }
-}
 
-/**
- * Get color for a legend class based on index
- * Uses unified color system for consistency
- */
-function getLegendColor(index: number, total: number, mode: 'loss' | 'wind'): string {
-  const colorScale = mode === 'loss' ? LOSS_SEQUENTIAL_COLORS : WIND_SEQUENTIAL_COLORS;
-
-  // Map index to color scale
-  const scaleIndex = Math.floor((index / (total - 1)) * (colorScale.length - 1));
-  const colorHex = colorScale[Math.min(scaleIndex, colorScale.length - 1)].color;
-
-  // Convert hex to Tailwind class (or return as inline style)
-  // For now, return as inline style for exact color matching
-  return colorHex;
-}
-
-/**
- * Get severity label for a class
- */
-function getSeverityLabel(index: number, total: number, mode: 'loss' | 'wind'): string {
-  const ratio = index / (total - 1);
-
-  if (mode === 'loss') {
-    if (ratio < 0.2) return 'Minimal';
-    if (ratio < 0.4) return 'Low';
-    if (ratio < 0.6) return 'Moderate';
-    if (ratio < 0.8) return 'High';
-    if (ratio < 0.95) return 'Severe';
-    return 'Catastrophic';
-  } else {
-    if (ratio < 0.14) return 'Below TS';
-    if (ratio < 0.29) return 'Cat 1 / TS';
-    if (ratio < 0.43) return 'Cat 2';
-    if (ratio < 0.57) return 'Cat 3';
-    if (ratio < 0.71) return 'Cat 3 - Severe';
-    if (ratio < 0.86) return 'Cat 4';
-    return 'Cat 5 - Extreme';
+  const current = Math.round(value);
+  if (nextValue === null) {
+    return `>= ${current} km/h`;
   }
+  return `${current}-${Math.round(nextValue)} km/h`;
 }
 
 export default function UnifiedMapLegend({
@@ -128,49 +64,20 @@ export default function UnifiedMapLegend({
   onZoomToBuildings,
   onZoomToRoads,
   activeWmsLayers = [],
+  countryCode = null,
 }: UnifiedMapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Compute data-driven legend breaks
+  // Legend classes mirror the exact static thresholds used by map paint expressions.
   const legendClasses = useMemo(() => {
-    // If we have real data, compute quantile breaks
-    if (dataValues && dataValues.length > 0) {
-      const numClasses = mode === 'loss' ? 6 : 7;
-      const breaks = computeQuantileBreaks(dataValues, numClasses);
-
-      if (breaks.length > 0) {
-        const max = Math.max(...dataValues);
-
-        return breaks.map((breakValue, index) => {
-          const nextValue = index < breaks.length - 1 ? breaks[index + 1] : null;
-          return {
-            label: formatLegendLabel(breakValue, nextValue, mode),
-            color: getLegendColor(index, breaks.length, mode),
-            textColor: 'text-slate-900 dark:text-white',
-            range: getSeverityLabel(index, breaks.length, mode),
-            minValue: breakValue,
-            maxValue: nextValue || max,
-          };
-        });
-      }
-    }
-
-    // Fallback to domain-specific thresholds from unified color system
-    const colorScale = mode === 'loss' ? LOSS_SEQUENTIAL_COLORS : WIND_SEQUENTIAL_COLORS;
+    const colorScale =
+      mode === 'loss' ? getLossSequentialColors(countryCode) : WIND_SEQUENTIAL_COLORS;
 
     return colorScale.map((item, index) => {
       const nextItem = colorScale[index + 1];
-      const label =
-        mode === 'loss'
-          ? nextItem
-            ? `${formatCurrency(item.threshold)} - ${formatCurrency(nextItem.threshold)}`
-            : `> ${formatCurrency(item.threshold)}`
-          : nextItem
-            ? `${Math.round(item.threshold)}-${Math.round(nextItem.threshold)} km/h`
-            : `> ${Math.round(item.threshold)} km/h`;
 
       return {
-        label,
+        label: formatContinuousRangeLabel(item.threshold, nextItem?.threshold ?? null, mode),
         color: item.color,
         textColor: 'text-slate-900 dark:text-white',
         range: item.label,
@@ -178,13 +85,13 @@ export default function UnifiedMapLegend({
         maxValue: nextItem ? nextItem.threshold : Infinity,
       };
     });
-  }, [mode, dataValues]);
+  }, [mode, countryCode]);
 
   const config = useMemo(() => {
     if (mode === 'loss') {
       return {
-        title: 'Economic Loss (USD)',
-        subtitle: 'Direct physical damage costs (USD, millions)',
+        title: 'Economic Damage (USD)',
+        subtitle: 'Direct physical damage costs (USD)',
         icon: DollarSign,
         iconColor: 'text-green-600 dark:text-green-400',
         units: 'USD',
@@ -225,6 +132,32 @@ export default function UnifiedMapLegend({
     ];
   }, [showRoads]);
 
+  // Cyclone swath legend classes (when cyclone layer is visible)
+  const cycloneSwathLegendClasses = useMemo(() => {
+    if (!showCyclone) return [];
+
+    return [
+      {
+        label: 'Hurricane Swath',
+        description: 'Maximum hurricane-force footprint',
+        color: 'rgba(244, 63, 94, 0.67)',
+        borderColor: 'rgb(244, 63, 94)',
+      },
+      {
+        label: 'Storm Swath',
+        description: 'Maximum storm-force footprint',
+        color: 'rgba(250, 204, 21, 0.47)',
+        borderColor: 'rgb(250, 204, 21)',
+      },
+      {
+        label: 'Gale Swath',
+        description: 'Maximum gale-force footprint',
+        color: 'rgba(56, 189, 248, 0.34)',
+        borderColor: 'rgb(56, 189, 248)',
+      },
+    ];
+  }, [showCyclone]);
+
   const IconComponent = config.icon;
 
   // Find min and max from data
@@ -255,9 +188,9 @@ export default function UnifiedMapLegend({
     };
   };
 
-  // Hide when not visible or when something is selected
+  // Hide only when globally disabled.
   // This must come AFTER all hooks to comply with Rules of Hooks
-  if (!visible || hasSelection) return null;
+  if (!visible) return null;
 
   return (
     <div
@@ -330,6 +263,11 @@ export default function UnifiedMapLegend({
                   <span className="font-medium text-slate-200 ml-1">{temporalScope}</span>
                 </div>
               </div>
+              {hasSelection && (
+                <p className="text-xs text-amber-300">
+                  Selection active: legend remains visible for overlay reference.
+                </p>
+              )}
             </div>
 
             {/* Title - simplified */}
@@ -386,7 +324,7 @@ export default function UnifiedMapLegend({
             <div className="px-3 py-2 bg-black/10">
               <p className="text-xs text-slate-500 leading-relaxed">
                 {mode === 'loss'
-                  ? 'Direct physical damage costs in USD (millions)'
+                  ? 'Direct physical damage costs in USD'
                   : '10-minute sustained wind speed in km/h'}
               </p>
               {dataValues && dataValues.length > 0 && (
@@ -409,12 +347,19 @@ export default function UnifiedMapLegend({
 
                 <div className="px-2 py-2 space-y-3">
                   {activeWmsLayers.map((layer, layerIndex) => {
-                    const range = layer.styleConfig?.colorScaleRange?.split(',').map(Number) || [
-                      0, 100,
-                    ];
+                    const parsedRange =
+                      layer.styleConfig?.colorScaleRange
+                        ?.split(',')
+                        .map(v => Number(v.trim()))
+                        .filter(v => Number.isFinite(v)) ?? [];
+                    const hasValidRange = parsedRange.length === 2;
+                    const rangeMin = hasValidRange ? parsedRange[0] : null;
+                    const rangeMax = hasValidRange ? parsedRange[1] : null;
                     const isWind = layer.hazardType === 'wind';
                     const isFlood =
-                      layer.hazardType === 'flood' || layer.hazardType === 'inundation';
+                      layer.hazardType === 'flood' ||
+                      layer.hazardType === 'inundation' ||
+                      layer.hazardType === 'fluvial-depth';
 
                     // Parse color style (e.g., "default-scalar/seq-YlOrRd" or "default-scalar/seq-Blues")
                     const colorStyle = layer.styleConfig?.styles || '';
@@ -443,16 +388,22 @@ export default function UnifiedMapLegend({
                         />
 
                         {/* Min and max labels */}
-                        <div className="flex justify-between text-xs text-slate-400 font-mono">
-                          <span>
-                            {range[0]}
-                            {isWind ? ' km/h' : ' m'}
-                          </span>
-                          <span>
-                            {range[1]}
-                            {isWind ? ' km/h' : ' m'}
-                          </span>
-                        </div>
+                        {hasValidRange ? (
+                          <div className="flex justify-between text-xs text-slate-400 font-mono">
+                            <span>
+                              {rangeMin}
+                              {isWind ? ' km/h' : ' m'}
+                            </span>
+                            <span>
+                              {rangeMax}
+                              {isWind ? ' km/h' : ' m'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-slate-500 font-mono">
+                            Range unavailable in WMS metadata
+                          </div>
+                        )}
 
                         <p className="text-xs text-slate-500 mt-1">
                           {isWind ? 'Wind speed intensity' : 'Flood inundation depth'}
@@ -556,6 +507,42 @@ export default function UnifiedMapLegend({
                         <span className="text-xs text-slate-500 uppercase tracking-wide">
                           {item.range}
                         </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Cyclone swath legend (when visible) */}
+            {showCyclone && cycloneSwathLegendClasses.length > 0 && (
+              <>
+                <div className="px-3 py-2 border-t border-white/10">
+                  <h4 className="text-xs font-bold text-blue-400 mb-0.5 flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                    Cyclone Swath Envelope
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Maximum forecast wind footprints by force band
+                  </p>
+                </div>
+
+                <div className="px-2 py-2 space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                  {cycloneSwathLegendClasses.map(item => (
+                    <div
+                      key={item.label}
+                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                    >
+                      <div
+                        className="w-4 h-4 rounded border flex-shrink-0"
+                        style={{
+                          backgroundColor: item.color,
+                          borderColor: item.borderColor,
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-slate-200">{item.label}</div>
+                        <div className="text-xs text-slate-500">{item.description}</div>
                       </div>
                     </div>
                   ))}

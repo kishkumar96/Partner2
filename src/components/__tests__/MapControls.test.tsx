@@ -1,12 +1,6 @@
-/**
- * Tests for MapControls component
- *
- * Covers basemap switching, map style toggling (loss/wind),
- * and wind/inundation layer toggle callbacks.
- */
-
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MapControls } from '../MapControls';
 
 const POSITRON_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
@@ -20,70 +14,123 @@ describe('MapControls', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('renders without crashing', () => {
-    const { container } = render(<MapControls {...defaultProps} />);
-    expect(container).toBeInTheDocument();
-  });
-
-  it('opens the settings/basemap panel on button click', () => {
+  it('renders map controls toggle', () => {
     render(<MapControls {...defaultProps} />);
-    // The settings toggle button (Settings2 icon) or similar trigger
-    const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBeGreaterThan(0);
-    // Click the first toggle button (typically the settings or basemap toggle)
-    fireEvent.click(buttons[0]);
-    // Panel should now be open – one way to verify is more buttons appear
-    // We just assert no throw
+    expect(screen.getByRole('button', { name: /map controls/i })).toBeInTheDocument();
   });
 
-  it('calls onBasemapChange when a basemap option is selected', () => {
-    const onBasemapChange = jest.fn();
-    render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
-
-    // Open the basemap panel – find the basemap expand button
-    const allButtons = screen.getAllByRole('button');
-    // Click until we find the basemap selector button
-    // It contains 'Basemap' text or is the second control button
-    const basemapBtn = allButtons.find(
-      btn =>
-        btn.textContent?.toLowerCase().includes('basemap') ||
-        btn.getAttribute('aria-label')?.toLowerCase().includes('basemap')
-    );
-    if (basemapBtn) {
-      fireEvent.click(basemapBtn);
-      // Now the basemap options should be visible
-      const detailedBtn = screen.queryByText('Detailed');
-      if (detailedBtn) {
-        fireEvent.click(detailedBtn);
-        expect(onBasemapChange).toHaveBeenCalledWith(VOYAGER_URL);
-      }
-    }
-  });
-
-  it('calls onMapStyleChange with "wind" when Wind style button is clicked', () => {
+  it('announces pressed state and calls onMapStyleChange for display mode buttons', () => {
     const onMapStyleChange = jest.fn();
     render(<MapControls {...defaultProps} mapStyle="loss" onMapStyleChange={onMapStyleChange} />);
-    // Open the settings panel
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
 
-    const windBtn = screen.queryByText(/wind hazard/i);
-    if (windBtn) {
-      fireEvent.click(windBtn);
-      expect(onMapStyleChange).toHaveBeenCalledWith('wind');
-    }
+    const lossButton = screen.getByRole('button', { name: /economic loss coloring/i });
+    const windButton = screen.getByRole('button', { name: /wind exposure coloring/i });
+
+    expect(lossButton).toHaveAttribute('aria-pressed', 'true');
+    expect(windButton).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(windButton);
+    expect(onMapStyleChange).toHaveBeenCalledWith('wind');
   });
 
-  it('calls onMapStyleChange with "loss" when Economic Loss button is clicked', () => {
+  it('does not auto-enable wind overlay when switching to wind display mode', () => {
     const onMapStyleChange = jest.fn();
-    render(<MapControls {...defaultProps} mapStyle="wind" onMapStyleChange={onMapStyleChange} />);
-    const buttons = screen.getAllByRole('button');
-    fireEvent.click(buttons[0]);
+    const onWindLayerToggle = jest.fn();
 
-    const lossBtn = screen.queryByText(/economic loss/i);
-    if (lossBtn) {
-      fireEvent.click(lossBtn);
-      expect(onMapStyleChange).toHaveBeenCalledWith('loss');
-    }
+    render(
+      <MapControls
+        {...defaultProps}
+        mapStyle="loss"
+        onMapStyleChange={onMapStyleChange}
+        showWindLayer={false}
+        onWindLayerToggle={onWindLayerToggle}
+      />
+    );
+
+    const windExposureButton = screen.getByRole('button', { name: /wind exposure coloring/i });
+
+    fireEvent.click(windExposureButton);
+
+    expect(onMapStyleChange).toHaveBeenCalledWith('wind');
+    expect(onWindLayerToggle).not.toHaveBeenCalled();
+  });
+
+  it('supports keyboard navigation and focus return in basemap menu', async () => {
+    const user = userEvent.setup();
+    const onBasemapChange = jest.fn();
+
+    render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
+
+    const basemapTrigger = screen.getByRole('button', { name: /basemap/i });
+    await user.click(basemapTrigger);
+
+    const basemapPanel = screen.getByRole('menu', { name: /basemap options/i });
+    expect(basemapPanel).toBeInTheDocument();
+
+    const lightOption = screen.getByRole('menuitemradio', { name: /light/i });
+    const detailedOption = screen.getByRole('menuitemradio', { name: /detailed/i });
+
+    await waitFor(() => {
+      expect(lightOption).toHaveFocus();
+    });
+    expect(lightOption).toHaveAttribute('aria-checked', 'true');
+
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() => {
+      expect(detailedOption).toHaveFocus();
+    });
+
+    await user.keyboard('{Enter}');
+    expect(onBasemapChange).toHaveBeenCalledWith(VOYAGER_URL);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: /basemap options/i })).not.toBeInTheDocument();
+    });
+    expect(basemapTrigger).toHaveFocus();
+  });
+
+  it('disables actionable controls while loading', () => {
+    const onMapStyleChange = jest.fn();
+    const on3DViewToggle = jest.fn();
+    const onWindLayerToggle = jest.fn();
+    const onLayerOpacityChange = jest.fn();
+
+    render(
+      <MapControls
+        {...defaultProps}
+        mapStyle="loss"
+        onMapStyleChange={onMapStyleChange}
+        on3DViewToggle={on3DViewToggle}
+        onWindLayerToggle={onWindLayerToggle}
+        showWindLayer={true}
+        onLayerOpacityChange={onLayerOpacityChange}
+        isMapDataLoading={true}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /economic loss coloring/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /wind exposure coloring/i })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /3d buildings/i })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /wind layer/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /basemap/i })).toBeDisabled();
+    expect(screen.getByRole('slider', { name: /layer opacity/i })).toBeDisabled();
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+  });
+
+  it('exposes opacity slider semantic values', () => {
+    const onLayerOpacityChange = jest.fn();
+
+    render(
+      <MapControls
+        {...defaultProps}
+        onLayerOpacityChange={onLayerOpacityChange}
+        layerOpacity={82}
+      />
+    );
+
+    const slider = screen.getByRole('slider', { name: /layer opacity, 82 percent/i });
+    expect(slider).toHaveAttribute('aria-valuemin', '0');
+    expect(slider).toHaveAttribute('aria-valuemax', '100');
+    expect(slider).toHaveAttribute('aria-valuenow', '82');
   });
 });

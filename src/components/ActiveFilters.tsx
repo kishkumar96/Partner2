@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { FilterState, Hazard, Sector } from '@/types';
 import { Calendar, Filter, X } from 'lucide-react';
+import { normalizeHazardId } from '@/utils/hazardIds';
 
 interface ActiveFiltersProps {
   filters: FilterState;
@@ -43,18 +44,34 @@ export default function ActiveFilters({
   const chips: ReactNode[] = [];
 
   activeHazards.forEach(hazardId => {
-    const hazard = hazards.find(h => h.id === hazardId);
-    if (!hazard) return;
-    const HazardIcon = hazard.icon;
+    const normalizedHazardId = normalizeHazardId(hazardId);
+    const hazard = hazards.find(h => h.id === hazardId || h.id === normalizedHazardId);
+
+    if (hazard) {
+      const HazardIcon = hazard.icon;
+      chips.push(
+        <button
+          key={`hazard-${hazardId}`}
+          onClick={() => onClearFilter('hazard', hazardId)}
+          className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors group"
+          title={`Remove ${hazard.name} filter`}
+        >
+          <HazardIcon className="w-3 h-3" aria-hidden="true" />
+          <span>{hazard.name}</span>
+          <X className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+        </button>
+      );
+      return;
+    }
+
     chips.push(
       <button
         key={`hazard-${hazardId}`}
         onClick={() => onClearFilter('hazard', hazardId)}
         className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-500/20 text-red-300 rounded-full text-xs font-medium border border-red-500/30 hover:bg-red-500/30 transition-colors group"
-        title={`Remove ${hazard.name} filter`}
+        title={`Remove ${hazardId} filter`}
       >
-        <HazardIcon className="w-3 h-3" aria-hidden="true" />
-        <span>{hazard.name}</span>
+        <span>Hazard: {hazardId}</span>
         <X className="w-3 h-3 opacity-60 group-hover:opacity-100" />
       </button>
     );

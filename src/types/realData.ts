@@ -159,4 +159,9 @@ export interface RealDataLoadResult {
   cycloneForecast: CycloneForecastPoint[] | null;
   regionalImpactsData?: any[]; // RegionalImpact[] - structured impact data per region
   sectorSpecificEvents?: any[]; // Event[] - sector-specific events for filtering
+  dataSourceInfo?: {
+    countryCode: string;
+    cycloneTrackSource: 'partner_api' | 'local_files';
+    eventMetadataSource: 'partner_api' | 'local_files';
+  };
 }

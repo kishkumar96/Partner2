@@ -1,3 +1,5 @@
+import { CountryCode } from '@/types/thredds';
+
 /**
  * Unified Color System for Pacific Disaster Dashboard
  *
@@ -56,6 +58,17 @@ export const LOSS_SEQUENTIAL_COLORS = [
   { threshold: 50000000, color: '#c62828', label: 'Catastrophic' }, // Deep red
 ] as const;
 
+// Samoa (TC Gita) has much lower regional losses than the other country datasets.
+// Use tighter class breaks so the choropleth shows meaningful contrast.
+export const SAMOA_LOSS_SEQUENTIAL_COLORS = [
+  { threshold: 0, color: '#e8f5e9', label: 'Minimal' },
+  { threshold: 100000, color: '#fff9c4', label: 'Low' },
+  { threshold: 300000, color: '#ffe082', label: 'Moderate' },
+  { threshold: 700000, color: '#ffcc80', label: 'High' },
+  { threshold: 1500000, color: '#ef9a9a', label: 'Severe' },
+  { threshold: 3000000, color: '#c62828', label: 'Catastrophic' },
+] as const;
+
 /**
  * Sequential color scale for Wind Speed (km/h)
  * Subtle, desaturated cool-to-warm progression for professional overlays
@@ -88,12 +101,20 @@ export const WIND_SEQUENTIAL_COLORS = [
  * Generate MapLibre interpolation expression for economic loss
  * @returns MapLibre style expression
  */
-export function createLossColorExpression(): any {
+export function getLossSequentialColors(countryCode?: CountryCode | null) {
+  if (countryCode === 'WS') {
+    return SAMOA_LOSS_SEQUENTIAL_COLORS;
+  }
+  return LOSS_SEQUENTIAL_COLORS;
+}
+
+export function createLossColorExpression(countryCode?: CountryCode | null): any {
+  const scale = getLossSequentialColors(countryCode);
   return [
     'interpolate',
     ['linear'],
     ['get', 'Total_Loss'],
-    ...LOSS_SEQUENTIAL_COLORS.flatMap(({ threshold, color }) => [threshold, color]),
+    ...scale.flatMap(({ threshold, color }) => [threshold, color]),
   ];
 }
 
@@ -179,13 +200,15 @@ export function createScaleDependentOpacity(baseOpacity: number): any {
  */
 export function createRegionalFillOpacity(
   mode: 'wind' | 'loss',
-  selectedRegion: string | null
+  selectedRegion: string | null,
+  scale: number = 1
 ): any {
   const isWindMode = mode === 'wind';
-  const baseOpacity = isWindMode ? LAYER_OPACITY.regional.fillWind : LAYER_OPACITY.regional.fill;
-  const selectedOpacity = isWindMode
-    ? LAYER_OPACITY.regional.fillWindSelected
-    : LAYER_OPACITY.regional.fillSelected;
+  const baseOpacity =
+    (isWindMode ? LAYER_OPACITY.regional.fillWind : LAYER_OPACITY.regional.fill) * scale;
+  const selectedOpacity =
+    (isWindMode ? LAYER_OPACITY.regional.fillWindSelected : LAYER_OPACITY.regional.fillSelected) *
+    scale;
 
   return [
     'case',

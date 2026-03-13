@@ -12,12 +12,48 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { resolveCountryCode } from '@/lib/countryAuth';
+import { ensureCountryApiAccessEnhanced } from '@/lib/countryApiAuth';
+import type { CountryCode } from '@/types/thredds';
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
 
+const DB_CONNECT_TIMEOUT_MS = 2000;
+const DB_QUERY_TIMEOUT_MS = 5000;
+const DB_FAILURE_COOLDOWN_MS = 30_000;
+const DB_LOG_THROTTLE_MS = 10_000;
+
+let dbUnavailableUntil = 0;
+let lastDbErrorLogAt = 0;
+
+function isDbConnectivityError(error: unknown): boolean {
+  const err = error as NodeJS.ErrnoException | { code?: string; message?: string };
+  const code = err?.code;
+  const message = (err?.message || '').toLowerCase();
+
+  return (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'EHOSTUNREACH' ||
+    code === 'ECONNRESET' ||
+    message.includes('timeout expired') ||
+    message.includes('connection timeout')
+  );
+}
+
+function maybeLogDbError(error: unknown): void {
+  const now = Date.now();
+  if (now - lastDbErrorLogAt >= DB_LOG_THROTTLE_MS) {
+    lastDbErrorLogAt = now;
+    console.error('Buildings API DB connectivity error:', error);
+  }
+}
+
 export async function GET(request: NextRequest) {
-  let client: Client | null = null;
+  let bbox: [number, number, number, number] | null = null;
+  let countryCode: CountryCode | null = null;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -28,84 +64,137 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing bbox parameter' }, { status: 400 });
     }
 
-    const [minLng, minLat, maxLng, maxLat] = bboxStr.split(',').map(Number);
-    if ([minLng, minLat, maxLng, maxLat].some(isNaN)) {
+    bbox = bboxStr.split(',').map(Number) as [number, number, number, number];
+    if (bbox.length !== 4 || bbox.some(isNaN)) {
       return NextResponse.json(
         { error: 'Invalid bbox format. Expected: minLng,minLat,maxLng,maxLat' },
         { status: 400 }
       );
     }
+    const [minLng, minLat, maxLng, maxLat] = bbox;
 
     // Parse pagination
     const limit = Math.min(parseInt(searchParams.get('limit') || '1000'), 5000);
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Parse country code (default to VU for backward compatibility)
-    const country = (searchParams.get('country') || 'VU').toUpperCase();
+    countryCode = resolveCountryCode(searchParams.get('country') || 'VU');
+    if (!countryCode) {
+      return NextResponse.json({ error: 'Invalid country code' }, { status: 400 });
+    }
 
-    // Connect to database
-    client = new Client({ connectionString: DATABASE_URL });
+    // If DB recently failed, short-circuit to avoid repeated timeouts and log spam.
+    if (Date.now() < dbUnavailableUntil) {
+      return NextResponse.json(
+        {
+          type: 'FeatureCollection',
+          features: [],
+          count: 0,
+          bbox,
+          country: countryCode,
+          degraded: true,
+          message: 'Building data temporarily unavailable',
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-Data-Status': 'degraded',
+          },
+        }
+      );
+    }
+
+    const authResponse = await ensureCountryApiAccessEnhanced(
+      request,
+      countryCode,
+      '/api/buildings'
+    );
+    if (authResponse) return authResponse;
+
+    const client = new Client({
+      connectionString: DATABASE_URL,
+      connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+      query_timeout: DB_QUERY_TIMEOUT_MS,
+      statement_timeout: DB_QUERY_TIMEOUT_MS,
+    });
     await client.connect();
 
-    // Query buildings within bounding box filtered by country
-    const result = await client.query(
-      `SELECT 
-        id,
-        latitude,
-        longitude,
-        wind_loss,
-        exposure,
-        damage_ratio,
-        building_type,
-        occupancy,
-        country_code
-       FROM damaged_buildings
-       WHERE country_code = $1
-         AND longitude BETWEEN $2 AND $3
-         AND latitude BETWEEN $4 AND $5
-       ORDER BY wind_loss DESC NULLS LAST
-       LIMIT $6 OFFSET $7`,
-      [country, minLng, maxLng, minLat, maxLat, limit, offset]
-    );
+    try {
+      // Query buildings within bounding box filtered by country
+      const result = await client.query(
+        `SELECT 
+          id,
+          latitude,
+          longitude,
+          wind_loss,
+          exposure,
+          damage_ratio,
+          building_type,
+          occupancy,
+          country_code
+         FROM damaged_buildings
+         WHERE country_code = $1
+           AND longitude BETWEEN $2 AND $3
+           AND latitude BETWEEN $4 AND $5
+         ORDER BY wind_loss DESC NULLS LAST
+         LIMIT $6 OFFSET $7`,
+        [countryCode, minLng, maxLng, minLat, maxLat, limit, offset]
+      );
 
-    // Transform to GeoJSON
-    const features = result.rows.map(row => ({
-      type: 'Feature',
-      id: row.id,
-      geometry: {
-        type: 'Point',
-        coordinates: [row.longitude, row.latitude],
-      },
-      properties: {
-        Wind_Loss: row.wind_loss,
-        Exposure: row.exposure,
-        Damage_Ratio: row.damage_ratio,
-        Building_Type: row.building_type,
-        Occupancy: row.occupancy,
-      },
-    }));
+      // Transform to GeoJSON
+      const features = result.rows.map(row => ({
+        type: 'Feature',
+        id: row.id,
+        geometry: {
+          type: 'Point',
+          coordinates: [row.longitude, row.latitude],
+        },
+        properties: {
+          Wind_Loss: row.wind_loss,
+          Exposure: row.exposure,
+          Damage_Ratio: row.damage_ratio,
+          Building_Type: row.building_type,
+          Occupancy: row.occupancy,
+        },
+      }));
 
-    const response = {
-      type: 'FeatureCollection',
-      features,
-      count: features.length,
-      bbox: [minLng, minLat, maxLng, maxLat],
-      country: country,
-    };
+      const response = {
+        type: 'FeatureCollection',
+        features,
+        count: features.length,
+        bbox,
+        country: countryCode,
+      };
 
-    return NextResponse.json(response);
-  } catch (error) {
-    console.error('Buildings API error:', error);
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
-  } finally {
-    if (client) {
+      return NextResponse.json(response);
+    } finally {
       await client.end();
     }
+  } catch (error) {
+    if (isDbConnectivityError(error)) {
+      dbUnavailableUntil = Date.now() + DB_FAILURE_COOLDOWN_MS;
+      maybeLogDbError(error);
+
+      return NextResponse.json(
+        {
+          type: 'FeatureCollection',
+          features: [],
+          count: 0,
+          bbox: bbox ?? undefined,
+          country: countryCode ?? undefined,
+          degraded: true,
+          message: 'Building data temporarily unavailable',
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store',
+            'X-Data-Status': 'degraded',
+          },
+        }
+      );
+    }
+
+    console.error('Buildings API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

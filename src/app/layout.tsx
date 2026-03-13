@@ -85,7 +85,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: '/favicon.ico', sizes: 'any' }],
   },
-  manifest: '/partner2/manifest.json',
+  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'}/manifest.json`,
 
   // Additional metadata
   category: 'technology',

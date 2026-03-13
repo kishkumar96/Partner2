@@ -13,6 +13,7 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import RealDataLayers from '../RealDataLayers';
 import { FilterState } from '@/types';
+import { getLayersForCountry } from '@/data/realThreddsLayers';
 
 // Mock heavy utilities that make external network calls
 jest.mock('@/utils/cycloneAnimationLoader', () => ({
@@ -31,6 +32,10 @@ jest.mock('@/data/realThreddsLayers', () => ({
   buildWMSImageUrl: jest.fn().mockReturnValue('https://example.com/wms'),
   getLayersForCountry: jest.fn().mockReturnValue([]),
 }));
+
+const mockGetLayersForCountry = getLayersForCountry as jest.MockedFunction<
+  typeof getLayersForCountry
+>;
 
 const mockMap = {
   on: jest.fn(),
@@ -56,6 +61,11 @@ const baseFilters: FilterState = {
 };
 
 describe('RealDataLayers', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetLayersForCountry.mockReturnValue([]);
+  });
+
   it('renders nothing (null) regardless of props', () => {
     const { container } = render(
       <RealDataLayers map={mockMap} countryCode="VU" visible filters={baseFilters} />
@@ -115,5 +125,40 @@ describe('RealDataLayers', () => {
       />
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('hides flood layers immediately when inundation toggle is off', () => {
+    mockGetLayersForCountry.mockReturnValue([
+      {
+        id: 'flood-test',
+        name: 'Flood Test Layer',
+        hazardType: 'flood',
+        ncFile: 'test.nc',
+        layerName: 'flood_test',
+        bbox: [0, 0, 1, 1],
+      } as any,
+    ]);
+
+    const localMap = {
+      ...mockMap,
+      getLayer: jest.fn((id: string) => (id === 'wms-layer-flood-test' ? ({ id } as any) : null)),
+      setLayoutProperty: jest.fn(),
+    } as unknown as import('maplibre-gl').Map;
+
+    render(
+      <RealDataLayers
+        map={localMap}
+        countryCode="VU"
+        visible
+        filters={baseFilters}
+        showInundationLayer={false}
+      />
+    );
+
+    expect(localMap.setLayoutProperty).toHaveBeenCalledWith(
+      'wms-layer-flood-test',
+      'visibility',
+      'none'
+    );
   });
 });

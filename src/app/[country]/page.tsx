@@ -2,13 +2,20 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import DashboardView from '@/components/DashboardView';
 import { COUNTRIES } from '@/types/thredds';
+import { isCountryProtected } from '@/lib/countryAuth';
 import { CODE_TO_SLUG, getCountryCodeFromSlug } from '@/utils/countrySlug';
+import { getTenantCountryCodeFromEnv } from '@/utils/tenantCountry';
 
 interface CountryPageProps {
   params: Promise<{ country: string }>;
 }
 
 export function generateStaticParams() {
+  const tenantCountryCode = getTenantCountryCodeFromEnv();
+  if (tenantCountryCode) {
+    return [{ country: CODE_TO_SLUG[tenantCountryCode] }];
+  }
+
   return Object.values(CODE_TO_SLUG).map(country => ({ country }));
 }
 
@@ -34,10 +41,21 @@ export async function generateMetadata({ params }: CountryPageProps): Promise<Me
 export default async function CountryPage({ params }: CountryPageProps) {
   const { country } = await params;
   const countryCode = getCountryCodeFromSlug(country);
+  const tenantCountryCode = getTenantCountryCodeFromEnv();
 
   if (!countryCode || !Object.prototype.hasOwnProperty.call(COUNTRIES, countryCode)) {
     notFound();
   }
 
-  return <DashboardView countryCode={countryCode} />;
+  if (tenantCountryCode && countryCode !== tenantCountryCode) {
+    notFound();
+  }
+
+  return (
+    <DashboardView
+      countryCode={countryCode}
+      allowCountrySwitch={false}
+      showLogout={isCountryProtected(countryCode)}
+    />
+  );
 }

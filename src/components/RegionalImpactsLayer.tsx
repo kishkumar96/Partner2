@@ -16,7 +16,37 @@ import { getBeforeLayerId } from '@/utils/layerOrder';
 import { debugLogger } from '@/utils/debugLogger';
 import { loadGeoJSON } from '@/utils/dataLoader';
 import { CountryCode } from '@/types/thredds';
-import { DATA_PATH } from '@/utils/realDataLoader';
+import { DATA_PATH, getCountryDataFilePath } from '@/utils/realDataLoader';
+
+function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
+  if (!map) return false;
+  try {
+    const styleLoaded = map.isStyleLoaded();
+    return !!map.getStyle() && styleLoaded === true;
+  } catch {
+    return false;
+  }
+}
+
+const REGIONAL_SOURCE_ID = 'regional-impacts';
+const REGIONAL_FILL_LAYER_ID = 'regional-impacts-fill';
+const REGIONAL_LINE_LAYER_ID = 'regional-impacts-line';
+const REGIONAL_EXTRUSION_LAYER_ID = 'regional-impacts-extrusion';
+
+function removeRegionalLayersAndSource(map: MapLibreMap) {
+  if (map.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) {
+    map.removeLayer(REGIONAL_EXTRUSION_LAYER_ID);
+  }
+  if (map.getLayer(REGIONAL_FILL_LAYER_ID)) {
+    map.removeLayer(REGIONAL_FILL_LAYER_ID);
+  }
+  if (map.getLayer(REGIONAL_LINE_LAYER_ID)) {
+    map.removeLayer(REGIONAL_LINE_LAYER_ID);
+  }
+  if (map.getSource(REGIONAL_SOURCE_ID)) {
+    map.removeSource(REGIONAL_SOURCE_ID);
+  }
+}
 
 interface RegionalImpactsLayerProps {
   map: MapLibreMap | null;
@@ -26,6 +56,8 @@ interface RegionalImpactsLayerProps {
   onRegionSelect?: (regionId: string | null) => void;
   styleChangeCounter?: number;
   countryCode?: CountryCode | null;
+  /** 0–100 opacity scale for regional fill layers */
+  layerOpacityScale?: number;
 }
 
 export default function RegionalImpactsLayer({
@@ -36,6 +68,7 @@ export default function RegionalImpactsLayer({
   onRegionSelect,
   styleChangeCounter = 0,
   countryCode = null,
+  layerOpacityScale = 70,
 }: RegionalImpactsLayerProps) {
   // Store event handlers as refs to enable proper cleanup
   const handlersRef = useRef<{
@@ -90,7 +123,7 @@ export default function RegionalImpactsLayer({
           `📊 Loading RegionalImpactsLayer (mapStyle: ${mapStyle}, selectedRegion: ${selectedRegion})`
         );
         console.log(
-          `🗺️ Map instance exists: ${!!map}, Map loaded: ${map.loaded()}, Style loaded: ${map.isStyleLoaded()}`
+          `🗺️ Map instance exists: ${!!map}, Map loaded: ${map.loaded()}, Style loaded: ${safeIsStyleLoaded(map)}`
         );
 
         // Load both regional impacts and sector-specific data with caching
@@ -99,6 +132,14 @@ export default function RegionalImpactsLayer({
 
         const effectiveCountry = countryCode ?? 'VU';
         const basePath = DATA_PATH[effectiveCountry];
+        const regionalImpactsPath = getCountryDataFilePath(
+          effectiveCountry,
+          'regional-impacts.geojson'
+        );
+        const regionalImpactsBySectorPath = getCountryDataFilePath(
+          effectiveCountry,
+          'regional-impacts-by-sector.geojson'
+        );
 
         if (
           dataCache.current.geojson &&
@@ -117,8 +158,13 @@ export default function RegionalImpactsLayer({
 
           console.log('🔄 Fetching regional impacts data from server...');
           const [regionalResult, sectorResult] = await Promise.all([
-            loadGeoJSON(`${basePath}/regional-impacts.geojson`, { cache: true }),
-            loadGeoJSON(`${basePath}/regional-impacts-by-sector.geojson`, { cache: true }),
+            loadGeoJSON(regionalImpactsPath || `${basePath}/regional-impacts.geojson`, {
+              cache: true,
+            }),
+            loadGeoJSON(
+              regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
+              { cache: true }
+            ),
           ]);
 
           if (!mountedRef.current) {
@@ -156,21 +202,12 @@ export default function RegionalImpactsLayer({
           console.log(`✅ Cached regional impacts data (${geojson.features?.length || 0} regions)`);
         }
 
-        const sourceId = 'regional-impacts';
-        const fillLayerId = 'regional-impacts-fill';
-        const lineLayerId = 'regional-impacts-line';
+        const sourceId = REGIONAL_SOURCE_ID;
+        const fillLayerId = REGIONAL_FILL_LAYER_ID;
 
         // Remove existing layers and source if present
         try {
-          if (map.getLayer(fillLayerId)) {
-            map.removeLayer(fillLayerId);
-          }
-          if (map.getLayer(lineLayerId)) {
-            map.removeLayer(lineLayerId);
-          }
-          if (map.getSource(sourceId)) {
-            map.removeSource(sourceId);
-          }
+          removeRegionalLayersAndSource(map);
         } catch (e) {
           debugLogger.warn('Error removing existing regional impacts layers', 'map-layer', e);
         }
@@ -198,16 +235,14 @@ export default function RegionalImpactsLayer({
             '🎨 addLayers() called - Map loaded:',
             map.loaded(),
             ', Style loaded:',
-            map.isStyleLoaded()
+            safeIsStyleLoaded(map)
           );
 
           // Check if source already exists and remove it first to prevent "already exists" error
           if (map.getSource(sourceId)) {
             console.log('⚠️ Source already exists, removing...');
             try {
-              if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
-              if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
-              map.removeSource(sourceId);
+              removeRegionalLayersAndSource(map);
               console.log('✅ Removed existing layers and source');
             } catch (e) {
               console.error('❌ Error removing existing source:', e);
@@ -226,7 +261,7 @@ export default function RegionalImpactsLayer({
           console.log('✅ Source added successfully');
 
           // Define color expressions using unified color system
-          const lossColorExpression = createLossColorExpression();
+          const lossColorExpression = createLossColorExpression(countryCode);
           const windColorExpression = createWindColorExpression();
 
           // Use deterministic z-order system for consistent layer placement
@@ -249,7 +284,8 @@ export default function RegionalImpactsLayer({
                   // Use unified opacity system from colorSystem.ts
                   'fill-opacity': createRegionalFillOpacity(
                     mapStyle as 'wind' | 'loss',
-                    selectedRegion
+                    selectedRegion,
+                    layerOpacityScale / 100
                   ) as any,
                 },
               },
@@ -417,7 +453,7 @@ export default function RegionalImpactsLayer({
 
         // Check if style is loaded before adding layers
         console.log('🔍 Checking map style status...');
-        console.log(`   - Map isStyleLoaded(): ${map.isStyleLoaded()}`);
+        console.log(`   - Map isStyleLoaded(): ${safeIsStyleLoaded(map)}`);
         console.log(`   - Map loaded(): ${map.loaded()}`);
 
         if (!mountedRef.current) {
@@ -426,7 +462,7 @@ export default function RegionalImpactsLayer({
           return;
         }
 
-        if (map.isStyleLoaded()) {
+        if (safeIsStyleLoaded(map)) {
           console.log('✅ Map style is loaded, adding layers immediately');
           addLayers();
         } else {
@@ -465,10 +501,10 @@ export default function RegionalImpactsLayer({
     console.log('🔍 Setting up regional impacts layer loader...');
     console.log(`   - Map exists: ${!!map}`);
     console.log(`   - Visible: ${visible}`);
-    console.log(`   - Map isStyleLoaded: ${map.isStyleLoaded()}`);
+    console.log(`   - Map isStyleLoaded: ${safeIsStyleLoaded(map)}`);
     console.log(`   - Map loaded: ${map.loaded()}`);
 
-    if (!map.isStyleLoaded()) {
+    if (!safeIsStyleLoaded(map)) {
       console.log('⏳ Map not ready, attaching styledata listener (ONCE)');
       styleLoadListener = () => {
         console.log('🎉 Map styledata event fired, calling loadRegionalImpacts');
@@ -498,9 +534,7 @@ export default function RegionalImpactsLayer({
         loadEventListenerRef.current = null;
       }
 
-      const sourceId = 'regional-impacts';
-      const fillLayerId = 'regional-impacts-fill';
-      const lineLayerId = 'regional-impacts-line';
+      const fillLayerId = REGIONAL_FILL_LAYER_ID;
 
       try {
         // Remove event listeners
@@ -517,16 +551,8 @@ export default function RegionalImpactsLayer({
         // Remove layers and source — only when the style is still accessible.
         // On full page unmount the map can be partially destroyed; isStyleLoaded()
         // returns false (or throws) in that state, so we skip layer removal safely.
-        if (map.isStyleLoaded()) {
-          if (map.getLayer(fillLayerId)) {
-            map.removeLayer(fillLayerId);
-          }
-          if (map.getLayer(lineLayerId)) {
-            map.removeLayer(lineLayerId);
-          }
-          if (map.getSource(sourceId)) {
-            map.removeSource(sourceId);
-          }
+        if (safeIsStyleLoaded(map)) {
+          removeRegionalLayersAndSource(map);
         }
 
         // Reset flags regardless
@@ -548,7 +574,7 @@ export default function RegionalImpactsLayer({
     if (!map || !visible) return;
 
     // Wait for style to be loaded before accessing layers
-    if (!map.isStyleLoaded()) return;
+    if (!safeIsStyleLoaded(map)) return;
 
     const fillLayerId = 'regional-impacts-fill';
     const lineLayerId = 'regional-impacts-line';
@@ -557,10 +583,13 @@ export default function RegionalImpactsLayer({
       if (map.getLayer(fillLayerId)) {
         // Use consistent color expressions from colorSystem.ts
         const colorExpression =
-          mapStyle === 'wind' ? createWindColorExpression() : createLossColorExpression();
+          mapStyle === 'wind'
+            ? createWindColorExpression()
+            : createLossColorExpression(countryCode);
         const opacityExpression = createRegionalFillOpacity(
           mapStyle as 'wind' | 'loss',
-          selectedRegion
+          selectedRegion,
+          layerOpacityScale / 100
         );
 
         // Smoothly transition to new color scheme using setPaintProperty only
@@ -586,7 +615,7 @@ export default function RegionalImpactsLayer({
     } catch (e) {
       console.warn('Error updating map style:', e);
     }
-  }, [map, visible, mapStyle, selectedRegion, styleChangeCounter]);
+  }, [map, visible, mapStyle, selectedRegion, styleChangeCounter, layerOpacityScale, countryCode]);
 
   return null;
 }

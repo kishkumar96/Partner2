@@ -6,16 +6,21 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
 import type { BuildingProperties, RoadProperties } from '@/types/realData';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
+import { RealWMSLayer } from '@/data/realThreddsLayers';
 import { formatCurrency, formatNumber, getHazardColor } from '@/utils/formatters';
 import { filterEvents } from '@/utils/filterUtils';
 import { districtsGeoJSON } from '@/data/districtsGeo';
-import { LAYER_OPACITY, createScaleDependentOpacity } from '@/utils/colorSystem';
+import {
+  LAYER_OPACITY,
+  createScaleDependentOpacity,
+  createLossColorExpression,
+  createWindColorExpression,
+} from '@/utils/colorSystem';
 import { debugLogger } from '@/utils/debugLogger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
 import RealDataLayers from './RealDataLayers';
 import RegionalImpactsLayer from './RegionalImpactsLayer';
-import IntensityHeatmapLayer from './IntensityHeatmapLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
 import DamagedRoadsLayer from './DamagedRoadsLayer';
 import CycloneAnimationLayer from './CycloneAnimationLayer';
@@ -27,6 +32,12 @@ const DISTRICTS_SOURCE_ID = 'districts-source';
 const DISTRICTS_FILL_LAYER_ID = 'districts-fill';
 const DISTRICTS_OUTLINE_LAYER_ID = 'districts-outline';
 const DISTRICTS_HOVER_LAYER_ID = 'districts-hover';
+const REGIONAL_IMPACTS_SOURCE_ID = 'regional-impacts';
+const REGIONAL_EXTRUSION_LAYER_ID = 'regional-impacts-extrusion';
+const REALISTIC_BUILDING_FALLBACK_HEIGHT = 8;
+const REALISTIC_BUILDING_MAX_HEIGHT = 70;
+const BUILDING_EXTRUSION_MIN_ZOOM = 12;
+const STRONG_BUILDING_EXTRUSION_MIN_ZOOM = 2;
 
 // Hazard zone layer configuration (unused - removed to avoid linter/TS warnings)
 
@@ -203,9 +214,12 @@ interface MapViewProps {
   selectedCountry?: CountryCode | null;
   mapStyle?: 'loss' | 'wind';
   basemapStyle?: string;
+  is3DView?: boolean;
+  extrusionMode?: 'none' | 'loss' | 'wind';
   showWindLayer?: boolean;
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
+  onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
@@ -230,6 +244,8 @@ interface MapViewProps {
   onStoryModeChange?: (enabled: boolean) => void;
   onMapReady?: (map: maplibregl.Map) => void;
   onStoryIndexChange?: (index: number) => void;
+  /** 0–100 opacity scale applied to all hazard/data layers */
+  layerOpacity?: number;
 }
 
 export default function MapView({
@@ -241,9 +257,12 @@ export default function MapView({
   selectedCountry = null,
   mapStyle = 'loss',
   basemapStyle = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  is3DView = false,
+  extrusionMode = 'none',
   showWindLayer = true,
   showInundationLayer = true,
   onLayersLoadingChange,
+  onActiveWmsLayersChange,
   damagedBuildings,
   damagedRoads,
   cycloneForecast,
@@ -263,6 +282,7 @@ export default function MapView({
   onStoryModeChange,
   onMapReady,
   onStoryIndexChange,
+  layerOpacity = 70,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -274,6 +294,7 @@ export default function MapView({
   const [basemapError, setBasemapError] = useState<string | null>(null);
   const tileErrorCountRef = useRef(0);
   const styleLoadAttemptsRef = useRef(0);
+  const mapStyleRef = useRef(mapStyle);
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -281,6 +302,13 @@ export default function MapView({
       onStoryIndexChange?.(index);
     },
     [currentCycloneIndex, onStoryIndexChange]
+  );
+  const handleCyclonePlayingChange = useCallback(
+    (isPlaying: boolean) => {
+      setIsAnimationPlaying(prev => (prev === isPlaying ? prev : isPlaying));
+      onCyclonePlayingChange?.(isPlaying);
+    },
+    [onCyclonePlayingChange]
   );
   const basemapRequestIdRef = useRef(0);
   const pendingStyleLoadHandlerRef = useRef<(() => void) | null>(null);
@@ -362,7 +390,7 @@ export default function MapView({
       const isCORSError = errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin');
 
       if (isWMSError && !isTileError) {
-        setWmsWarning(prev => prev ?? 'Wind hazard tiles unavailable. Check THREDDS connectivity.');
+        setWmsWarning(prev => prev ?? 'Hazard layer unavailable. Check THREDDS connectivity.');
         return;
       }
 
@@ -439,8 +467,12 @@ export default function MapView({
 
   useEffect(() => {
     if (typeof isCyclonePlaying !== 'boolean') return;
-    setIsAnimationPlaying(isCyclonePlaying);
+    setIsAnimationPlaying(prev => (prev === isCyclonePlaying ? prev : isCyclonePlaying));
   }, [isCyclonePlaying]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+  }, [mapStyle]);
 
   useEffect(() => {
     if (!wmsWarning) return;
@@ -522,6 +554,146 @@ export default function MapView({
     applyBasemapStyle();
   }, [basemapStyle, mapLoaded]);
 
+  // Apply 2D/3D camera and best-effort basemap building extrusions.
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+
+    const apply3DMode = () => {
+      if (!m || !m.isStyleLoaded()) return;
+
+      const layers = m.getStyle()?.layers || [];
+      const customExtrusionLayerId = 'copilot-3d-buildings';
+      const nativeExtrusionLayerIds = layers
+        .filter(
+          layer =>
+            layer.type === 'fill-extrusion' &&
+            layer.id !== customExtrusionLayerId &&
+            layer.id !== REGIONAL_EXTRUSION_LAYER_ID
+        )
+        .map(layer => layer.id);
+      const setLayerVisibilityIfNeeded = (layerId: string, visibility: 'visible' | 'none') => {
+        if (!m.getLayer(layerId)) return;
+        const currentVisibility = m.getLayoutProperty(layerId, 'visibility');
+        const normalizedCurrent = currentVisibility === 'none' ? 'none' : 'visible';
+        if (normalizedCurrent !== visibility) {
+          m.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+      };
+      const targetPitch = is3DView ? 52 : 0;
+      const targetBearing = is3DView ? -15 : 0;
+      const pitchDelta = Math.abs(m.getPitch() - targetPitch);
+      const bearingDelta = Math.abs(((((m.getBearing() - targetBearing) % 360) + 540) % 360) - 180);
+
+      if (pitchDelta > 0.2 || bearingDelta > 0.2) {
+        // Cancel queued camera transitions to keep 2D/3D switching responsive.
+        m.stop();
+        m.easeTo({ pitch: targetPitch, bearing: targetBearing, duration: 350, essential: true });
+      }
+
+      if (is3DView) {
+        // Hide native extrusion layers and render a stronger custom layer for
+        // consistent 3D readability across different basemap styles.
+        nativeExtrusionLayerIds.forEach(layerId => {
+          setLayerVisibilityIfNeeded(layerId, 'none');
+        });
+
+        // Create/update custom extrusion from a building source-layer when available.
+        const candidateLayer = layers.find(layer => {
+          const sourceLayer = (layer as any)['source-layer'];
+          return (
+            typeof sourceLayer === 'string' &&
+            /building/i.test(sourceLayer) &&
+            typeof (layer as any).source === 'string'
+          );
+        }) as
+          | (maplibregl.LayerSpecification & {
+              source?: string;
+              'source-layer'?: string;
+            })
+          | undefined;
+
+        if (candidateLayer?.source && candidateLayer['source-layer']) {
+          const beforeId = layers.find(layer => layer.type === 'symbol')?.id;
+          const baseHeightExpr: maplibregl.ExpressionSpecification = [
+            'min',
+            [
+              'coalesce',
+              ['to-number', ['get', 'height']],
+              ['to-number', ['get', 'render_height']],
+              ['*', ['to-number', ['get', 'building:levels']], 3.2],
+              REALISTIC_BUILDING_FALLBACK_HEIGHT,
+            ],
+            REALISTIC_BUILDING_MAX_HEIGHT,
+          ];
+
+          const extrusionHeightExpr: maplibregl.ExpressionSpecification = [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            STRONG_BUILDING_EXTRUSION_MIN_ZOOM,
+            ['max', ['*', baseHeightExpr, 1.35], 8],
+            14,
+            ['max', ['*', baseHeightExpr, 1.65], 14],
+            16,
+            ['max', ['*', baseHeightExpr, 1.9], 20],
+          ];
+
+          const extrusionLayer: maplibregl.AddLayerObject = {
+            id: customExtrusionLayerId,
+            type: 'fill-extrusion',
+            source: candidateLayer.source,
+            'source-layer': candidateLayer['source-layer'],
+            minzoom: STRONG_BUILDING_EXTRUSION_MIN_ZOOM,
+            paint: {
+              'fill-extrusion-color': '#8fa5bf',
+              'fill-extrusion-height': extrusionHeightExpr,
+              'fill-extrusion-base': [
+                'coalesce',
+                ['to-number', ['get', 'min_height']],
+                ['*', ['to-number', ['get', 'building:min_level']], 3.2],
+                0,
+              ],
+              'fill-extrusion-opacity': 0.86,
+            },
+          };
+
+          if (!m.getLayer(customExtrusionLayerId)) {
+            if (beforeId) {
+              m.addLayer(extrusionLayer, beforeId);
+            } else {
+              m.addLayer(extrusionLayer);
+            }
+          } else {
+            m.setPaintProperty(
+              customExtrusionLayerId,
+              'fill-extrusion-height',
+              extrusionHeightExpr
+            );
+            m.setPaintProperty(customExtrusionLayerId, 'fill-extrusion-opacity', 0.86);
+          }
+        }
+
+        setLayerVisibilityIfNeeded(customExtrusionLayerId, 'visible');
+      } else {
+        nativeExtrusionLayerIds.forEach(layerId => {
+          setLayerVisibilityIfNeeded(layerId, 'none');
+        });
+        setLayerVisibilityIfNeeded(customExtrusionLayerId, 'none');
+      }
+    };
+
+    if (m.isStyleLoaded()) {
+      apply3DMode();
+    } else {
+      m.once('style.load', apply3DMode);
+      return () => {
+        m.off('style.load', apply3DMode);
+      };
+    }
+  }, [is3DView, mapLoaded, styleChangeCounter]);
+
   // Add district polygon layers after map loads
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -598,6 +770,157 @@ export default function MapView({
       m.once('style.load', addDistrictLayers);
     }
   }, [mapLoaded, styleChangeCounter]); // Re-run when style changes
+
+  // Update regional impacts 3D extrusion based on selected metric.
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+    let rafId = 0;
+
+    const ensureRegionalExtrusionLayer = () => {
+      if (!m.getSource(REGIONAL_IMPACTS_SOURCE_ID)) return;
+
+      const beforeId = m.getStyle()?.layers?.find(layer => layer.type === 'symbol')?.id;
+
+      if (!m.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) {
+        const layer: maplibregl.AddLayerObject = {
+          id: REGIONAL_EXTRUSION_LAYER_ID,
+          type: 'fill-extrusion',
+          source: REGIONAL_IMPACTS_SOURCE_ID,
+          layout: {
+            visibility: 'none',
+          },
+          paint: {
+            'fill-extrusion-color': '#f43f5e',
+            'fill-extrusion-opacity': 0.82,
+            'fill-extrusion-base': 0,
+            'fill-extrusion-height': 0,
+          },
+        };
+
+        if (beforeId) {
+          m.addLayer(layer, beforeId);
+        } else {
+          m.addLayer(layer);
+        }
+      } else if (beforeId) {
+        m.moveLayer(REGIONAL_EXTRUSION_LAYER_ID, beforeId);
+      }
+    };
+
+    const applyRegionalExtrusion = () => {
+      ensureRegionalExtrusionLayer();
+      if (!m.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) return;
+
+      if (!is3DView || extrusionMode === 'none') {
+        const currentVisibility = m.getLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility');
+        if (currentVisibility !== 'none') {
+          m.setLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility', 'none');
+        }
+        return;
+      }
+
+      let rawExtrusionHeight: maplibregl.ExpressionSpecification;
+      if (extrusionMode === 'loss') {
+        const lossStops =
+          selectedCountry === 'WS'
+            ? [0, 0, 50000, 50, 250000, 150, 750000, 360, 3000000, 900]
+            : [0, 0, 100000, 40, 1000000, 120, 10000000, 380, 100000000, 900];
+        rawExtrusionHeight = [
+          'interpolate',
+          ['linear'],
+          ['to-number', ['get', 'Total_Loss']],
+          ...lossStops,
+        ];
+      } else {
+        rawExtrusionHeight = [
+          'interpolate',
+          ['linear'],
+          ['to-number', ['get', 'Max_Wind_Gusts']],
+          0,
+          0,
+          60,
+          120,
+          120,
+          360,
+          180,
+          780,
+          240,
+          1300,
+        ];
+      }
+
+      // Keep bars readable when zoomed in, but avoid unrealistic spikes at country-scale zoom.
+      // MapLibre requires ["zoom"] to be the input of a top-level step/interpolate expression.
+      const extrusionHeight: maplibregl.ExpressionSpecification = [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        5,
+        ['*', rawExtrusionHeight, 0.2],
+        7,
+        ['*', rawExtrusionHeight, 0.35],
+        9,
+        ['*', rawExtrusionHeight, 0.55],
+        11,
+        ['*', rawExtrusionHeight, 0.8],
+        13,
+        ['*', rawExtrusionHeight, 1],
+      ];
+
+      const extrusionColorExpression =
+        mapStyleRef.current === 'wind'
+          ? createWindColorExpression()
+          : createLossColorExpression(selectedCountry);
+
+      m.setLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility', 'visible');
+      m.setPaintProperty(REGIONAL_EXTRUSION_LAYER_ID, 'fill-extrusion-height', extrusionHeight);
+      m.setPaintProperty(
+        REGIONAL_EXTRUSION_LAYER_ID,
+        'fill-extrusion-color',
+        extrusionColorExpression
+      );
+      m.setPaintProperty(REGIONAL_EXTRUSION_LAYER_ID, 'fill-extrusion-opacity', 0.72);
+    };
+
+    const scheduleRegionalExtrusionUpdate = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        applyRegionalExtrusion();
+      });
+    };
+
+    scheduleRegionalExtrusionUpdate();
+
+    m.on('styledata', scheduleRegionalExtrusionUpdate);
+    m.on('sourcedata', scheduleRegionalExtrusionUpdate);
+
+    return () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+      m.off('styledata', scheduleRegionalExtrusionUpdate);
+      m.off('sourcedata', scheduleRegionalExtrusionUpdate);
+    };
+  }, [mapLoaded, is3DView, extrusionMode, styleChangeCounter, selectedCountry]);
+
+  // Keep extrusion colors aligned with map mode changes without altering the main effect signature.
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !is3DView || extrusionMode === 'none') return;
+    if (!map.current.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) return;
+
+    const colorExpression =
+      mapStyle === 'wind'
+        ? createWindColorExpression()
+        : createLossColorExpression(selectedCountry);
+    map.current.setPaintProperty(
+      REGIONAL_EXTRUSION_LAYER_ID,
+      'fill-extrusion-color',
+      colorExpression
+    );
+  }, [mapLoaded, is3DView, extrusionMode, mapStyle, selectedCountry]);
 
   // Handle district hover and click interactions
   useEffect(() => {
@@ -697,10 +1020,12 @@ export default function MapView({
       m.setPaintProperty(
         DISTRICTS_FILL_LAYER_ID,
         'fill-opacity',
-        createScaleDependentOpacity(LAYER_OPACITY.district.fill)
+        createScaleDependentOpacity(LAYER_OPACITY.district.fill * (layerOpacity / 100))
       );
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, 'line-opacity', 0.8);
+      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, 'line-opacity', 0.8 * (layerOpacity / 100));
     } else {
+      const opacityScale = layerOpacity / 100;
+
       // Build case expression for selected hazards
       // Map UI hazard IDs to exposure field keys first
       const selectedMappedHazards = Array.from(
@@ -746,20 +1071,20 @@ export default function MapView({
           ['linear'],
           maxExposure,
           0,
-          0.15,
+          0.15 * opacityScale,
           0.5,
-          0.4,
+          0.4 * opacityScale,
           1,
-          0.6,
+          0.6 * opacityScale,
         ];
 
         m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', opacityExpression);
       } else {
         // No valid exposure fields for selected hazards, use low opacity
-        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', 0.15);
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', 0.15 * (layerOpacity / 100));
       }
     }
-  }, [filters.selectedHazards, mapLoaded]);
+  }, [filters.selectedHazards, mapLoaded, layerOpacity]);
 
   // Note: Mock hazard zones and event markers removed - now using real data from THREDDS server via RealData Layers
 
@@ -774,7 +1099,7 @@ export default function MapView({
         </div>
       )}
 
-      {showOverlays && storyMode && map.current && (
+      {showOverlays && showCycloneAnimation && storyMode && map.current && (
         <CycloneStoryOverlay
           map={map.current}
           forecastTrack={cycloneForecast ?? null}
@@ -794,12 +1119,20 @@ export default function MapView({
             map={map.current}
             countryCode={selectedCountry}
             visible={true}
+            // Show static cyclone track by default; hide it only when animated cyclone
+            // forecast is actively visible to avoid duplicate lines.
+            showCycloneTrack={
+              !showCycloneAnimation || !cycloneForecast || cycloneForecast.length === 0
+            }
             mapStyle={mapStyle}
+            basemapStyle={basemapStyle}
             styleChangeCounter={styleChangeCounter}
             filters={filters}
             showWindLayer={showWindLayer}
             showInundationLayer={showInundationLayer}
             onLoadingChange={onLayersLoadingChange}
+            onActiveLayersChange={onActiveWmsLayersChange}
+            layerOpacityScale={layerOpacity}
           />
           <RegionalImpactsLayer
             map={map.current}
@@ -809,11 +1142,7 @@ export default function MapView({
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
             countryCode={selectedCountry}
-          />
-          <IntensityHeatmapLayer
-            map={map.current}
-            events={filteredEvents}
-            visible={!damagedBuildings && !damagedRoads}
+            layerOpacityScale={layerOpacity}
           />
           <DamagedBuildingsLayer
             map={map.current}
@@ -832,12 +1161,9 @@ export default function MapView({
               map={map.current}
               forecastTrack={cycloneForecast}
               isVisible={showCycloneAnimation}
-              uiVisible={showOverlays}
+              uiVisible={showOverlays && showCycloneAnimation}
               onClose={() => onCycloneAnimationChange?.(false)}
-              onPlayingChange={isPlaying => {
-                setIsAnimationPlaying(isPlaying);
-                onCyclonePlayingChange?.(isPlaying);
-              }}
+              onPlayingChange={handleCyclonePlayingChange}
               onTimestepChange={onCycloneTimestepChange}
               isLeftPanelOpen={isLeftPanelOpen}
               isRightPanelOpen={isRightPanelOpen}

@@ -16,9 +16,9 @@ describe('UnifiedMapLegend', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing when hasSelection is true', () => {
-    const { container } = render(<UnifiedMapLegend mode="loss" visible hasSelection />);
-    expect(container).toBeEmptyDOMElement();
+  it('still renders when hasSelection is true', () => {
+    render(<UnifiedMapLegend mode="loss" visible hasSelection />);
+    expect(screen.getByRole('region', { name: /map legend/i })).toBeInTheDocument();
   });
 
   it('renders the legend region when visible and no selection', () => {

@@ -139,7 +139,7 @@ export default function PopulationLossScatter({ data }: PopulationLossScatterPro
         beginAtZero: true,
         title: {
           display: true,
-          text: 'Economic Loss (USD)',
+          text: 'Economic Damage (USD)',
           color: 'rgba(107, 114, 128, 1)',
           font: {
             size: 13,

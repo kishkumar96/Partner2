@@ -4,6 +4,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import FilterPanel from '../FilterPanel';
 import type { FilterState, Hazard, Sector, ExposureData } from '../../types';
+import type { Event } from '@/types';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -19,8 +20,8 @@ const EMPTY_FILTERS: FilterState = {
 };
 
 const sampleHazards: Hazard[] = [
-  { id: 'TC', name: 'Tropical Cyclone', color: '#00aaff', icon: MockIcon as any },
-  { id: 'FL', name: 'Flood', color: '#0044ff', icon: MockIcon as any },
+  { id: 'tropical-cyclone', name: 'Tropical Cyclone', color: '#00aaff', icon: MockIcon as any },
+  { id: 'flood', name: 'Flood', color: '#0044ff', icon: MockIcon as any },
 ];
 
 const sampleSectors: Sector[] = [
@@ -35,24 +36,31 @@ const sampleSectors: Sector[] = [
 const sampleExposureData: ExposureData[] = [
   {
     id: 'ex1',
-    hazardId: 'TC',
+    hazardId: 'tropical-cyclone',
     sectorId: 'AGR',
     population: 1000,
     assets: 500,
     infrastructure: 200,
   },
-  { id: 'ex2', hazardId: 'FL', sectorId: 'HSG', population: 800, assets: 400, infrastructure: 100 },
+  {
+    id: 'ex2',
+    hazardId: 'flood',
+    sectorId: 'HSG',
+    population: 800,
+    assets: 400,
+    infrastructure: 100,
+  },
 ];
 
 /**
  * Events that make sampleHazards "available" (activeHazardIds is derived from events).
  */
-const sampleEvents = [
+const sampleEvents: Event[] = [
   {
     id: 'e1',
     name: 'TC Lola',
     date: '2023-10-01',
-    hazardId: 'TC',
+    hazardId: 'tropical-cyclone',
     totalAffectedPopulation: 1000,
     totalEconomicDamage: 5_000_000,
     affectedRegions: 3,
@@ -63,7 +71,7 @@ const sampleEvents = [
     id: 'e2',
     name: 'Flood 2024',
     date: '2024-03-01',
-    hazardId: 'FL',
+    hazardId: 'flood',
     totalAffectedPopulation: 500,
     totalEconomicDamage: 2_000_000,
     affectedRegions: 1,
@@ -75,13 +83,17 @@ const sampleEvents = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function renderPanel(filterOverrides: Partial<FilterState> = {}, onFilterChange = jest.fn()) {
+function renderPanel(
+  filterOverrides: Partial<FilterState> = {},
+  onFilterChange = jest.fn(),
+  options?: { events?: Event[]; hazards?: Hazard[] }
+) {
   const filters = { ...EMPTY_FILTERS, ...filterOverrides };
   render(
     <FilterPanel
-      hazards={sampleHazards}
+      hazards={options?.hazards ?? sampleHazards}
       sectors={sampleSectors}
-      events={sampleEvents}
+      events={options?.events ?? sampleEvents}
       districts={[]}
       filters={filters}
       onFilterChange={onFilterChange}
@@ -99,7 +111,7 @@ describe('FilterPanel Component', () => {
   // 1. Basic render
   it('renders the filter panel container', () => {
     renderPanel();
-    expect(screen.getByText(/filter/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /filters/i })).toBeInTheDocument();
   });
 
   // 2. Real options rendered from props (hazards section is expanded by default)
@@ -128,13 +140,13 @@ describe('FilterPanel Component', () => {
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
     expect(onFilterChange).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedHazards: ['TC'] })
+      expect.objectContaining({ selectedHazards: ['tropical-cyclone'] })
     );
   });
 
   it('calls onFilterChange with the hazard removed when a selected hazard is toggled off', () => {
     // Start with TC already selected
-    const { onFilterChange } = renderPanel({ selectedHazards: ['TC'] });
+    const { onFilterChange } = renderPanel({ selectedHazards: ['tropical-cyclone'] });
 
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
@@ -173,7 +185,7 @@ describe('FilterPanel Component', () => {
   // 6. Reset – starting from a non-empty state
   it('resets filters to defaults when "Clear all filters" is clicked from a non-empty state', () => {
     const { onFilterChange } = renderPanel({
-      selectedHazards: ['TC'],
+      selectedHazards: ['tropical-cyclone'],
       selectedSectors: ['AGR'],
       selectedEvents: ['e1'],
       dateRange: { start: '2023-01-01', end: '2023-12-31' },
@@ -190,5 +202,34 @@ describe('FilterPanel Component', () => {
       dateRange: { start: '', end: '' },
       aggregationLevel: 'district',
     });
+  });
+
+  it('shows date range validation when start date is after end date', () => {
+    renderPanel({ dateRange: { start: '2024-12-31', end: '2024-01-01' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /temporal/i }));
+
+    expect(screen.getByText(/invalid date range/i)).toBeInTheDocument();
+  });
+
+  it('keeps flood available when events use inundation hazard id', () => {
+    const aliasEvents = [
+      {
+        id: 'e-inundation',
+        name: 'Inundation Event',
+        date: '2024-02-01',
+        hazardId: 'inundation',
+        totalAffectedPopulation: 100,
+        totalEconomicDamage: 1000,
+        affectedRegions: 1,
+        severity: 'medium' as const,
+        location: { lat: -15, lng: 167 },
+      },
+    ];
+
+    renderPanel({}, jest.fn(), { events: aliasEvents });
+
+    const floodCheckbox = screen.getByRole('checkbox', { name: /^flood$/i });
+    expect(floodCheckbox).not.toBeDisabled();
   });
 });

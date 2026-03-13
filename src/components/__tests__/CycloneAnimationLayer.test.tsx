@@ -10,6 +10,19 @@ import { render, fireEvent } from '@testing-library/react';
 import CycloneAnimationLayer from '../CycloneAnimationLayer';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 
+jest.mock('@deck.gl/mapbox', () => ({
+  MapboxOverlay: class MockMapboxOverlay {
+    constructor(_props?: unknown) {}
+    setProps = jest.fn();
+  },
+}));
+
+jest.mock('deck.gl', () => ({
+  SolidPolygonLayer: class MockSolidPolygonLayer {
+    constructor(_props?: unknown) {}
+  },
+}));
+
 // maplibre-gl and portal target are globally mocked via __mocks__ and jest.setup.js
 // Additionally mock the heavy playback hook to give us controllable state
 jest.mock('@/hooks/useCycloneTrackPlayback', () => ({
@@ -106,6 +119,8 @@ const mockMap = {
   removeLayer: jest.fn(),
   addSource: jest.fn(),
   removeSource: jest.fn(),
+  addControl: jest.fn(),
+  removeControl: jest.fn(),
   getSource: jest.fn(() => null),
   getLayer: jest.fn(() => null),
   getCanvas: jest.fn(() => ({ style: {} })),
@@ -180,7 +195,22 @@ const sampleForecast: CycloneForecastPoint[] = [
   },
 ];
 
+const datelineCrossingForecast: CycloneForecastPoint[] = [
+  {
+    ...sampleForecast[0],
+    longitude: 179.0,
+  },
+  {
+    ...sampleForecast[1],
+    longitude: -179.0,
+  },
+];
+
 describe('CycloneAnimationLayer', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('renders without crashing when forecastTrack is null', () => {
     const { container } = render(<CycloneAnimationLayer map={mockMap} forecastTrack={null} />);
     expect(container).toBeInTheDocument();
@@ -231,5 +261,28 @@ describe('CycloneAnimationLayer', () => {
       />
     );
     expect(onPlayingChange).toBeDefined();
+  });
+
+  it('builds continuous track geometry across the antimeridian', () => {
+    render(<CycloneAnimationLayer map={mockMap} forecastTrack={datelineCrossingForecast} />);
+
+    const addSourceCalls = (mockMap.addSource as jest.Mock).mock.calls;
+    const trackSourceCall = addSourceCalls.find(call => call[0] === 'cyclone-forecast-track');
+
+    expect(trackSourceCall).toBeDefined();
+
+    const trackSource = trackSourceCall?.[1] as {
+      type: string;
+      data: { type: string; features: Array<{ geometry: { type: string; coordinates: any } }> };
+    };
+
+    const lineFeature = trackSource.data.features.find(f => f.geometry.type === 'LineString') as {
+      geometry: { coordinates: [number, number][] };
+    };
+
+    expect(lineFeature).toBeDefined();
+    const [start, end] = lineFeature.geometry.coordinates;
+    expect(Math.abs(end[0] - start[0])).toBeLessThanOrEqual(180);
+    expect(end[0]).toBe(181);
   });
 });

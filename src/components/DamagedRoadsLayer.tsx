@@ -92,6 +92,12 @@ export default function DamagedRoadsLayer({
         });
       }
 
+      // If data already exists when layers initialize, hydrate source immediately.
+      const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+      if (source && source.setData && data) {
+        source.setData(data as GeoJSON.FeatureCollection);
+      }
+
       // Add outline layer for visibility
       if (!map.getLayer(layerIdOutline)) {
         map.addLayer({
@@ -175,6 +181,14 @@ export default function DamagedRoadsLayer({
       map.on('click', layerId, handleClick);
       map.on('mouseenter', layerId, handleMouseEnter);
       map.on('mouseleave', layerId, handleMouseLeave);
+
+      // Apply current visibility immediately to avoid style-load race.
+      const visibility = visible ? 'visible' : 'none';
+      [layerId, layerIdOutline].forEach(id => {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', visibility);
+        }
+      });
     };
 
     // Check if style is loaded before adding layers
@@ -209,18 +223,24 @@ export default function DamagedRoadsLayer({
         // Layers/sources might not exist
       }
     };
-  }, [map, styleChangeCounter]); // Only depend on map and styleChangeCounter
+  }, [map, styleChangeCounter, visible, data]); // Include data for style-load races
 
   // Effect 2: Update data in existing source when data changes
   useEffect(() => {
     if (!map || !data) return;
 
-    // Wait for style to be loaded before accessing sources
-    if (!map.isStyleLoaded()) return;
+    const applyData = () => {
+      const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+      if (source && typeof source.setData === 'function') {
+        source.setData(data as GeoJSON.FeatureCollection);
+      }
+    };
 
-    const source = map.getSource(sourceId) as maplibregl.GeoJSONSource;
-    if (source && typeof source.setData === 'function') {
-      source.setData(data as GeoJSON.FeatureCollection);
+    if (map.isStyleLoaded()) {
+      applyData();
+    } else {
+      // Handle race where data arrives before style/source is ready.
+      map.once('load', applyData);
     }
   }, [map, data]); // Only depend on map and data
 

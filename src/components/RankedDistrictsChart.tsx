@@ -63,7 +63,7 @@ export default function RankedDistrictsChart({
       labels,
       datasets: [
         {
-          label: metric === 'loss' ? 'Economic Loss (USD)' : 'Affected Population',
+          label: metric === 'loss' ? 'Economic Damage (USD)' : 'Affected Population',
           data: values,
           backgroundColor: backgroundColors,
           borderColor: backgroundColors.map(c => c.replace(/[\d.]+\)$/, '1)')),

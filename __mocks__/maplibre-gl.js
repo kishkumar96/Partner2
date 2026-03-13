@@ -20,11 +20,18 @@ const maplibreMock = {
     resize: jest.fn(),
   })),
   Marker: jest.fn().mockImplementation(() => ({
+    popup: null,
     setLngLat: jest.fn().mockReturnThis(),
     addTo: jest.fn().mockReturnThis(),
     remove: jest.fn().mockReturnThis(),
     getElement: jest.fn(() => document.createElement('div')),
-    setPopup: jest.fn().mockReturnThis(),
+    setPopup: jest.fn(function setPopup(popup) {
+      this.popup = popup;
+      return this;
+    }),
+    getPopup: jest.fn(function getPopup() {
+      return this.popup;
+    }),
     togglePopup: jest.fn().mockReturnThis(),
   })),
   Popup: jest.fn().mockImplementation(() => ({

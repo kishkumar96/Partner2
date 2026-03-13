@@ -6,6 +6,13 @@ import MapView from '../MapView';
 import { Event, Hazard, FilterState } from '@/types';
 import { Wind } from 'lucide-react';
 
+// Avoid deck.gl ESM dependency chain in this unit test suite
+jest.mock('../CycloneAnimationLayer', () => {
+  const MockComponent = () => null;
+  MockComponent.displayName = 'CycloneAnimationLayer';
+  return MockComponent;
+});
+
 // Mock maplibre-gl
 jest.mock('maplibre-gl', () => ({
   Map: jest.fn(() => ({

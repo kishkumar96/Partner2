@@ -45,6 +45,57 @@ export interface CycloneForecastPoint {
 
 // CSV parsing now handled by unified parser utility
 
+function normalizeLongitude(rawLongitude: number): number {
+  // Normalize any longitude convention (e.g. 0..360 or -540..540) into [-180, 180)
+  return ((((rawLongitude + 180) % 360) + 360) % 360) - 180;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function estimateFallbackRadii(
+  meanWind: number,
+  category: number
+): {
+  gale: number;
+  storm: number;
+  hurricane: number;
+} {
+  // Conservative fallback profile (nautical miles) for feeds that omit radii columns.
+  // Tuned to preserve animation readability without overstating hazard extents.
+  let gale = meanWind >= 34 ? Math.round(55 + (meanWind - 34) * 1.9) : 0;
+  let storm = meanWind >= 48 ? Math.round(25 + (meanWind - 48) * 1.2) : 0;
+  let hurricane = meanWind >= 64 ? Math.round(12 + (meanWind - 64) * 0.9) : 0;
+
+  if (category >= 1 && gale === 0) gale = 50;
+  if (category >= 3 && storm === 0) storm = 30;
+  if (category >= 4 && hurricane === 0) hurricane = 15;
+
+  return {
+    gale: clamp(gale, 0, 220),
+    storm: clamp(storm, 0, 140),
+    hurricane: clamp(hurricane, 0, 100),
+  };
+}
+
+function resolveQuadrantRadii(
+  ne: number | null | undefined,
+  se: number | null | undefined,
+  sw: number | null | undefined,
+  nw: number | null | undefined,
+  fallback: number | null | undefined
+): { ne: number; se: number; sw: number; nw: number } {
+  const hasAnyProvided = ne != null || se != null || sw != null || nw != null;
+  const resolvedFallback = hasAnyProvided ? 0 : (fallback ?? 0);
+  return {
+    ne: ne ?? resolvedFallback,
+    se: se ?? resolvedFallback,
+    sw: sw ?? resolvedFallback,
+    nw: nw ?? resolvedFallback,
+  };
+}
+
 /**
  * Load cyclone forecast track data with schema validation
  * Returns validated data with detailed error reporting
@@ -92,10 +143,33 @@ export async function loadCycloneForecastTrack(
     }
 
     const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => {
-      // RSMC Nadi uses 0-360° longitude convention for Pacific tracks.
-      // Normalise values >180 to negative so MapLibre renders them correctly.
-      const rawLon = row.Longitude;
-      const longitude = rawLon > 180 ? rawLon - 360 : rawLon;
+      // RSMC feeds may mix 0-360 and signed longitudes. Normalize first so
+      // downstream antimeridian unwrapping works deterministically.
+      const longitude = normalizeLongitude(row.Longitude);
+      const fallbackRadii = estimateFallbackRadii(row.MeanWind, row.Category);
+
+      const galeRadii = resolveQuadrantRadii(
+        row.NEGaleRadius,
+        row.SEGaleRadius,
+        row.SWGaleRadius,
+        row.NWGaleRadius,
+        row.GaleRadius ?? fallbackRadii.gale
+      );
+      const stormRadii = resolveQuadrantRadii(
+        row.NEStormRadius,
+        row.SEStormRadius,
+        row.SWStormRadius,
+        row.NWStormRadius,
+        row.StormRadius ?? fallbackRadii.storm
+      );
+      const hurricaneRadii = resolveQuadrantRadii(
+        row.NEHurricaneRadius,
+        row.SEHurricaneRadius,
+        row.SWHurricaneRadius,
+        row.NWHurricaneRadius,
+        row.HurricaneRadius ?? fallbackRadii.hurricane
+      );
+
       return {
         time: new Date(
           row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"].replace(' ', 'T').replace(/Z?$/, 'Z')
@@ -108,18 +182,18 @@ export async function loadCycloneForecastTrack(
         meanWind: row.MeanWind,
         windGust: row.WindGust,
         uncertainty: row.Uncertainty,
-        galeRadiusNE: row.NEGaleRadius ?? 0,
-        galeRadiusSE: row.SEGaleRadius ?? 0,
-        galeRadiusSW: row.SWGaleRadius ?? 0,
-        galeRadiusNW: row.NWGaleRadius ?? 0,
-        stormRadiusNE: row.NEStormRadius ?? 0,
-        stormRadiusSE: row.SEStormRadius ?? 0,
-        stormRadiusSW: row.SWStormRadius ?? 0,
-        stormRadiusNW: row.NWStormRadius ?? 0,
-        hurricaneRadiusNE: row.NEHurricaneRadius ?? 0,
-        hurricaneRadiusSE: row.SEHurricaneRadius ?? 0,
-        hurricaneRadiusSW: row.SWHurricaneRadius ?? 0,
-        hurricaneRadiusNW: row.NWHurricaneRadius ?? 0,
+        galeRadiusNE: galeRadii.ne,
+        galeRadiusSE: galeRadii.se,
+        galeRadiusSW: galeRadii.sw,
+        galeRadiusNW: galeRadii.nw,
+        stormRadiusNE: stormRadii.ne,
+        stormRadiusSE: stormRadii.se,
+        stormRadiusSW: stormRadii.sw,
+        stormRadiusNW: stormRadii.nw,
+        hurricaneRadiusNE: hurricaneRadii.ne,
+        hurricaneRadiusSE: hurricaneRadii.se,
+        hurricaneRadiusSW: hurricaneRadii.sw,
+        hurricaneRadiusNW: hurricaneRadii.nw,
         eyeRadius: row.EyeRadius ?? 0,
         eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
         verticalExtent: row.VerticalExtent ?? 0,

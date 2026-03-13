@@ -184,6 +184,9 @@ export default function BottomTabs({
   // filtered event data so the table reflects the current filter selection.
   const hasActiveDataFilters =
     filters.selectedHazards.length > 0 || filters.selectedSectors.length > 0;
+  const hasEventOrDateFilters =
+    filters.selectedEvents.length > 0 || !!filters.dateRange.start || !!filters.dateRange.end;
+  const hasHazardEventOrDateFilters = filters.selectedHazards.length > 0 || hasEventOrDateFilters;
 
   // Impact data based on current aggregation level (respects filters)
   const impactData = useMemo(() => {
@@ -376,15 +379,15 @@ export default function BottomTabs({
       id: 'economic-sector',
       label:
         filteredSectorEconomicData.length === sectorEconomicData.length
-          ? `Loss $ by Sector (${filteredSectorEconomicData.length})`
-          : `Loss $ by Sector (${filteredSectorEconomicData.length}/${sectorEconomicData.length})`,
+          ? `Economic Damage $ by Sector (${filteredSectorEconomicData.length})`
+          : `Economic Damage $ by Sector (${filteredSectorEconomicData.length}/${sectorEconomicData.length})`,
     },
     {
       id: 'economic-asset',
       label:
         filteredAssetEconomicData.length === assetEconomicData.length
-          ? `Loss $ by Asset (${filteredAssetEconomicData.length})`
-          : `Loss $ by Asset (${filteredAssetEconomicData.length}/${assetEconomicData.length})`,
+          ? `Economic Damage $ by Asset (${filteredAssetEconomicData.length})`
+          : `Economic Damage $ by Asset (${filteredAssetEconomicData.length}/${assetEconomicData.length})`,
     },
     // { id: "details", label: "Details" },
     // { id: "damage", label: `Damage (${regionalSummary.length})` },
@@ -579,6 +582,11 @@ export default function BottomTabs({
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-200">
                 Exposure Data ({exposureDisplayData.length} entries)
+                {hasEventOrDateFilters && (
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    Event and date filters do not apply to exposure tables.
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => {
@@ -682,11 +690,10 @@ export default function BottomTabs({
               <div className="text-sm text-slate-400">
                 Economic losses aggregated by sector. For asset-specific details, see the
                 &ldquo;Economic by Asset&rdquo; tab.
-                {(filters.selectedHazards.length > 0 ||
-                  filters.dateRange.start ||
-                  filters.dateRange.end) && (
+                {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
-                    Hazard and date filters do not apply to CSV-based economic tables.
+                    Hazard, event, and date filters do not apply to CSV-based economic tables.
+                    Sector filters still apply.
                   </div>
                 )}
               </div>
@@ -779,11 +786,10 @@ export default function BottomTabs({
               <div className="text-sm text-slate-400">
                 Economic losses by individual asset type. For sector-level aggregates, see the
                 &ldquo;Economic by Sector&rdquo; tab.
-                {(filters.selectedHazards.length > 0 ||
-                  filters.dateRange.start ||
-                  filters.dateRange.end) && (
+                {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
-                    Hazard and date filters do not apply to CSV-based economic tables.
+                    Hazard, event, and date filters do not apply to CSV-based economic tables.
+                    Sector filters still apply.
                   </div>
                 )}
               </div>
@@ -879,7 +885,7 @@ export default function BottomTabs({
               </span>{' '}
               This tab shows aggregated impact data from CSV files.{' '}
               <strong>Sector filter is active</strong> (if selected). Hazard and date filters do not
-              apply as CSV data lacks that granularity.
+              apply as CSV data lacks that granularity. Event filters also do not apply.
             </div>
             {filteredImpactByAssetType && filteredImpactByAssetType.length > 0 && (
               <div className="overflow-x-auto">

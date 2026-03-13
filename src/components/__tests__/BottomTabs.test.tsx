@@ -70,7 +70,7 @@ describe('BottomTabs', () => {
     const tabLabels = tabButtons.map(btn => btn.textContent ?? '');
     expect(tabLabels.some(l => l.includes('Impact'))).toBe(true);
     expect(tabLabels.some(l => l.includes('Exposure'))).toBe(true);
-    expect(tabLabels.some(l => l.includes('Loss'))).toBe(true);
+    expect(tabLabels.some(l => l.includes('Economic Damage'))).toBe(true);
   });
 
   it('switching to Exposure tab changes active tab styling', () => {

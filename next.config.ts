@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Base path for subdirectory deployment
-  basePath: '/partner2',
+  // Base path for subdirectory deployment (disabled in dev for convenience)
+  basePath: process.env.NODE_ENV === 'production' ? '/partner2' : '',
   
   // Production optimizations
   reactStrictMode: true,
@@ -61,28 +61,10 @@ const nextConfig: NextConfig = {
           }
         ],
       },
-      // Cache static assets
+      // Cache country data files with shorter TTL.
+      // These assets live under /public/<country> and are served at /<country>/...
       {
-        source: '/public/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
-      // Cache data files with shorter TTL
-      {
-        source: '/:file*.csv',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=3600, stale-while-revalidate=86400',
-          },
-        ],
-      },
-      {
-        source: '/:file*.geojson',
+        source: '/:country(vanuatu|samoa|tonga|cook-islands)/:file*\\.(csv|geojson|gpkg)',
         headers: [
           {
             key: 'Cache-Control',

@@ -17,7 +17,7 @@
  * and improved maintainability.
  */
 
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   BarChart3,
@@ -34,7 +34,9 @@ import {
   Wheat,
   Wind,
   X,
+  Maximize2,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -92,6 +94,69 @@ interface SummaryPanelProps {
   regionalSummary?: RegionalSummary[];
   regionalSummaryBySector?: RegionalSummaryBySector[];
   impactBySector?: any[];
+}
+
+function PopoutVisualization({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [overlayRoot, setOverlayRoot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    Promise.resolve().then(() => {
+      setOverlayRoot(document.getElementById('map-overlay-root'));
+    });
+  }, []);
+
+  const overlay = (
+    <div className="absolute inset-0 pointer-events-auto bg-slate-950/70 backdrop-blur-sm flex items-center justify-center">
+      <div className="w-[min(1080px,94vw)] max-h-[88vh] rounded-2xl border border-slate-700/60 bg-slate-900/95 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
+            {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="text-xs px-2.5 py-1.5 rounded-md border border-slate-600/60 text-slate-200 bg-slate-900/60 hover:bg-slate-800/70 transition-colors"
+            aria-label={`Close ${title}`}
+          >
+            Close
+          </button>
+        </div>
+        <div className="p-4 overflow-auto max-h-[calc(88vh-60px)]">{children}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="flex items-end justify-end mb-2">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-slate-600/60 text-slate-200 bg-slate-900/60 hover:bg-slate-800/70 transition-colors"
+          aria-label={`Expand ${title}`}
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+          Pop out
+        </button>
+      </div>
+      {children}
+      {isOpen &&
+        (overlayRoot
+          ? createPortal(overlay, overlayRoot)
+          : createPortal(<div className="fixed inset-0 z-[90]">{overlay}</div>, document.body))}
+    </>
+  );
 }
 
 export default function SummaryPanel({
@@ -571,7 +636,7 @@ export default function SummaryPanel({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-1 border-t border-slate-700/50 pt-3">
+        <div className="grid grid-cols-4 gap-1 border-t border-slate-700/50 pt-3">
           {[
             { id: 'summary', label: 'Summary', icon: BarChart3 },
             { id: 'exposure', label: 'Exposure', icon: Home },
@@ -581,14 +646,16 @@ export default function SummaryPanel({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`min-w-[92px] flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-[11px] font-semibold transition-all ${
+              className={`h-9 min-w-0 w-full flex items-center justify-center rounded-lg border text-slate-300 transition-colors ${
                 activeTab === tab.id
-                  ? 'bg-blue-500/20 text-blue-300 border-2 border-blue-500/50 shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-700/20 text-slate-400 hover:bg-slate-700/40 hover:text-slate-200 border-2 border-transparent'
+                  ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                  : 'bg-slate-700/20 border-transparent text-slate-400 hover:bg-slate-700/40 hover:text-slate-200'
               }`}
+              aria-label={tab.label}
               title={tab.label}
             >
-              <tab.icon className="w-4 h-4" />
+              <tab.icon className="w-3.5 h-3.5" />
+              <span className="sr-only">{tab.label}</span>
             </button>
           ))}
         </div>
@@ -683,174 +750,182 @@ export default function SummaryPanel({
                   {/* Exposure by Sector */}
                   {exposureDoughnutData && (
                     <div className="bg-slate-800/40 rounded-lg p-4 border border-slate-700/50">
-                      <h4 className="text-xs font-medium text-slate-300 mb-3">
-                        Exposure by Sector
-                      </h4>
-                      <div className="relative" style={{ height: '220px' }}>
-                        <Doughnut
-                          data={{
-                            labels: exposureDoughnutData.labels,
-                            datasets: exposureDoughnutData.datasets,
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: {
-                                ...doughnutTooltipConfig,
-                                callbacks: {
-                                  label: context => {
-                                    const label = context.label || '';
-                                    const value = context.parsed || 0;
-                                    const total = exposureDoughnutData.total;
-                                    const percentage =
-                                      total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-                                    return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                      <h4 className="text-xs font-medium text-slate-300">Exposure by Sector</h4>
+                      <PopoutVisualization
+                        title="Exposure by Sector"
+                        subtitle="Sector share of exposed value"
+                      >
+                        <div className="relative" style={{ height: '220px' }}>
+                          <Doughnut
+                            data={{
+                              labels: exposureDoughnutData.labels,
+                              datasets: exposureDoughnutData.datasets,
+                            }}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                  ...doughnutTooltipConfig,
+                                  callbacks: {
+                                    label: context => {
+                                      const label = context.label || '';
+                                      const value = context.parsed || 0;
+                                      const total = exposureDoughnutData.total;
+                                      const percentage =
+                                        total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+                                      return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                                    },
                                   },
                                 },
                               },
-                            },
-                          }}
-                        />
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-3xl font-bold text-white">
-                            ${exposureDoughnutData.total.toFixed(0)}M
-                          </span>
-                          <span className="text-xs text-slate-400 mt-1">Total Exposed</span>
+                            }}
+                          />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-3xl font-bold text-white">
+                              ${exposureDoughnutData.total.toFixed(0)}M
+                            </span>
+                            <span className="text-xs text-slate-400 mt-1">Total Exposed</span>
+                          </div>
                         </div>
-                      </div>
-                      {/* Legend */}
-                      <div className="mt-3 space-y-2">
-                        {exposureDoughnutData.labels.map((label: string, idx: number) => {
-                          const value = exposureDoughnutData.datasets[0].data[idx];
-                          const percentage =
-                            exposureDoughnutData.total > 0
-                              ? ((value / exposureDoughnutData.total) * 100).toFixed(1)
-                              : '0';
-                          const color = exposureDoughnutData.datasets[0].backgroundColor[idx];
-                          return (
-                            <div key={idx} className="group">
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <div className="flex items-center gap-2">
+                        {/* Legend */}
+                        <div className="mt-3 space-y-2">
+                          {exposureDoughnutData.labels.map((label: string, idx: number) => {
+                            const value = exposureDoughnutData.datasets[0].data[idx];
+                            const percentage =
+                              exposureDoughnutData.total > 0
+                                ? ((value / exposureDoughnutData.total) * 100).toFixed(1)
+                                : '0';
+                            const color = exposureDoughnutData.datasets[0].backgroundColor[idx];
+                            return (
+                              <div key={idx} className="group">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-3 h-3 rounded-sm shadow-md transition-transform group-hover:scale-110"
+                                      style={{
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 10px ${color}50`,
+                                      }}
+                                    />
+                                    <span className="text-slate-200 font-medium">{label}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-slate-300 font-semibold">
+                                      ${value.toFixed(1)}M
+                                    </span>
+                                    <span className="text-slate-500 text-[10px]">•</span>
+                                    <span className="text-cyan-400 font-bold">{percentage}%</span>
+                                  </div>
+                                </div>
+                                <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
                                   <div
-                                    className="w-3 h-3 rounded-sm shadow-md transition-transform group-hover:scale-110"
+                                    className="h-full rounded-full transition-all duration-500"
                                     style={{
+                                      width: `${percentage}%`,
                                       backgroundColor: color,
-                                      boxShadow: `0 0 10px ${color}50`,
+                                      boxShadow: `0 0 8px ${color}80`,
                                     }}
                                   />
-                                  <span className="text-slate-200 font-medium">{label}</span>
-                                </div>
-                                <div className="flex items-baseline gap-1.5">
-                                  <span className="text-slate-300 font-semibold">
-                                    ${value.toFixed(1)}M
-                                  </span>
-                                  <span className="text-slate-500 text-[10px]">•</span>
-                                  <span className="text-cyan-400 font-bold">{percentage}%</span>
                                 </div>
                               </div>
-                              <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{
-                                    width: `${percentage}%`,
-                                    backgroundColor: color,
-                                    boxShadow: `0 0 8px ${color}80`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      </PopoutVisualization>
                     </div>
                   )}
 
                   {/* Economic Damage by Sector */}
                   {damageDoughnutData && (
                     <div className="bg-slate-800/40 rounded-lg p-4 border border-slate-700/50">
-                      <h4 className="text-xs font-medium text-slate-300 mb-3">
+                      <h4 className="text-xs font-medium text-slate-300">
                         Economic Damage by Sector
                       </h4>
-                      <div className="relative" style={{ height: '220px' }}>
-                        <Doughnut
-                          data={{
-                            labels: damageDoughnutData.labels,
-                            datasets: damageDoughnutData.datasets,
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: {
-                                ...doughnutTooltipConfig,
-                                callbacks: {
-                                  label: context => {
-                                    const label = context.label || '';
-                                    const value = context.parsed || 0;
-                                    const total = damageDoughnutData.total;
-                                    const percentage =
-                                      total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-                                    return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                      <PopoutVisualization
+                        title="Economic Damage by Sector"
+                        subtitle="Sector share of total losses"
+                      >
+                        <div className="relative" style={{ height: '220px' }}>
+                          <Doughnut
+                            data={{
+                              labels: damageDoughnutData.labels,
+                              datasets: damageDoughnutData.datasets,
+                            }}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                  ...doughnutTooltipConfig,
+                                  callbacks: {
+                                    label: context => {
+                                      const label = context.label || '';
+                                      const value = context.parsed || 0;
+                                      const total = damageDoughnutData.total;
+                                      const percentage =
+                                        total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+                                      return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                                    },
                                   },
                                 },
                               },
-                            },
-                          }}
-                        />
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-3xl font-bold text-white">
-                            ${damageDoughnutData.total.toFixed(0)}M
-                          </span>
-                          <span className="text-xs text-slate-400 mt-1">Total Loss</span>
+                            }}
+                          />
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-3xl font-bold text-white">
+                              ${damageDoughnutData.total.toFixed(0)}M
+                            </span>
+                            <span className="text-xs text-slate-400 mt-1">Total Loss</span>
+                          </div>
                         </div>
-                      </div>
-                      {/* Legend */}
-                      <div className="mt-3 space-y-2">
-                        {damageDoughnutData.labels.map((label: string, idx: number) => {
-                          const value = damageDoughnutData.datasets[0].data[idx];
-                          const percentage =
-                            damageDoughnutData.total > 0
-                              ? ((value / damageDoughnutData.total) * 100).toFixed(1)
-                              : '0';
-                          const color = damageDoughnutData.datasets[0].backgroundColor[idx];
-                          return (
-                            <div key={idx} className="group">
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <div className="flex items-center gap-2">
+                        {/* Legend */}
+                        <div className="mt-3 space-y-2">
+                          {damageDoughnutData.labels.map((label: string, idx: number) => {
+                            const value = damageDoughnutData.datasets[0].data[idx];
+                            const percentage =
+                              damageDoughnutData.total > 0
+                                ? ((value / damageDoughnutData.total) * 100).toFixed(1)
+                                : '0';
+                            const color = damageDoughnutData.datasets[0].backgroundColor[idx];
+                            return (
+                              <div key={idx} className="group">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-3 h-3 rounded-sm shadow-md transition-transform group-hover:scale-110"
+                                      style={{
+                                        backgroundColor: color,
+                                        boxShadow: `0 0 10px ${color}50`,
+                                      }}
+                                    />
+                                    <span className="text-slate-200 font-medium">{label}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-slate-300 font-semibold">
+                                      ${value.toFixed(1)}M
+                                    </span>
+                                    <span className="text-slate-500 text-[10px]">•</span>
+                                    <span className="text-cyan-400 font-bold">{percentage}%</span>
+                                  </div>
+                                </div>
+                                <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
                                   <div
-                                    className="w-3 h-3 rounded-sm shadow-md transition-transform group-hover:scale-110"
+                                    className="h-full rounded-full transition-all duration-500"
                                     style={{
+                                      width: `${percentage}%`,
                                       backgroundColor: color,
-                                      boxShadow: `0 0 10px ${color}50`,
+                                      boxShadow: `0 0 8px ${color}80`,
                                     }}
                                   />
-                                  <span className="text-slate-200 font-medium">{label}</span>
-                                </div>
-                                <div className="flex items-baseline gap-1.5">
-                                  <span className="text-slate-300 font-semibold">
-                                    ${value.toFixed(1)}M
-                                  </span>
-                                  <span className="text-slate-500 text-[10px]">•</span>
-                                  <span className="text-cyan-400 font-bold">{percentage}%</span>
                                 </div>
                               </div>
-                              <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{
-                                    width: `${percentage}%`,
-                                    backgroundColor: color,
-                                    boxShadow: `0 0 8px ${color}80`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      </PopoutVisualization>
                     </div>
                   )}
                 </div>
@@ -1265,42 +1340,47 @@ export default function SummaryPanel({
               <div className="text-xs text-slate-400 mb-2">
                 Economic loss by administrative region
               </div>
-              <div className="h-48">
-                <Bar
-                  data={regionalComparisonData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: false,
+              <PopoutVisualization
+                title="Most Affected Regions"
+                subtitle="Economic loss by administrative region"
+              >
+                <div className="h-48">
+                  <Bar
+                    data={regionalComparisonData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: false,
+                        },
                       },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        grid: { color: UI_COLORS.borderSubtle },
-                        ticks: {
-                          font: { size: 9 },
-                          callback: function (value) {
-                            return '$' + value + 'M';
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          grid: { color: UI_COLORS.borderSubtle },
+                          ticks: {
+                            font: { size: 9 },
+                            callback: function (value) {
+                              return '$' + value + 'M';
+                            },
+                          },
+                          title: {
+                            display: true,
+                            text: 'Economic Damage (USD)',
+                            font: { size: 10 },
+                            color: UI_COLORS.textTertiary,
                           },
                         },
-                        title: {
-                          display: true,
-                          text: 'Economic Loss (USD)',
-                          font: { size: 10 },
-                          color: UI_COLORS.textTertiary,
+                        x: {
+                          grid: { display: false },
+                          ticks: { font: { size: 9 } },
                         },
                       },
-                      x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 9 } },
-                      },
-                    },
-                  }}
-                />
-              </div>
+                    }}
+                  />
+                </div>
+              </PopoutVisualization>
             </div>
           )}
 
@@ -1313,40 +1393,45 @@ export default function SummaryPanel({
               <div className="text-xs text-slate-400 mb-3">
                 Showing {assetExposureData.stats.total} individual assets
               </div>
-              <div className="h-40">
-                <Bar
-                  data={assetTypeChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                      legend: {
-                        display: false,
-                      },
-                    },
-                    scales: {
-                      x: {
-                        beginAtZero: true,
-                        grid: {
-                          color: UI_COLORS.borderSubtle,
-                        },
-                        ticks: {
-                          font: { size: 9 },
-                        },
-                      },
-                      y: {
-                        grid: {
+              <PopoutVisualization
+                title="Exposed Assets by Type"
+                subtitle={`Showing ${assetExposureData.stats.total} individual assets`}
+              >
+                <div className="h-40">
+                  <Bar
+                    data={assetTypeChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      indexAxis: 'y',
+                      plugins: {
+                        legend: {
                           display: false,
                         },
-                        ticks: {
-                          font: { size: 9 },
+                      },
+                      scales: {
+                        x: {
+                          beginAtZero: true,
+                          grid: {
+                            color: UI_COLORS.borderSubtle,
+                          },
+                          ticks: {
+                            font: { size: 9 },
+                          },
+                        },
+                        y: {
+                          grid: {
+                            display: false,
+                          },
+                          ticks: {
+                            font: { size: 9 },
+                          },
                         },
                       },
-                    },
-                  }}
-                />
-              </div>
+                    }}
+                  />
+                </div>
+              </PopoutVisualization>
             </div>
           )}
 
@@ -1427,44 +1512,49 @@ export default function SummaryPanel({
                 Wind Intensity Distribution
               </h4>
               <div className="text-xs text-slate-400 mb-2">Population by wind speed</div>
-              <div className="h-56">
-                <Bar
-                  data={windIntensityData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom' as const,
-                        labels: {
-                          usePointStyle: true,
-                          padding: 10,
-                          font: { size: 9 },
+              <PopoutVisualization
+                title="Wind Intensity Distribution"
+                subtitle="Population by wind speed"
+              >
+                <div className="h-56">
+                  <Bar
+                    data={windIntensityData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom' as const,
+                          labels: {
+                            usePointStyle: true,
+                            padding: 10,
+                            font: { size: 9 },
+                          },
                         },
                       },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        grid: {
-                          color: UI_COLORS.borderSubtle,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          grid: {
+                            color: UI_COLORS.borderSubtle,
+                          },
+                          ticks: {
+                            font: { size: 9 },
+                          },
                         },
-                        ticks: {
-                          font: { size: 9 },
+                        x: {
+                          grid: {
+                            display: false,
+                          },
+                          ticks: {
+                            font: { size: 9 },
+                          },
                         },
                       },
-                      x: {
-                        grid: {
-                          display: false,
-                        },
-                        ticks: {
-                          font: { size: 9 },
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
+                    }}
+                  />
+                </div>
+              </PopoutVisualization>
             </div>
           )}
         </div>
@@ -1501,9 +1591,11 @@ export default function SummaryPanel({
               <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
                 Impact by Sector
               </h4>
-              <div className="h-40 mb-4">
-                <Bar data={realSectorChartData} options={chartOptions} />
-              </div>
+              <PopoutVisualization title="Impact by Sector" subtitle="Sector damage comparison">
+                <div className="h-40 mb-4">
+                  <Bar data={realSectorChartData} options={chartOptions} />
+                </div>
+              </PopoutVisualization>
             </div>
           )}
 
@@ -1559,26 +1651,31 @@ export default function SummaryPanel({
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
                     Building Damage Distribution
                   </h4>
-                  <div className="h-40 mb-4">
-                    <Bar
-                      data={lossRangeData}
-                      options={{
-                        ...chartOptions,
-                        scales: {
-                          ...chartOptions.scales,
-                          y: {
-                            ...chartOptions.scales.y,
-                            title: {
-                              display: true,
-                              text: 'Number of Buildings',
-                              font: { size: 10 },
-                              color: 'rgba(255,255,255,0.6)',
+                  <PopoutVisualization
+                    title="Building Damage Distribution"
+                    subtitle="Buildings grouped by loss range"
+                  >
+                    <div className="h-40 mb-4">
+                      <Bar
+                        data={lossRangeData}
+                        options={{
+                          ...chartOptions,
+                          scales: {
+                            ...chartOptions.scales,
+                            y: {
+                              ...chartOptions.scales.y,
+                              title: {
+                                display: true,
+                                text: 'Number of Buildings',
+                                font: { size: 10 },
+                                color: 'rgba(255,255,255,0.6)',
+                              },
                             },
                           },
-                        },
-                      }}
-                    />
-                  </div>
+                        }}
+                      />
+                    </div>
+                  </PopoutVisualization>
                 </div>
               );
             })()}
@@ -1653,9 +1750,14 @@ export default function SummaryPanel({
                       <div className="text-xs text-slate-500">100%</div>
                     </div>
                   </div>
-                  <div className="h-40">
-                    <Bar data={exposureData} options={chartOptions} />
-                  </div>
+                  <PopoutVisualization
+                    title="Building Exposure Status"
+                    subtitle="Damaged, exposed, and unaffected buildings"
+                  >
+                    <div className="h-40">
+                      <Bar data={exposureData} options={chartOptions} />
+                    </div>
+                  </PopoutVisualization>
                 </div>
               );
             })()}
@@ -1791,7 +1893,16 @@ export default function SummaryPanel({
                   </button>
                 </div>
               </div>
-              <RankedDistrictsChart data={displayAggregatedData} metric={districtMetric} topN={8} />
+              <PopoutVisualization
+                title="Top Districts Ranking"
+                subtitle={`Top ${aggregatedEventData.length > 0 ? 'districts' : 'regions'} by ${districtMetric === 'loss' ? 'economic loss' : 'affected population'}`}
+              >
+                <RankedDistrictsChart
+                  data={displayAggregatedData}
+                  metric={districtMetric}
+                  topN={8}
+                />
+              </PopoutVisualization>
             </div>
           )}
 
@@ -1800,10 +1911,15 @@ export default function SummaryPanel({
               Sector and Regional Structure
             </h4>
             {derivedRegionalSummary.length > 0 || filteredRegionalSummaryBySector.length > 0 ? (
-              <AdvancedCharts
-                regionalSummary={derivedRegionalSummary}
-                regionalSummaryBySector={filteredRegionalSummaryBySector}
-              />
+              <PopoutVisualization
+                title="Sector and Regional Structure"
+                subtitle="Heatmap and bar analysis for regional economic distribution"
+              >
+                <AdvancedCharts
+                  regionalSummary={derivedRegionalSummary}
+                  regionalSummaryBySector={filteredRegionalSummaryBySector}
+                />
+              </PopoutVisualization>
             ) : (
               <p className="text-xs text-slate-500 text-center py-6 italic">
                 No regional sector data available

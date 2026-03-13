@@ -234,20 +234,20 @@ export const UI_COLORS = {
  */
 export const WIND_RADII_COLORS = {
   gale: {
-    stroke: '#FFD700', // Gold - 34-47 kt
-    fill: '#FFD70040', // Gold with alpha
+    stroke: '#F59E0B', // amber-500 - 34-47 kt (gale force)
+    fill: '#F59E0B18', // very subtle amber wash
   },
   storm: {
-    stroke: '#FFA500', // Orange - 48-63 kt
-    fill: '#FFA50040', // Orange with alpha
+    stroke: '#F97316', // orange-500 - 48-63 kt (storm force)
+    fill: '#F9731618', // very subtle orange wash
   },
   hurricane: {
-    stroke: '#FF0000', // Red - ≥64 kt
-    fill: '#FF000040', // Red with alpha
+    stroke: '#EF4444', // red-500 - ≥64 kt (hurricane force)
+    fill: '#EF444418', // very subtle red wash
   },
   uncertainty: {
-    stroke: '#666666', // Gray - Forecast cone
-    fill: '#88888820', // Gray with alpha (dashed)
+    stroke: '#475569', // slate-600 - forecast cone
+    fill: '#47556910', // barely-there slate
   },
 };
 

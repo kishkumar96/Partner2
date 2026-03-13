@@ -154,6 +154,12 @@ export default function DamagedBuildingsLayer({
         });
       }
 
+      // If data is already available when layers initialize, hydrate source immediately.
+      const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+      if (source && source.setData && data) {
+        source.setData(data as GeoJSON.FeatureCollection);
+      }
+
       // Add cluster circle layer - MUST render above regional polygons
       if (!map.getLayer(clusterLayerId)) {
         map.addLayer(
@@ -269,6 +275,14 @@ export default function DamagedBuildingsLayer({
       map.on('click', clusterLayerId, handleClusterClick);
       map.on('mouseenter', clusterLayerId, handleMouseEnter);
       map.on('mouseleave', clusterLayerId, handleMouseLeave);
+
+      // Apply current visibility immediately to avoid style-load race.
+      const visibility = visible ? 'visible' : 'none';
+      [layerId, clusterLayerId, clusterCountLayerId].forEach(id => {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, 'visibility', visibility);
+        }
+      });
     };
 
     // Check if style is loaded before adding layers
@@ -310,20 +324,26 @@ export default function DamagedBuildingsLayer({
         // Silently ignore cleanup errors when map is destroyed
       }
     };
-  }, [map, styleChangeCounter]); // Only depend on map and styleChangeCounter
+  }, [map, styleChangeCounter, visible, data]); // Include data for style-load races
 
   // Effect 2: Update data in existing source when data changes
   // This avoids recreating layers/sources and eliminates flicker
   useEffect(() => {
     if (!map || !data) return;
 
-    // Wait for style to be loaded before accessing sources
-    if (!map.isStyleLoaded()) return;
+    const applyData = () => {
+      const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+      if (source && source.setData) {
+        // Update the existing source with new data - much faster than recreating
+        source.setData(data as GeoJSON.FeatureCollection);
+      }
+    };
 
-    const source = map.getSource(sourceId) as maplibregl.GeoJSONSource;
-    if (source && source.setData) {
-      // Update the existing source with new data - much faster than recreating
-      source.setData(data as GeoJSON.FeatureCollection);
+    if (map.isStyleLoaded()) {
+      applyData();
+    } else {
+      // Handle race where data arrives before style/source is ready.
+      map.once('load', applyData);
     }
   }, [map, data]); // Only depend on map and data
 

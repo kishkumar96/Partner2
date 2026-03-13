@@ -9,8 +9,8 @@
  * - Caching support
  */
 
-// Get basePath from Next.js config
-const BASE_PATH = '/partner2';
+// Get basePath from env — empty in dev, '/partner2' in production
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
 
 /**
  * Add basePath to URL if needed

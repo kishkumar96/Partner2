@@ -22,12 +22,15 @@ describe('Data Flow Integration Tests', () => {
       } as Response)
     );
 
+    const response = await fetch('/api/data');
+    const responseData = await response.json();
+
     // Test that data flows through the application
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalled();
     });
 
-    expect(mockData).toBeDefined();
+    expect(responseData).toEqual(mockData);
   });
 
   it('handles API errors gracefully', async () => {

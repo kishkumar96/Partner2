@@ -10,11 +10,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { resolveCountryCode } from '@/lib/countryAuth';
+import { ensureCountryApiAccessEnhanced } from '@/lib/countryApiAuth';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const countryCode = searchParams.get('country') || 'VU';
+    const countryCode = resolveCountryCode(searchParams.get('country') || 'VU');
+    if (!countryCode) {
+      return NextResponse.json({ error: 'Invalid country code' }, { status: 400 });
+    }
+
+    const authResponse = await ensureCountryApiAccessEnhanced(
+      request,
+      countryCode,
+      '/api/regional-summary-by-sector'
+    );
+    if (authResponse) return authResponse;
 
     const query = `
       SELECT 
