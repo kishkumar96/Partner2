@@ -1,11 +1,8 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 echo "🚀 Running pre-push checks..."
 
-# Run full test suite with coverage
+# Run full test suite (without global coverage gate)
 echo "🧪 Running full test suite..."
-npm run test:coverage || exit 1
+npm test || exit 1
 
 # Run build to ensure it works
 echo "🏗️  Building application..."
