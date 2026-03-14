@@ -15,6 +15,7 @@ COPY package*.json ./
 COPY next.config.* ./
 COPY tsconfig.* ./
 COPY postcss.config.* ./
+COPY tailwind.config.* ./
 COPY eslint.config.* ./
 COPY public ./public
 COPY src ./src
