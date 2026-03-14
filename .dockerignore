@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules
+.next
+
+# VCS and docs
+.git
+.gitignore
+*.md
+
+# Environment and secret material
+.env
+.env.*
+!.env.example
+
+# Local tooling artifacts
+*.log
+coverage
+reports
+*.har

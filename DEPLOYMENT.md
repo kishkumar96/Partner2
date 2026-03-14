@@ -39,7 +39,7 @@ Edit `.env.production` with your production values:
 
 ```bash
 NODE_ENV=production
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
+NEXT_PUBLIC_APP_URL=https://yourdomain.com/partner2
 NEXT_PUBLIC_ENABLE_ANALYTICS=true
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
@@ -63,10 +63,9 @@ Vercel is the easiest way to deploy Next.js applications.
 > the live URL will be `https://your-project.vercel.app/partner2`.  
 > Set `NEXT_PUBLIC_APP_URL` to that full URL (including `/partner2`).
 
-A `vercel.json` is already included in the repository with sensible defaults.  
-After deploying, update `NEXT_PUBLIC_APP_URL` in the Vercel dashboard (or CLI)
-to replace the placeholder `your-project.vercel.app` with your actual Vercel
-project URL (or custom domain).
+A `vercel.json` is already included in the repository with build defaults.  
+Set `NEXT_PUBLIC_APP_URL` in the Vercel dashboard (or CLI) for each environment
+(production/preview/development) so URLs always include `/partner2`.
 
 #### Option 1: Deploy via CLI
 
@@ -251,11 +250,12 @@ version: '3.8'
 services:
   app:
     build: .
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
       - PORT=3112
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_APP_URL=https://yourdomain.com/partner2
     restart: unless-stopped
     networks:
       - app-network
@@ -279,10 +279,18 @@ networks:
     driver: bridge
 ```
 
-Example NGINX `location` block to proxy `/partner2`:
+> Ensure `.env.production` contains `NEXT_PUBLIC_APP_URL=https://yourdomain.com/partner2`.
+
+Example NGINX `location` blocks to proxy `/partner2`:
 
 ```nginx
-location /partner2 {
+# Redirect exact `/partner2` to `/partner2/` to avoid relative-path issues
+location = /partner2 {
+    return 301 /partner2/;
+}
+
+# Proxy all `/partner2/...` paths (without matching `/partner23`, etc.)
+location ^~ /partner2/ {
     proxy_pass         http://app:3112;
     proxy_set_header   Host $host;
     proxy_set_header   X-Real-IP $remote_addr;

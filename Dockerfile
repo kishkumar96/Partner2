@@ -9,7 +9,16 @@ RUN npm ci
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copy only build inputs (avoid accidentally copying local secrets like .env*)
+COPY package*.json ./
+COPY next.config.* ./
+COPY tsconfig.* ./
+COPY postcss.config.* ./
+COPY tailwind.config.* ./
+COPY eslint.config.* ./
+COPY public ./public
+COPY src ./src
 
 # Produce a standalone Next.js bundle (see next.config.ts output:'standalone')
 ENV NEXT_TELEMETRY_DISABLED=1

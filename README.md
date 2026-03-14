@@ -495,11 +495,15 @@ WCAG 2.1 AA compliant:
    (e.g. `https://my-project.vercel.app/partner2`).
 3. The app will be accessible at `https://your-project.vercel.app/partner2`.
 
-> A `vercel.json` is included in the repository with sensible defaults.
+> A `vercel.json` is included in the repository with sensible build defaults.
+> Configure `NEXT_PUBLIC_APP_URL` in your Vercel project environment variables.
 
 ### Option 2 — Docker
 
 ```bash
+# Create production env file and set NEXT_PUBLIC_APP_URL with /partner2
+cp .env.example .env.production
+
 # Build and run with Docker Compose
 docker compose up -d --build
 
