@@ -39,7 +39,7 @@ Edit `.env.production` with your production values:
 
 ```bash
 NODE_ENV=production
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
+NEXT_PUBLIC_APP_URL=https://yourdomain.com/partner2
 NEXT_PUBLIC_ENABLE_ANALYTICS=true
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
@@ -59,6 +59,14 @@ NEXT_PUBLIC_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 
 Vercel is the easiest way to deploy Next.js applications.
 
+> **Base-path note:** This app uses `basePath: '/partner2'` in production, so
+> the live URL will be `https://your-project.vercel.app/partner2`.  
+> Set `NEXT_PUBLIC_APP_URL` to that full URL (including `/partner2`).
+
+A `vercel.json` is already included in the repository with build defaults.  
+Set `NEXT_PUBLIC_APP_URL` in the Vercel dashboard (or CLI) for each environment
+(production/preview/development) so URLs always include `/partner2`.
+
 #### Option 1: Deploy via CLI
 
 ```bash
@@ -74,17 +82,19 @@ vercel --prod
 
 #### Option 2: Deploy via Git
 
-1. Push code to GitHub/GitLab/Bitbucket
-2. Visit [vercel.com](https://vercel.com)
-3. Import your repository
-4. Configure environment variables in Vercel dashboard
-5. Deploy
+1. Push code to GitHub
+2. Visit [vercel.com](https://vercel.com) → **Add New Project**
+3. Import the `kishkumar96/Partner2` repository
+4. Configure environment variables in the Vercel dashboard (see below)
+5. Click **Deploy**
 
 #### Configure Environment Variables in Vercel
 
 ```bash
 # Via CLI
 vercel env add NEXT_PUBLIC_APP_URL production
+# Enter: https://your-project.vercel.app/partner2
+
 vercel env add NEXT_PUBLIC_GA_MEASUREMENT_ID production
 vercel env add NEXT_PUBLIC_SENTRY_DSN production
 
@@ -97,14 +107,16 @@ vercel env add NEXT_PUBLIC_SENTRY_DSN production
 1. Go to Project Settings → Domains
 2. Add your custom domain
 3. Configure DNS settings as instructed
+4. Update `NEXT_PUBLIC_APP_URL` to `https://yourdomain.com/partner2`
 
 #### Build Settings
 
-Vercel auto-detects Next.js. Default settings work well:
+Vercel auto-detects Next.js. Default settings work well (also captured in
+`vercel.json`):
 
 - **Build Command**: `npm run build`
 - **Output Directory**: `.next`
-- **Install Command**: `npm install`
+- **Install Command**: `npm ci`
 - **Development Command**: `npm run dev`
 
 ### AWS (EC2/ECS)
@@ -200,23 +212,37 @@ eb deploy
 
 ### Docker
 
+> **Important:** This application is served under the `/partner2` base-path in
+> production (configured in `next.config.ts`). All URLs must include this prefix,
+> e.g. `http://localhost:3112/partner2`.
+
 #### Build Docker Image
 
 ```bash
 # Build
-docker build -t climate-dashboard:latest .
+docker build -t partner2-dashboard:latest .
 
-# Run locally to test
-docker run -p 3000:3000 --env-file .env.production climate-dashboard:latest
+# Run locally to test (app available at http://localhost:3112/partner2)
+docker run -p 3112:3112 \
+  -e NODE_ENV=production \
+  -e NEXT_PUBLIC_APP_URL=http://localhost:3112/partner2 \
+  partner2-dashboard:latest
 
-# Push to registry
-docker tag climate-dashboard:latest your-registry/climate-dashboard:latest
-docker push your-registry/climate-dashboard:latest
+# Push to a registry
+docker tag partner2-dashboard:latest your-registry/partner2-dashboard:latest
+docker push your-registry/partner2-dashboard:latest
 ```
 
-#### Docker Compose (with NGINX)
+#### Docker Compose (quickstart)
 
-Create `docker-compose.yml`:
+A `docker-compose.yml` is included in the repository. Start it with:
+
+```bash
+docker compose up -d --build
+# Dashboard → http://localhost:3112/partner2
+```
+
+#### Docker Compose (with NGINX reverse proxy)
 
 ```yaml
 version: '3.8'
@@ -224,9 +250,12 @@ version: '3.8'
 services:
   app:
     build: .
+    env_file:
+      - .env.production
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_APP_URL=https://yourdomain.com
+      - PORT=3112
+      - HOSTNAME=0.0.0.0
     restart: unless-stopped
     networks:
       - app-network
@@ -250,10 +279,30 @@ networks:
     driver: bridge
 ```
 
+> Ensure `.env.production` contains `NEXT_PUBLIC_APP_URL=https://yourdomain.com/partner2`.
+
+Example NGINX `location` blocks to proxy `/partner2`:
+
+```nginx
+# Redirect exact `/partner2` to `/partner2/` to avoid relative-path issues
+location = /partner2 {
+    return 301 /partner2/;
+}
+
+# Proxy all `/partner2/...` paths (without matching `/partner23`, etc.)
+location ^~ /partner2/ {
+    proxy_pass         http://app:3112;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Real-IP $remote_addr;
+    proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}
+```
+
 Deploy:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Self-Hosted (Standalone Server)

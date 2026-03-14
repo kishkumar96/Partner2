@@ -486,19 +486,42 @@ WCAG 2.1 AA compliant:
 
 ## 🚀 Deployment
 
-### Deploy to Vercel (Recommended)
+### Option 1 — Vercel (Recommended)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/climate-dashboard)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kishkumar96/Partner2)
+
+1. Click the button above (or run `vercel --prod` via the CLI).
+2. Set `NEXT_PUBLIC_APP_URL` to your Vercel URL **with** the `/partner2` suffix
+   (e.g. `https://my-project.vercel.app/partner2`).
+3. The app will be accessible at `https://your-project.vercel.app/partner2`.
+
+> A `vercel.json` is included in the repository with sensible build defaults.
+> Configure `NEXT_PUBLIC_APP_URL` in your Vercel project environment variables.
+
+### Option 2 — Docker
+
+```bash
+# Create production env file and set NEXT_PUBLIC_APP_URL with /partner2
+cp .env.example .env.production
+
+# Build and run with Docker Compose
+docker compose up -d --build
+
+# The dashboard will be available at:
+# http://localhost:3112/partner2
+```
+
+> **Note:** In production the app is served under the `/partner2` base-path
+> (configured in `next.config.ts`). Always include it in your URL.
 
 ### Other Platforms
 
 - AWS (EC2, ECS, Amplify)
 - Google Cloud Platform
 - Azure
-- Docker
-- Self-hosted
+- Self-hosted (Node.js / PM2)
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed step-by-step instructions for all platforms.
 
 ## 🤝 Contributing
 
