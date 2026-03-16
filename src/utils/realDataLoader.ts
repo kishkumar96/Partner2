@@ -985,17 +985,8 @@ async function loadPartnerApiCountryData(
   riskRegionalSummary: Array<Record<string, unknown>>;
   riskImpactByAsset: Array<Record<string, unknown>>;
 }> {
-  // Partner API mapping requested for Samoa and Tonga only.
-  if (countryCode !== 'WS' && countryCode !== 'TO') {
-    return {
-      countryId: null,
-      cycloneTrack: null,
-      eventMeta: null,
-      riskRegionalSummary: [],
-      riskImpactByAsset: [],
-    };
-  }
-
+  // Partner API now supports all countries (VU, WS, TO, CK)
+  // Will gracefully return empty data if country not found in API
   try {
     const mapping = await mapCountryPartnerApis(countryCode);
 

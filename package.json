@@ -33,7 +33,8 @@
     "ollama:docs": "node scripts/ollama-docs.js",
     "ollama:tests": "node scripts/ollama-tests.js",
     "ollama:commit": "node scripts/ollama-commit.js",
-    "ollama:check": "node scripts/ollama-check.js"
+    "ollama:check": "node scripts/ollama-check.js",
+    "check:partner-api": "node scripts/check-partner-api.js"
   },
   "dependencies": {
     "@deck.gl/extensions": "^9.2.11",
