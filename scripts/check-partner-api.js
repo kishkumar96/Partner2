@@ -11,7 +11,7 @@
  *   npm run check:partner-api
  */
 
-const BASE_URL = 'http://opmthredds.gem.spc.int/partner_api/v1';
+const BASE_URL = 'https://opmthredds.gem.spc.int/partner_api/v1';
 
 const COUNTRY_CODES = ['VU', 'WS', 'TO', 'CK'];
 const COUNTRY_NAMES = {

@@ -29,7 +29,7 @@ export interface PartnerCountryIdentity {
   names: string[];
 }
 
-const DEFAULT_PARTNER_API_BASE = 'http://opmthredds.gem.spc.int';
+const DEFAULT_PARTNER_API_BASE = 'https://opmthredds.gem.spc.int';
 
 // Human-readable country aliases used to resolve Samoa/Tonga country records.
 const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
