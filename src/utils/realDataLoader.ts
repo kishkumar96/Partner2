@@ -1085,8 +1085,12 @@ async function loadPartnerApiCountryData(
   } catch (error) {
     const isAbortError = error instanceof DOMException && error.name === 'AbortError';
     const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    const isDataLoadAbort = error instanceof Error && (
+      error.message.includes('New data load requested') ||
+      error.message.includes('New supplementary data load requested')
+    );
     
-    if (isAbortError || isUnmountError) {
+    if (isAbortError || isUnmountError || isDataLoadAbort) {
       // Request was deliberately aborted (e.g., component unmounted, navigation away).
       // This is expected and should not be logged as a failure.
     } else {
@@ -1632,8 +1636,12 @@ export async function loadDamagedBuildings(
   } catch (error) {
     const isAbortError = error instanceof DOMException && error.name === 'AbortError';
     const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    const isDataLoadAbort = error instanceof Error && (
+      error.message.includes('New data load requested') ||
+      error.message.includes('New supplementary data load requested')
+    );
     
-    if (isAbortError || isUnmountError) {
+    if (isAbortError || isUnmountError || isDataLoadAbort) {
       if (signal?.aborted) {
         return null;
       }
@@ -1810,8 +1818,12 @@ export async function loadDamagedRoads(
   } catch (error) {
     const isAbortError = error instanceof DOMException && error.name === 'AbortError';
     const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    const isDataLoadAbort = error instanceof Error && (
+      error.message.includes('New data load requested') ||
+      error.message.includes('New supplementary data load requested')
+    );
     
-    if (isAbortError || isUnmountError) {
+    if (isAbortError || isUnmountError || isDataLoadAbort) {
       if (signal?.aborted) {
         return null;
       }
