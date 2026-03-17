@@ -1083,8 +1083,11 @@ async function loadPartnerApiCountryData(
       riskImpactByAsset,
     };
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      // Request was deliberately aborted (e.g., component unmounted).
+    const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+    const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    
+    if (isAbortError || isUnmountError) {
+      // Request was deliberately aborted (e.g., component unmounted, navigation away).
       // This is expected and should not be logged as a failure.
     } else {
       console.error(`[Partner API] Failed to load data for ${countryCode}:`, error);
@@ -1627,11 +1630,14 @@ export async function loadDamagedBuildings(
       // DB unavailable/empty path from API: continue to file fallback.
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+    const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    
+    if (isAbortError || isUnmountError) {
       if (signal?.aborted) {
         return null;
       }
-      // Internal timeout abort: continue to local file fallback without warning spam.
+      // Internal timeout or component unmount: continue to local file fallback without warning spam.
     } else {
       console.warn(
         '⚠️ Database API unavailable, falling back to file:',
@@ -1802,11 +1808,14 @@ export async function loadDamagedRoads(
       console.warn(`⚠️ API returned ${response.status}: ${response.statusText}`);
     }
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    const isAbortError = error instanceof DOMException && error.name === 'AbortError';
+    const isUnmountError = error instanceof Error && error.message === 'Component unmounted';
+    
+    if (isAbortError || isUnmountError) {
       if (signal?.aborted) {
         return null;
       }
-      // Internal timeout abort: continue to local file fallback without warning spam.
+      // Internal timeout or component unmount: continue to local file fallback without warning spam.
     } else {
       console.warn(
         '⚠️ Roads API unavailable, falling back to file:',
