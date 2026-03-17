@@ -12,10 +12,12 @@ const PARTNER_API_BASE = 'https://opmthredds.gem.spc.int/partner_api/v1';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    const path = params.path.join('/');
+    // Next.js 15+ requires awaiting params
+    const { path: pathArray } = await params;
+    const path = pathArray.join('/');
     const searchParams = request.nextUrl.searchParams.toString();
     const targetUrl = `${PARTNER_API_BASE}/${path}${searchParams ? `?${searchParams}` : ''}`;
 
