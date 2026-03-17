@@ -29,7 +29,7 @@ export interface PartnerCountryIdentity {
   names: string[];
 }
 
-const DEFAULT_PARTNER_API_BASE = 'https://opmthredds.gem.spc.int';
+const DEFAULT_PARTNER_API_BASE = '';
 
 // Human-readable country aliases used to resolve Samoa/Tonga country records.
 const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
@@ -46,8 +46,9 @@ function trimTrailingSlash(value: string): string {
 export function buildPartnerApiEndpoints(
   baseUrl: string = DEFAULT_PARTNER_API_BASE
 ): PartnerApiEndpoints {
-  const base = `${trimTrailingSlash(baseUrl)}/partner_api`;
-  const v1 = `${base}/v1`;
+  // Use Next.js API proxy to bypass CORS restrictions
+  const base = baseUrl ? `${trimTrailingSlash(baseUrl)}/partner_api` : '/api/partner-proxy';
+  const v1 = baseUrl ? `${base}/v1` : base;
 
   return {
     base,
