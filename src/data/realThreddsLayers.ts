@@ -259,9 +259,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     id: 'ck-tc-meena-wind',
     name: 'TC Meena Wind Hazard',
     countryCode: 'CK',
-    ncFile: 'CK_merged.nc',
+    ncFile: '_CK_subdomain_1_local_wind.nc',
     layerName: 'Depth',
-    description: 'Wind hazard from TC Meena (CK_merged.nc)',
+    description: 'Wind hazard from TC Meena (_CK_subdomain_1_local_wind.nc)',
     hazardType: 'wind',
     bbox: [-162.0, -22.0, -157.0, -19.0], // Cook Islands southern group
     styleConfig: {
@@ -269,8 +269,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
       crs: 'EPSG:4326',
       styles: 'default-scalar/x-Sst',
       time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,50.0',
-      numColorBands: 50,
+      // Color scale from WMS GetMap request for Cook Islands wind speeds
+      colorScaleRange: '0.1,27.93',
+      numColorBands: 20,
       aboveMaxColor: 'extend',
       belowMinColor: 'transparent',
       bgColor: 'extend',
