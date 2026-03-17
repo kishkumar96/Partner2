@@ -61,8 +61,25 @@ curl http://localhost:3002/api/partner-proxy/country/
 npm run check:partner-api
 ```
 
+## Network Accessibility
+
+**Important:** The Partner API server (`opmthredds.gem.spc.int`) resolves to a **private IP address (192.168.53.71)** and is only accessible from within the SPC internal network.
+
+### Development Environments
+
+- **External networks** (e.g., localhost, GitHub Codespaces): API requests will timeout
+- **Automatic fallback**: Application gracefully falls back to local GeoJSON/CSV files
+- **Expected behavior**: Console shows timeout warnings, but all features work with local data
+
+### Production Deployment
+
+- Deploy to servers with access to SPC internal network (192.168.53.0/24)
+- Partner API will be accessible and provide live data
+- Local files remain as fallback for resilience
+
 ## Notes
 
 - The health check script (`scripts/check-partner-api.js`) still uses the direct API because it runs server-side in Node.js where CORS doesn't apply
 - The proxy adds a 30-second timeout per request
 - Response caching is set to 5 minutes (`s-maxage=300`)
+- API timeouts are logged but don't prevent the application from functioning

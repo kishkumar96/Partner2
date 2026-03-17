@@ -21,7 +21,7 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams.toString();
     const targetUrl = `${PARTNER_API_BASE}/${path}${searchParams ? `?${searchParams}` : ''}`;
 
-    console.log(`[Partner Proxy] Proxying: ${targetUrl}`);
+    // Uncomment for debugging: console.log(`[Partner Proxy] Proxying: ${targetUrl}`);
 
     const response = await fetch(targetUrl, {
       method: 'GET',
@@ -54,12 +54,21 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('[Partner Proxy] Request failed:', error);
+    // Timeouts are expected in external environments (API on private network)
+    const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+    
+    if (isTimeout) {
+      console.log('[Partner Proxy] Timeout - API unreachable (expected outside SPC network)');
+    } else {
+      console.error('[Partner Proxy] Request failed:', error);
+    }
     
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Unknown proxy error',
-        details: 'Failed to fetch data from Partner API'
+        details: isTimeout 
+          ? 'Partner API timeout (not accessible from this network)' 
+          : 'Failed to fetch data from Partner API'
       },
       { status: 502 }
     );
