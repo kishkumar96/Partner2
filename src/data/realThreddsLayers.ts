@@ -42,7 +42,7 @@ function getHazardDatasetInfo(countryCode: CountryCode): {
     case 'TO':
       return { countryPath: 'Harold_TO', cycloneName: 'Harold' };
     case 'CK':
-      return { countryPath: 'ck_hazard', cycloneName: 'Event' };
+      return { countryPath: 'ck_hazard', cycloneName: 'Meena' };
     default:
       return { countryPath: 'vu_hazard', cycloneName: 'Lola' };
   }
@@ -246,6 +246,53 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
       // Keep a country-specific COLORSCALERANGE to preserve local contrast.
       styles: 'default-scalar/x-Sst',
       colorScaleRange: '0.001694,2.691',
+      numColorBands: 20,
+      aboveMaxColor: 'extend',
+      belowMinColor: 'transparent',
+      bgColor: 'extend',
+      logScale: false,
+    },
+  },
+
+  // Cook Islands - TC Meena
+  {
+    id: 'ck-tc-meena-wind',
+    name: 'TC Meena Wind Hazard',
+    countryCode: 'CK',
+    ncFile: 'CK_merged.nc',
+    layerName: 'Depth',
+    description: 'Wind hazard from TC Meena (CK_merged.nc)',
+    hazardType: 'wind',
+    bbox: [-162.0, -22.0, -157.0, -19.0], // Cook Islands southern group
+    styleConfig: {
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:4326',
+      styles: 'default-scalar/x-Sst',
+      time: '2022-06-14T00:00:00.000Z',
+      colorScaleRange: '0.1,50.0',
+      numColorBands: 50,
+      aboveMaxColor: 'extend',
+      belowMinColor: 'transparent',
+      bgColor: 'extend',
+      logScale: false,
+    },
+  },
+  {
+    id: 'ck-tc-meena-inundation',
+    name: 'TC Meena Flood Hazard',
+    countryCode: 'CK',
+    ncFile: 'CK_merged.nc',
+    layerName: 'Depth',
+    description: 'Flood/inundation hazard from TC Meena (CK_merged.nc)',
+    hazardType: 'flood',
+    bbox: [-162.0, -22.0, -157.0, -19.0], // Cook Islands southern group
+    styleConfig: {
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:4326',
+      styles: 'default-scalar/x-Sst',
+      time: '2022-06-14T00:00:00.000Z',
+      // Color scale from WMS GetMap request for Cook Islands flood depths
+      colorScaleRange: '2.412,2.666',
       numColorBands: 20,
       aboveMaxColor: 'extend',
       belowMinColor: 'transparent',
