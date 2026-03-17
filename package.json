@@ -48,7 +48,7 @@
     "jspdf": "^3.0.2",
     "lucide-react": "^0.554.0",
     "maplibre-gl": "^5.13.0",
-    "next": "16.0.4",
+    "next": "16.1.7",
     "pg": "^8.13.1",
     "react": "19.2.0",
     "react-chartjs-2": "^5.3.1",
