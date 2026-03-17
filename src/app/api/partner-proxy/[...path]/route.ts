@@ -29,8 +29,8 @@ export async function GET(
         'Accept': 'application/json',
         'User-Agent': 'Climate-Dashboard/1.0',
       },
-      // 30 second timeout
-      signal: AbortSignal.timeout(30000),
+      // 10 second timeout (API on private network, fail fast if unreachable)
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
@@ -54,20 +54,31 @@ export async function GET(
       },
     });
   } catch (error) {
-    // Timeouts are expected in external environments (API on private network)
-    const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+    // Connection failures and timeouts are expected when API is on private network
+    const isTimeout = error instanceof Error && (
+      error.name === 'TimeoutError' || 
+      error.message.includes('Connect Timeout') ||
+      (error as any).code === 'UND_ERR_CONNECT_TIMEOUT'
+    );
     
-    if (isTimeout) {
-      console.log('[Partner Proxy] Timeout - API unreachable (expected outside SPC network)');
+    const isConnectionError = error instanceof Error && (
+      error.message.includes('fetch failed') ||
+      error.message.includes('ECONNREFUSED') ||
+      error.message.includes('ETIMEDOUT')
+    );
+    
+    // Suppress verbose logging for expected network failures
+    if (isTimeout || isConnectionError) {
+      // Silent - these are expected when Partner API is unreachable
     } else {
-      console.error('[Partner Proxy] Request failed:', error);
+      console.error('[Partner Proxy] Unexpected error:', error);
     }
     
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Unknown proxy error',
-        details: isTimeout 
-          ? 'Partner API timeout (not accessible from this network)' 
+        details: (isTimeout || isConnectionError)
+          ? 'Partner API not accessible from this network' 
           : 'Failed to fetch data from Partner API'
       },
       { status: 502 }
