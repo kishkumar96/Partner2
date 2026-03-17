@@ -767,55 +767,91 @@ function buildCycloneTrackFromPartnerPayload(payload: unknown): GeoJSON.FeatureC
   const rows = toArrayPayload(payload);
   if (rows.length === 0) return null;
 
-  const points: Array<{ lon: number; lat: number; timestamp?: string }> = [];
+  const features: GeoJSON.Feature[] = [];
 
-  rows.forEach(row => {
+  rows.forEach((row, index) => {
+    // Option 1: Check if row has geometry or geometry_computed field (Partner API format)
+    if (row.geometry || row.geometry_computed) {
+      // Prefer geometry_computed if it's an object, otherwise use geometry
+      // (geometry_computed can be a boolean flag, not actual geometry data)
+      const geometry = (typeof row.geometry_computed === 'object' && row.geometry_computed !== null)
+        ? row.geometry_computed
+        : row.geometry;
+      
+      // If geometry is a GeoJSON object, use it
+      if (geometry && typeof geometry === 'object') {
+        // Check if it's a FeatureCollection (Partner API typically nests FeatureCollections)
+        if ((geometry as any).type === 'FeatureCollection' && Array.isArray((geometry as any).features)) {
+          const fc = geometry as GeoJSON.FeatureCollection;
+          
+          // Extract all features and add cyclone metadata to their properties
+          fc.features.forEach((feature, featureIdx) => {
+            features.push({
+              type: 'Feature',
+              geometry: feature.geometry,
+              properties: {
+                ...feature.properties,
+                source: 'partner_api',
+                cyclone_id: row.id,
+                cyclone_name: row.cyclone_name,
+                issued_time: row.issued_time,
+                issued_agency: row.issued_agency,
+                cyclone_sequence: index,
+                point_sequence: featureIdx,
+              },
+            });
+          });
+          return;
+        }
+        
+        // Otherwise, treat as a single Geometry
+        const geom = geometry as GeoJSON.Geometry;
+        features.push({
+          type: 'Feature',
+          geometry: geom,
+          properties: {
+            source: 'partner_api',
+            id: row.id,
+            cyclone_name: row.cyclone_name,
+            issued_time: row.issued_time,
+            issued_agency: row.issued_agency,
+            sequence: index,
+          },
+        });
+        return;
+      }
+    }
+
+    // Option 2: Extract lat/lon from top-level fields (backward compatibility)
     const lon =
       toNumber(row.longitude) ?? toNumber(row.lon) ?? toNumber(row.lng) ?? toNumber(row.x);
     const lat = toNumber(row.latitude) ?? toNumber(row.lat) ?? toNumber(row.y);
 
-    if (lon === null || lat === null) return;
-
-    points.push({
-      lon,
-      lat,
-      timestamp:
-        (typeof row.timestamp === 'string' && row.timestamp) ||
-        (typeof row.time === 'string' && row.time) ||
-        (typeof row.date === 'string' && row.date) ||
-        undefined,
-    });
+    if (lon !== null && lat !== null) {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [lon, lat],
+        },
+        properties: {
+          source: 'partner_api',
+          sequence: index,
+          timestamp:
+            (typeof row.timestamp === 'string' && row.timestamp) ||
+            (typeof row.time === 'string' && row.time) ||
+            (typeof row.date === 'string' && row.date) ||
+            undefined,
+        },
+      });
+    }
   });
 
-  if (points.length === 0) return null;
-
-  const pointFeatures: GeoJSON.Feature[] = points.map((point, index) => ({
-    type: 'Feature',
-    geometry: {
-      type: 'Point',
-      coordinates: [point.lon, point.lat],
-    },
-    properties: {
-      source: 'partner_api',
-      sequence: index,
-      timestamp: point.timestamp,
-    },
-  }));
-
-  const lineFeature: GeoJSON.Feature = {
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: points.map(point => [point.lon, point.lat]),
-    },
-    properties: {
-      source: 'partner_api',
-    },
-  };
+  if (features.length === 0) return null;
 
   return {
     type: 'FeatureCollection',
-    features: [lineFeature, ...pointFeatures],
+    features,
   };
 }
 
@@ -990,7 +1026,14 @@ async function loadPartnerApiCountryData(
   try {
     const mapping = await mapCountryPartnerApis(countryCode);
 
+    console.log(`[Partner API Debug] Mapping for ${countryCode}:`, {
+      hasCountryId: !!mapping.countryId,
+      hasScopedUrls: !!mapping.scopedUrls,
+      cycloneTrackUrl: mapping.scopedUrls?.cyclone_track,
+    });
+
     if (!mapping.scopedUrls) {
+      console.warn(`[Partner API] No scopedUrls for ${countryCode} - will use local files`);
       return {
         countryId: mapping.countryId,
         cycloneTrack: null,
@@ -1000,25 +1043,52 @@ async function loadPartnerApiCountryData(
       };
     }
 
+    console.log(`[Partner API] Fetching data for ${countryCode} from:`, mapping.scopedUrls.cyclone_track);
+    
     const [cycloneResponse, eventResponse, riskResponse] = await Promise.all([
       fetch(mapping.scopedUrls.cyclone_track, { signal }),
       fetch(mapping.scopedUrls.event, { signal }),
       fetch(mapping.scopedUrls.risk_information, { signal }),
     ]);
 
+    console.log(`[Partner API] Response statuses for ${countryCode}:`, {
+      cyclone: cycloneResponse.status,
+      event: eventResponse.status,
+      risk: riskResponse.status,
+    });
+
     const cyclonePayload = cycloneResponse.ok ? await cycloneResponse.json() : null;
     const eventPayload = eventResponse.ok ? await eventResponse.json() : null;
     const riskPayload = riskResponse.ok ? await riskResponse.json() : null;
     const riskRows = toArrayPayload(riskPayload);
 
+    const cycloneTrack = buildCycloneTrackFromPartnerPayload(cyclonePayload);
+    const eventMeta = selectPartnerPrimaryEvent(eventPayload);
+    const riskRegionalSummary = extractPartnerRegionalSummaryRows(riskRows);
+    const riskImpactByAsset = extractPartnerImpactByAssetRows(riskRows);
+
+    console.log(`[Partner API] Loaded data for ${countryCode}:`, {
+      countryId: mapping.countryId,
+      cycloneTrackFeatures: cycloneTrack?.features?.length || 0,
+      eventMetaFound: !!eventMeta,
+      riskRegionalSummaryRows: riskRegionalSummary.length,
+      riskImpactByAssetRows: riskImpactByAsset.length,
+    });
+
     return {
       countryId: mapping.countryId,
-      cycloneTrack: buildCycloneTrackFromPartnerPayload(cyclonePayload),
-      eventMeta: selectPartnerPrimaryEvent(eventPayload),
-      riskRegionalSummary: extractPartnerRegionalSummaryRows(riskRows),
-      riskImpactByAsset: extractPartnerImpactByAssetRows(riskRows),
+      cycloneTrack,
+      eventMeta,
+      riskRegionalSummary,
+      riskImpactByAsset,
     };
-  } catch (_error) {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      // Request was deliberately aborted (e.g., component unmounted).
+      // This is expected and should not be logged as a failure.
+    } else {
+      console.error(`[Partner API] Failed to load data for ${countryCode}:`, error);
+    }
     // Any partner API failure falls through to existing local-file loaders.
     return {
       countryId: null,
@@ -1052,6 +1122,16 @@ export async function loadAllRealData(
   const eventMetadataSource: 'partner_api' | 'local_files' = partnerData.eventMeta
     ? 'partner_api'
     : 'local_files';
+
+  console.log(`[Data Loading] Sources for ${countryCode}:`, {
+    cycloneTrack: cycloneTrackSource,
+    eventMetadata: eventMetadataSource,
+    hasPartnerCycloneTrack: !!partnerData.cycloneTrack,
+    hasPartnerEventMeta: !!partnerData.eventMeta,
+    hasPartnerRiskSummary: partnerData.riskRegionalSummary.length,
+    hasPartnerImpactByAsset: partnerData.riskImpactByAsset.length,
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Loading real data for ${countryCode} from ${basePath}...`);
   }
@@ -1562,21 +1642,22 @@ export async function loadDamagedBuildings(
 
   // Fallback to file (cached)
   const filePath = getCountryDataFilePath(countryCode, 'damaged-buildings.geojson');
-  const { data } = await loadGeoJSON(filePath, {
-    cache: true,
-    signal,
-  });
+  try {
+    const { data } = await loadGeoJSON(filePath, {
+      cache: true,
+      signal,
+    });
 
-  const toPointCoordinate = (
-    geometry: GeoJSON.Geometry | null | undefined
-  ): [number, number] | null => {
-    if (!geometry) return null;
+    const toPointCoordinate = (
+      geometry: GeoJSON.Geometry | null | undefined
+    ): [number, number] | null => {
+      if (!geometry) return null;
 
-    if (geometry.type === 'Point') {
-      const coords = geometry.coordinates as number[];
-      if (coords.length >= 2) return [coords[0], coords[1]];
-      return null;
-    }
+      if (geometry.type === 'Point') {
+        const coords = geometry.coordinates as number[];
+        if (coords.length >= 2) return [coords[0], coords[1]];
+        return null;
+      }
 
     const bounds = {
       minLng: Infinity,
@@ -1619,32 +1700,44 @@ export async function loadDamagedBuildings(
     }
 
     return [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
-  };
+    };
 
-  const pointFeatures =
-    data?.features
-      ?.map(feature => {
-        const point = toPointCoordinate(feature.geometry as GeoJSON.Geometry | null | undefined);
-        if (!point) return null;
-        return {
-          ...feature,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: point,
-          },
-        };
-      })
-      .filter(feature => feature !== null) || [];
+    const pointFeatures =
+      data?.features
+        ?.map(feature => {
+          const point = toPointCoordinate(feature.geometry as GeoJSON.Geometry | null | undefined);
+          if (!point) return null;
+          return {
+            ...feature,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: point,
+            },
+          };
+        })
+        .filter(feature => feature !== null) || [];
 
-  const normalizedData = {
-    type: 'FeatureCollection' as const,
-    features: pointFeatures,
-  };
+    const normalizedData = {
+      type: 'FeatureCollection' as const,
+      features: pointFeatures,
+    };
 
-  console.log(
-    `📁 Loaded buildings from FILE (normalized to ${normalizedData.features.length} points)`
-  );
-  return normalizedData;
+    console.log(
+      `📁 Loaded buildings from FILE (normalized to ${normalizedData.features.length} points)`
+    );
+    return normalizedData;
+  } catch (error) {
+    // File doesn't exist (404) - return empty collection (some countries don't have damage data)
+    if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
+      console.log(`📁 No damaged buildings file for ${countryCode} - this is expected`);
+      return {
+        type: 'FeatureCollection' as const,
+        features: [],
+      };
+    }
+    // Other errors (network, permission, etc.) should still throw
+    throw error;
+  }
 }
 
 /**
@@ -1727,12 +1820,22 @@ export async function loadDamagedRoads(
     return null;
   }
   console.log('📁 Falling back to damaged-roads.geojson file');
-  const { data } = await loadGeoJSON(`${basePath}/damaged-roads.geojson`, {
-    cache: true,
-    signal,
-  });
-  console.log(`📁 Loaded ${data?.features?.length || 0} roads from FILE`);
-  return data;
+  try {
+    const { data } = await loadGeoJSON(`${basePath}/damaged-roads.geojson`, {
+      cache: true,
+      signal,
+    });
+    console.log(`📁 Loaded ${data?.features?.length || 0} roads from FILE`);
+    return data;
+  } catch (error) {
+    // File doesn't exist (404) - return null (some countries don't have damage data)
+    if (error instanceof Error && (error.message.includes('404') || error.message.includes('Not Found'))) {
+      console.log(`📁 No damaged roads file for ${countryCode} - this is expected`);
+      return null;
+    }
+    // Other errors should still throw
+    throw error;
+  }
 }
 
 /**

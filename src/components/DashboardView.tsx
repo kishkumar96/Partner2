@@ -197,6 +197,10 @@ export default function DashboardView({
     buildings: false,
     roads: false,
   });
+  const damageLoadFailedRef = useRef<{ buildings: boolean; roads: boolean }>({
+    buildings: false,
+    roads: false,
+  });
   const [regionalSummary, setRegionalSummary] = useState<any[]>([]);
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
@@ -475,11 +479,16 @@ export default function DashboardView({
         } else {
           setDamagedRoads(data);
         }
+        
+        // Clear failed flag on success
+        damageLoadFailedRef.current[type] = false;
 
         return data;
       } catch (error) {
         if (!controller.signal.aborted) {
           const message = error instanceof Error ? error.message : 'Unknown error';
+          // Mark as failed to prevent retry loops
+          damageLoadFailedRef.current[type] = true;
           setDamageLoadError(`Failed to load ${type} data: ${message}`);
         }
         return null;
@@ -557,24 +566,28 @@ export default function DashboardView({
       showBuildingsLayer &&
       !damagedBuildings &&
       !isLoadingDamage.buildings &&
-      !damageAutoLoadRequestedRef.current.buildings
+      !damageAutoLoadRequestedRef.current.buildings &&
+      !damageLoadFailedRef.current.buildings
     ) {
       damageAutoLoadRequestedRef.current.buildings = true;
       void loadDamageLayer('buildings');
     }
-  }, [showBuildingsLayer, damagedBuildings, isLoadingDamage.buildings, loadDamageLayer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBuildingsLayer, damagedBuildings, isLoadingDamage.buildings]);
 
   useEffect(() => {
     if (
       showRoadsLayer &&
       !damagedRoads &&
       !isLoadingDamage.roads &&
-      !damageAutoLoadRequestedRef.current.roads
+      !damageAutoLoadRequestedRef.current.roads &&
+      !damageLoadFailedRef.current.roads
     ) {
       damageAutoLoadRequestedRef.current.roads = true;
       void loadDamageLayer('roads');
     }
-  }, [showRoadsLayer, damagedRoads, isLoadingDamage.roads, loadDamageLayer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRoadsLayer, damagedRoads, isLoadingDamage.roads]);
 
   /**
    * Zoom to specific asset coordinates (for table row clicks)
@@ -1074,6 +1087,7 @@ export default function DashboardView({
     setExpandedEvents([]);
     setEvents([]);
     damageAutoLoadRequestedRef.current = { buildings: false, roads: false };
+    damageLoadFailedRef.current = { buildings: false, roads: false };
     try {
       const realData = await loadAllRealData({
         signal: controller.signal,

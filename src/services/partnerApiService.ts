@@ -130,7 +130,11 @@ export async function fetchPartnerCountries(
   baseUrl?: string
 ): Promise<Array<Record<string, unknown>>> {
   const endpoints = buildPartnerApiEndpoints(baseUrl);
+  console.log(`[Partner API] Fetching countries from:`, endpoints.resource.country);
+  
   const response = await fetch(endpoints.resource.country);
+  console.log(`[Partner API] Countries response status:`, response.status);
+  
   if (!response.ok) {
     throw new Error(`Failed to fetch partner countries: ${response.status}`);
   }
