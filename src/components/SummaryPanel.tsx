@@ -1581,7 +1581,8 @@ export default function SummaryPanel({
             filters.dateRange.start ||
             filters.dateRange.end) && (
             <div className="text-[10px] text-slate-400">
-              Hazard and date filters do not apply to CSV-based damage metrics.
+              Pre-aggregated CSV damage metrics may remain broader than the active hazard/date
+              filters when the source data has no matching event-level breakdown.
             </div>
           )}
 

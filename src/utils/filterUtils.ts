@@ -76,6 +76,48 @@ function normalizeDate(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeFilterDateRange(dateRange: FilterState['dateRange']): {
+  start: string;
+  end: string;
+} {
+  const start = normalizeDate(dateRange.start);
+  const end = normalizeDate(dateRange.end);
+
+  if (start && end && start > end) {
+    return { start: end, end: start };
+  }
+
+  return { start, end };
+}
+
+function matchesEventSelection(
+  itemId: string | undefined,
+  parentEventId: string | undefined,
+  selectedEvents: string[]
+): boolean {
+  if (selectedEvents.length === 0) return true;
+  if (itemId && selectedEvents.includes(itemId)) return true;
+  if (parentEventId && selectedEvents.includes(parentEventId)) return true;
+  return false;
+}
+
+function matchesDateRange(eventDate: string | undefined, dateRange: FilterState['dateRange']): boolean {
+  const { start, end } = normalizeFilterDateRange(dateRange);
+  if (!start && !end) return true;
+
+  const normalizedEventDate = normalizeDate(eventDate || '');
+  if (!normalizedEventDate) return true;
+
+  if (start && normalizedEventDate < start) {
+    return false;
+  }
+  if (end && normalizedEventDate > end) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Filters events based on the current filter state.
  * @param events - Array of events to filter
@@ -94,28 +136,11 @@ export function filterEvents(events: Event[], filters: FilterState): Event[] {
     // Filter by specific events
     // Also check parentEventId so expanded/regional events (which have regional IDs)
     // are correctly matched against their master event ID.
-    if (
-      filters.selectedEvents.length > 0 &&
-      !filters.selectedEvents.includes(event.id) &&
-      !(event.parentEventId && filters.selectedEvents.includes(event.parentEventId))
-    ) {
+    if (!matchesEventSelection(event.id, event.parentEventId, filters.selectedEvents)) {
       return false;
     }
-    // Filter by date range with normalization
-    // FIX: Normalize dates to ISO format for proper comparison
-    if (filters.dateRange.start) {
-      const eventDate = normalizeDate(event.date);
-      const startDate = normalizeDate(filters.dateRange.start);
-      if (eventDate && startDate && eventDate < startDate) {
-        return false;
-      }
-    }
-    if (filters.dateRange.end) {
-      const eventDate = normalizeDate(event.date);
-      const endDate = normalizeDate(filters.dateRange.end);
-      if (eventDate && endDate && eventDate > endDate) {
-        return false;
-      }
+    if (!matchesDateRange(event.date, filters.dateRange)) {
+      return false;
     }
     return true;
   });
@@ -134,7 +159,9 @@ export function filterExposureData(
   return exposureData.filter(exposure => {
     return (
       matchesHazardFilter(exposure.hazardId, filters.selectedHazards) &&
-      matchesSectorFilter(exposure.sectorId, filters.selectedSectors)
+      matchesSectorFilter(exposure.sectorId, filters.selectedSectors) &&
+      matchesEventSelection(exposure.eventId, undefined, filters.selectedEvents) &&
+      matchesDateRange(exposure.eventDate, filters.dateRange)
     );
   });
 }
@@ -153,14 +180,16 @@ export function filterEconomicDamageData(
     // Hazard and sector filtering
     if (!matchesHazardFilter(damage.hazardId, filters.selectedHazards)) return false;
     if (!matchesSectorFilter(damage.sectorId, filters.selectedSectors)) return false;
+    if (!matchesEventSelection(damage.eventId, undefined, filters.selectedEvents)) return false;
 
-    // Date range filtering based on year
-    if (filters.dateRange.start || filters.dateRange.end) {
+    if (damage.eventDate) {
+      if (!matchesDateRange(damage.eventDate, filters.dateRange)) return false;
+    } else if (filters.dateRange.start || filters.dateRange.end) {
+      // Fall back to year-only filtering for legacy rows that don't carry exact event dates.
       const dataYear = damage.year;
-      const startYear = filters.dateRange.start
-        ? new Date(filters.dateRange.start).getFullYear()
-        : 0;
-      const endYear = filters.dateRange.end ? new Date(filters.dateRange.end).getFullYear() : 9999;
+      const { start, end } = normalizeFilterDateRange(filters.dateRange);
+      const startYear = start ? new Date(start).getFullYear() : 0;
+      const endYear = end ? new Date(end).getFullYear() : 9999;
       if (dataYear < startYear || dataYear > endYear) return false;
     }
 

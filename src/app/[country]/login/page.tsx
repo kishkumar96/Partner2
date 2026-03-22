@@ -82,7 +82,7 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
                   svg
                   aria-label={COUNTRIES[countryCode].name}
                   title={COUNTRIES[countryCode].name}
-                  style={{ width: '1.2rem', height: '1.2rem' }}
+                  className="w-5 h-5"
                 />
                 <span className="text-sm font-medium">{COUNTRIES[countryCode].name}</span>
               </div>

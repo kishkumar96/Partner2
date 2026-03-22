@@ -42,10 +42,16 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     defaultZoom: COUNTRIES.VU.zoom,
     dataAvailable: true,
   },
-  WS: emptyConfig('WS'),
+  WS: {
+    ...emptyConfig('WS'),
+    hazards: coreHazardsForWmsCountries,
+  },
   TO: {
     ...emptyConfig('TO'),
     hazards: coreHazardsForWmsCountries,
   },
-  CK: emptyConfig('CK'),
+  CK: {
+    ...emptyConfig('CK'),
+    hazards: coreHazardsForWmsCountries,
+  },
 };

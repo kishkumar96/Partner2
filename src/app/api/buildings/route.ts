@@ -19,7 +19,7 @@ import type { CountryCode } from '@/types/thredds';
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
 
-const DB_CONNECT_TIMEOUT_MS = 2000;
+const DB_CONNECT_TIMEOUT_MS = 500;
 const DB_QUERY_TIMEOUT_MS = 5000;
 const DB_FAILURE_COOLDOWN_MS = 30_000;
 const DB_LOG_THROTTLE_MS = 10_000;

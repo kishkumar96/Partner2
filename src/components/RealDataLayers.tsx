@@ -19,7 +19,6 @@ import {
 } from '@/utils/realDataLoader';
 import { generateForecastCone } from '@/utils/forecastCone';
 
-// Mapping between filter hazard IDs and WMS layer hazard types
 const HAZARD_ID_TO_LAYER_TYPE: Record<string, string[]> = {
   'tropical-cyclone': ['cyclone', 'wind'],
   flood: ['flood', 'inundation'],
@@ -36,6 +35,91 @@ const HAZARD_ID_TO_LAYER_TYPE: Record<string, string[]> = {
 const RAW_WMS_PARITY_LAYER_IDS = new Set(['to-tc-harold-wind', 'vu-tc-lola-wind']);
 const isRawParityMapLayerId = (layerId: string): boolean =>
   RAW_WMS_PARITY_LAYER_IDS.has(layerId.replace('wms-layer-', ''));
+
+function normalizeDateValue(dateStr: string): string {
+  if (!dateStr) return '';
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getEffectiveDateRange(startDate: string, endDate: string): {
+  effectiveStartDate: string;
+  effectiveEndDate: string;
+} {
+  const normalizedStartDate = normalizeDateValue(startDate);
+  const normalizedEndDate = normalizeDateValue(endDate);
+
+  return {
+    effectiveStartDate:
+      normalizedStartDate && normalizedEndDate && normalizedStartDate > normalizedEndDate
+        ? normalizedEndDate
+        : normalizedStartDate,
+    effectiveEndDate:
+      normalizedStartDate && normalizedEndDate && normalizedStartDate > normalizedEndDate
+        ? normalizedStartDate
+        : normalizedEndDate,
+  };
+}
+
+function countryIsExcludedByTemporalFilters(
+  country: CountryCode,
+  selectedEventIds: string[],
+  effectiveStartDate: string,
+  effectiveEndDate: string
+): boolean {
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG?.[country];
+  if (!cycloneConfig) return false;
+
+  if (selectedEventIds.length > 0 && !selectedEventIds.includes(cycloneConfig.eventId)) {
+    return true;
+  }
+
+  const normalizedEventDate = normalizeDateValue(cycloneConfig.eventDate);
+  if (effectiveStartDate && normalizedEventDate && normalizedEventDate < effectiveStartDate) {
+    return true;
+  }
+  if (effectiveEndDate && normalizedEventDate && normalizedEventDate > effectiveEndDate) {
+    return true;
+  }
+
+  return false;
+}
+
+function getHazardTypesToShow(
+  selectedHazards: string[],
+  showWindLayer: boolean,
+  showInundationLayer: boolean
+): string[] {
+  if (selectedHazards.length > 0) {
+    const filteredHazardTypes = new Set(
+      selectedHazards.flatMap(hazardId => HAZARD_ID_TO_LAYER_TYPE[hazardId] ?? [])
+    );
+
+    if (!showWindLayer) {
+      filteredHazardTypes.delete('wind');
+    }
+    if (!showInundationLayer) {
+      filteredHazardTypes.delete('flood');
+      filteredHazardTypes.delete('inundation');
+      filteredHazardTypes.delete('fluvial-depth');
+    }
+
+    return Array.from(filteredHazardTypes);
+  }
+
+  const hazardTypesToShow: string[] = [];
+  if (showWindLayer) {
+    hazardTypesToShow.push('wind');
+  }
+  if (showInundationLayer) {
+    hazardTypesToShow.push('inundation', 'flood');
+  }
+  return hazardTypesToShow;
+}
 
 interface RealDataLayersProps {
   map: MapLibreMap | null;
@@ -98,11 +182,16 @@ export default function RealDataLayers({
     handleMouseLeave?: () => void;
   }>({});
 
-  // Create stable reference for selectedHazards to avoid unnecessary re-renders
+  const selectedEventsKey = useMemo(
+    () => JSON.stringify(filters?.selectedEvents ?? []),
+    [filters?.selectedEvents]
+  );
   const selectedHazardsKey = useMemo(
     () => JSON.stringify(filters?.selectedHazards ?? []),
     [filters?.selectedHazards]
   );
+  const dateRangeStart = filters?.dateRange.start ?? '';
+  const dateRangeEnd = filters?.dateRange.end ?? '';
 
   useEffect(() => {
     layerOpacityScaleRef.current = layerOpacityScale;
@@ -174,8 +263,33 @@ export default function RealDataLayers({
       try {
         console.log(`Loading cyclone tracks from real data...`);
 
-        // Build country-specific file paths
-        const effectiveCountry = countryCode ?? 'VU';
+        const cycloneConfigByCountry = COUNTRY_CYCLONE_CONFIG ?? ({} as Record<CountryCode, never>);
+        const countriesToLoad: CountryCode[] = countryCode
+          ? [countryCode]
+          : (Object.keys(cycloneConfigByCountry) as CountryCode[]);
+        const selectedEventIds = filters?.selectedEvents ?? [];
+        const { effectiveStartDate, effectiveEndDate } = getEffectiveDateRange(
+          dateRangeStart,
+          dateRangeEnd
+        );
+
+        // If we are not in a country route, prefer the first country that matches
+        // temporal filters instead of hardcoding a VU fallback.
+        const effectiveCountry = countriesToLoad.find(
+          country =>
+            !countryIsExcludedByTemporalFilters(
+              country,
+              selectedEventIds,
+              effectiveStartDate,
+              effectiveEndDate
+            )
+        );
+
+        if (!effectiveCountry) {
+          loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
+          return;
+        }
+
         const cycloneConfig = COUNTRY_CYCLONE_CONFIG?.[effectiveCountry];
         if (!cycloneConfig) {
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
@@ -195,9 +309,13 @@ export default function RealDataLayers({
 
         // Load forecast data first so we can synthesize a track if GeoJSON is empty.
         const forecastData = forecastFile ? await loadCycloneForecastTrack({ forecastFile }) : null;
-        const fallbackTrack = forecastData
-          ? buildCycloneTrackFromForecastPoints(forecastData)
-          : null;
+        const fallbackTrack =
+          forecastData &&
+          typeof buildCycloneTrackFromForecastPoints === 'function' &&
+          Array.isArray(forecastData) &&
+          forecastData.length > 0
+            ? buildCycloneTrackFromForecastPoints(forecastData)
+            : null;
 
         // Load from public directory using dataLoader (handles basePath)
         const geojson = await loadCycloneTrackData({ trackFile });
@@ -465,8 +583,10 @@ export default function RealDataLayers({
       resolutionUpgradeTimeouts.current = [];
 
       // Define minimum zoom level for WMS layer loading to optimize performance
-      // WMS raster layers are expensive to fetch and render at low zoom levels
-      const MIN_ZOOM_FOR_WMS = 5;
+      // WMS raster layers are expensive to fetch and render at low zoom levels.
+      // Pacific island nations are small and viewed at zoom ~6-9 at country level,
+      // so use 6 as the threshold to ensure layers load at typical country views.
+      const MIN_ZOOM_FOR_WMS = 6;
 
       // Skip if zoom level is too low (user is viewing large area)
       if (map.getZoom() < MIN_ZOOM_FOR_WMS) {
@@ -488,6 +608,12 @@ export default function RealDataLayers({
       onLoadingChange?.(true);
 
       try {
+        const selectedEventIds = filters?.selectedEvents ?? [];
+        const { effectiveStartDate, effectiveEndDate } = getEffectiveDateRange(
+          dateRangeStart,
+          dateRangeEnd
+        );
+
         const getBasemapCategory = (): 'light' | 'dark' | 'imagery' => {
           const value = basemapStyle.toLowerCase();
           if (
@@ -508,29 +634,7 @@ export default function RealDataLayers({
             // Keep parity layers visually aligned with direct WMS previews.
             return 1;
           }
-
-          const hasHazardFilter = !!(filters && filters.selectedHazards.length > 0);
           const basemapCategory = getBasemapCategory();
-
-          if (hasHazardFilter) {
-            if (hazardType === 'wind') {
-              return 0.75;
-            }
-            if (hazardType === 'cyclone') {
-              return 0.65;
-            }
-            if (
-              hazardType === 'flood' ||
-              hazardType === 'inundation' ||
-              hazardType === 'fluvial-depth'
-            ) {
-              // Keep flood layers prominent when explicitly selected.
-              if (basemapCategory === 'dark') return 0.84;
-              if (basemapCategory === 'imagery') return 0.88;
-              return 0.8;
-            }
-            return 0.15;
-          }
 
           if (hazardType === 'wind' && showWindLayer) {
             return mapStyle === 'wind' ? 0.85 : 0.5;
@@ -610,74 +714,70 @@ export default function RealDataLayers({
           };
         };
 
+        const getRasterResampling = (hazardType: string, layerId?: string) => {
+          if (layerId && RAW_WMS_PARITY_LAYER_IDS.has(layerId)) {
+            return 'nearest' as const;
+          }
+
+          if (
+            hazardType === 'flood' ||
+            hazardType === 'inundation' ||
+            hazardType === 'fluvial-depth'
+          ) {
+            // Flood rasters look softer than intended with linear interpolation,
+            // especially after native tiles are overzoomed at coastal scales.
+            return 'nearest' as const;
+          }
+
+          return 'linear' as const;
+        };
+
         // Determine which countries to load hazards for
         const countriesToLoad: CountryCode[] = countryCode
           ? [countryCode]
           : (Object.keys(COUNTRIES) as CountryCode[]);
 
-        // Define hazard types to display based on mapStyle and selected hazards
-        // If no hazards are selected, show all relevant hazards
-        // If hazards are selected, only show layers matching those hazards
-        let hazardTypesToShow: string[] = [];
-
-        if (filters && filters.selectedHazards.length > 0) {
-          // Use selected hazards to determine which layer types to show
-          filters.selectedHazards.forEach(hazardId => {
-            const layerTypes = HAZARD_ID_TO_LAYER_TYPE[hazardId] || [];
-            hazardTypesToShow = [...hazardTypesToShow, ...layerTypes];
-          });
-          const hazardTypeSet = new Set(hazardTypesToShow);
-
-          // Keep map controls authoritative even when hazard filters are active.
-          if (showWindLayer) {
-            hazardTypeSet.add('wind');
-          } else {
-            hazardTypeSet.delete('wind');
-          }
-
-          if (showInundationLayer) {
-            hazardTypeSet.add('inundation');
-            hazardTypeSet.add('flood');
-          } else {
-            hazardTypeSet.delete('inundation');
-            hazardTypeSet.delete('flood');
-          }
-
-          hazardTypesToShow = Array.from(hazardTypeSet);
-          console.log(
-            `Hazard filter active: showing layers for selected hazards:`,
-            filters.selectedHazards,
-            `-> layer types:`,
-            hazardTypesToShow
+        const countryMatchesTemporalFilters = (country: CountryCode) => {
+          return !countryIsExcludedByTemporalFilters(
+            country,
+            selectedEventIds,
+            effectiveStartDate,
+            effectiveEndDate
           );
-        } else {
-          // No hazard filter selected - build list based on mapStyle and user toggles
-          hazardTypesToShow = [];
+        };
 
-          // Add layers based on explicit user toggles
-          if (showWindLayer) {
-            hazardTypesToShow.push('wind');
-          }
-          if (showInundationLayer) {
-            hazardTypesToShow.push('inundation', 'flood');
-          }
-
-          console.log(
-            `No hazard filter - showing layers based on toggles and ${mapStyle} mode:`,
-            hazardTypesToShow
-          );
-        }
+        const hazardTypesToShow = getHazardTypesToShow(
+          filters?.selectedHazards ?? [],
+          showWindLayer,
+          showInundationLayer
+        );
 
         console.log(
           `✅ Final hazard types to show:`,
           hazardTypesToShow,
-          `(Wind: ${showWindLayer}, Flood/Inundation: ${showInundationLayer})`
+          `(Wind: ${showWindLayer}, Flood/Inundation: ${showInundationLayer}, Selected events: ${selectedEventIds.length || 'all'}, Date range: ${effectiveStartDate || '...'} → ${effectiveEndDate || '...'})`
         );
 
         // Collect all active layers for the legend
         const allActiveLayers: RealWMSLayer[] = [];
 
         for (const country of countriesToLoad) {
+          if (!countryMatchesTemporalFilters(country)) {
+            console.log(`Skipping WMS layers for ${country} because current temporal filters exclude its historical event.`);
+            // Hide any already-loaded layers for this country so they don't linger.
+            getLayersForCountry(country).forEach(layer => {
+              const layerId = `wms-layer-${layer.id}`;
+              try {
+                if (map.getLayer(layerId)) {
+                  map.setLayoutProperty(layerId, 'visibility', 'none');
+                }
+              } catch (_e) {
+                // Layer may be mid-transition; ignore.
+              }
+            });
+            continue;
+          }
+
           const countryLayers = getLayersForCountry(country);
           const availableLayers = countryLayers.filter(layer =>
             hazardTypesToShow.includes(layer.hazardType)
@@ -742,6 +842,10 @@ export default function RealDataLayers({
                         type: 'raster',
                         tiles: [tileUrl],
                         tileSize: 256,
+                        // Clamp native tile fetching conservatively by default,
+                        // but allow per-layer overrides where the upstream WMS
+                        // has been verified to support deeper zoom tiles.
+                        maxzoom: layer.maxNativeZoom ?? 12,
                       });
                     }
                   } else {
@@ -827,16 +931,16 @@ export default function RealDataLayers({
                       ?.layers?.find(existingLayer => existingLayer.type === 'symbol')?.id;
                   }
 
-                  const hasHazardFilter = filters && filters.selectedHazards.length > 0;
                   const isRawParityLayer = RAW_WMS_PARITY_LAYER_IDS.has(layer.id);
                   const layerOpacity = getBaseLayerOpacity(layer.hazardType, layer.id);
                   const scaledLayerOpacity = isRawParityLayer
                     ? layerOpacity
                     : layerOpacity * (layerOpacityScaleRef.current / 100);
                   const rasterVisual = getRasterVisualTuning(layer.hazardType, layer.id);
+                  const rasterResampling = getRasterResampling(layer.hazardType, layer.id);
 
                   console.log(
-                    `  → Layer opacity for ${layer.name} (${layer.hazardType}): ${layerOpacity} (mapStyle: ${mapStyle}, hasFilter: ${hasHazardFilter}, windToggle: ${showWindLayer}, floodToggle: ${showInundationLayer})`
+                    `  → Layer opacity for ${layer.name} (${layer.hazardType}): ${layerOpacity} (mapStyle: ${mapStyle}, windToggle: ${showWindLayer}, floodToggle: ${showInundationLayer})`
                   );
 
                   if (map.getLayer(layerId)) {
@@ -850,7 +954,7 @@ export default function RealDataLayers({
                     map.setPaintProperty(
                       layerId,
                       'raster-resampling',
-                      isRawParityLayer ? 'nearest' : 'linear'
+                      rasterResampling
                     );
                     map.setPaintProperty(layerId, 'raster-contrast', rasterVisual.contrast);
                     map.setPaintProperty(layerId, 'raster-saturation', rasterVisual.saturation);
@@ -875,7 +979,7 @@ export default function RealDataLayers({
                       paint: {
                         'raster-opacity': scaledLayerOpacity,
                         'raster-fade-duration': isRawParityLayer ? 0 : 300,
-                        'raster-resampling': isRawParityLayer ? 'nearest' : 'linear',
+                        'raster-resampling': rasterResampling,
                         'raster-contrast': rasterVisual.contrast,
                         'raster-saturation': rasterVisual.saturation,
                         'raster-brightness-min': rasterVisual.brightnessMin,
@@ -895,7 +999,7 @@ export default function RealDataLayers({
                     layers: { ...loadingStateRef.current.layers, [layer.id]: false },
                   };
                   console.log(
-                    `✅ WMS layer loaded: ${layer.name} (type: ${layer.hazardType}, opacity: ${layerOpacity}${hasHazardFilter ? ' [filtered]' : ''})`
+                    `✅ WMS layer loaded: ${layer.name} (type: ${layer.hazardType}, opacity: ${layerOpacity})`
                   );
                   layerBaseOpacityRef.current[layerId] = layerOpacity;
                   layerHazardTypeRef.current[layerId] = layer.hazardType;
@@ -1029,10 +1133,12 @@ export default function RealDataLayers({
     mapStyle,
     basemapStyle,
     styleChangeCounter,
+    selectedEventsKey,
     selectedHazardsKey,
+    dateRangeStart,
+    dateRangeEnd,
     showWindLayer,
     showInundationLayer,
-    filters,
     onActiveLayersChange,
     onLoadingChange,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
@@ -1045,10 +1151,29 @@ export default function RealDataLayers({
       ? [countryCode]
       : (Object.keys(COUNTRIES) as CountryCode[]);
 
-    const isFloodLikeHazard = (hazardType: string) =>
-      hazardType === 'flood' || hazardType === 'inundation' || hazardType === 'fluvial-depth';
+    // Replicate temporal-exclusion logic so this fast-path sync doesn't re-show
+    // layers that the main effect just hid due to event/date filter exclusion.
+    const selectedEventIds = filters?.selectedEvents ?? [];
+    const { effectiveStartDate, effectiveEndDate } = getEffectiveDateRange(
+      filters?.dateRange.start ?? '',
+      filters?.dateRange.end ?? ''
+    );
+    const visibleHazardTypes = new Set(
+      getHazardTypesToShow(
+        filters?.selectedHazards ?? [],
+        showWindLayer,
+        showInundationLayer
+      )
+    );
 
     countriesToSync.forEach(country => {
+      const excluded = countryIsExcludedByTemporalFilters(
+        country,
+        selectedEventIds,
+        effectiveStartDate,
+        effectiveEndDate
+      );
+
       getLayersForCountry(country).forEach(layer => {
         const layerId = `wms-layer-${layer.id}`;
 
@@ -1057,12 +1182,11 @@ export default function RealDataLayers({
             return;
           }
 
-          let targetVisibility: 'visible' | 'none' = 'visible';
-          if (layer.hazardType === 'wind') {
-            targetVisibility = showWindLayer ? 'visible' : 'none';
-          } else if (isFloodLikeHazard(layer.hazardType)) {
-            targetVisibility = showInundationLayer ? 'visible' : 'none';
-          }
+          const isLayerIncluded =
+            visibleHazardTypes.has(layer.hazardType) ||
+            (layer.hazardType === 'flood' && visibleHazardTypes.has('inundation'));
+          let targetVisibility: 'visible' | 'none' =
+            excluded || !isLayerIncluded ? 'none' : 'visible';
 
           map.setLayoutProperty(layerId, 'visibility', targetVisibility);
         } catch (_e) {
@@ -1070,7 +1194,7 @@ export default function RealDataLayers({
         }
       });
     });
-  }, [map, visible, countryCode, showWindLayer, showInundationLayer, styleChangeCounter]);
+  }, [map, visible, countryCode, showWindLayer, showInundationLayer, styleChangeCounter, filters]);
 
   // Update WMS layer opacity dynamically when map mode or global opacity changes.
   useEffect(() => {

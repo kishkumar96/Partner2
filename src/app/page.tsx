@@ -35,7 +35,7 @@ export default function RootPage() {
                     svg
                     aria-label={country.name}
                     title={country.name}
-                    style={{ width: '1.8rem', height: '1.8rem' }}
+                    className="w-7 h-7"
                   />
                 </div>
                 <div className="mt-2 text-lg font-semibold">{country.name}</div>

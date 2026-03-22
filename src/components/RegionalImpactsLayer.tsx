@@ -16,7 +16,12 @@ import { getBeforeLayerId } from '@/utils/layerOrder';
 import { debugLogger } from '@/utils/debugLogger';
 import { loadGeoJSON } from '@/utils/dataLoader';
 import { CountryCode } from '@/types/thredds';
-import { DATA_PATH, getCountryDataFilePath } from '@/utils/realDataLoader';
+import {
+  DATA_PATH,
+  enrichRegionalImpactsWithSummary,
+  getCountryDataFilePath,
+  loadRegionalSummary,
+} from '@/utils/realDataLoader';
 
 function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
   if (!map) return false;
@@ -157,7 +162,7 @@ export default function RegionalImpactsLayer({
           }
 
           console.log('🔄 Fetching regional impacts data from server...');
-          const [regionalResult, sectorResult] = await Promise.all([
+          const [regionalResult, sectorResult, regionalSummary] = await Promise.all([
             loadGeoJSON(regionalImpactsPath || `${basePath}/regional-impacts.geojson`, {
               cache: true,
             }),
@@ -165,6 +170,7 @@ export default function RegionalImpactsLayer({
               regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
               { cache: true }
             ),
+            loadRegionalSummary({ basePath }),
           ]);
 
           if (!mountedRef.current) {
@@ -194,7 +200,10 @@ export default function RegionalImpactsLayer({
             return;
           }
 
-          geojson = regionalResult.data;
+          geojson = enrichRegionalImpactsWithSummary(
+            regionalResult.data,
+            regionalSummary as Array<Record<string, unknown>> | null | undefined
+          );
           sectorGeojson = sectorResult.data || null;
 
           // Cache for future use

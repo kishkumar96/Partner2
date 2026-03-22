@@ -49,13 +49,13 @@ class RedisCache {
       this.client = createClient({
         url: REDIS_URL,
         socket: {
-          connectTimeout: 5000,
+          connectTimeout: 1000,
           reconnectStrategy: (retries: number) => {
-            if (retries > 5) {
-              console.error('Redis: Max reconnection attempts reached');
+            if (retries >= 3) {
+              console.error('Redis: Max reconnection attempts reached, giving up');
               return new Error('Max reconnection attempts');
             }
-            return Math.min(retries * 250, 5000);
+            return Math.min(retries * 200, 1000);
           },
         },
       });

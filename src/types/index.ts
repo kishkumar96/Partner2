@@ -101,6 +101,8 @@ export interface ExposureData {
   id: string;
   hazardId: string;
   sectorId: string;
+  eventId?: string;
+  eventDate?: string;
   region?: string; // Region name for geographic context
   population: number;
   assets: number;
@@ -112,6 +114,8 @@ export interface EconomicDamageData {
   id: string;
   hazardId: string;
   sectorId: string;
+  eventId?: string;
+  eventDate?: string;
   directLoss: number;
   indirectLoss: number;
   totalLoss: number;

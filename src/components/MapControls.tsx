@@ -495,38 +495,35 @@ export function MapControls({
                   </>
                 )}
 
-                {/* Download Map Button */}
-                {onDownloadMap && (
-                  <>
-                    <div className="border-t border-slate-700 my-3" />
-                    <button
-                      onClick={onDownloadMap}
-                      disabled={isDownloadingMap || controlsBusy}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-400/50 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-xs font-semibold"
-                      title={
-                        isDownloadingMap
-                          ? 'Preparing map export...'
-                          : 'Download current map view as PNG'
-                      }
-                      aria-busy={isDownloadingMap}
-                    >
-                      {isDownloadingMap ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          Preparing export...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-3.5 h-3.5" />
-                          Download Map (PNG)
-                        </>
-                      )}
-                    </button>
-                  </>
-                )}
               </div>
             )}
           </div>
+
+          {onDownloadMap && (
+            <div className="glass-panel rounded-lg p-3 shadow-lg">
+              <button
+                onClick={onDownloadMap}
+                disabled={isDownloadingMap || controlsBusy}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-400/50 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-xs font-semibold"
+                title={
+                  isDownloadingMap ? 'Preparing map export...' : 'Download current map view as PNG'
+                }
+                aria-busy={isDownloadingMap}
+              >
+                {isDownloadingMap ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Preparing export...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    Download Map (PNG)
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Collapsible: Basemap Selector - outside overflow container to prevent popup clipping */}
           <div className="relative">

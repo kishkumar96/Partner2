@@ -29,7 +29,6 @@ import {
 import SearchableEventSelector from './SearchableEventSelector';
 import MapAccessibleFeatures, { type DistrictFeature } from './MapAccessibleFeatures';
 import Toast from './Toast';
-import { normalizeHazardId } from '@/utils/hazardIds';
 
 interface FilterPanelProps {
   hazards: Hazard[];
@@ -244,37 +243,31 @@ export default function FilterPanel({
     [sectors, activeSectorIds]
   );
 
-  const activeHazardIds = useMemo(() => {
-    const hazardIds = new Set<string>();
-    const addHazardWithAliases = (rawHazardId: string) => {
-      const normalized = normalizeHazardId(rawHazardId);
-      hazardIds.add(normalized);
-
-      // Flood and inundation are treated as equivalent for UI availability.
-      if (normalized === 'flood') hazardIds.add('inundation');
-      if (normalized === 'inundation') hazardIds.add('flood');
-    };
-
-    events.forEach(event => {
-      if (event.hazardId) addHazardWithAliases(event.hazardId);
-    });
-    return hazardIds;
-  }, [events]);
-
   const hazardsWithAvailability = useMemo(
     () =>
       hazards.map(hazard => ({
         ...hazard,
-        isAvailable:
-          activeHazardIds.size === 0 ? true : activeHazardIds.has(normalizeHazardId(hazard.id)),
+        isAvailable: true,
       })),
-    [hazards, activeHazardIds]
+    [hazards]
   );
 
-  const isDateRangeInvalid =
-    !!filters.dateRange.start &&
-    !!filters.dateRange.end &&
-    filters.dateRange.start > filters.dateRange.end;
+  const updateDateRange = (bound: 'start' | 'end', value: string) => {
+    const nextDateRange = { ...filters.dateRange, [bound]: value };
+
+    if (nextDateRange.start && nextDateRange.end && nextDateRange.start > nextDateRange.end) {
+      if (bound === 'start') {
+        nextDateRange.end = value;
+      } else {
+        nextDateRange.start = value;
+      }
+    }
+
+    onFilterChange({
+      ...filters,
+      dateRange: nextDateRange,
+    });
+  };
 
   return (
     <div className="w-72 border-r border-cyan-500/15 bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/95 shadow-[inset_-1px_0_0_rgba(34,211,238,0.08)] flex flex-col flex-shrink-0 h-full min-h-0 overflow-hidden isolate">
@@ -297,7 +290,9 @@ export default function FilterPanel({
             </button>
           </div>
           <p className="mt-1 text-[10px] text-slate-400">
-            Data filters for analytics and tables. Layer visibility is controlled in Map Controls.
+            Data filters for analytics and summaries. Hazard raster visibility is controlled in Map
+            Controls; event and date filters can hide historical rasters when they exclude the
+            active event.
           </p>
         </div>
 
@@ -356,8 +351,9 @@ export default function FilterPanel({
             aria-labelledby="filter-panel-tab-filters"
           >
             <div className="mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-900/10 px-3 py-2 text-[10px] text-blue-200">
-              These are data filters. Hazard layer visibility toggles are separate and live in Map
-              Controls.
+              These are data filters. Hazard visibility toggles live in Map Controls. Event and date
+              filters also apply to historical hazard rasters when the selected event is outside the
+              active country dataset.
             </div>
 
             {/* Hazards Section - Compact */}
@@ -523,12 +519,8 @@ export default function FilterPanel({
                         name="dateFrom"
                         type="date"
                         value={filters.dateRange.start}
-                        onChange={e =>
-                          onFilterChange({
-                            ...filters,
-                            dateRange: { ...filters.dateRange, start: e.target.value },
-                          })
-                        }
+                        max={filters.dateRange.end || undefined}
+                        onChange={e => updateDateRange('start', e.target.value)}
                         className="w-full px-3 py-1.5 text-xs border border-slate-600/60 hover:border-cyan-500/40 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 rounded-lg bg-slate-950/50 text-white transition-colors"
                       />
                     </div>
@@ -544,21 +536,15 @@ export default function FilterPanel({
                         name="dateTo"
                         type="date"
                         value={filters.dateRange.end}
-                        onChange={e =>
-                          onFilterChange({
-                            ...filters,
-                            dateRange: { ...filters.dateRange, end: e.target.value },
-                          })
-                        }
+                        min={filters.dateRange.start || undefined}
+                        onChange={e => updateDateRange('end', e.target.value)}
                         className="w-full px-3 py-1.5 text-xs border border-slate-600/60 hover:border-cyan-500/40 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 rounded-lg bg-slate-950/50 text-white transition-colors"
                       />
                     </div>
-                    {isDateRangeInvalid && (
-                      <p className="text-[10px] text-amber-300 bg-amber-900/20 border border-amber-500/30 rounded px-2 py-1">
-                        Invalid date range: &ldquo;From Date&rdquo; must be earlier than or equal to
-                        &ldquo;To Date&rdquo;.
-                      </p>
-                    )}
+                    <p className="text-[10px] text-slate-500">
+                      Dates are applied to the active event timeline. If only annual source data is
+                      available, the event date is used for matching.
+                    </p>
                   </div>
                 </div>
               )}

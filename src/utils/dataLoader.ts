@@ -10,7 +10,10 @@
  */
 
 // Get basePath from env — empty in dev, '/partner2' in production
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
+const BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'
+    : process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 /**
  * Add basePath to URL if needed
@@ -18,8 +21,11 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
 function getFullUrl(url: string): string {
   // If URL is relative and starts with /, prepend basePath
   if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
-    return `${BASE_PATH}${url}`;
+    const newUrl = `${BASE_PATH}${url}`;
+    console.log(`[Debug] getFullUrl transforming "${url}" to "${newUrl}"`);
+    return newUrl;
   }
+  console.log(`[Debug] getFullUrl returning original URL: "${url}"`);
   return url;
 }
 
@@ -56,6 +62,8 @@ export interface DataLoaderResult<T> {
 
 // Simple in-memory cache
 const dataCache = new Map<string, any>();
+// In-flight promise deduplication — prevents wasteful parallel fetches for the same URL
+const inFlight = new Map<string, Promise<DataLoaderResult<unknown>>>();
 
 /**
  * Generic data loader with retry logic and error handling
@@ -71,7 +79,7 @@ export async function loadData<T>(
 
   const fullUrl = getFullUrl(url);
 
-  // Check cache first
+  // Check memory cache first
   if (cache && dataCache.has(fullUrl)) {
     return {
       data: dataCache.get(fullUrl) as T,
@@ -80,63 +88,77 @@ export async function loadData<T>(
     };
   }
 
-  let lastError: Error | null = null;
+  // Return an existing in-flight request so concurrent callers share one fetch
+  if (cache && inFlight.has(fullUrl)) {
+    return (await inFlight.get(fullUrl)!) as DataLoaderResult<T>;
+  }
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
-      if (signal) {
-        if (signal.aborted) {
-          controller.abort(toAbortReason(signal.reason));
-        } else {
-          signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
-            once: true,
-          });
+  const fetchTask = (async (): Promise<DataLoaderResult<unknown>> => {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
+        if (signal) {
+          if (signal.aborted) {
+            controller.abort(toAbortReason(signal.reason));
+          } else {
+            signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
+              once: true,
+            });
+          }
+        }
+
+        const response = await fetch(fullUrl, {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = (await response.json()) as T;
+
+        // Populate cache before resolving so late joiners hit cache on next call
+        if (cache) {
+          dataCache.set(fullUrl, data);
+        }
+
+        return {
+          data,
+          error: null,
+          cached: false,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Don't retry on last attempt
+        if (attempt < retries) {
+          await delay(retryDelay);
         }
       }
-
-      const response = await fetch(fullUrl, {
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as T;
-
-      // Cache if requested
-      if (cache) {
-        dataCache.set(fullUrl, data);
-      }
-
-      return {
-        data,
-        error: null,
-        cached: false,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      // Don't retry on last attempt
-      if (attempt < retries) {
-        await delay(retryDelay);
-      }
     }
+
+    // Don't log AbortErrors as they are expected during component cleanup
+    if (lastError && lastError.name !== 'AbortError') {
+      console.error(`Failed to load data from ${url}:`, lastError);
+    }
+    return {
+      data: null,
+      error: lastError,
+      cached: false,
+    };
+  })();
+
+  if (cache) {
+    inFlight.set(fullUrl, fetchTask);
+    fetchTask.finally(() => inFlight.delete(fullUrl));
   }
 
-  // Don't log AbortErrors as they are expected during component cleanup
-  if (lastError && lastError.name !== 'AbortError') {
-    console.error(`Failed to load data from ${url}:`, lastError);
-  }
-  return {
-    data: null,
-    error: lastError,
-    cached: false,
-  };
+  return (await fetchTask) as DataLoaderResult<T>;
 }
 
 /**
@@ -153,7 +175,7 @@ export async function loadTextData(
 
   const fullUrl = getFullUrl(url);
 
-  // Check cache first
+  // Check memory cache first
   if (cache && dataCache.has(fullUrl)) {
     return {
       data: dataCache.get(fullUrl) as string,
@@ -162,62 +184,75 @@ export async function loadTextData(
     };
   }
 
-  let lastError: Error | null = null;
+  // Return an existing in-flight request so concurrent callers share one fetch
+  if (cache && inFlight.has(fullUrl)) {
+    return (await inFlight.get(fullUrl)!) as DataLoaderResult<string>;
+  }
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
-      if (signal) {
-        if (signal.aborted) {
-          controller.abort(toAbortReason(signal.reason));
-        } else {
-          signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
-            once: true,
-          });
+  const fetchTask = (async (): Promise<DataLoaderResult<unknown>> => {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(new Error('Request timeout')), timeout);
+        if (signal) {
+          if (signal.aborted) {
+            controller.abort(toAbortReason(signal.reason));
+          } else {
+            signal.addEventListener('abort', () => controller.abort(toAbortReason(signal.reason)), {
+              once: true,
+            });
+          }
+        }
+
+        const response = await fetch(fullUrl, {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+
+        if (cache) {
+          dataCache.set(fullUrl, text);
+        }
+
+        return {
+          data: text,
+          error: null,
+          cached: false,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (attempt < retries) {
+          await delay(retryDelay);
         }
       }
-
-      const response = await fetch(fullUrl, {
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const text = await response.text();
-
-      // Cache if requested
-      if (cache) {
-        dataCache.set(fullUrl, text);
-      }
-
-      return {
-        data: text,
-        error: null,
-        cached: false,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      if (attempt < retries) {
-        await delay(retryDelay);
-      }
     }
+
+    // Don't log AbortErrors as they are expected during component cleanup
+    if (lastError && lastError.name !== 'AbortError') {
+      console.error(`Failed to load text data from ${url}:`, lastError);
+    }
+    return {
+      data: null,
+      error: lastError,
+      cached: false,
+    };
+  })();
+
+  if (cache) {
+    inFlight.set(fullUrl, fetchTask);
+    fetchTask.finally(() => inFlight.delete(fullUrl));
   }
 
-  // Don't log AbortErrors as they are expected during component cleanup
-  if (lastError && lastError.name !== 'AbortError') {
-    console.error(`Failed to load text data from ${url}:`, lastError);
-  }
-  return {
-    data: null,
-    error: lastError,
-    cached: false,
-  };
+  return (await fetchTask) as DataLoaderResult<string>;
 }
 
 /**

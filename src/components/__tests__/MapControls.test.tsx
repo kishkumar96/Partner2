@@ -133,4 +133,12 @@ describe('MapControls', () => {
     expect(slider).toHaveAttribute('aria-valuemax', '100');
     expect(slider).toHaveAttribute('aria-valuenow', '82');
   });
+
+  it('renders the map download action when provided', () => {
+    const onDownloadMap = jest.fn();
+
+    render(<MapControls {...defaultProps} onDownloadMap={onDownloadMap} />);
+
+    expect(screen.getByRole('button', { name: /download map/i })).toBeInTheDocument();
+  });
 });

@@ -101,8 +101,8 @@ export default function SearchableEventSelector({
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search events by name, district, hazard..."
-          aria-label="Search events by name, district, or hazard"
+          placeholder="Search events by name, hazard, or date..."
+          aria-label="Search events by name, hazard, or date"
           className="w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border-2 border-slate-600 rounded-xl text-sm font-medium text-white placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 backdrop-blur-sm hover:border-slate-500"
         />
         {searchQuery && (
@@ -120,7 +120,7 @@ export default function SearchableEventSelector({
       {/* Results Summary & Actions */}
       <div className="flex items-center justify-between text-xs bg-gradient-to-r from-slate-800/60 to-slate-700/40 rounded-xl px-3 py-2.5 border border-slate-700/50">
         <span aria-live="polite" aria-atomic="true" className="font-semibold text-slate-300">
-          {filteredEvents.length} district{filteredEvents.length !== 1 ? 's' : ''}{' '}
+          {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}{' '}
           {searchQuery && `(filtered from ${events.length})`}
           {selectedEvents.length > 0 && (
             <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-500/30">
@@ -188,6 +188,9 @@ export default function SearchableEventSelector({
           <div className="divide-y divide-slate-700/50">
             {paginatedEvents.map(event => {
               const isSelected = selectedEvents.includes(event.id);
+              const hazardName = hazardNameById.get(event.hazardId) || event.hazardId;
+              const districtName = districtNameById.get(event.districtId || '');
+              const metadata = [hazardName, districtName, event.date].filter(Boolean).join(' • ');
               return (
                 <label
                   key={event.id}
@@ -222,7 +225,7 @@ export default function SearchableEventSelector({
                       {event.name}
                     </div>
                     <div className="text-xs text-slate-400 mt-1 font-medium">
-                      {event.districtId} • {event.date}
+                      {metadata}
                     </div>
                   </div>
                   <div

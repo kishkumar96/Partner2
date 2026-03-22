@@ -27,40 +27,23 @@ export interface RealWMSLayer {
   description: string;
   hazardType: string;
   bbox: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
+  maxNativeZoom?: number;
   styleConfig?: WMSStyleConfig;
 }
 
-function getHazardDatasetInfo(countryCode: CountryCode): {
-  countryPath: string;
-  cycloneName: string;
-} {
-  switch (countryCode) {
-    case 'VU':
-      return { countryPath: 'vu_hazard', cycloneName: 'Lola' };
-    case 'WS':
-      return { countryPath: 'ws_hazard', cycloneName: 'Gita' };
-    case 'TO':
-      return { countryPath: 'Harold_TO', cycloneName: 'Harold' };
-    case 'CK':
-      return { countryPath: 'ck_hazard', cycloneName: 'Event' };
-    default:
-      return { countryPath: 'vu_hazard', cycloneName: 'Lola' };
-  }
-}
+const DEFAULT_STYLE = 'default-scalar/default';
+const DEFAULT_WMS_VERSION: NonNullable<WMSStyleConfig['wmsVersion']> = '1.3.0';
+const DEFAULT_CRS: NonNullable<WMSStyleConfig['crs']> = 'EPSG:3857';
+
+const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
+  VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
+  WS: '/POP/Partner2/case_study2/hazard/ws_hazard/TC/Gita',
+  TO: '/POP/Partner2/case_study2/Harold_TO',
+  CK: '/POP/Partner2/case_study2/hazard/ck_hazard/TC/Meena',
+};
 
 function buildDatasetPath(layer: RealWMSLayer): string {
-  // Samoa Gita datasets are published under a flat Gita_WS path.
-  if (layer.countryCode === 'WS') {
-    return `/POP/Partner2/case_study2/Gita_WS/${layer.ncFile}`;
-  }
-
-  // Tonga Harold datasets are published under a flat Harold_TO path.
-  if (layer.countryCode === 'TO') {
-    return `/POP/Partner2/case_study2/Harold_TO/${layer.ncFile}`;
-  }
-
-  const { countryPath, cycloneName } = getHazardDatasetInfo(layer.countryCode);
-  return `/POP/Partner2/case_study2/hazard/${countryPath}/TC/${cycloneName}/${layer.ncFile}`;
+  return `${COUNTRY_DATASET_BASE_PATH[layer.countryCode]}/${layer.ncFile}`;
 }
 
 const WEB_MERCATOR_MAX_LAT = 85.05112878;
@@ -82,6 +65,59 @@ function bboxLonLatToWebMercator(bbox: [number, number, number, number]): string
   const [minX, minY] = lonLatToWebMercator(minLon, minLat);
   const [maxX, maxY] = lonLatToWebMercator(maxLon, maxLat);
   return `${minX},${minY},${maxX},${maxY}`;
+}
+
+function applyNcWmsStyleParams(params: URLSearchParams, styleConfig?: WMSStyleConfig): void {
+  if (!styleConfig) return;
+
+  if (styleConfig.colorScaleRange) {
+    params.set('COLORSCALERANGE', styleConfig.colorScaleRange);
+  }
+  if (styleConfig.numColorBands !== undefined) {
+    params.set('NUMCOLORBANDS', styleConfig.numColorBands.toString());
+  }
+  if (styleConfig.aboveMaxColor) {
+    params.set('ABOVEMAXCOLOR', styleConfig.aboveMaxColor);
+  }
+  if (styleConfig.belowMinColor) {
+    params.set('BELOWMINCOLOR', styleConfig.belowMinColor);
+  }
+  if (styleConfig.bgColor) {
+    params.set('BGCOLOR', styleConfig.bgColor);
+  }
+  if (styleConfig.logScale !== undefined) {
+    params.set('LOGSCALE', styleConfig.logScale.toString());
+  }
+  if (styleConfig.time) {
+    params.set('TIME', styleConfig.time);
+  }
+}
+
+function createBaseWmsParams(options: {
+  layerName: string;
+  version: NonNullable<WMSStyleConfig['wmsVersion']>;
+  crs: NonNullable<WMSStyleConfig['crs']>;
+  bbox?: string;
+  width: number;
+  height: number;
+  styles: string;
+}): URLSearchParams {
+  const { layerName, version, crs, bbox, width, height, styles } = options;
+  const isWms111 = version === '1.1.1';
+
+  return new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: version,
+    REQUEST: 'GetMap',
+    LAYERS: layerName,
+    ...(isWms111 ? { SRS: crs } : { CRS: crs }),
+    ...(bbox ? { BBOX: bbox } : {}),
+    WIDTH: width.toString(),
+    HEIGHT: height.toString(),
+    FORMAT: 'image/png',
+    TRANSPARENT: 'true',
+    STYLES: styles,
+  });
 }
 
 /**
@@ -124,6 +160,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     hazardType: 'flood',
     // Match server-advertised bounds from GetCapabilities for better map fit/loading.
     bbox: [166.54033818684763, -20.264667548114673, 170.24232553831496, -13.059866369838865],
+    // Allow deeper native tile fetches so the flood raster stays sharp when users
+    // zoom into island/coastal detail instead of overzooming z12 tiles.
+    maxNativeZoom: 15,
     styleConfig: {
       // Match THREDDS Flood Depth default rendering for _merged.nc.
       styles: 'default-scalar/x-Sst',
@@ -164,13 +203,11 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     id: 'ws-tc-gita-wind',
     name: 'TC Gita Wind Hazard',
     countryCode: 'WS',
-    ncFile: 'SA_savaii_upolu_local_wind.nc', // Wind data
+    ncFile: 'SA_savaii_upolu_local_wind.nc', // Wind data (correct filename from THREDDS)
     layerName: 'Depth', // All layers named "Depth"
-    description: 'Wind hazard from TC Gita (Savaii & Upolu)',
+    description: 'Wind hazard from TC Gita',
     hazardType: 'wind',
-    // Use full regional extent for map rendering. A single-tile BBOX from a
-    // manual GetMap request is too small and makes the layer appear missing.
-    bbox: [-173.0, -14.5, -171.0, -13.0],
+    bbox: [-172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997],
     styleConfig: {
       wmsVersion: '1.1.1',
       crs: 'EPSG:4326',
@@ -188,21 +225,30 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     id: 'ws-tc-gita-inundation',
     name: 'TC Gita Flood Hazard',
     countryCode: 'WS',
-    ncFile: '_merged.nc', // Flood data
-    layerName: 'Depth', // All layers named "Depth"
-    description: 'Flood/inundation hazard from TC Gita (_merged.nc)',
+    ncFile: 'WS_merged.nc', // Flood data — confirmed filename from GetCapabilities
+    layerName: 'Depth', // WMS layer name is "Depth" (title is "Flood Depth")
+    description: 'Flood/inundation hazard from TC Gita (WS_merged.nc)',
     hazardType: 'flood',
-    bbox: [-171.32576857676, -14.341425919499, -170.84386683102, -13.859524173763],
+    bbox: [-172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997],
+    // Allow deeper native tile fetches so the flood raster stays sharp when users
+    // zoom into island/coastal detail instead of overzooming z12 tiles.
+    maxNativeZoom: 15,
     styleConfig: {
+      // Use EPSG:3857 + WMS 1.1.1 so the tiled rendering path is taken.
+      // buildWMSTileUrl hardcodes SRS=EPSG:3857/WMS-1.1.1 which THREDDS supports.
+      // Using EPSG:4326 forces the single static image path, which sends wrong
+      // bbox coordinates and returns only 3 white tiles.
       wmsVersion: '1.1.1',
-      crs: 'EPSG:4326',
+      crs: 'EPSG:3857',
+      // Use x-Sst — confirmed working palette on this THREDDS server (same as VU/TO layers).
+      // seq-Blues is not listed in GetCapabilities and returns white tiles on this server.
       styles: 'default-scalar/x-Sst',
       time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0,50',
-      numColorBands: 50,
+      colorScaleRange: '0.01,5', // 0–5m covers realistic TC coastal inundation depths
+      numColorBands: 20,
       aboveMaxColor: 'extend',
-      belowMinColor: 'extend',
-      bgColor: 'extend',
+      belowMinColor: 'transparent',
+      bgColor: 'transparent',
       logScale: false,
     },
   },
@@ -218,7 +264,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     hazardType: 'wind',
     bbox: [-176.5, -23.5, -173.0, -15.0],
     styleConfig: {
-      wmsVersion: '1.1.1',
+      wmsVersion: '1.3.0',
       crs: 'EPSG:3857',
       // Keep calm/near-zero wind values transparent by setting a non-zero lower bound.
       // This mirrors the known-good Harold_TO WMS profile.
@@ -241,15 +287,101 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     description: 'Flood/inundation hazard from TC Harold (best.nc)',
     hazardType: 'flood',
     bbox: [-176.5, -23.5, -173.0, -15.0],
+    // Use tiled requests to avoid a single full-extent static GetMap that can
+    // exceed proxy timeout windows for Harold_TO/best.nc.
+    maxNativeZoom: 12,
     styleConfig: {
-      // Tonga flood depths use a narrower dataset range than Vanuatu.
-      // Keep a country-specific COLORSCALERANGE to preserve local contrast.
+      // Force the tiled path in RealDataLayers (EPSG:3857), which distributes
+      // work into smaller GetMap calls and avoids repeated 30s+ static timeouts.
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:3857',
+      // Match the known-good Godiva request for Harold_TO/best.nc exactly.
       styles: 'default-scalar/x-Sst',
-      colorScaleRange: '0.001694,2.691',
+      time: '2022-06-14T00:00:00.000Z',
+      colorScaleRange: '0.0586,1.899',
       numColorBands: 20,
+      aboveMaxColor: 'extend',
+      belowMinColor: 'extend',
+      bgColor: 'extend',
+      logScale: false,
+    },
+  },
+
+  // Cook Islands - TC Meena
+  {
+    id: 'ck-tc-meena-wind-subdomain-1',
+    name: 'TC Meena Wind Hazard (Subdomain 1)',
+    countryCode: 'CK',
+    ncFile: '_CK_subdomain_1_local_wind.nc',
+    layerName: 'Depth',
+    description: 'Wind hazard from TC Meena (_CK_subdomain_1_local_wind.nc)',
+    hazardType: 'wind',
+    // Use the server-advertised subdomain extent so the raster is not stretched
+    // across the full Cook Islands archipelago.
+    bbox: [-166.24347222222224, -13.386527777777781, -157.24347222222212, -8.38652777777778],
+    maxNativeZoom: 15,
+    styleConfig: {
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:3857',
+      styles: 'default-scalar/x-Sst',
+      time: '2022-06-14T00:00:00.000Z',
+      colorScaleRange: '0.1,65.74',
+      numColorBands: 50,
       aboveMaxColor: 'extend',
       belowMinColor: 'transparent',
       bgColor: 'extend',
+      logScale: false,
+    },
+  },
+  {
+    id: 'ck-tc-meena-wind-subdomain-2',
+    name: 'TC Meena Wind Hazard (Subdomain 2)',
+    countryCode: 'CK',
+    ncFile: '_CK_subdomain_2_local_wind.nc',
+    layerName: 'Depth',
+    description: 'Wind hazard from TC Meena (_CK_subdomain_2_local_wind.nc)',
+    hazardType: 'wind',
+    // Use the server-advertised subdomain extent so the raster is not stretched
+    // across the full Cook Islands archipelago.
+    bbox: [-160.60208333348902, -22.813472222378515, -156.60208333319275, -18.813472222156314],
+    maxNativeZoom: 15,
+    styleConfig: {
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:3857',
+      styles: 'default-scalar/x-Sst',
+      time: '2022-06-14T00:00:00.000Z',
+      colorScaleRange: '0.1,65.74',
+      numColorBands: 50,
+      aboveMaxColor: 'extend',
+      belowMinColor: 'transparent',
+      bgColor: 'extend',
+      logScale: false,
+    },
+  },
+  {
+    id: 'ck-tc-meena-inundation',
+    name: 'TC Meena Flood Hazard',
+    countryCode: 'CK',
+    ncFile: 'CK_merged.nc',
+    layerName: 'Depth',
+    description: 'Flood/inundation hazard from TC Meena (CK_merged.nc)',
+    hazardType: 'flood',
+    bbox: [-163.1997484633778299, -21.9594303145659886, -157.3212295556423328, -17.9868879088506723],
+    // Verified against THREDDS with small-bbox GetMap requests after fixing the
+    // palette name, so we can fetch native tiles deeper into the zoom range.
+    maxNativeZoom: 15,
+    styleConfig: {
+      // Use tiled WMS requests for Cook Islands flood to avoid compressing the
+      // entire archipelago into a single 256px image overlay.
+      wmsVersion: '1.1.1',
+      crs: 'EPSG:3857',
+      styles: 'default-scalar/x-Sst',
+      time: '2022-06-14T00:00:00.000Z',
+      colorScaleRange: '0.01,5',
+      numColorBands: 20,
+      aboveMaxColor: 'extend',
+      belowMinColor: 'transparent',
+      bgColor: 'transparent',
       logScale: false,
     },
   },
@@ -259,64 +391,39 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
  * Build WMS GetMap URL for a layer
  * Note: WMS 1.3.0 with EPSG:4326 requires lat,lon order in BBOX
  */
+/** Base URL for WMS requests — routes through the same-origin proxy in the browser */
+function wmsBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? '/api/partner-proxy/thredds/wms';
+}
+
 export function buildRealWMSUrl(
   layer: RealWMSLayer,
   width: number = 512,
   height: number = 512,
   styles?: string
 ): string {
-  const baseUrl = 'https://gemthreddshpc.spc.int/thredds/wms';
+  const baseUrl = wmsBaseUrl();
 
   const datasetPath = buildDatasetPath(layer);
-  const wmsVersion = layer.styleConfig?.wmsVersion || '1.3.0';
-  const isWms111 = wmsVersion === '1.1.1';
-  const crs = layer.styleConfig?.crs || 'EPSG:3857';
+  const wmsVersion = layer.styleConfig?.wmsVersion || DEFAULT_WMS_VERSION;
+  const crs = layer.styleConfig?.crs || DEFAULT_CRS;
   const isEpsg4326 = crs === 'EPSG:4326';
   const wmsBbox = isEpsg4326
     ? `${layer.bbox[0]},${layer.bbox[1]},${layer.bbox[2]},${layer.bbox[3]}`
     : bboxLonLatToWebMercator(layer.bbox);
 
   // Use layer-specific style config or provided style, fallback to default
-  const styleToUse = styles || layer.styleConfig?.styles || 'default-scalar/default';
-
-  const params = new URLSearchParams({
-    SERVICE: 'WMS',
-    VERSION: wmsVersion,
-    REQUEST: 'GetMap',
-    LAYERS: layer.layerName,
-    ...(isWms111 ? { SRS: crs } : { CRS: crs }),
-    BBOX: wmsBbox,
-    WIDTH: width.toString(),
-    HEIGHT: height.toString(),
-    FORMAT: 'image/png',
-    TRANSPARENT: 'true',
-    STYLES: styleToUse,
+  const styleToUse = styles || layer.styleConfig?.styles || DEFAULT_STYLE;
+  const params = createBaseWmsParams({
+    layerName: layer.layerName,
+    version: wmsVersion,
+    crs,
+    bbox: wmsBbox,
+    width,
+    height,
+    styles: styleToUse,
   });
-
-  // Add ncWMS-specific parameters from layer config
-  if (layer.styleConfig) {
-    if (layer.styleConfig.colorScaleRange) {
-      params.set('COLORSCALERANGE', layer.styleConfig.colorScaleRange);
-    }
-    if (layer.styleConfig.numColorBands !== undefined) {
-      params.set('NUMCOLORBANDS', layer.styleConfig.numColorBands.toString());
-    }
-    if (layer.styleConfig.aboveMaxColor) {
-      params.set('ABOVEMAXCOLOR', layer.styleConfig.aboveMaxColor);
-    }
-    if (layer.styleConfig.belowMinColor) {
-      params.set('BELOWMINCOLOR', layer.styleConfig.belowMinColor);
-    }
-    if (layer.styleConfig.bgColor) {
-      params.set('BGCOLOR', layer.styleConfig.bgColor);
-    }
-    if (layer.styleConfig.logScale !== undefined) {
-      params.set('LOGSCALE', layer.styleConfig.logScale.toString());
-    }
-    if (layer.styleConfig.time) {
-      params.set('TIME', layer.styleConfig.time);
-    }
-  }
+  applyNcWmsStyleParams(params, layer.styleConfig);
 
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
@@ -326,45 +433,20 @@ export function buildRealWMSUrl(
  * MapLibre expects {bbox-epsg-4326} to be replaced, but we need to provide proper tile coordinates
  */
 export function buildWMSTileUrl(layer: RealWMSLayer): string {
-  const baseUrl = 'https://gemthreddshpc.spc.int/thredds/wms';
+  const baseUrl = wmsBaseUrl();
 
   const datasetPath = buildDatasetPath(layer);
 
-  const styleToUse = layer.styleConfig?.styles || 'default-scalar/default';
-  const params = new URLSearchParams({
-    SERVICE: 'WMS',
-    VERSION: '1.1.1',
-    REQUEST: 'GetMap',
-    LAYERS: layer.layerName,
-    SRS: 'EPSG:3857',
-    WIDTH: '256',
-    HEIGHT: '256',
-    FORMAT: 'image/png',
-    TRANSPARENT: 'true',
-    STYLES: styleToUse,
+  const styleToUse = layer.styleConfig?.styles || DEFAULT_STYLE;
+  const params = createBaseWmsParams({
+    layerName: layer.layerName,
+    version: '1.1.1',
+    crs: 'EPSG:3857',
+    width: 256,
+    height: 256,
+    styles: styleToUse,
   });
-
-  if (layer.styleConfig?.colorScaleRange) {
-    params.set('COLORSCALERANGE', layer.styleConfig.colorScaleRange);
-  }
-  if (layer.styleConfig?.numColorBands !== undefined) {
-    params.set('NUMCOLORBANDS', layer.styleConfig.numColorBands.toString());
-  }
-  if (layer.styleConfig?.aboveMaxColor) {
-    params.set('ABOVEMAXCOLOR', layer.styleConfig.aboveMaxColor);
-  }
-  if (layer.styleConfig?.belowMinColor) {
-    params.set('BELOWMINCOLOR', layer.styleConfig.belowMinColor);
-  }
-  if (layer.styleConfig?.bgColor) {
-    params.set('BGCOLOR', layer.styleConfig.bgColor);
-  }
-  if (layer.styleConfig?.logScale !== undefined) {
-    params.set('LOGSCALE', layer.styleConfig.logScale.toString());
-  }
-  if (layer.styleConfig?.time) {
-    params.set('TIME', layer.styleConfig.time);
-  }
+  applyNcWmsStyleParams(params, layer.styleConfig);
 
   // Keep BBOX token unencoded so MapLibre can replace it per tile.
   // MapLibre reliably supports the EPSG:3857 placeholder for raster tile templates.
@@ -399,62 +481,33 @@ export function buildWMSImageUrl(
   height: number = 256,
   styles?: string
 ): string {
-  const baseUrl = 'https://gemthreddshpc.spc.int/thredds/wms';
+  const baseUrl = wmsBaseUrl();
 
   const datasetPath = buildDatasetPath(layer);
-  const wmsVersion = layer.styleConfig?.wmsVersion || '1.3.0';
-  const isWms111 = wmsVersion === '1.1.1';
-  const crs = layer.styleConfig?.crs || 'EPSG:3857';
+  const wmsVersion = layer.styleConfig?.wmsVersion || DEFAULT_WMS_VERSION;
+  const crs = layer.styleConfig?.crs || DEFAULT_CRS;
   const isEpsg4326 = crs === 'EPSG:4326';
   const wmsBbox = isEpsg4326
     ? `${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}`
     : bboxLonLatToWebMercator(bbox);
 
   // Use layer-specific style config or provided style, fallback to default
-  const styleToUse = styles || layer.styleConfig?.styles || 'default-scalar/default';
-
-  const params = new URLSearchParams({
-    SERVICE: 'WMS',
-    VERSION: wmsVersion,
-    REQUEST: 'GetMap',
-    LAYERS: layer.layerName,
-    ...(isWms111 ? { SRS: crs } : { CRS: crs }),
-    BBOX: wmsBbox,
-    WIDTH: width.toString(),
-    HEIGHT: height.toString(),
-    FORMAT: 'image/png',
-    TRANSPARENT: 'true',
-    STYLES: styleToUse,
+  const styleToUse = styles || layer.styleConfig?.styles || DEFAULT_STYLE;
+  const params = createBaseWmsParams({
+    layerName: layer.layerName,
+    version: wmsVersion,
+    crs,
+    bbox: wmsBbox,
+    width,
+    height,
+    styles: styleToUse,
   });
 
   // Note: THREDDS WMS responses include Cache-Control headers by default.
   // Browsers cache identical requests for faster subsequent loads.
   // For production, consider adding CDN (CloudFlare/AWS CloudFront) to reduce latency.
 
-  // Add ncWMS-specific parameters from layer config
-  if (layer.styleConfig) {
-    if (layer.styleConfig.colorScaleRange) {
-      params.set('COLORSCALERANGE', layer.styleConfig.colorScaleRange);
-    }
-    if (layer.styleConfig.numColorBands !== undefined) {
-      params.set('NUMCOLORBANDS', layer.styleConfig.numColorBands.toString());
-    }
-    if (layer.styleConfig.aboveMaxColor) {
-      params.set('ABOVEMAXCOLOR', layer.styleConfig.aboveMaxColor);
-    }
-    if (layer.styleConfig.belowMinColor) {
-      params.set('BELOWMINCOLOR', layer.styleConfig.belowMinColor);
-    }
-    if (layer.styleConfig.bgColor) {
-      params.set('BGCOLOR', layer.styleConfig.bgColor);
-    }
-    if (layer.styleConfig.logScale !== undefined) {
-      params.set('LOGSCALE', layer.styleConfig.logScale.toString());
-    }
-    if (layer.styleConfig.time) {
-      params.set('TIME', layer.styleConfig.time);
-    }
-  }
+  applyNcWmsStyleParams(params, layer.styleConfig);
 
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }

@@ -30,6 +30,47 @@ interface UnifiedMapLegendProps {
   countryCode?: CountryCode | null;
 }
 
+function getWmsLegendGradient(styleName: string, hazardType: string): string {
+  const normalizedStyle = styleName.toLowerCase();
+  const isFloodLike =
+    hazardType === 'flood' || hazardType === 'inundation' || hazardType === 'fluvial-depth';
+
+  if (normalizedStyle.includes('x-sst')) {
+    // Approximate ncWMS x-Sst ramp used by the rendered WMS layers.
+    return 'linear-gradient(to right, #fff7bc, #fee391, #fec44f, #fe9929, #ec7014, #cc4c02, #993404, #662506)';
+  }
+
+  if (normalizedStyle.includes('blues') || (isFloodLike && !normalizedStyle.includes('ylorrd'))) {
+    return 'linear-gradient(to right, #f7fbff, #deebf7, #c6dbef, #9ecae1, #6baed6, #4292c6, #2171b5, #08519c, #08306b)';
+  }
+
+  if (normalizedStyle.includes('ylorrd')) {
+    return 'linear-gradient(to right, #ffffcc, #ffeda0, #fed976, #feb24c, #fd8d3c, #fc4e2a, #e31a1c, #bd0026, #800026)';
+  }
+
+  return 'linear-gradient(to right, #f0f0f0, #d0d0d0, #a0a0a0, #707070, #404040)';
+}
+
+function getWmsLegendUnits(hazardType: string): string {
+  if (hazardType === 'wind') {
+    return 'm/s';
+  }
+  return 'm';
+}
+
+function formatWmsStyleName(styleName: string): string {
+  if (!styleName) {
+    return 'default';
+  }
+
+  const trimmed = styleName.trim();
+  if (!trimmed) {
+    return 'default';
+  }
+
+  return trimmed.split('/').pop() || trimmed;
+}
+
 function formatContinuousRangeLabel(
   value: number,
   nextValue: number | null,
@@ -67,6 +108,7 @@ export default function UnifiedMapLegend({
   countryCode = null,
 }: UnifiedMapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasActiveWmsLayers = activeWmsLayers.length > 0;
 
   // Legend classes mirror the exact static thresholds used by map paint expressions.
   const legendClasses = useMemo(() => {
@@ -90,22 +132,34 @@ export default function UnifiedMapLegend({
   const config = useMemo(() => {
     if (mode === 'loss') {
       return {
-        title: 'Economic Damage (USD)',
-        subtitle: 'Direct physical damage costs (USD)',
+        title: hasActiveWmsLayers ? 'Regional Economic Damage (USD)' : 'Economic Damage (USD)',
+        subtitle: hasActiveWmsLayers
+          ? 'Regional damage overlay; historical hazard rasters are listed separately below'
+          : 'Direct physical damage costs (USD)',
         icon: DollarSign,
         iconColor: 'text-green-600 dark:text-green-400',
         units: 'USD',
+        footer: hasActiveWmsLayers
+          ? 'Regional damage overlay in USD. Historical hazard rasters below use separate metadata, units, and palettes.'
+          : 'Direct physical damage costs in USD',
+        rangeLabel: 'Regional range',
       };
     } else {
       return {
-        title: 'Peak Wind Speed (km/h)',
-        subtitle: '10-minute sustained wind speed per district (km/h)',
+        title: hasActiveWmsLayers ? 'Regional Wind Overlay (km/h)' : 'Peak Wind Speed (km/h)',
+        subtitle: hasActiveWmsLayers
+          ? 'Regional wind overlay in km/h; historical hazard rasters are listed separately below'
+          : '10-minute sustained wind speed per district (km/h)',
         icon: Wind,
         iconColor: 'text-blue-600 dark:text-blue-400',
         units: 'km/h',
+        footer: hasActiveWmsLayers
+          ? 'Regional wind overlay in km/h. Historical hazard rasters below use separate metadata, units, and palettes.'
+          : '10-minute sustained wind speed in km/h',
+        rangeLabel: 'Regional range',
       };
     }
-  }, [mode]);
+  }, [mode, hasActiveWmsLayers]);
 
   // Building damage legend classes (when buildings are visible)
   const buildingLegendClasses = useMemo(() => {
@@ -277,6 +331,7 @@ export default function UnifiedMapLegend({
               {/* Show data range if available */}
               {dataRange && (
                 <p className="text-xs text-slate-500 font-mono mt-1">
+                  <span className="font-sans mr-1">{config.rangeLabel}:</span>
                   {mode === 'loss'
                     ? formatCurrency(dataRange.min)
                     : `${Math.round(dataRange.min)} km/h`}
@@ -322,11 +377,7 @@ export default function UnifiedMapLegend({
 
             {/* Compact footer */}
             <div className="px-3 py-2 bg-black/10">
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {mode === 'loss'
-                  ? 'Direct physical damage costs in USD'
-                  : '10-minute sustained wind speed in km/h'}
-              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">{config.footer}</p>
               {dataValues && dataValues.length > 0 && (
                 <p className="text-xs text-blue-400 mt-1">✓ {dataValues.length} data points</p>
               )}
@@ -338,10 +389,14 @@ export default function UnifiedMapLegend({
                 <div className="px-3 py-2 border-t border-white/10">
                   <h4 className="text-xs font-bold text-purple-400 mb-0.5 flex items-center gap-1.5">
                     <Droplet className="w-3 h-3" />
-                    THREDDS Hazard Layers
+                    Historical Hazard Rasters
                   </h4>
                   <p className="text-xs text-slate-400">
-                    Real-time hazard intensity from Pacific Ocean Portal
+                    Event-specific THREDDS rasters from Pacific Ocean Portal
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ranges and units come from layer metadata. Palette bars are visual previews of the
+                    server style, not exact sampled legends.
                   </p>
                 </div>
 
@@ -360,12 +415,10 @@ export default function UnifiedMapLegend({
                       layer.hazardType === 'flood' ||
                       layer.hazardType === 'inundation' ||
                       layer.hazardType === 'fluvial-depth';
-
-                    // Parse color style (e.g., "default-scalar/seq-YlOrRd" or "default-scalar/seq-Blues")
                     const colorStyle = layer.styleConfig?.styles || '';
-                    const isBlues =
-                      colorStyle.includes('Blues') || (isFlood && !colorStyle.includes('YlOrRd'));
-                    const isYlOrRd = colorStyle.includes('YlOrRd');
+                    const styleLabel = formatWmsStyleName(colorStyle);
+                    const gradient = getWmsLegendGradient(colorStyle, layer.hazardType);
+                    const units = getWmsLegendUnits(layer.hazardType);
 
                     return (
                       <div key={layerIndex} className="bg-black/20 rounded-lg p-2">
@@ -379,11 +432,7 @@ export default function UnifiedMapLegend({
                         <div
                           className="h-4 rounded overflow-hidden mb-2"
                           style={{
-                            background: isBlues
-                              ? 'linear-gradient(to right, #f7fbff, #deebf7, #c6dbef, #9ecae1, #6baed6, #4292c6, #2171b5, #08519c, #08306b)'
-                              : isYlOrRd
-                                ? 'linear-gradient(to right, #ffffcc, #ffeda0, #fed976, #feb24c, #fd8d3c, #fc4e2a, #e31a1c, #bd0026, #800026)'
-                                : 'linear-gradient(to right, #f0f0f0, #d0d0d0, #a0a0a0, #707070, #404040)',
+                            background: gradient,
                           }}
                         />
 
@@ -392,11 +441,13 @@ export default function UnifiedMapLegend({
                           <div className="flex justify-between text-xs text-slate-400 font-mono">
                             <span>
                               {rangeMin}
-                              {isWind ? ' km/h' : ' m'}
+                              {' '}
+                              {units}
                             </span>
                             <span>
                               {rangeMax}
-                              {isWind ? ' km/h' : ' m'}
+                              {' '}
+                              {units}
                             </span>
                           </div>
                         ) : (
@@ -406,7 +457,13 @@ export default function UnifiedMapLegend({
                         )}
 
                         <p className="text-xs text-slate-500 mt-1">
-                          {isWind ? 'Wind speed intensity' : 'Flood inundation depth'}
+                          {isWind ? `Wind speed intensity (${units})` : `Flood inundation depth (${units})`}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Palette: {styleLabel}
+                          {layer.styleConfig?.numColorBands
+                            ? ` · ${layer.styleConfig.numColorBands} bands`
+                            : ''}
                         </p>
                       </div>
                     );

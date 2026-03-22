@@ -17,7 +17,7 @@ import {
 } from '@/types';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { computeFilteredData } from '../utils/filteredData';
-import { aggregateEventsByLevel } from '@/utils/filterUtils';
+import { aggregateEventsByLevel, filterEconomicDamageData } from '@/utils/filterUtils';
 import {
   AlertCircle,
   AlertTriangle,
@@ -151,17 +151,14 @@ export default function BottomTabs({
     });
 
     // Filter sector and asset economic data using the same logic
-    const filteredSector = sectorEconomicData.filter(data => {
-      if (filters.selectedSectors.length > 0 && !filters.selectedSectors.includes(data.sectorId))
-        return false;
-      return true;
-    });
-
-    const filteredAsset = assetEconomicData.filter(data => {
-      if (filters.selectedSectors.length > 0 && !filters.selectedSectors.includes(data.sectorId))
-        return false;
-      return true;
-    });
+    const filteredSector = filterEconomicDamageData(
+      sectorEconomicData as EconomicDamageData[],
+      filters
+    ) as typeof sectorEconomicData;
+    const filteredAsset = filterEconomicDamageData(
+      assetEconomicData as EconomicDamageData[],
+      filters
+    ) as typeof assetEconomicData;
 
     return {
       ...result,
@@ -193,7 +190,11 @@ export default function BottomTabs({
     // Use CSV data for the unfiltered province/national view — it has the best accuracy.
     // When hazard/sector filters are active we fall back to event-based aggregation
     // so the numbers reflect what the user filtered.
-    const canUseCSV = !hasActiveDataFilters && regionalSummary && regionalSummary.length > 0;
+    const canUseCSV =
+      !hasActiveDataFilters &&
+      !hasEventOrDateFilters &&
+      regionalSummary &&
+      regionalSummary.length > 0;
 
     if (canUseCSV) {
       // CSV contains province-level data (Malampa, Penama, Sanma, Shefa, Tafea, Torba)
@@ -246,6 +247,7 @@ export default function BottomTabs({
     return aggregateEventsByLevel(filteredEvents, effectiveLevel, districts, provinces, false);
   }, [
     hasActiveDataFilters,
+    hasEventOrDateFilters,
     regionalSummary,
     selectedRegion,
     filteredEvents,
@@ -584,7 +586,7 @@ export default function BottomTabs({
                 Exposure Data ({exposureDisplayData.length} entries)
                 {hasEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
-                    Event and date filters do not apply to exposure tables.
+                    Event and date filters are applied using the active event metadata.
                   </div>
                 )}
               </div>
@@ -692,8 +694,8 @@ export default function BottomTabs({
                 &ldquo;Economic by Asset&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
-                    Hazard, event, and date filters do not apply to CSV-based economic tables.
-                    Sector filters still apply.
+                    Hazard, event, date, and sector filters are applied to these event-linked
+                    economic records.
                   </div>
                 )}
               </div>
@@ -788,8 +790,8 @@ export default function BottomTabs({
                 &ldquo;Economic by Sector&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
-                    Hazard, event, and date filters do not apply to CSV-based economic tables.
-                    Sector filters still apply.
+                    Hazard, event, date, and sector filters are applied to these event-linked
+                    economic records.
                   </div>
                 )}
               </div>

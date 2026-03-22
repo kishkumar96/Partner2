@@ -952,10 +952,9 @@ export default function DashboardView({
 
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
-    // Show hazards that have WMS layer data available:
-    // - Tropical Cyclone (maps to cyclone + wind WMS layers)
-    // - Flood (maps to flood + inundation WMS layers)
-    return allHazards.filter((h: any) => h.id === 'tropical-cyclone' || h.id === 'flood');
+    // allHazards from COUNTRY_CONFIGS already contains only the hazards with WMS data
+    // (tropical-cyclone and flood) for all countries that have THREDDS layers.
+    return allHazards;
   }, [allHazards]);
 
   const sectors = useMemo(() => {
@@ -1394,8 +1393,9 @@ export default function DashboardView({
         : 'Loading map/data...';
   const isHazardsLoading = isLoadingLayers;
   const hazardsLoadingLabel = 'Loading hazard layers...';
+  const hazardMinZoom = 6;
   const hazardZoomBlocked =
-    (showWindLayer || showInundationLayer) && mapZoom !== null && mapZoom < 5;
+    (showWindLayer || showInundationLayer) && mapZoom !== null && mapZoom < hazardMinZoom;
 
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
@@ -1465,7 +1465,7 @@ export default function DashboardView({
                         svg
                         aria-label={COUNTRIES[selectedCountry].name}
                         title={COUNTRIES[selectedCountry].name}
-                        style={{ width: '1.1rem', height: '1.1rem' }}
+                        className="w-4 h-4"
                       />
                       <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
                     </>
@@ -1486,7 +1486,7 @@ export default function DashboardView({
                     svg
                     aria-label={COUNTRIES[selectedCountry].name}
                     title={COUNTRIES[selectedCountry].name}
-                    style={{ width: '1.1rem', height: '1.1rem' }}
+                    className="w-4 h-4"
                   />
                   <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
                 </div>
@@ -1701,7 +1701,7 @@ export default function DashboardView({
                       isHazardsLoading={isHazardsLoading}
                       hazardsLoadingLabel={hazardsLoadingLabel}
                       hazardZoomBlocked={hazardZoomBlocked}
-                      hazardMinZoom={5}
+                      hazardMinZoom={hazardMinZoom}
                       currentZoom={mapZoom ?? undefined}
                       layerOpacity={layerOpacity}
                       onLayerOpacityChange={setLayerOpacity}

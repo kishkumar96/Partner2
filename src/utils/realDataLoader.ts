@@ -54,7 +54,10 @@ export function getCountryDataFilePath(
   return `${basePath}/${resolvedFile}`;
 }
 
-const NEXT_PUBLIC_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
+const NEXT_PUBLIC_BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'
+    : process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 function withBasePath(path: string): string {
   if (!NEXT_PUBLIC_BASE_PATH) return path;
@@ -349,6 +352,66 @@ export async function loadRegionalSummary(options: DataLoaderOptions & { basePat
     signal: loaderOptions.signal,
   });
   return csvText ? parseCSV(csvText) : null;
+}
+
+function normalizeRegionJoinValue(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function getRegionJoinCandidates(record: Record<string, unknown>): string[] {
+  return [
+    record.Region_ID,
+    record['Region.ID'],
+    record.Region,
+    record['Region.Region'],
+    record.ID,
+  ]
+    .map(normalizeRegionJoinValue)
+    .filter(Boolean);
+}
+
+export function enrichRegionalImpactsWithSummary(
+  geojson: any,
+  regionalSummary: Array<Record<string, unknown>> | null | undefined
+) {
+  if (!geojson?.features || !regionalSummary || regionalSummary.length === 0) {
+    return geojson;
+  }
+
+  const summaryByKey = new Map<string, Record<string, unknown>>();
+  regionalSummary.forEach(row => {
+    getRegionJoinCandidates(row).forEach(key => {
+      if (!summaryByKey.has(key)) {
+        summaryByKey.set(key, row);
+      }
+    });
+  });
+
+  const enrichedFeatures = geojson.features.map((feature: any) => {
+    const props = feature?.properties ?? {};
+    const match = getRegionJoinCandidates(props)
+      .map(key => summaryByKey.get(key))
+      .find(Boolean);
+
+    if (!match) {
+      return feature;
+    }
+
+    return {
+      ...feature,
+      properties: {
+        ...props,
+        ...match,
+      },
+    };
+  });
+
+  return {
+    ...geojson,
+    features: enrichedFeatures,
+  };
 }
 
 /**
@@ -1113,6 +1176,10 @@ export async function loadAllRealData(
     regionalSummaryFromPartner.length > 0 && !hasNonZeroLoss(regionalSummaryData)
       ? regionalSummaryFromPartner
       : regionalSummaryData;
+  const enrichedRegionalImpacts = enrichRegionalImpactsWithSummary(
+    regionalImpacts,
+    (effectiveRegionalSummary || []) as Array<Record<string, unknown>>
+  );
 
   const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
     regionalSummaryFromPartner
@@ -1137,8 +1204,8 @@ export async function loadAllRealData(
   const primaryEventId = cycloneConfig.eventId;
 
   // Convert regional impacts to RegionalImpact objects
-  const regionalImpactsData = regionalImpacts
-    ? convertRegionalImpactsToRegionalImpacts(regionalImpacts, primaryEventId)
+  const regionalImpactsData = enrichedRegionalImpacts
+    ? convertRegionalImpactsToRegionalImpacts(enrichedRegionalImpacts, primaryEventId)
     : [];
 
   // Calculate national aggregated statistics from regional impacts
@@ -1187,7 +1254,11 @@ export async function loadAllRealData(
 
   // Convert CSV data to dashboard format
   // Use regional-summary-by-sector for sector-specific exposure data
-  const exposureData = convertToExposureData(regionalSummaryBySector, effectiveRegionalSummary);
+  const exposureData = convertToExposureData(
+    regionalSummaryBySector,
+    effectiveRegionalSummary,
+    countryCode
+  );
 
   // Separate economic data into sector-level and asset-level
   const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
@@ -1222,7 +1293,7 @@ export async function loadAllRealData(
   return {
     cycloneTrack: effectiveCycloneTrack,
     cycloneForecast: (cycloneForecast as any) || null,
-    regionalImpacts,
+    regionalImpacts: enrichedRegionalImpacts,
     exposureByCluster,
     nationalSummary: (effectiveNationalSummary || []) as any,
     impactByAsset: (effectiveImpactByAsset || []) as any,
@@ -1303,7 +1374,7 @@ export async function loadSupplementaryRealData(
   const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
     ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
     : [];
-  const exposureData = convertToExposureData(regionalSummaryBySector, regionalSummary);
+  const exposureData = convertToExposureData(regionalSummaryBySector, regionalSummary, countryCode);
   const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
   const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
   const assetExposureData = processAssetExposureData(exposureByCluster);
@@ -1356,8 +1427,13 @@ function mapAssetToSector(assetType: string): string {
  * CRITICAL: regional-summary-by-sector.csv has NO population columns.
  * Population is attributed proportionally from regional-summary.csv based on exposed value.
  */
-function convertToExposureData(regionalSummaryBySector: any, regionalSummary?: any): any[] {
+function convertToExposureData(
+  regionalSummaryBySector: any,
+  regionalSummary: any | undefined,
+  countryCode: CountryCode
+): any[] {
   if (!regionalSummaryBySector || !Array.isArray(regionalSummaryBySector)) return [];
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
 
   // Build region -> population lookup from full regional summary
   const regionPopulationMap: Record<
@@ -1394,6 +1470,8 @@ function convertToExposureData(regionalSummaryBySector: any, regionalSummary?: a
       id: `exposure-${index}`,
       hazardId: 'tropical-cyclone',
       sectorId: row.Sector || 'Unknown',
+      eventId: cycloneConfig.eventId,
+      eventDate: cycloneConfig.eventDate,
       region: regionName,
       population: attributedPopulation,
       assets: exposedValue,
@@ -1425,6 +1503,7 @@ function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode
       Number(row.Number_Damaged_Buildings) || Number(row.Number_Exposed_Buildings) || 0,
     year: normalizedYear,
     eventId: cycloneConfig.eventId,
+    eventDate: cycloneConfig.eventDate,
     sector: row.Sector || 'Unknown',
   }));
 }
@@ -1450,6 +1529,7 @@ function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode):
     totalLoss: Number(row.Total_Loss) || 0,
     year: normalizedYear,
     eventId: cycloneConfig.eventId,
+    eventDate: cycloneConfig.eventDate,
   }));
 }
 
@@ -1571,6 +1651,7 @@ export async function loadDamagedBuildings(
 
   // Fallback to file (cached)
   const filePath = getCountryDataFilePath(countryCode, 'damaged-buildings.geojson');
+  console.log(`[Debug] Falling back to file. Loading GeoJSON from: ${filePath}`);
   const { data } = await loadGeoJSON(filePath, {
     cache: true,
     signal,
@@ -1736,7 +1817,8 @@ export async function loadDamagedRoads(
     return null;
   }
   console.log('📁 Falling back to damaged-roads.geojson file');
-  const { data } = await loadGeoJSON(`${basePath}/damaged-roads.geojson`, {
+  const filePath = getCountryDataFilePath(countryCode, 'damaged-roads.geojson');
+  const { data } = await loadGeoJSON(filePath, {
     cache: true,
     signal,
   });
