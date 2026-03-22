@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PARTNER_API_BASE =
-  process.env.PARTNER_API_BASE_URL ?? 'http://opmthredds.gem.spc.int';
-const THREDDS_BASE =
-  process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
+const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://opmthredds.gem.spc.int';
+const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
 
 // WMS responses are immutable for a given request — cache 5 minutes in the browser / CDN.
 const WMS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=60';
@@ -96,8 +94,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
     } catch (err) {
       lastError = err;
       const isTimeout =
-        err instanceof Error &&
-        (err.name === 'TimeoutError' || err.name === 'AbortError');
+        err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
       // Retry transient THREDDS transport errors before returning 5xx.
       if (canRetryWms && attempt < maxAttempts - 1) {
@@ -132,11 +129,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   }
 
   // Add browser/CDN caching for WMS tile requests (GET only, successful responses)
-  if (
-    request.method === 'GET' &&
-    upstream.status === 200 &&
-    isThreddsRequest
-  ) {
+  if (request.method === 'GET' && upstream.status === 200 && isThreddsRequest) {
     responseHeaders.set('Cache-Control', WMS_CACHE_CONTROL);
   }
 

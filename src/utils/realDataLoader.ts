@@ -56,8 +56,8 @@ export function getCountryDataFilePath(
 
 const NEXT_PUBLIC_BASE_PATH =
   process.env.NODE_ENV === 'production'
-    ? process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'
-    : process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
+    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
 function withBasePath(path: string): string {
   if (!NEXT_PUBLIC_BASE_PATH) return path;
@@ -268,10 +268,20 @@ export async function loadRegionalImpactsBySector(
  * Load exposure by cluster data
  */
 export async function loadExposureByCluster(
-  options: DataLoaderOptions & { basePath?: string } = {}
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
 ) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data } = await loadGeoJSON(`${basePath}/exposure-by-cluster.geojson`, {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'exposure-by-cluster.geojson')
+    : `${basePath}/exposure-by-cluster.geojson`;
+  const { data } = await loadGeoJSON(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -308,14 +318,38 @@ export async function loadNationalSummary(
  * Load impact by asset type CSV data
  */
 export async function loadImpactByAssetType(
-  options: DataLoaderOptions & { basePath?: string } = {}
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
 ) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data: csvText } = await loadTextData(`${basePath}/impact-by-asset-type.csv`, {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'impact-by-asset-type.csv')
+    : `${basePath}/impact-by-asset-type.csv`;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[loadImpactByAssetType] Loading from ${path}`);
+  }
+
+  const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
-  return csvText ? parseCSV(csvText) : null;
+
+  const parsed = csvText ? parseCSV(csvText) : null;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(
+      `[loadImpactByAssetType] Loaded ${parsed ? (parsed as any[]).length : 0} rows from ${path}`
+    );
+  }
+
+  return parsed;
 }
 
 /**
@@ -335,19 +369,45 @@ export async function loadImpactBySector(
   const path = countryCode
     ? getCountryDataFilePath(countryCode, 'impact-by-sector.csv')
     : `${basePath}/impact-by-sector.csv`;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[loadImpactBySector] Loading from ${path}`);
+  }
+
   const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
-  return csvText ? parseCSV(csvText) : null;
+
+  const parsed = csvText ? parseCSV(csvText) : null;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(
+      `[loadImpactBySector] Loaded ${parsed ? (parsed as any[]).length : 0} rows from ${path}`
+    );
+  }
+
+  return parsed;
 }
 
 /**
  * Load regional summary CSV data
  */
-export async function loadRegionalSummary(options: DataLoaderOptions & { basePath?: string } = {}) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data: csvText } = await loadTextData(`${basePath}/regional-summary.csv`, {
+export async function loadRegionalSummary(
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
+) {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'regional-summary.csv')
+    : `${basePath}/regional-summary.csv`;
+  const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -361,13 +421,7 @@ function normalizeRegionJoinValue(value: unknown): string {
 }
 
 function getRegionJoinCandidates(record: Record<string, unknown>): string[] {
-  return [
-    record.Region_ID,
-    record['Region.ID'],
-    record.Region,
-    record['Region.Region'],
-    record.ID,
-  ]
+  return [record.Region_ID, record['Region.ID'], record.Region, record['Region.Region'], record.ID]
     .map(normalizeRegionJoinValue)
     .filter(Boolean);
 }
@@ -418,10 +472,20 @@ export function enrichRegionalImpactsWithSummary(
  * Load regional summary by sector CSV data
  */
 export async function loadRegionalSummaryBySector(
-  options: DataLoaderOptions & { basePath?: string } = {}
+  options: DataLoaderOptions & { basePath?: string; countryCode?: CountryCode } = {}
 ) {
-  const { basePath = '/vanuatu', ...loaderOptions } = options;
-  const { data: csvText } = await loadTextData(`${basePath}/regional-summary-by-sector.csv`, {
+  const {
+    basePath = '/vanuatu',
+    countryCode,
+    ...loaderOptions
+  } = options as DataLoaderOptions & {
+    basePath?: string;
+    countryCode?: CountryCode;
+  };
+  const path = countryCode
+    ? getCountryDataFilePath(countryCode, 'regional-summary-by-sector.csv')
+    : `${basePath}/regional-summary-by-sector.csv`;
+  const { data: csvText } = await loadTextData(path, {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -1152,17 +1216,21 @@ export async function loadAllRealData(
     includeSupplementaryData
       ? loadRegionalImpactsBySector({ signal, basePath, countryCode }) // Load sector-specific regional data
       : Promise.resolve(null),
-    includeSupplementaryData ? loadExposureByCluster({ signal, basePath }) : Promise.resolve(null),
+    includeSupplementaryData
+      ? loadExposureByCluster({ signal, basePath, countryCode })
+      : Promise.resolve(null),
     includeSupplementaryData
       ? loadNationalSummary({ signal, basePath, countryCode })
       : Promise.resolve(null),
-    includeSupplementaryData ? loadImpactByAssetType({ signal, basePath }) : Promise.resolve(null),
+    includeSupplementaryData
+      ? loadImpactByAssetType({ signal, basePath, countryCode })
+      : Promise.resolve(null),
     includeSupplementaryData
       ? loadImpactBySector({ signal, basePath, countryCode })
       : Promise.resolve(null),
-    loadRegionalSummary({ signal, basePath }),
+    loadRegionalSummary({ signal, basePath, countryCode }),
     includeSupplementaryData
-      ? loadRegionalSummaryBySector({ signal, basePath })
+      ? loadRegionalSummaryBySector({ signal, basePath, countryCode })
       : Promise.resolve(null),
     includeDamagedAssets ? loadDamagedBuildings({ signal, countryCode }) : Promise.resolve(null),
     includeDamagedAssets ? loadDamagedRoads({ signal, countryCode }) : Promise.resolve(null),
@@ -1340,6 +1408,11 @@ export async function loadSupplementaryRealData(
 > {
   const { signal, countryCode = 'VU', regionalSummary } = options;
   const basePath = DATA_PATH[countryCode];
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[loadSupplementaryRealData] Loading for ${countryCode} from ${basePath}`);
+  }
+
   const partnerData = await loadPartnerApiCountryData(countryCode, signal);
 
   const [
@@ -1351,12 +1424,19 @@ export async function loadSupplementaryRealData(
     regionalSummaryBySector,
   ] = await Promise.all([
     loadRegionalImpactsBySector({ signal, basePath, countryCode }),
-    loadExposureByCluster({ signal, basePath }),
+    loadExposureByCluster({ signal, basePath, countryCode }),
     loadNationalSummary({ signal, basePath, countryCode }),
-    loadImpactByAssetType({ signal, basePath }),
+    loadImpactByAssetType({ signal, basePath, countryCode }),
     loadImpactBySector({ signal, basePath, countryCode }),
-    loadRegionalSummaryBySector({ signal, basePath }),
+    loadRegionalSummaryBySector({ signal, basePath, countryCode }),
   ]);
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[loadSupplementaryRealData] Loaded CSV files:`, {
+      impactByAsset: impactByAsset ? `${(impactByAsset as any[]).length} rows` : 'null',
+      impactBySector: impactBySector ? `${(impactBySector as any[]).length} rows` : 'null',
+    });
+  }
 
   const impactByAssetFromPartner = partnerData.riskImpactByAsset;
   const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
@@ -1378,6 +1458,13 @@ export async function loadSupplementaryRealData(
   const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
   const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
   const assetExposureData = processAssetExposureData(exposureByCluster);
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[loadSupplementaryRealData] Converted data:`, {
+      sectorEconomicData: `${sectorEconomicData.length} rows`,
+      assetEconomicData: `${assetEconomicData.length} rows`,
+    });
+  }
 
   return {
     nationalSummary: (effectiveNationalSummary || []) as any,
@@ -1485,13 +1572,30 @@ function convertToExposureData(
  * Convert impact by sector CSV to EconomicDamageData format (sector-level)
  */
 function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode): any[] {
-  if (!impactBySector || !Array.isArray(impactBySector)) return [];
+  if (!impactBySector || !Array.isArray(impactBySector)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        `[convertSectorEconomicData] Received null/non-array for ${countryCode}:`,
+        impactBySector
+      );
+    }
+    return [];
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(
+      `[convertSectorEconomicData] Converting ${impactBySector.length} rows for ${countryCode}`
+    );
+    if (impactBySector.length > 0) {
+      console.log(`[convertSectorEconomicData] First row:`, impactBySector[0]);
+    }
+  }
 
   const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
   const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
   const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
-  return impactBySector.map((row, index) => ({
+  const converted = impactBySector.map((row, index) => ({
     id: `damage-sector-${index}`,
     hazardId: 'tropical-cyclone',
     sectorId: row.Sector || 'Unknown',
@@ -1506,19 +1610,42 @@ function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode
     eventDate: cycloneConfig.eventDate,
     sector: row.Sector || 'Unknown',
   }));
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[convertSectorEconomicData] Converted ${converted.length} rows`);
+  }
+
+  return converted;
 }
 
 /**
  * Convert impact by asset type CSV to AssetDamageData format (asset-level)
  */
 function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode): any[] {
-  if (!impactByAsset || !Array.isArray(impactByAsset)) return [];
+  if (!impactByAsset || !Array.isArray(impactByAsset)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        `[convertAssetEconomicData] Received null/non-array for ${countryCode}:`,
+        impactByAsset
+      );
+    }
+    return [];
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(
+      `[convertAssetEconomicData] Converting ${impactByAsset.length} rows for ${countryCode}`
+    );
+    if (impactByAsset.length > 0) {
+      console.log(`[convertAssetEconomicData] First row:`, impactByAsset[0]);
+    }
+  }
 
   const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
   const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
   const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
-  return impactByAsset.map((row, index) => ({
+  const converted = impactByAsset.map((row, index) => ({
     id: `damage-asset-${index}`,
     hazardId: 'tropical-cyclone',
     assetType: row.Asset || 'Unknown',
@@ -1531,6 +1658,12 @@ function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode):
     eventId: cycloneConfig.eventId,
     eventDate: cycloneConfig.eventDate,
   }));
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[convertAssetEconomicData] Converted ${converted.length} rows`);
+  }
+
+  return converted;
 }
 
 /**

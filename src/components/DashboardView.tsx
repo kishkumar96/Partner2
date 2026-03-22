@@ -1077,7 +1077,7 @@ export default function DashboardView({
       const realData = await loadAllRealData({
         signal: controller.signal,
         includeDamagedAssets: false,
-        includeSupplementaryData: false,
+        includeSupplementaryData: true,
         countryCode: selectedCountry,
       });
 
@@ -1196,6 +1196,9 @@ export default function DashboardView({
       // Load supplementary analytics data in the background.
       const supplementaryController = new AbortController();
       supplementaryLoadAbortRef.current = supplementaryController;
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DashboardView] Starting supplementary load for ${selectedCountry}`);
+      }
       void loadSupplementaryRealData({
         signal: supplementaryController.signal,
         countryCode: selectedCountry,
@@ -1209,6 +1212,13 @@ export default function DashboardView({
             return;
           }
 
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[DashboardView] Supplementary load complete for ${selectedCountry}`, {
+              sectorEconomicData: supplementary.sectorEconomicData?.length || 0,
+              assetEconomicData: supplementary.assetEconomicData?.length || 0,
+            });
+          }
+
           if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
           if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
           if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
@@ -1220,10 +1230,21 @@ export default function DashboardView({
             setEconomicDamageData(supplementary.economicDamageData);
           }
           if (supplementary.sectorEconomicData) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `[DashboardView] Setting sectorEconomicData: ${supplementary.sectorEconomicData.length} rows`
+              );
+            }
             setSectorEconomicData(supplementary.sectorEconomicData);
           }
-          if (supplementary.assetEconomicData)
+          if (supplementary.assetEconomicData) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `[DashboardView] Setting assetEconomicData: ${supplementary.assetEconomicData.length} rows`
+              );
+            }
             setAssetEconomicData(supplementary.assetEconomicData);
+          }
           if (supplementary.assetExposureData)
             setAssetExposureData(supplementary.assetExposureData);
           if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
@@ -1235,7 +1256,7 @@ export default function DashboardView({
             return;
           }
           if (process.env.NODE_ENV !== 'production') {
-            console.warn('Supplementary data loading failed:', error);
+            console.warn('[DashboardView] Supplementary data loading failed:', error);
           }
         })
         .finally(() => {

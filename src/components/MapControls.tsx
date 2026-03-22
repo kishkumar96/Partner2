@@ -494,7 +494,6 @@ export function MapControls({
                     </div>
                   </>
                 )}
-
               </div>
             )}
           </div>

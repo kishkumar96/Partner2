@@ -204,12 +204,22 @@ describe('FilterPanel Component', () => {
     });
   });
 
-  it('shows date range validation when start date is after end date', () => {
-    renderPanel({ dateRange: { start: '2024-12-31', end: '2024-01-01' } });
+  it('auto-corrects the date range when the end date is set before the start date', () => {
+    const { onFilterChange } = renderPanel({
+      dateRange: { start: '2024-12-31', end: '2024-12-31' },
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /temporal/i }));
+    fireEvent.change(screen.getByLabelText(/to date/i), {
+      target: { value: '2024-01-01' },
+    });
 
-    expect(screen.getByText(/invalid date range/i)).toBeInTheDocument();
+    expect(onFilterChange).toHaveBeenCalledTimes(1);
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dateRange: { start: '2024-01-01', end: '2024-01-01' },
+      })
+    );
   });
 
   it('keeps flood available when events use inundation hazard id', () => {

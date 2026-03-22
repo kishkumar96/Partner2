@@ -46,7 +46,10 @@ function normalizeDateValue(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
-function getEffectiveDateRange(startDate: string, endDate: string): {
+function getEffectiveDateRange(
+  startDate: string,
+  endDate: string
+): {
   effectiveStartDate: string;
   effectiveEndDate: string;
 } {
@@ -763,7 +766,9 @@ export default function RealDataLayers({
 
         for (const country of countriesToLoad) {
           if (!countryMatchesTemporalFilters(country)) {
-            console.log(`Skipping WMS layers for ${country} because current temporal filters exclude its historical event.`);
+            console.log(
+              `Skipping WMS layers for ${country} because current temporal filters exclude its historical event.`
+            );
             // Hide any already-loaded layers for this country so they don't linger.
             getLayersForCountry(country).forEach(layer => {
               const layerId = `wms-layer-${layer.id}`;
@@ -951,11 +956,7 @@ export default function RealDataLayers({
                       'raster-fade-duration',
                       isRawParityLayer ? 0 : 300
                     );
-                    map.setPaintProperty(
-                      layerId,
-                      'raster-resampling',
-                      rasterResampling
-                    );
+                    map.setPaintProperty(layerId, 'raster-resampling', rasterResampling);
                     map.setPaintProperty(layerId, 'raster-contrast', rasterVisual.contrast);
                     map.setPaintProperty(layerId, 'raster-saturation', rasterVisual.saturation);
                     map.setPaintProperty(
@@ -1159,11 +1160,7 @@ export default function RealDataLayers({
       filters?.dateRange.end ?? ''
     );
     const visibleHazardTypes = new Set(
-      getHazardTypesToShow(
-        filters?.selectedHazards ?? [],
-        showWindLayer,
-        showInundationLayer
-      )
+      getHazardTypesToShow(filters?.selectedHazards ?? [], showWindLayer, showInundationLayer)
     );
 
     countriesToSync.forEach(country => {
@@ -1185,7 +1182,7 @@ export default function RealDataLayers({
           const isLayerIncluded =
             visibleHazardTypes.has(layer.hazardType) ||
             (layer.hazardType === 'flood' && visibleHazardTypes.has('inundation'));
-          let targetVisibility: 'visible' | 'none' =
+          const targetVisibility: 'visible' | 'none' =
             excluded || !isLayerIncluded ? 'none' : 'visible';
 
           map.setLayoutProperty(layerId, 'visibility', targetVisibility);

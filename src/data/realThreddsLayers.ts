@@ -207,7 +207,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     layerName: 'Depth', // All layers named "Depth"
     description: 'Wind hazard from TC Gita',
     hazardType: 'wind',
-    bbox: [-172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997],
+    bbox: [
+      -172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997,
+    ],
     styleConfig: {
       wmsVersion: '1.1.1',
       crs: 'EPSG:4326',
@@ -229,7 +231,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     layerName: 'Depth', // WMS layer name is "Depth" (title is "Flood Depth")
     description: 'Flood/inundation hazard from TC Gita (WS_merged.nc)',
     hazardType: 'flood',
-    bbox: [-172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997],
+    bbox: [
+      -172.8092202219999933, -14.0791361030754079, -171.3973987012869031, -13.4344756949999997,
+    ],
     // Allow deeper native tile fetches so the flood raster stays sharp when users
     // zoom into island/coastal detail instead of overzooming z12 tiles.
     maxNativeZoom: 15,
@@ -366,7 +370,9 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
     layerName: 'Depth',
     description: 'Flood/inundation hazard from TC Meena (CK_merged.nc)',
     hazardType: 'flood',
-    bbox: [-163.1997484633778299, -21.9594303145659886, -157.3212295556423328, -17.9868879088506723],
+    bbox: [
+      -163.1997484633778299, -21.9594303145659886, -157.3212295556423328, -17.9868879088506723,
+    ],
     // Verified against THREDDS with small-bbox GetMap requests after fixing the
     // palette name, so we can fetch native tiles deeper into the zoom range.
     maxNativeZoom: 15,

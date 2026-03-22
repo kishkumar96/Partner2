@@ -395,8 +395,8 @@ export default function UnifiedMapLegend({
                     Event-specific THREDDS rasters from Pacific Ocean Portal
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Ranges and units come from layer metadata. Palette bars are visual previews of the
-                    server style, not exact sampled legends.
+                    Ranges and units come from layer metadata. Palette bars are visual previews of
+                    the server style, not exact sampled legends.
                   </p>
                 </div>
 
@@ -440,14 +440,10 @@ export default function UnifiedMapLegend({
                         {hasValidRange ? (
                           <div className="flex justify-between text-xs text-slate-400 font-mono">
                             <span>
-                              {rangeMin}
-                              {' '}
-                              {units}
+                              {rangeMin} {units}
                             </span>
                             <span>
-                              {rangeMax}
-                              {' '}
-                              {units}
+                              {rangeMax} {units}
                             </span>
                           </div>
                         ) : (
@@ -457,7 +453,9 @@ export default function UnifiedMapLegend({
                         )}
 
                         <p className="text-xs text-slate-500 mt-1">
-                          {isWind ? `Wind speed intensity (${units})` : `Flood inundation depth (${units})`}
+                          {isWind
+                            ? `Wind speed intensity (${units})`
+                            : `Flood inundation depth (${units})`}
                         </p>
                         <p className="text-xs text-slate-500">
                           Palette: {styleLabel}

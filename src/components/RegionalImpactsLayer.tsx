@@ -170,7 +170,7 @@ export default function RegionalImpactsLayer({
               regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
               { cache: true }
             ),
-            loadRegionalSummary({ basePath }),
+            loadRegionalSummary({ basePath, countryCode: effectiveCountry }),
           ]);
 
           if (!mountedRef.current) {

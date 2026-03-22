@@ -101,7 +101,10 @@ function matchesEventSelection(
   return false;
 }
 
-function matchesDateRange(eventDate: string | undefined, dateRange: FilterState['dateRange']): boolean {
+function matchesDateRange(
+  eventDate: string | undefined,
+  dateRange: FilterState['dateRange']
+): boolean {
   const { start, end } = normalizeFilterDateRange(dateRange);
   if (!start && !end) return true;
 

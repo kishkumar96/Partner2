@@ -224,9 +224,7 @@ export default function SearchableEventSelector({
                     <div className="font-bold text-sm text-slate-200 group-hover:text-white truncate transition-colors">
                       {event.name}
                     </div>
-                    <div className="text-xs text-slate-400 mt-1 font-medium">
-                      {metadata}
-                    </div>
+                    <div className="text-xs text-slate-400 mt-1 font-medium">{metadata}</div>
                   </div>
                   <div
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold flex-shrink-0 border transition-all duration-200 group-hover:scale-105 ${
