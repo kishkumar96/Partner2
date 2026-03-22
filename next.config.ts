@@ -1,8 +1,17 @@
 import type { NextConfig } from "next";
 
+const dataVersion =
+  process.env.NEXT_PUBLIC_DATA_VERSION ??
+  process.env.NEXT_PUBLIC_APP_VERSION ??
+  `${Date.now()}`;
+
 const nextConfig: NextConfig = {
   // Base path for subdirectory deployment (disabled in dev for convenience)
   basePath: process.env.NODE_ENV === 'production' ? '/partner2' : '',
+
+  env: {
+    NEXT_PUBLIC_DATA_VERSION: dataVersion,
+  },
   
   // Production optimizations
   reactStrictMode: true,

@@ -34,6 +34,10 @@ export interface RealWMSLayer {
 const DEFAULT_STYLE = 'default-scalar/default';
 const DEFAULT_WMS_VERSION: NonNullable<WMSStyleConfig['wmsVersion']> = '1.3.0';
 const DEFAULT_CRS: NonNullable<WMSStyleConfig['crs']> = 'EPSG:3857';
+const NEXT_PUBLIC_BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
+    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
 const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
   VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
@@ -399,7 +403,19 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
  */
 /** Base URL for WMS requests — routes through the same-origin proxy in the browser */
 function wmsBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? '/api/partner-proxy/thredds/wms';
+  const configuredUrl = process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? '/api/partner-proxy/thredds/wms';
+
+  // In production the app is served under /partner2, so relative proxy URLs must
+  // include the base path. Dev keeps an empty base path, so this stays unchanged.
+  if (
+    configuredUrl.startsWith('/') &&
+    NEXT_PUBLIC_BASE_PATH &&
+    !configuredUrl.startsWith(NEXT_PUBLIC_BASE_PATH)
+  ) {
+    return `${NEXT_PUBLIC_BASE_PATH}${configuredUrl}`;
+  }
+
+  return configuredUrl;
 }
 
 export function buildRealWMSUrl(

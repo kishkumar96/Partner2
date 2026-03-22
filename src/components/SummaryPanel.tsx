@@ -176,6 +176,16 @@ export default function SummaryPanel({
   regionalSummaryBySector = [],
   impactBySector = [],
 }: SummaryPanelProps) {
+  const regionMatchesSelection = useCallback(
+    (row: any, selection: string | null) => {
+      if (!selection) return true;
+      return [row?.Region_ID, row?.['Region.ID'], row?.Region]
+        .filter(Boolean)
+        .map((value: unknown) => String(value).trim())
+        .includes(selection);
+    },
+    []
+  );
   const [activeTab, setActiveTab] = useState<
     'summary' | 'exposure' | 'damage' | 'analytics' | 'cyclone'
   >('summary');
@@ -276,8 +286,8 @@ export default function SummaryPanel({
   // Filter regional data by selected region
   const regionFilteredData = useMemo(() => {
     if (!selectedRegion) return derivedRegionalSummary;
-    return derivedRegionalSummary.filter(row => row.Region === selectedRegion);
-  }, [selectedRegion, derivedRegionalSummary]);
+    return derivedRegionalSummary.filter(row => regionMatchesSelection(row, selectedRegion));
+  }, [selectedRegion, derivedRegionalSummary, regionMatchesSelection]);
 
   // Calculate CSV-based totals (for when CSV data is available)
   const csvTotals = useMemo(() => {

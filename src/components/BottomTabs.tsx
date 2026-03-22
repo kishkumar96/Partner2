@@ -81,6 +81,13 @@ export default function BottomTabs({
   onRequestDamageData,
 }: BottomTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('events');
+  const regionMatchesSelection = (row: any, selection: string | null) => {
+    if (!selection) return true;
+    return [row?.Region_ID, row?.['Region.ID'], row?.Region]
+      .filter(Boolean)
+      .map((value: unknown) => String(value).trim())
+      .includes(selection);
+  };
 
   useEffect(() => {
     if (activeTab === 'roads' && !damagedRoads) {
@@ -199,12 +206,12 @@ export default function BottomTabs({
     if (canUseCSV) {
       // CSV contains province-level data (Malampa, Penama, Sanma, Shefa, Tafea, Torba)
       const isDistrictSelected =
-        selectedRegion && !regionalSummary.some((row: any) => row.Region === selectedRegion);
+        selectedRegion && !regionalSummary.some((row: any) => regionMatchesSelection(row, selectedRegion));
 
       // Only filter if selectedRegion matches a province name
       const filteredData =
         selectedRegion && !isDistrictSelected
-          ? regionalSummary.filter((row: any) => row.Region === selectedRegion)
+          ? regionalSummary.filter((row: any) => regionMatchesSelection(row, selectedRegion))
           : regionalSummary;
 
       const provinceRows = filteredData

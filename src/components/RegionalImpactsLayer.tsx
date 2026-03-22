@@ -38,6 +38,18 @@ const REGIONAL_FILL_LAYER_ID = 'regional-impacts-fill';
 const REGIONAL_LINE_LAYER_ID = 'regional-impacts-line';
 const REGIONAL_EXTRUSION_LAYER_ID = 'regional-impacts-extrusion';
 
+function getFeatureRegionName(props: Record<string, unknown>): string {
+  const value = props['Region.Region'] ?? props.Region ?? props.region_name;
+  return typeof value === 'string' && value.trim() ? value.trim() : 'Unknown Region';
+}
+
+function getFeatureRegionId(props: Record<string, unknown>): string {
+  const value = props['Region.ID'] ?? props.Region_ID ?? props['Region.Region'] ?? props.Region;
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value).trim()
+    : 'unknown-region';
+}
+
 function removeRegionalLayersAndSource(map: MapLibreMap) {
   if (map.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) {
     map.removeLayer(REGIONAL_EXTRUSION_LAYER_ID);
@@ -333,7 +345,13 @@ export default function RegionalImpactsLayer({
                   'line-width': createRegionalLineWidth(selectedRegion) as any,
                   'line-opacity': [
                     'case',
-                    ['==', ['get', 'Region.Region'], selectedRegion || ''],
+                    [
+                      'any',
+                      ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegion || ''],
+                      ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegion || ''],
+                      ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
+                      ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
+                    ],
                     1.0, // Fully visible selected
                     LAYER_OPACITY.regional.outline, // Crisp visible boundaries
                   ],
@@ -353,12 +371,13 @@ export default function RegionalImpactsLayer({
 
             const feature = e.features[0];
             const props = feature.properties;
-            const regionName = props['Region.Region'] || 'Unknown Region';
+            const regionName = getFeatureRegionName(props);
+            const regionId = getFeatureRegionId(props);
 
             // Update selected region (for filtering charts/analytics)
             if (onRegionSelect) {
-              const isAlreadySelected = selectedRegion === regionName;
-              onRegionSelect(isAlreadySelected ? null : regionName);
+              const isAlreadySelected = selectedRegion === regionId || selectedRegion === regionName;
+              onRegionSelect(isAlreadySelected ? null : regionId);
             }
 
             // Get sector-specific data for this region

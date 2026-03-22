@@ -1094,7 +1094,7 @@ export default function MapView({
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 
       {showOverlays && wmsWarning && (
-        <div className="absolute top-4 right-4 z-[25] max-w-sm rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
+        <div className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)] rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
           {wmsWarning}
         </div>
       )}

@@ -51,7 +51,17 @@ export function getCountryDataFilePath(
 ): string {
   const basePath = DATA_PATH[countryCode];
   const resolvedFile = COUNTRY_DATA_FILE_OVERRIDES[countryCode]?.[logicalFile] ?? logicalFile;
-  return `${basePath}/${resolvedFile}`;
+  return appendDataVersion(`${basePath}/${resolvedFile}`);
+}
+
+function appendDataVersion(path: string): string {
+  const version = process.env.NEXT_PUBLIC_DATA_VERSION ?? process.env.NEXT_PUBLIC_APP_VERSION;
+  if (!version) {
+    return path;
+  }
+
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}v=${encodeURIComponent(version)}`;
 }
 
 const NEXT_PUBLIC_BASE_PATH =
@@ -147,7 +157,7 @@ export async function loadCycloneTrackData(
   options: DataLoaderOptions & { trackFile?: string } = {}
 ) {
   const { trackFile = '/vanuatu/cyclone-track.geojson', ...loaderOptions } = options;
-  const { data } = await loadGeoJSON(trackFile, {
+  const { data } = await loadGeoJSON(appendDataVersion(trackFile), {
     cache: true,
     signal: loaderOptions.signal,
   });
@@ -568,9 +578,9 @@ export function convertRegionalImpactsToRegionalImpacts(
     })
     .map((feature: any, index: number) => {
       const props = feature.properties;
-      const regionName = props['Region.Region'] || `Region ${index + 1}`;
+      const regionName = props['Region.Region'] || props.Region || `Region ${index + 1}`;
       const centroid = calculateCentroid(feature.geometry);
-      const regionId = props['Region.ID'] || `region-${index}`;
+      const regionId = props['Region.ID'] || props.Region_ID || props.Region || `region-${index}`;
 
       const maxWindGusts = Number(props.Max_Wind_Gusts) || 0;
       const severity: 'low' | 'medium' | 'high' | 'critical' =
@@ -649,9 +659,14 @@ export function expandEventsToRegionalEntries(events: Event[]): Event[] {
  * Convert regional impacts GeoJSON to event data for the dashboard
  * @deprecated Use convertRegionalImpactsToRegionalImpacts and create single event instead
  */
-export function convertRegionalImpactsToEvents(geojson: any): Event[] {
+export function convertRegionalImpactsToEvents(
+  geojson: any,
+  countryCode: CountryCode = 'VU'
+): Event[] {
   if (!geojson || !geojson.features) return [];
 
+  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
+  const cycloneLabel = cycloneConfig.eventName.replace(/^Tropical\s+/i, '');
   const events: Event[] = geojson.features
     .filter((feature: any) => {
       // Filter out features with invalid or missing geometry
@@ -663,18 +678,19 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
     })
     .map((feature: any, index: number) => {
       const props = feature.properties;
-      const regionName = props['Region.Region'] || `Region ${index + 1}`;
+      const regionName = props['Region.Region'] || props.Region || `Region ${index + 1}`;
       const centroid = calculateCentroid(feature.geometry);
-      const regionId = props['Region.ID'] || `region-${index}`;
+      const regionId = props['Region.ID'] || props.Region_ID || props.Region || `region-${index}`;
 
       return {
         id: regionId,
-        name: `TC Lola Impact - ${regionName}`,
-        date: '2024-01-30', // TC Lola event date
+        name: `${cycloneLabel} Impact - ${regionName}`,
+        date: cycloneConfig.eventDate,
         hazardId: 'tropical-cyclone',
         sectorId: 'Infrastructure', // Primary sector for regional aggregation
         districtId: regionId,
-        provinceId: getProvinceIdFromDistrictId(regionId),
+        // regionId from these files is a region/admin1 identifier, not a Vanuatu admin2 district ID.
+        provinceId: regionId,
         location: {
           lat: centroid.lat,
           lng: centroid.lng,
@@ -692,7 +708,7 @@ export function convertRegionalImpactsToEvents(geojson: any): Event[] {
         totalAffectedPopulation: Number(props.Population_Exposed_To_Any_Hazard) || 0,
         totalEconomicDamage: Number(props.Total_Loss) || 0,
         affectedRegions: 1,
-        countryCode: 'VU', // All current data is for Vanuatu
+        countryCode,
       } as Event;
     });
 

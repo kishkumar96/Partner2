@@ -72,7 +72,7 @@ kubectl logs -f deployment/climate-dashboard -n production
 
 ### Service (`service.yaml`)
 - **Type**: ClusterIP
-- **Port**: 80 → 3000
+- **Port**: 80 → 3112
 - **Headless service**: For direct pod access
 
 ### Ingress (`ingress.yaml`)
@@ -80,6 +80,7 @@ kubectl logs -f deployment/climate-dashboard -n production
 - **TLS**: Let's Encrypt certificates
 - **SSL**: Forced redirect
 - **Rate limiting**: 100 req/s
+- **Host/Path**: `https://opmthredds.gem.spc.int/partner2`
 
 ### ConfigMap (`configmap.yaml`)
 - Environment variables
@@ -118,7 +119,7 @@ kubectl describe hpa climate-dashboard-hpa -n production
 ```bash
 # Update image
 kubectl set image deployment/climate-dashboard \
-  climate-dashboard=climate-dashboard:v2 \
+  climate-dashboard=ghcr.io/kishkumar96/partner2-dashboard:<tag> \
   -n production
 
 # Rollout status
@@ -141,7 +142,7 @@ kubectl logs -f <pod-name> -n production
 kubectl exec -it <pod-name> -n production -- /bin/sh
 
 # Port forward
-kubectl port-forward deployment/climate-dashboard 3000:3000 -n production
+kubectl port-forward deployment/climate-dashboard 3112:3112 -n production
 
 # Events
 kubectl get events -n production --sort-by='.lastTimestamp'
@@ -162,7 +163,7 @@ kubectl top pods -n production
 kubectl get pods -n production -w
 
 # Check health
-kubectl exec -it <pod-name> -n production -- curl localhost:3000/api/health
+kubectl exec -it <pod-name> -n production -- curl localhost:3112/partner2/api/health
 ```
 
 ## Blue-Green Deployment
@@ -172,7 +173,7 @@ kubectl exec -it <pod-name> -n production -- curl localhost:3000/api/health
 kubectl apply -f k8s/deployment-green.yaml
 
 # Test green version
-kubectl port-forward deployment/climate-dashboard-green 3001:3000 -n production
+kubectl port-forward deployment/climate-dashboard-green 3001:3112 -n production
 
 # Switch traffic
 kubectl patch service climate-dashboard -n production \

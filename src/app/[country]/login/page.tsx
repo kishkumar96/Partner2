@@ -28,7 +28,7 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
   const countryCode = SLUG_TO_CODE[country?.toLowerCase() ?? ''];
   const countryName = countryCode ? COUNTRIES[countryCode]?.name : country;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     if (!password.trim()) return;
     setLoading(true);

@@ -21,6 +21,10 @@ export interface PartnerCountryIdentity {
 }
 
 const DEFAULT_PARTNER_API_BASE = 'http://opmthredds.gem.spc.int';
+const NEXT_PUBLIC_BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
+    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
 // Human-readable country aliases used to resolve Samoa/Tonga country records.
 const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
@@ -34,8 +38,22 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function withBasePath(path: string): string {
+  if (!NEXT_PUBLIC_BASE_PATH) return path;
+  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+}
+
+function getDefaultPartnerApiBase(): string {
+  // Browser-side requests must stay same-origin and go through the proxy route.
+  if (typeof window !== 'undefined') {
+    return withBasePath('/api/partner-proxy');
+  }
+
+  return process.env.PARTNER_API_BASE_URL ?? DEFAULT_PARTNER_API_BASE;
+}
+
 export function buildPartnerApiEndpoints(
-  baseUrl: string = DEFAULT_PARTNER_API_BASE
+  baseUrl: string = getDefaultPartnerApiBase()
 ): PartnerApiEndpoints {
   const base = `${trimTrailingSlash(baseUrl)}/partner_api`;
   const v1 = `${base}/v1`;

@@ -8,6 +8,7 @@ metadata:
     version: v1
 spec:
   replicas: 3
+  revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -24,17 +25,20 @@ spec:
     spec:
       containers:
       - name: climate-dashboard
-        image: climate-dashboard:latest
+        image: ghcr.io/kishkumar96/partner2-dashboard:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 3000
+        - containerPort: 3112
           name: http
           protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: climate-dashboard-config
         env:
-        - name: NODE_ENV
-          value: "production"
-        - name: NEXT_PUBLIC_ENVIRONMENT
-          value: "production"
+        - name: PORT
+          value: "3112"
+        - name: HOSTNAME
+          value: "0.0.0.0"
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
@@ -58,18 +62,23 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
+        startupProbe:
+          tcpSocket:
+            port: 3112
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
         livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 3000
+          tcpSocket:
+            port: 3112
           initialDelaySeconds: 30
           periodSeconds: 10
-          timeoutSeconds: 5
+          timeoutSeconds: 3
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /api/health
-            port: 3000
+            path: /partner2/api/health
+            port: 3112
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3

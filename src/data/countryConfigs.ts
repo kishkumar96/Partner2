@@ -45,13 +45,16 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
   WS: {
     ...emptyConfig('WS'),
     hazards: coreHazardsForWmsCountries,
+    dataAvailable: true,
   },
   TO: {
     ...emptyConfig('TO'),
     hazards: coreHazardsForWmsCountries,
+    dataAvailable: true,
   },
   CK: {
     ...emptyConfig('CK'),
     hazards: coreHazardsForWmsCountries,
+    dataAvailable: true,
   },
 };

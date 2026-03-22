@@ -28,6 +28,11 @@ import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { normalizeHazardIds } from '@/utils/hazardIds';
 
+function haveSameItems(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
 // Loading component for panels
 const PanelLoader = () => (
   <div className="flex items-center justify-center p-8">
@@ -200,6 +205,51 @@ export default function DashboardView({
   const [regionalSummary, setRegionalSummary] = useState<any[]>([]);
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
+  const derivedRegions = useMemo(() => {
+    if (regionalSummary.length === 0) {
+      return [];
+    }
+
+    const regionMap = new Map<string, { id: string; name: string }>();
+    regionalSummary.forEach((row: any) => {
+      const rawId = row?.Region_ID ?? row?.['Region.ID'] ?? row?.Region;
+      const rawName = row?.Region ?? row?.region_name ?? rawId;
+      if (!rawId || !rawName) {
+        return;
+      }
+
+      const id = String(rawId).trim();
+      const name = String(rawName).trim();
+      if (!id || !name || regionMap.has(id)) {
+        return;
+      }
+
+      regionMap.set(id, { id, name });
+    });
+
+    return Array.from(regionMap.values());
+  }, [regionalSummary]);
+  const resolvedDistricts = useMemo(
+    () =>
+      districts.length > 0
+        ? districts
+        : derivedRegions.map(region => ({
+            id: region.id,
+            name: region.name,
+            provinceId: region.id,
+          })),
+    [derivedRegions, districts]
+  );
+  const resolvedProvinces = useMemo(
+    () =>
+      provinces.length > 0
+        ? provinces
+        : derivedRegions.map(region => ({
+            id: region.id,
+            name: region.name,
+          })),
+    [derivedRegions, provinces]
+  );
   const activeCycloneName =
     events[0]?.name || COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventName || 'Tropical Cyclone';
   const storyBeats = useMemo(
@@ -944,11 +994,29 @@ export default function DashboardView({
 
     // Filter by region/district if one is selected
     if (selectedRegion) {
-      filtered = filtered.filter(e => e.regionalImpacts?.[0]?.regionId === selectedRegion);
+      filtered = filtered.filter(e => {
+        const regionIds = [
+          e.districtId,
+          e.provinceId,
+          e.regionalImpacts?.[0]?.regionId,
+          e.regionalImpacts?.[0]?.regionName,
+        ]
+          .filter(Boolean)
+          .map(value => String(value).trim());
+        return regionIds.includes(selectedRegion);
+      });
     }
 
     return filtered;
   }, [expandedEvents, selectedCountry, selectedRegion]);
+
+  const countryScopedEventIds = useMemo(
+    () =>
+      expandedEvents
+        .filter(event => event.countryCode === selectedCountry)
+        .map(event => event.id),
+    [expandedEvents, selectedCountry]
+  );
 
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
@@ -962,6 +1030,50 @@ export default function DashboardView({
     return allSectors;
   }, [allSectors]);
 
+  useEffect(() => {
+    const validHazardIds = new Set(hazards.map(hazard => hazard.id));
+    const validSectorIds = new Set(sectors.map(sector => sector.id));
+    const validEventIds = new Set(countryScopedEventIds);
+    const validRegionIds = new Set([
+      ...resolvedDistricts.map((district: any) => district.id),
+      ...resolvedDistricts.map((district: any) => district.name),
+      ...resolvedProvinces.map((province: any) => province.id),
+      ...resolvedProvinces.map((province: any) => province.name),
+    ]);
+
+    setFilters(prevFilters => {
+      const nextHazards = prevFilters.selectedHazards.filter(hazardId =>
+        validHazardIds.has(hazardId)
+      );
+      const nextSectors = prevFilters.selectedSectors.filter(sectorId =>
+        validSectorIds.has(sectorId)
+      );
+      const nextEvents = prevFilters.selectedEvents.filter(eventId => validEventIds.has(eventId));
+
+      if (
+        haveSameItems(nextHazards, prevFilters.selectedHazards) &&
+        haveSameItems(nextSectors, prevFilters.selectedSectors) &&
+        haveSameItems(nextEvents, prevFilters.selectedEvents)
+      ) {
+        return prevFilters;
+      }
+
+      return {
+        ...prevFilters,
+        selectedHazards: nextHazards,
+        selectedSectors: nextSectors,
+        selectedEvents: nextEvents,
+      };
+    });
+
+    setSelectedRegion(prevRegion => {
+      if (!prevRegion || validRegionIds.has(prevRegion)) {
+        return prevRegion;
+      }
+      return null;
+    });
+  }, [hazards, sectors, countryScopedEventIds, resolvedDistricts, resolvedProvinces]);
+
   // Keep exports aligned with the active filter pipeline used in analytics panels.
   const {
     filteredEvents: exportEvents,
@@ -974,10 +1086,10 @@ export default function DashboardView({
         exposureData,
         economicDamageData,
         filters,
-        districts,
-        provinces,
+        districts: resolvedDistricts,
+        provinces: resolvedProvinces,
       }),
-    [countryEvents, exposureData, economicDamageData, filters, districts, provinces]
+    [countryEvents, exposureData, economicDamageData, filters, resolvedDistricts, resolvedProvinces]
   );
 
   const exportExposureData = useMemo(() => {
@@ -985,8 +1097,12 @@ export default function DashboardView({
       return baseExportExposureData;
     }
 
-    const selectedDistrict = districts.find((district: any) => district.id === selectedRegion);
-    const selectedProvince = provinces.find((province: any) => province.id === selectedRegion);
+    const selectedDistrict = resolvedDistricts.find(
+      (district: any) => district.id === selectedRegion || district.name === selectedRegion
+    );
+    const selectedProvince = resolvedProvinces.find(
+      (province: any) => province.id === selectedRegion || province.name === selectedRegion
+    );
     const selectedRegionName = selectedDistrict?.name || selectedProvince?.name || selectedRegion;
     const normalizedSelectedIds = new Set([
       selectedRegion.toLowerCase(),
@@ -1001,7 +1117,7 @@ export default function DashboardView({
       const normalizedRegion = String(rawRegion).trim().toLowerCase();
       return normalizedSelectedIds.has(normalizedRegion);
     });
-  }, [baseExportExposureData, selectedRegion, districts, provinces]);
+  }, [baseExportExposureData, selectedRegion, resolvedDistricts, resolvedProvinces]);
 
   const isExportDisabled = useMemo(() => {
     const hasFilteredEvents = exportEvents.some(e => (e.totalEconomicDamage || 0) > 0);
@@ -1323,7 +1439,9 @@ export default function DashboardView({
         clearTimeout(toastTimeoutRef.current);
       }
       const regionName =
-        districts.find((d: any) => d.id === selectedRegion)?.name || selectedRegion;
+        resolvedDistricts.find(
+          (district: any) => district.id === selectedRegion || district.name === selectedRegion
+        )?.name || selectedRegion;
       setToastMessage(`Region selected: ${regionName}`);
       setToastType('info');
       setToastAction({
@@ -1335,7 +1453,7 @@ export default function DashboardView({
       });
       setShowToast(true);
     }
-  }, [selectedRegion]);
+  }, [selectedRegion, resolvedDistricts]);
 
   useEffect(() => {
     if (!damageLoadError) return;
@@ -1664,7 +1782,7 @@ export default function DashboardView({
             hazards={hazards}
             sectors={sectors}
             events={events}
-            districts={districts}
+            districts={resolvedDistricts}
             filters={filters}
             onFilterChange={setFilters}
             exposureData={exposureData}
@@ -1915,8 +2033,8 @@ export default function DashboardView({
             sectorEconomicData={sectorEconomicData}
             assetEconomicData={assetEconomicData}
             filters={filters}
-            districts={districts}
-            provinces={provinces}
+            districts={resolvedDistricts}
+            provinces={resolvedProvinces}
             selectedRegion={selectedRegion}
             impactByAssetType={impactByAssetType}
             impactBySector={impactBySector || []}
@@ -1956,8 +2074,8 @@ export default function DashboardView({
           <SummaryPanel
             events={countryEvents}
             filters={filters}
-            districts={districts}
-            provinces={provinces}
+            districts={resolvedDistricts}
+            provinces={resolvedProvinces}
             sectors={sectors}
             selectedCountry={selectedCountry}
             selectedRegion={selectedRegion}

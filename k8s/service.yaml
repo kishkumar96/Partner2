@@ -9,7 +9,7 @@ spec:
   type: ClusterIP
   ports:
   - port: 80
-    targetPort: 3000
+    targetPort: 3112
     protocol: TCP
     name: http
   selector:
@@ -27,8 +27,8 @@ spec:
   type: ClusterIP
   clusterIP: None
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 3112
+    targetPort: 3112
     protocol: TCP
     name: http
   selector:

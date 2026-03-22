@@ -212,7 +212,13 @@ export function createRegionalFillOpacity(
 
   return [
     'case',
-    ['==', ['get', 'Region.Region'], selectedRegion || ''],
+    [
+      'any',
+      ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
+    ],
     selectedOpacity,
     baseOpacity,
   ];
@@ -226,7 +232,13 @@ export function createRegionalFillOpacity(
 export function createRegionalLineColor(selectedRegion: string | null): any {
   return [
     'case',
-    ['==', ['get', 'Region.Region'], selectedRegion || ''],
+    [
+      'any',
+      ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
+    ],
     '#fbbf24', // Gold for selected
     '#ffffff', // White for default
   ];
@@ -240,7 +252,13 @@ export function createRegionalLineColor(selectedRegion: string | null): any {
 export function createRegionalLineWidth(selectedRegion: string | null): any {
   return [
     'case',
-    ['==', ['get', 'Region.Region'], selectedRegion || ''],
+    [
+      'any',
+      ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
+      ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
+    ],
     3.5, // Prominent for selected
     2.0, // Default width
   ];

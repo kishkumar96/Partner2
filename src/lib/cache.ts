@@ -7,6 +7,11 @@ import { createClient, RedisClientType } from 'redis';
 
 // Redis connection URL from environment
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const AUTH_REQUIRE_REDIS = process.env.AUTH_REQUIRE_REDIS?.trim().toLowerCase();
+
+function isRedisExplicitlyDisabled(): boolean {
+  return AUTH_REQUIRE_REDIS === 'false' || AUTH_REQUIRE_REDIS === '0';
+}
 
 // Cache TTL (Time To Live) settings
 export const CacheTTL = {
@@ -44,6 +49,9 @@ class RedisCache {
    */
   async connect(): Promise<void> {
     if (this.connected) return;
+    if (isRedisExplicitlyDisabled()) {
+      return;
+    }
 
     try {
       this.client = createClient({
@@ -386,7 +394,7 @@ class RedisCache {
 const cache = new RedisCache();
 
 // Initialize connection on module load (in Node.js environment only)
-if (typeof window === 'undefined') {
+if (typeof window === 'undefined' && !isRedisExplicitlyDisabled()) {
   cache.connect().catch(console.error);
 }
 

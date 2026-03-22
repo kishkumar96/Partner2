@@ -163,7 +163,7 @@ export function MapControls({
   };
 
   return (
-    <div className="absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-1rem)] flex flex-col gap-2">
+    <div className="absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-1rem)] flex flex-col gap-2 overflow-x-hidden">
       {/* Loading Indicators */}
       {isMapDataLoading && (
         <div
@@ -227,7 +227,7 @@ export function MapControls({
         <>
           <div
             id="map-controls-panel"
-            className="space-y-2 min-h-0 overflow-y-auto overscroll-contain pr-1 pb-1"
+            className="space-y-2 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 pb-1"
           >
             {/* Core map controls grouped by intent */}
             {(hasMapStyleControls ||
@@ -584,7 +584,7 @@ export function MapControls({
                       focusBasemapIndex(BASEMAPS.length - 1);
                     }
                   }}
-                  className="absolute bottom-full left-0 mb-2 glass-panel rounded-lg p-3 w-[min(90vw,320px)] max-w-[320px] z-[16] shadow-2xl"
+                  className="absolute bottom-full left-0 mb-2 glass-panel rounded-lg p-3 w-[min(calc(100vw-3rem),320px)] max-w-[320px] z-[16] shadow-2xl"
                 >
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
                     Basemap

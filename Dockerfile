@@ -23,6 +23,8 @@ COPY src ./src
 # Produce a standalone Next.js bundle (see next.config.ts output:'standalone')
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# Disable auth requirement during build (auth features are optional)
+ENV AUTH_REQUIRE_REDIS=false
 RUN npm run build
 
 # ── Stage 3: production runner ───────────────────────────────────────────────

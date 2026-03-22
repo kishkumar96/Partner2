@@ -6,6 +6,7 @@ metadata:
 data:
   NEXT_PUBLIC_APP_NAME: "Climate Risk Dashboard"
   NEXT_PUBLIC_APP_VERSION: "1.0.0"
+  NEXT_PUBLIC_APP_URL: "https://opmthredds.gem.spc.int/partner2"
   NODE_ENV: "production"
   NEXT_PUBLIC_ENVIRONMENT: "production"
   NEXT_PUBLIC_ENABLE_ANALYTICS: "true"
