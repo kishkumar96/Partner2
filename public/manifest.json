@@ -1,7 +1,7 @@
 {
-  "name": "Climate Risk Dashboard",
-  "short_name": "Climate Risk",
-  "description": "Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis",
+  "name": "Pacific Disaster Platform",
+  "short_name": "Pacific Disaster",
+  "description": "Operational WebGIS platform for hazard, exposure, and impact assessment across Pacific countries",
   "start_url": "/partner2/",
   "display": "standalone",
   "background_color": "#0f172a",

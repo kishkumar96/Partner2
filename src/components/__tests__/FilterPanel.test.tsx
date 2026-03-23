@@ -95,6 +95,7 @@ function renderPanel(
       sectors={sampleSectors}
       events={options?.events ?? sampleEvents}
       districts={[]}
+      countryCode="VU"
       filters={filters}
       onFilterChange={onFilterChange}
       exposureData={sampleExposureData}

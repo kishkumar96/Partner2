@@ -156,7 +156,7 @@ export const LAYER_OPACITY = {
     fill: 0.12, // Ultra-subtle fill (reduced from 0.35)
     fillHover: 0.25, // Hover highlight (reduced from 0.5)
     fillSelected: 0.4, // Selected emphasis (reduced from 0.65)
-    outline: 0.7, // Visible boundaries (reduced from 0.8)
+    outline: 0.18, // District separators should stay subordinate to the fill
     outlineHover: 0.95, // Clear hover feedback (reduced from 1.0)
   },
   regional: {
@@ -164,7 +164,7 @@ export const LAYER_OPACITY = {
     fillSelected: 0.85, // Selected region in loss mode
     fillWind: 0.5, // Base fill for wind mode - INCREASED for better visibility
     fillWindSelected: 0.7, // Selected region in wind mode
-    outline: 1.0, // Clear boundaries - FULL opacity for maximum visibility
+    outline: 0.16, // Default regional boundaries should be barely perceptible
   },
   heatmap: {
     base: 0.4, // Reduced for better visual hierarchy
@@ -239,8 +239,8 @@ export function createRegionalLineColor(selectedRegion: string | null): any {
       ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
       ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
     ],
-    '#fbbf24', // Gold for selected
-    '#ffffff', // White for default
+    'rgba(241, 245, 249, 0.85)', // Soft light edge for selected
+    'rgba(100, 116, 139, 0.22)', // Neutral slate divider for default
   ];
 }
 
@@ -259,8 +259,8 @@ export function createRegionalLineWidth(selectedRegion: string | null): any {
       ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
       ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
     ],
-    3.5, // Prominent for selected
-    2.0, // Default width
+    1.2, // Enough to signal selection without becoming the main signal
+    0.45, // Default width should be structural only
   ];
 }
 

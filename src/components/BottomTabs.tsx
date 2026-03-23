@@ -15,6 +15,11 @@ import {
   District,
   Province,
 } from '@/types';
+import { CountryCode } from '@/types/thredds';
+import {
+  COUNTRY_CONFIGS,
+  getAggregationLabel as getCountryAggregationLabel,
+} from '@/data/countryConfigs';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { computeFilteredData } from '../utils/filteredData';
 import { aggregateEventsByLevel, filterEconomicDamageData } from '@/utils/filterUtils';
@@ -47,6 +52,7 @@ interface BottomTabsProps {
   damagedRoads?: GeoJSON.FeatureCollection | null;
   onZoomToAsset?: (coordinates: [number, number], zoom?: number) => void;
   onRequestDamageData?: (type: 'buildings' | 'roads') => void;
+  countryCode: CountryCode;
 }
 
 type TabType =
@@ -79,8 +85,10 @@ export default function BottomTabs({
   damagedRoads = null,
   onZoomToAsset,
   onRequestDamageData,
+  countryCode,
 }: BottomTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('events');
+  const geographyUi = COUNTRY_CONFIGS[countryCode].ui;
   const regionMatchesSelection = (row: any, selection: string | null) => {
     if (!selection) return true;
     return [row?.Region_ID, row?.['Region.ID'], row?.Region]
@@ -138,8 +146,8 @@ export default function BottomTabs({
   );
 
   const getAggregationLabel = () => {
-    if (filters.aggregationLevel === 'district') return 'Province'; // finest available granularity is province
-    return filters.aggregationLevel === 'province' ? 'Province' : 'National';
+    if (filters.aggregationLevel === 'district') return geographyUi.broaderAreaSingular;
+    return getCountryAggregationLabel(countryCode, filters.aggregationLevel);
   };
 
   const {
@@ -206,7 +214,8 @@ export default function BottomTabs({
     if (canUseCSV) {
       // CSV contains province-level data (Malampa, Penama, Sanma, Shefa, Tafea, Torba)
       const isDistrictSelected =
-        selectedRegion && !regionalSummary.some((row: any) => regionMatchesSelection(row, selectedRegion));
+        selectedRegion &&
+        !regionalSummary.some((row: any) => regionMatchesSelection(row, selectedRegion));
 
       // Only filter if selectedRegion matches a province name
       const filteredData =
@@ -232,7 +241,7 @@ export default function BottomTabs({
         return [
           {
             id: 'national',
-            name: 'National',
+            name: geographyUi.nationalLabel,
             totalEvents: 1,
             totalAffectedPopulation: provinceRows.reduce(
               (sum, r) => sum + r.totalAffectedPopulation,
@@ -261,6 +270,7 @@ export default function BottomTabs({
     filters.aggregationLevel,
     districts,
     provinces,
+    geographyUi,
   ]);
 
   // Calculate national totals for summary cards
@@ -460,7 +470,8 @@ export default function BottomTabs({
                 </div>
                 {filters.aggregationLevel === 'district' && (
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    District-level data unavailable — showing province totals
+                    {geographyUi.focusAreaSingular}-level data unavailable, showing{' '}
+                    {geographyUi.broaderAreaPlural.toLowerCase()} totals
                   </div>
                 )}
               </div>
@@ -709,7 +720,7 @@ export default function BottomTabs({
               <button
                 onClick={() => {
                   const dataToExport = filteredSectorEconomicData.map(damage => ({
-                    Region: damage.region || 'National',
+                    Region: damage.region || geographyUi.nationalLabel,
                     Sector: getSectorName(damage.sectorId),
                     'Wind Loss': damage.directLoss,
                     'Total Loss': damage.totalLoss,
@@ -751,7 +762,7 @@ export default function BottomTabs({
                   {filteredSectorEconomicData.map((damage, index) => (
                     <tr key={damage.id || `damage-sector-${index}`} className="hover:bg-white/5">
                       <td className="px-4 py-3 text-sm text-slate-100 font-medium">
-                        {damage.region || 'National'}
+                        {damage.region || geographyUi.nationalLabel}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-200">
                         {getSectorName(damage.sectorId)}

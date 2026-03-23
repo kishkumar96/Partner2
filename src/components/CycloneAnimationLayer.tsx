@@ -268,6 +268,7 @@ export default function CycloneAnimationLayer({
   const displayedPositionRef = useRef<[number, number] | null>(null);
   const storyBeatActiveRef = useRef<{ startTime: number; type: string } | null>(null);
   const uiVisibleRef = useRef(uiVisible);
+  const isVisibleRef = useRef(isVisible);
   const isDocked = alwaysDocked || !!controlsContainer;
 
   // Performance monitoring refs
@@ -330,6 +331,24 @@ export default function CycloneAnimationLayer({
       setWindGlowActivated(true);
     }
   }, [uiVisible]);
+
+  useEffect(() => {
+    isVisibleRef.current = isVisible;
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (isVisible) return;
+
+    pause();
+    setShowChart(false);
+    setShowShareCard(false);
+    setWindGlowActivated(false);
+    if (storyModeProp === undefined) {
+      setStoryModeInternal(false);
+    } else {
+      onStoryModeChange?.(false);
+    }
+  }, [isVisible, pause, onStoryModeChange, storyModeProp]);
 
   const clampPanelPosition = useCallback((x: number, y: number) => {
     if (typeof window === 'undefined') return { x, y };
@@ -1527,6 +1546,8 @@ export default function CycloneAnimationLayer({
           return;
         }
 
+        const layerVisibility = isVisibleRef.current ? 'visible' : 'none';
+
         // Determine beforeId to insert cyclone layers below damaged buildings/roads
         let beforeId: string | undefined = undefined;
         try {
@@ -1600,6 +1621,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-forecast-track-line',
               type: 'line',
               source: 'cyclone-forecast-track',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': catColorExpr,
                 'line-width': 2.5,
@@ -1614,6 +1638,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-forecast-points',
               type: 'circle',
               source: 'cyclone-forecast-track',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'circle-radius': 4,
                 'circle-color': catColorExpr,
@@ -1636,6 +1663,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-oci-layer',
               type: 'line',
               source: 'cyclone-oci',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': '#94a3b8',
                 'line-width': 1.5,
@@ -1663,6 +1693,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-gale-radius-layer',
               type: 'fill',
               source: 'cyclone-gale-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'fill-color': WIND_RADII_COLORS.gale.stroke,
                 'fill-opacity': 0.03,
@@ -1675,6 +1708,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-gale-radius-outline',
               type: 'line',
               source: 'cyclone-gale-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': WIND_RADII_COLORS.gale.stroke,
                 'line-width': 1.5,
@@ -1695,6 +1731,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-storm-radius-layer',
               type: 'fill',
               source: 'cyclone-storm-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'fill-color': WIND_RADII_COLORS.storm.stroke,
                 'fill-opacity': 0.05,
@@ -1707,6 +1746,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-storm-radius-outline',
               type: 'line',
               source: 'cyclone-storm-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': WIND_RADII_COLORS.storm.stroke,
                 'line-width': 2,
@@ -1727,6 +1769,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-hurricane-radius-layer',
               type: 'fill',
               source: 'cyclone-hurricane-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'fill-color': WIND_RADII_COLORS.hurricane.stroke,
                 'fill-opacity': 0.07,
@@ -1739,6 +1784,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-hurricane-radius-outline',
               type: 'line',
               source: 'cyclone-hurricane-radius',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': WIND_RADII_COLORS.hurricane.stroke,
                 'line-width': 2.5,
@@ -1760,6 +1808,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-eye-layer',
               type: 'fill',
               source: 'cyclone-eye',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'fill-color': '#1e293b',
                 'fill-opacity': 0.7,
@@ -1772,6 +1823,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-eye-outline',
               type: 'line',
               source: 'cyclone-eye',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': '#64748b',
                 'line-width': 2,
@@ -1792,6 +1846,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-uncertainty-layer',
               type: 'fill',
               source: 'cyclone-uncertainty',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'fill-color': '#888888',
                 'fill-opacity': 0.06,
@@ -1804,6 +1861,9 @@ export default function CycloneAnimationLayer({
               id: 'cyclone-uncertainty-outline',
               type: 'line',
               source: 'cyclone-uncertainty',
+              layout: {
+                visibility: layerVisibility,
+              },
               paint: {
                 'line-color': '#666666',
                 'line-width': 1.5,

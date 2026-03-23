@@ -33,8 +33,8 @@ export async function generateMetadata({ params }: CountryPageProps): Promise<Me
   const countryInfo = COUNTRIES[countryCode];
 
   return {
-    title: `${countryInfo.name} Climate Risk Dashboard`,
-    description: `Climate risk analytics, hazards, and impact view for ${countryInfo.fullName}.`,
+    title: `${countryInfo.name} Pacific Disaster Platform`,
+    description: `Operational hazard, exposure, and impact view for ${countryInfo.fullName}.`,
   };
 }
 

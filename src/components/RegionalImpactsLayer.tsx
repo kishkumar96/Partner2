@@ -347,10 +347,26 @@ export default function RegionalImpactsLayer({
                     'case',
                     [
                       'any',
-                      ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegion || ''],
-                      ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegion || ''],
-                      ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegion || ''],
-                      ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegion || ''],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region.ID'], '']],
+                        selectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region_ID'], '']],
+                        selectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region.Region'], '']],
+                        selectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region'], '']],
+                        selectedRegion || '',
+                      ],
                     ],
                     1.0, // Fully visible selected
                     LAYER_OPACITY.regional.outline, // Crisp visible boundaries
@@ -376,7 +392,8 @@ export default function RegionalImpactsLayer({
 
             // Update selected region (for filtering charts/analytics)
             if (onRegionSelect) {
-              const isAlreadySelected = selectedRegion === regionId || selectedRegion === regionName;
+              const isAlreadySelected =
+                selectedRegion === regionId || selectedRegion === regionName;
               onRegionSelect(isAlreadySelected ? null : regionId);
             }
 

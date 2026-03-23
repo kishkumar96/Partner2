@@ -24,7 +24,9 @@ export default function TopInsightsCards({ insights, className = '' }: TopInsigh
   if (insights.length === 0) return null;
 
   return (
-    <div className={`grid grid-cols-1 gap-3 ${className}`}>
+    <div
+      className={`flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2 ${className}`}
+    >
       {insights.map(insight => {
         const IconComponent = insight.icon;
         const isClickable = !!insight.onClick;
@@ -34,9 +36,9 @@ export default function TopInsightsCards({ insights, className = '' }: TopInsigh
             key={insight.id}
             onClick={insight.onClick}
             className={`
-              relative overflow-hidden rounded-xl border glass-panel p-4 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl min-w-0
-              ${isClickable ? 'cursor-pointer hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]' : ''}
-              ${insight.color}
+              min-w-0 rounded-full border px-2.5 py-1.5 transition-colors duration-200
+              ${isClickable ? 'cursor-pointer hover:bg-slate-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 active:bg-slate-800/90' : ''}
+              ${insight.color.replace('text-slate-100', 'text-slate-200')}
             `}
             role={isClickable ? 'button' : 'article'}
             tabIndex={isClickable ? 0 : undefined}
@@ -52,57 +54,44 @@ export default function TopInsightsCards({ insights, className = '' }: TopInsigh
             }
             aria-label={`${insight.label}: ${insight.value}`}
           >
-            {/* Decorative background pattern */}
-            <div className="absolute top-0 right-0 opacity-10">
-              <IconComponent className="w-24 h-24 -mr-8 -mt-8" aria-hidden="true" />
-            </div>
-
-            {/* Content */}
-            <div className="relative z-10 space-y-2">
-              {/* Icon & Label */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-slate-700/40 backdrop-blur-sm rounded-lg">
-                    <IconComponent className="w-5 h-5 text-slate-100" aria-hidden="true" />
-                  </div>
-                  {insight.trend && (
-                    <div
-                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        insight.trend === 'up'
-                          ? 'bg-red-500/30 text-red-100'
-                          : insight.trend === 'down'
-                            ? 'bg-green-500/30 text-green-100'
-                            : 'bg-slate-700/40 text-slate-100'
-                      }`}
-                    >
-                      {insight.trend === 'up' ? '↑' : insight.trend === 'down' ? '↓' : '→'}
-                    </div>
-                  )}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex items-center gap-1.5">
+                <div className="rounded-full bg-slate-800/55 p-1 text-slate-300/85">
+                  <IconComponent className="h-3 w-3" aria-hidden="true" />
                 </div>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-100/60">
+                  {insight.label}
+                </span>
               </div>
 
-              {/* Label */}
-              <h3 className="text-sm font-semibold text-slate-100/90 uppercase tracking-wide leading-tight">
-                {insight.label}
-              </h3>
+              <span className="text-sm font-semibold leading-none text-slate-100">
+                {typeof insight.value === 'number' ? formatNumber(insight.value) : insight.value}
+              </span>
 
-              {/* Value */}
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-slate-100 leading-none break-words">
-                  {typeof insight.value === 'number' ? formatNumber(insight.value) : insight.value}
-                </p>
-                {insight.subtitle && (
-                  <p className="text-xs text-slate-100/80 font-medium break-words">
-                    {insight.subtitle}
-                  </p>
-                )}
-              </div>
+              {insight.subtitle && (
+                <span className="text-[10px] font-medium text-slate-100/45">
+                  {insight.subtitle}
+                </span>
+              )}
 
-              {/* Clickable indicator */}
               {isClickable && (
-                <div className="flex items-center gap-1 text-xs text-slate-100/70 mt-3">
-                  <span>Click to view details</span>
-                  <ChevronRight className="w-3 h-3" />
+                <div className="flex items-center gap-1 text-[10px] text-slate-100/50">
+                  <span>View details</span>
+                  <ChevronRight className="h-3 w-3" />
+                </div>
+              )}
+
+              {insight.trend && (
+                <div
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    insight.trend === 'up'
+                      ? 'bg-red-500/20 text-red-100/80'
+                      : insight.trend === 'down'
+                        ? 'bg-green-500/20 text-green-100/80'
+                        : 'bg-slate-700/40 text-slate-100/70'
+                  }`}
+                >
+                  {insight.trend === 'up' ? '↑' : insight.trend === 'down' ? '↓' : '→'}
                 </div>
               )}
             </div>

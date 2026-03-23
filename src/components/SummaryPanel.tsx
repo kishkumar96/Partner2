@@ -176,16 +176,13 @@ export default function SummaryPanel({
   regionalSummaryBySector = [],
   impactBySector = [],
 }: SummaryPanelProps) {
-  const regionMatchesSelection = useCallback(
-    (row: any, selection: string | null) => {
-      if (!selection) return true;
-      return [row?.Region_ID, row?.['Region.ID'], row?.Region]
-        .filter(Boolean)
-        .map((value: unknown) => String(value).trim())
-        .includes(selection);
-    },
-    []
-  );
+  const regionMatchesSelection = useCallback((row: any, selection: string | null) => {
+    if (!selection) return true;
+    return [row?.Region_ID, row?.['Region.ID'], row?.Region]
+      .filter(Boolean)
+      .map((value: unknown) => String(value).trim())
+      .includes(selection);
+  }, []);
   const [activeTab, setActiveTab] = useState<
     'summary' | 'exposure' | 'damage' | 'analytics' | 'cyclone'
   >('summary');

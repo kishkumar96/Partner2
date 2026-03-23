@@ -115,7 +115,7 @@ export function MapControls({
   isDownloadingMap = false,
 }: MapControlsProps) {
   const [isBasemapOpen, setIsBasemapOpen] = useState(false);
-  const [isControlsOpen, setIsControlsOpen] = useState(true);
+  const [isControlsOpen, setIsControlsOpen] = useState(false);
   const basemapTriggerRef = useRef<HTMLButtonElement | null>(null);
   const basemapOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -163,7 +163,7 @@ export function MapControls({
   };
 
   return (
-    <div className="absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-1rem)] flex flex-col gap-2 overflow-x-hidden">
+    <div className="absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100%-1rem)] flex flex-col gap-2 overflow-x-hidden">
       {/* Loading Indicators */}
       {isMapDataLoading && (
         <div

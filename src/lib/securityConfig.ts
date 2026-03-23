@@ -78,9 +78,10 @@ export function validateSecurityConfigOrThrow(): void {
   // Redis is required only if AUTH_REQUIRE_REDIS is explicitly true,
   // or if we're in production AND AUTH_REQUIRE_REDIS is not explicitly false
   const authRequireRedisEnv = process.env.AUTH_REQUIRE_REDIS?.trim().toLowerCase();
-  const isAuthRequireRedisExplicitlyFalse = authRequireRedisEnv === 'false' || authRequireRedisEnv === '0';
+  const isAuthRequireRedisExplicitlyFalse =
+    authRequireRedisEnv === 'false' || authRequireRedisEnv === '0';
   const redisRequired =
-    isTruthyEnv(process.env.AUTH_REQUIRE_REDIS) || 
+    isTruthyEnv(process.env.AUTH_REQUIRE_REDIS) ||
     (process.env.NODE_ENV === 'production' && !isAuthRequireRedisExplicitlyFalse);
   const redisUrl = process.env.REDIS_URL?.trim();
   if (redisRequired) {

@@ -1,4 +1,4 @@
-import { District, Hazard, Province, Sector } from '@/types';
+import { AggregationLevel, District, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import {
   vanuatuDistricts,
@@ -15,6 +15,14 @@ export interface CountryConfig {
   defaultMapCenter: [number, number];
   defaultZoom: number;
   dataAvailable: boolean;
+  ui: {
+    appName: string;
+    focusAreaSingular: string;
+    focusAreaPlural: string;
+    broaderAreaSingular: string;
+    broaderAreaPlural: string;
+    nationalLabel: string;
+  };
 }
 
 const emptyConfig = (country: CountryCode): CountryConfig => ({
@@ -26,6 +34,14 @@ const emptyConfig = (country: CountryCode): CountryConfig => ({
   defaultMapCenter: COUNTRIES[country].center,
   defaultZoom: COUNTRIES[country].zoom,
   dataAvailable: false,
+  ui: {
+    appName: 'Pacific Disaster Platform',
+    focusAreaSingular: 'Region',
+    focusAreaPlural: 'Regions',
+    broaderAreaSingular: 'Region',
+    broaderAreaPlural: 'Regions',
+    nationalLabel: 'National',
+  },
 });
 
 const coreHazardsForWmsCountries = vanuatuHazards.filter(
@@ -41,6 +57,14 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     defaultMapCenter: COUNTRIES.VU.center,
     defaultZoom: COUNTRIES.VU.zoom,
     dataAvailable: true,
+    ui: {
+      appName: 'Pacific Disaster Platform',
+      focusAreaSingular: 'District',
+      focusAreaPlural: 'Districts',
+      broaderAreaSingular: 'Province',
+      broaderAreaPlural: 'Provinces',
+      nationalLabel: 'National',
+    },
   },
   WS: {
     ...emptyConfig('WS'),
@@ -58,3 +82,11 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     dataAvailable: true,
   },
 };
+
+export function getAggregationLabel(countryCode: CountryCode, level: AggregationLevel): string {
+  const ui = COUNTRY_CONFIGS[countryCode].ui;
+
+  if (level === 'district') return ui.focusAreaPlural;
+  if (level === 'province') return ui.broaderAreaPlural;
+  return ui.nationalLabel;
+}

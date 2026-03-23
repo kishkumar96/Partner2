@@ -82,6 +82,24 @@ function createHazardColorExpression(): maplibregl.ExpressionSpecification {
   ];
 }
 
+function createDistrictOutlineColorExpression(): maplibregl.ExpressionSpecification {
+  return [
+    'case',
+    ['boolean', ['feature-state', 'hover'], false],
+    'rgba(248, 250, 252, 0.9)',
+    'rgba(148, 163, 184, 0.12)',
+  ];
+}
+
+function createDistrictOutlineWidthExpression(): maplibregl.ExpressionSpecification {
+  return [
+    'case',
+    ['boolean', ['feature-state', 'hover'], false],
+    ['interpolate', ['linear'], ['zoom'], 5, 0.9, 8, 1.2, 12, 1.6],
+    ['interpolate', ['linear'], ['zoom'], 5, 0.12, 8, 0.2, 12, 0.3],
+  ];
+}
+
 /**
  * Creates styled HTML for the district popup.
  */
@@ -700,6 +718,8 @@ export default function MapView({
 
     const m = map.current;
     const hazardColorExpression = createHazardColorExpression();
+    const districtOutlineColorExpression = createDistrictOutlineColorExpression();
+    const districtOutlineWidthExpression = createDistrictOutlineWidthExpression();
 
     const addDistrictLayers = () => {
       // Add source for district polygons if not exists
@@ -739,8 +759,8 @@ export default function MapView({
             type: 'line',
             source: DISTRICTS_SOURCE_ID,
             paint: {
-              'line-color': hazardColorExpression,
-              'line-width': 2,
+              'line-color': districtOutlineColorExpression,
+              'line-width': districtOutlineWidthExpression,
               'line-opacity': LAYER_OPACITY.district.outline,
             },
           },
@@ -1016,13 +1036,16 @@ export default function MapView({
     if (filters.selectedHazards.length === 0) {
       // Show all districts with default styling
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', defaultColorExpression);
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, 'line-color', defaultColorExpression);
       m.setPaintProperty(
         DISTRICTS_FILL_LAYER_ID,
         'fill-opacity',
         createScaleDependentOpacity(LAYER_OPACITY.district.fill * (layerOpacity / 100))
       );
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, 'line-opacity', 0.8 * (layerOpacity / 100));
+      m.setPaintProperty(
+        DISTRICTS_OUTLINE_LAYER_ID,
+        'line-opacity',
+        LAYER_OPACITY.district.outline * (layerOpacity / 100)
+      );
     } else {
       const opacityScale = layerOpacity / 100;
 
@@ -1050,7 +1073,6 @@ export default function MapView({
       const colorExpression = ['case', ...caseArgs] as maplibregl.ExpressionSpecification;
 
       m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', colorExpression);
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, 'line-color', colorExpression);
 
       // Build max exposure expression for selected hazards using shared mapping
       // Reuse selectedMappedHazards already defined above

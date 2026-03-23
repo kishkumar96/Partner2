@@ -3,16 +3,29 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { X, Map as MapIcon, AlertCircle, Globe2, LogOut } from 'lucide-react';
+import {
+  X,
+  Map as MapIcon,
+  AlertCircle,
+  ChevronDown,
+  Globe2,
+  LogOut,
+  BarChart3,
+  DollarSign,
+  Layers,
+  MapPin,
+  Users,
+} from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import ReactCountryFlag from 'react-country-flag';
 import ActiveFilters from '@/components/ActiveFilters';
 import { MapControls } from '@/components/MapControls';
+import TopInsightsCards from '@/components/TopInsightsCards';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
-import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
+import { COUNTRY_CONFIGS, getAggregationLabel } from '@/data/countryConfigs';
 import {
   COUNTRY_CYCLONE_CONFIG,
   loadAllRealData,
@@ -146,6 +159,9 @@ export default function DashboardView({
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
   const [showFilters, setShowFilters] = useState(urlState.showFilters || false);
   const [showSummary, setShowSummary] = useState(urlState.showSummary || false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [filterPanelTab, setFilterPanelTab] = useState<'filters' | 'cyclone'>('filters');
   const [showCycloneControls, setShowCycloneControls] = useState(false);
   const [isCyclonePlaying, setIsCyclonePlaying] = useState(false);
   const [storyMode, setStoryMode] = useState(urlState.storyMode || false);
@@ -178,6 +194,7 @@ export default function DashboardView({
     sectors: allSectors,
     provinces,
     districts,
+    ui: countryUi,
   } = COUNTRY_CONFIGS[selectedCountry];
 
   // Real data state
@@ -1012,9 +1029,7 @@ export default function DashboardView({
 
   const countryScopedEventIds = useMemo(
     () =>
-      expandedEvents
-        .filter(event => event.countryCode === selectedCountry)
-        .map(event => event.id),
+      expandedEvents.filter(event => event.countryCode === selectedCountry).map(event => event.id),
     [expandedEvents, selectedCountry]
   );
 
@@ -1076,9 +1091,10 @@ export default function DashboardView({
 
   // Keep exports aligned with the active filter pipeline used in analytics panels.
   const {
-    filteredEvents: exportEvents,
+    filteredEvents: filteredDashboardEvents,
     filteredExposureData: baseExportExposureData,
     filteredEconomicDamageData: exportEconomicDamageData,
+    aggregatedEventData,
   } = useMemo(
     () =>
       computeFilteredData({
@@ -1091,6 +1107,8 @@ export default function DashboardView({
       }),
     [countryEvents, exposureData, economicDamageData, filters, resolvedDistricts, resolvedProvinces]
   );
+
+  const exportEvents = filteredDashboardEvents;
 
   const exportExposureData = useMemo(() => {
     if (!selectedRegion) {
@@ -1125,6 +1143,132 @@ export default function DashboardView({
       !hasFilteredEvents && exportExposureData.length === 0 && exportEconomicDamageData.length === 0
     );
   }, [exportEvents, exportExposureData, exportEconomicDamageData]);
+
+  const currentAggregationLabel = useMemo(
+    () => getAggregationLabel(selectedCountry, filters.aggregationLevel),
+    [selectedCountry, filters.aggregationLevel]
+  );
+
+  const metadataHazardSummary = useMemo(() => {
+    if (filters.selectedHazards.length === 0) {
+      return activeWmsLayers.length > 0 ? `${activeWmsLayers.length} active layers` : 'All hazards';
+    }
+
+    return filters.selectedHazards
+      .map(hazardId => hazards.find(hazard => hazard.id === hazardId)?.name || hazardId)
+      .join(', ');
+  }, [filters.selectedHazards, hazards, activeWmsLayers.length]);
+
+  const activeContextDate = useMemo(() => {
+    const configuredDate = COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventDate;
+    const eventDate = events[0]?.date || configuredDate;
+    if (!eventDate) return 'Not available';
+
+    const parsed = new Date(eventDate);
+    return Number.isNaN(parsed.getTime())
+      ? eventDate
+      : parsed.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+  }, [events, selectedCountry]);
+
+  const headlineMetrics = useMemo(() => {
+    const selectedRows = selectedRegion
+      ? regionalSummary.filter((row: any) => {
+          return [row?.Region_ID, row?.['Region.ID'], row?.Region]
+            .filter(Boolean)
+            .map((value: unknown) => String(value).trim())
+            .includes(selectedRegion);
+        })
+      : regionalSummary;
+
+    const csvPopulationTotal = selectedRows.reduce(
+      (sum: number, row: any) => sum + (Number(row.Population_Exposed_To_Any_Hazard) || 0),
+      0
+    );
+    const csvLossTotal = selectedRows.reduce(
+      (sum: number, row: any) => sum + (Number(row.Total_Loss) || 0),
+      0
+    );
+    const topCsvRegion = [...selectedRows].sort(
+      (left: any, right: any) => (Number(right.Total_Loss) || 0) - (Number(left.Total_Loss) || 0)
+    )[0];
+
+    const topAggregatedArea = [...aggregatedEventData].sort(
+      (left, right) => (right.totalEconomicDamage || 0) - (left.totalEconomicDamage || 0)
+    )[0];
+
+    const exposedPopulation =
+      csvPopulationTotal > 0
+        ? csvPopulationTotal
+        : aggregatedEventData.reduce(
+            (sum, row) => sum + (Number(row.totalAffectedPopulation) || 0),
+            0
+          );
+    const estimatedLoss =
+      csvLossTotal > 0
+        ? csvLossTotal
+        : aggregatedEventData.reduce((sum, row) => sum + (Number(row.totalEconomicDamage) || 0), 0);
+    const topAreaName =
+      topCsvRegion?.Region ||
+      topAggregatedArea?.name ||
+      `No ${countryUi.broaderAreaSingular.toLowerCase()} selected`;
+    const activeLayersCount =
+      filters.selectedHazards.length > 0
+        ? filters.selectedHazards.length
+        : [showWindLayer, showInundationLayer, showBuildingsLayer, showRoadsLayer].filter(Boolean)
+            .length;
+
+    return [
+      {
+        id: 'headline-population',
+        label: 'Exposed population',
+        value: exposedPopulation,
+        subtitle: `${COUNTRIES[selectedCountry].name} current view`,
+        icon: Users,
+        color: 'border-cyan-500/40 text-slate-100',
+      },
+      {
+        id: 'headline-loss',
+        label: 'Estimated loss',
+        value: estimatedLoss > 0 ? `$${Math.round(estimatedLoss).toLocaleString()}` : '$0',
+        subtitle: 'Modeled direct impact',
+        icon: DollarSign,
+        color: 'border-rose-500/40 text-slate-100',
+      },
+      {
+        id: 'headline-top-area',
+        label: `Highest impact ${countryUi.broaderAreaSingular.toLowerCase()}`,
+        value: topAreaName,
+        subtitle: selectedRegion ? 'Focused selection' : 'Top loss concentration',
+        icon: MapPin,
+        color: 'border-amber-500/40 text-slate-100',
+        onClick: topAreaName && topAggregatedArea ? () => setShowSummary(true) : undefined,
+      },
+      {
+        id: 'headline-layers',
+        label: 'Active hazard context',
+        value: activeLayersCount,
+        subtitle: `${currentAggregationLabel} resolution`,
+        icon: Layers,
+        color: 'border-emerald-500/40 text-slate-100',
+      },
+    ];
+  }, [
+    selectedRegion,
+    regionalSummary,
+    aggregatedEventData,
+    countryUi.broaderAreaSingular,
+    selectedCountry,
+    filters.selectedHazards.length,
+    showWindLayer,
+    showInundationLayer,
+    showBuildingsLayer,
+    showRoadsLayer,
+    currentAggregationLabel,
+  ]);
 
   // Load real data function
   const handleCycloneTimestepChange = useCallback(
@@ -1546,6 +1690,7 @@ export default function DashboardView({
               <button
                 onClick={() => {
                   setShowFilters(true);
+                  setFilterPanelTab('filters');
                   setShowSummary(false);
                 }}
                 className="px-3 py-2 rounded-lg bg-slate-800/70 text-slate-200 text-xs font-semibold uppercase tracking-wide border border-slate-700/60"
@@ -1570,10 +1715,12 @@ export default function DashboardView({
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-bold text-slate-100 truncate">
-                  Pacific Disaster Platform
+                  {countryUi.appName}
                 </h1>
                 <p className="text-xs text-slate-400 truncate">
-                  {isLoadingData ? 'Loading...' : activeCycloneName}
+                  {isLoadingData
+                    ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
+                    : `${COUNTRIES[selectedCountry].name} | ${activeCycloneName}`}
                 </p>
               </div>
             </div>
@@ -1581,12 +1728,74 @@ export default function DashboardView({
 
           {/* Actions Group - Right aligned, consistent spacing */}
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap lg:flex-nowrap justify-end">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/35 rounded-lg border border-slate-700/40">
+              <button
+                onClick={() => setShowAnalytics(current => !current)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                  showAnalytics
+                    ? 'bg-blue-500/15 text-blue-200 border border-blue-500/30'
+                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                }`}
+                aria-pressed={showAnalytics}
+                aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Data</span>
+              </button>
+              <button
+                onClick={() => setShowSummary(current => !current)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                  showSummary
+                    ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                }`}
+                aria-pressed={showSummary}
+                aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Summary</span>
+              </button>
+              {!!cycloneForecast && (
+                <button
+                  onClick={() => {
+                    setShowFilters(true);
+                    setShowSummary(false);
+                    setFilterPanelTab('cyclone');
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                    filterPanelTab === 'cyclone' && showFilters
+                      ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
+                      : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                  }`}
+                  aria-label="Open cyclone workspace"
+                >
+                  <MapIcon className="w-3.5 h-3.5" />
+                  <span>Cyclone</span>
+                </button>
+              )}
+            </div>
+
             {/* Header Actions */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/40 rounded-lg border border-slate-700/50">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/25 rounded-lg border border-slate-700/40">
+              <button
+                onClick={() => setShowMetadata(current => !current)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/15 hover:border-cyan-500/40"
+                aria-expanded={showMetadata}
+                aria-controls="dashboard-metadata"
+                aria-label={showMetadata ? 'Hide metadata' : 'Show metadata'}
+              >
+                <span>Metadata</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform duration-300 ${
+                    showMetadata ? 'rotate-0' : 'rotate-180'
+                  }`}
+                />
+              </button>
+
               {allowCountrySwitch ? (
                 <button
                   onClick={() => setShowCountrySelector(!showCountrySelector)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/35 hover:bg-slate-700/55 text-slate-300 rounded transition-colors text-xs"
                   aria-label={
                     selectedCountry
                       ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
@@ -1634,7 +1843,7 @@ export default function DashboardView({
               {showLogout && (
                 <button
                   onClick={() => void handleLogout()}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 hover:bg-slate-700 text-slate-300 rounded transition-colors text-xs"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 rounded transition-colors text-xs"
                   aria-label="Log out of country dashboard"
                   title="Log out"
                 >
@@ -1689,6 +1898,49 @@ export default function DashboardView({
             </div>
           </div>
         </div>
+
+        <div
+          id="dashboard-metadata"
+          className={`mt-3 grid transition-all duration-300 ease-out ${
+            showMetadata ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div
+              className={`rounded-xl border border-slate-700/50 bg-slate-900/40 px-4 py-2.5 transition-all duration-300 ${
+                showMetadata ? 'translate-y-0' : '-translate-y-1'
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 font-semibold text-blue-100">
+                  Country: {COUNTRIES[selectedCountry].name}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                  Event: {activeCycloneName}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                  Hazards: {metadataHazardSummary}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                  Resolution: {currentAggregationLabel}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                  Source: {devDataSourceLabel || 'PDIE local dataset'}
+                </span>
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                  Reference date: {activeContextDate}
+                </span>
+                <span className="text-slate-400">
+                  Map first. Open summary, data, or cyclone tools when needed.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {!showAnalytics && !showSummary && (
+          <TopInsightsCards insights={headlineMetrics} className="mt-2" />
+        )}
 
         {/* Active Filters Bar - Single line with horizontal scroll */}
         <div className="mt-2 pt-2 border-t border-slate-800">
@@ -1783,6 +2035,9 @@ export default function DashboardView({
             sectors={sectors}
             events={events}
             districts={resolvedDistricts}
+            countryCode={selectedCountry}
+            activeTabOverride={filterPanelTab}
+            onActiveTabChange={setFilterPanelTab}
             filters={filters}
             onFilterChange={setFilters}
             exposureData={exposureData}
@@ -1847,16 +2102,6 @@ export default function DashboardView({
                       onDownloadMap={() => void handleDownloadMap()}
                       isDownloadingMap={isDownloadingMap}
                     />
-                  )}
-
-                  {process.env.NODE_ENV !== 'production' && devDataSourceLabel && (
-                    <div className="absolute top-4 left-[24rem] z-[16] pointer-events-none max-w-[calc(100vw-26rem)]">
-                      <div className="glass-panel rounded-lg px-3 py-2 border border-emerald-500/30 bg-emerald-900/20 shadow-lg">
-                        <p className="text-[11px] text-emerald-200 font-medium truncate">
-                          Data Source: {devDataSourceLabel}
-                        </p>
-                      </div>
-                    </div>
                   )}
 
                   {/* NEW: Unified Map Legend with data-driven breaks */}
@@ -2023,29 +2268,31 @@ export default function DashboardView({
             )}
           </div>
 
-          {/* Bottom Tabs */}
-          <BottomTabs
-            events={countryEvents}
-            hazards={hazards}
-            sectors={sectors}
-            exposureData={exposureData}
-            economicDamageData={economicDamageData}
-            sectorEconomicData={sectorEconomicData}
-            assetEconomicData={assetEconomicData}
-            filters={filters}
-            districts={resolvedDistricts}
-            provinces={resolvedProvinces}
-            selectedRegion={selectedRegion}
-            impactByAssetType={impactByAssetType}
-            impactBySector={impactBySector || []}
-            regionalSummary={regionalSummary}
-            damagedBuildings={damagedBuildings}
-            damagedRoads={damagedRoads}
-            onZoomToAsset={handleZoomToAsset}
-            onRequestDamageData={type => {
-              void loadDamageLayer(type);
-            }}
-          />
+          {showAnalytics && (
+            <BottomTabs
+              events={countryEvents}
+              hazards={hazards}
+              sectors={sectors}
+              exposureData={exposureData}
+              economicDamageData={economicDamageData}
+              sectorEconomicData={sectorEconomicData}
+              assetEconomicData={assetEconomicData}
+              filters={filters}
+              districts={resolvedDistricts}
+              provinces={resolvedProvinces}
+              selectedRegion={selectedRegion}
+              impactByAssetType={impactByAssetType}
+              impactBySector={impactBySector || []}
+              regionalSummary={regionalSummary}
+              damagedBuildings={damagedBuildings}
+              damagedRoads={damagedRoads}
+              onZoomToAsset={handleZoomToAsset}
+              onRequestDamageData={type => {
+                void loadDamageLayer(type);
+              }}
+              countryCode={selectedCountry}
+            />
+          )}
         </div>
 
         {/* Right Summary Panel */}
@@ -2058,9 +2305,8 @@ export default function DashboardView({
         )}
         <div
           ref={summaryPanelRef}
-          className={`fixed inset-y-0 right-0 z-[40] w-80 transform transition-transform duration-300 
-            ${showSummary ? 'translate-x-0' : 'translate-x-full'} 
-            md:static md:w-80 md:translate-x-0`}
+          className={`fixed inset-y-0 right-0 z-[40] w-80 transform transition-transform duration-300 bg-transparent
+            ${showSummary ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
         >
           <div className="md:hidden absolute top-3 left-3 z-[45]">
             <button

@@ -18,7 +18,7 @@ export default function Loading() {
           </div>
         </div>
 
-        <p className="mt-6 text-slate-400 font-medium">Loading Climate Risk Dashboard...</p>
+        <p className="mt-6 text-slate-400 font-medium">Loading Pacific Disaster Platform...</p>
         <p className="mt-2 text-sm text-slate-500">Please wait while we prepare your data</p>
       </div>
     </div>

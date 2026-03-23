@@ -49,6 +49,7 @@ const minimalProps = {
   filters: baseFilters,
   districts: [],
   provinces: [],
+  countryCode: 'VU' as const,
 };
 
 describe('BottomTabs', () => {

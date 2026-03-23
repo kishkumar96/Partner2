@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import type { KeyboardEvent, Ref } from 'react';
 import {
   FilterState,
@@ -12,8 +12,14 @@ import {
   ExposureData,
   EconomicDamageData,
 } from '@/types';
+import { CountryCode } from '@/types/thredds';
+import {
+  COUNTRY_CONFIGS,
+  getAggregationLabel as getCountryAggregationLabel,
+} from '@/data/countryConfigs';
 import {
   Calendar,
+  Check,
   ChevronDown,
   Database,
   Keyboard,
@@ -22,9 +28,10 @@ import {
   Play,
   Pause,
   BookOpen,
-  Check,
   Eye,
   EyeOff,
+  RotateCcw,
+  Waves,
 } from 'lucide-react';
 import SearchableEventSelector from './SearchableEventSelector';
 import MapAccessibleFeatures, { type DistrictFeature } from './MapAccessibleFeatures';
@@ -48,6 +55,9 @@ interface FilterPanelProps {
   storyMode?: boolean;
   isCycloneVisible?: boolean;
   onToggleCycloneVisibility?: (visible: boolean) => void;
+  countryCode: CountryCode;
+  activeTabOverride?: 'filters' | 'cyclone';
+  onActiveTabChange?: (tab: 'filters' | 'cyclone') => void;
 }
 
 const noopDistrictSelect = () => {};
@@ -70,7 +80,11 @@ export default function FilterPanel({
   storyMode = false,
   isCycloneVisible = true,
   onToggleCycloneVisibility,
+  countryCode,
+  activeTabOverride,
+  onActiveTabChange,
 }: FilterPanelProps) {
+  const geographyUi = COUNTRY_CONFIGS[countryCode].ui;
   const [showClearToast, setShowClearToast] = useState(false);
   const [previousFilters, setPreviousFilters] = useState<FilterState | null>(null);
 
@@ -116,6 +130,12 @@ export default function FilterPanel({
     }));
   };
 
+  useEffect(() => {
+    if (!activeTabOverride) return;
+    if (activeTabOverride === 'cyclone' && !hasCycloneData) return;
+    setActiveTab(activeTabOverride);
+  }, [activeTabOverride, hasCycloneData]);
+
   const toggleSector = (sectorId: string) => {
     const newSectors = filters.selectedSectors.includes(sectorId)
       ? filters.selectedSectors.filter(s => s !== sectorId)
@@ -130,6 +150,10 @@ export default function FilterPanel({
       : [...filters.selectedHazards, hazardId];
 
     onFilterChange({ ...filters, selectedHazards: newHazards });
+  };
+
+  const setHazardsOnly = (hazardIds: string[]) => {
+    onFilterChange({ ...filters, selectedHazards: hazardIds });
   };
 
   const toggleEvent = (eventId: string) => {
@@ -196,6 +220,7 @@ export default function FilterPanel({
 
     const nextTab = order[nextIndex];
     setActiveTab(nextTab);
+    onActiveTabChange?.(nextTab);
     if (nextTab === 'filters') {
       filtersTabRef.current?.focus();
     } else {
@@ -212,9 +237,9 @@ export default function FilterPanel({
   };
 
   const aggregationOptions: { value: AggregationLevel; label: string }[] = [
-    { value: 'district', label: 'Districts' },
-    { value: 'province', label: 'Province' },
-    { value: 'national', label: 'National' },
+    { value: 'district', label: geographyUi.focusAreaPlural },
+    { value: 'province', label: geographyUi.broaderAreaPlural },
+    { value: 'national', label: getCountryAggregationLabel(countryCode, 'national') },
   ];
   const sectionTriggerClass =
     'w-full px-4 py-2.5 flex items-center gap-2.5 hover:bg-slate-800/45 transition-colors group';
@@ -290,9 +315,7 @@ export default function FilterPanel({
             </button>
           </div>
           <p className="mt-1 text-[10px] text-slate-400">
-            Data filters for analytics and summaries. Hazard raster visibility is controlled in Map
-            Controls; event and date filters can hide historical rasters when they exclude the
-            active event.
+            Filters change map highlights, data, and summary results.
           </p>
         </div>
 
@@ -307,7 +330,10 @@ export default function FilterPanel({
             >
               <button
                 type="button"
-                onClick={() => setActiveTab('filters')}
+                onClick={() => {
+                  setActiveTab('filters');
+                  onActiveTabChange?.('filters');
+                }}
                 id="filter-panel-tab-filters"
                 role="tab"
                 aria-selected={activeTab === 'filters'}
@@ -320,11 +346,14 @@ export default function FilterPanel({
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
                 } focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400`}
               >
-                Filters
+                Data Filters
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('cyclone')}
+                onClick={() => {
+                  setActiveTab('cyclone');
+                  onActiveTabChange?.('cyclone');
+                }}
                 id="filter-panel-tab-cyclone"
                 role="tab"
                 aria-selected={activeTab === 'cyclone'}
@@ -338,7 +367,7 @@ export default function FilterPanel({
                 } focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400`}
               >
                 <Wind className="w-3 h-3" />
-                Cyclone
+                Cyclone Details
               </button>
             </div>
           </div>
@@ -351,9 +380,7 @@ export default function FilterPanel({
             aria-labelledby="filter-panel-tab-filters"
           >
             <div className="mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-900/10 px-3 py-2 text-[10px] text-blue-200">
-              These are data filters. Hazard visibility toggles live in Map Controls. Event and date
-              filters also apply to historical hazard rasters when the selected event is outside the
-              active country dataset.
+              Start with a hazard, then narrow by time or map level.
             </div>
 
             {/* Hazards Section - Compact */}
@@ -368,7 +395,7 @@ export default function FilterPanel({
               >
                 <Wind className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Hazards
+                  What hazard do you want to explore?
                 </h3>
                 {filters.selectedHazards.length > 0 && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
@@ -393,48 +420,112 @@ export default function FilterPanel({
                   aria-labelledby={accordionIds.quickFilters.button}
                   className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
                 >
+                  <div className="mb-3 flex flex-wrap gap-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cycloneHazards = hazardsWithAvailability
+                          .filter(hazard => {
+                            const id = hazard.id.toLowerCase();
+                            return id.includes('cyclone') || id.includes('wind');
+                          })
+                          .map(hazard => hazard.id);
+                        setHazardsOnly(cycloneHazards);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/15"
+                    >
+                      <Wind className="h-3 w-3" />
+                      Cyclone only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const floodHazards = hazardsWithAvailability
+                          .filter(hazard => {
+                            const id = hazard.id.toLowerCase();
+                            return id.includes('flood') || id.includes('inundation');
+                          })
+                          .map(hazard => hazard.id);
+                        setHazardsOnly(floodHazards);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-sky-200 transition-colors hover:bg-sky-500/15"
+                    >
+                      <Waves className="h-3 w-3" />
+                      Flood only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setHazardsOnly(
+                          hazardsWithAvailability
+                            .filter(hazard => hazard.isAvailable)
+                            .map(hazard => hazard.id)
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/50 bg-slate-800/60 px-2.5 py-1.5 text-[10px] font-semibold text-slate-200 transition-colors hover:bg-slate-700/70"
+                    >
+                      All hazards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-rose-200 transition-colors hover:bg-rose-500/15"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reset filters
+                    </button>
+                  </div>
+
                   {hazardsWithAvailability.length === 0 ? (
                     <p className="text-[10px] text-slate-500 italic py-2">
                       No hazard data available
                     </p>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="grid grid-cols-2 gap-2">
                       {hazardsWithAvailability.map(hazard => (
                         <label
                           key={hazard.id}
                           htmlFor={`hazard-${hazard.id}`}
-                          className={`flex items-center gap-2 group relative px-2 py-1.5 rounded-lg transition-colors ${
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
                             hazard.isAvailable
-                              ? 'cursor-pointer hover:bg-slate-800/50'
-                              : 'cursor-not-allowed opacity-50'
+                              ? filters.selectedHazards.includes(hazard.id)
+                                ? 'border-cyan-500/40 bg-cyan-500/12 text-white'
+                                : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:bg-slate-800/70 hover:border-slate-600/70'
+                              : 'cursor-not-allowed border-slate-800/70 bg-slate-900/30 text-slate-500 opacity-50'
                           }`}
-                          title={!hazard.isAvailable ? 'No data available for this hazard' : ''}
+                          title={
+                            !hazard.isAvailable ? 'No data available for this hazard' : undefined
+                          }
                         >
-                          <div className="relative flex items-center justify-center">
-                            <input
-                              id={`hazard-${hazard.id}`}
-                              type="checkbox"
-                              name="hazards"
-                              value={hazard.id}
-                              checked={filters.selectedHazards.includes(hazard.id)}
-                              onChange={() => hazard.isAvailable && toggleHazard(hazard.id)}
-                              disabled={!hazard.isAvailable}
-                              className="appearance-none w-4 h-4 border border-slate-500/80 rounded cursor-pointer transition-colors hover:border-cyan-400 checked:border-cyan-400 checked:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                            {filters.selectedHazards.includes(hazard.id) && (
-                              <Check
-                                className="absolute w-3 h-3 text-cyan-400 pointer-events-none"
-                                strokeWidth={3}
-                              />
-                            )}
-                          </div>
+                          <input
+                            id={`hazard-${hazard.id}`}
+                            type="checkbox"
+                            name="hazards"
+                            value={hazard.id}
+                            checked={filters.selectedHazards.includes(hazard.id)}
+                            onChange={() => hazard.isAvailable && toggleHazard(hazard.id)}
+                            disabled={!hazard.isAvailable}
+                            aria-label={hazard.name}
+                            className="sr-only"
+                          />
                           <div
-                            className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-slate-700/30"
+                            className="h-3 w-3 rounded-full flex-shrink-0 ring-1 ring-slate-700/30"
                             style={{ backgroundColor: hazard.color }}
                           />
-                          <span className="text-xs text-slate-300 group-hover:text-white flex-1 transition-colors">
-                            {hazard.name}
-                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold">
+                              {hazard.id === 'tropical-cyclone'
+                                ? 'Cyclone impact'
+                                : hazard.id === 'flood'
+                                  ? 'Flood risk'
+                                  : hazard.name}
+                            </div>
+                            <div className="mt-0.5 text-[10px] text-slate-400">
+                              {filters.selectedHazards.includes(hazard.id)
+                                ? 'Shown in results'
+                                : 'Tap to explore'}
+                            </div>
+                          </div>
                           {!hazard.isAvailable && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 font-semibold">
                               No data
@@ -456,11 +547,12 @@ export default function FilterPanel({
                 id={accordionIds.temporal.button}
                 aria-expanded={expandedSections.temporal}
                 aria-controls={accordionIds.temporal.panel}
+                aria-label="Temporal filters"
                 className={sectionTriggerClass}
               >
                 <Calendar className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Temporal
+                  Time and event
                 </h3>
                 {filters.selectedEvents.length > 0 && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
@@ -542,8 +634,7 @@ export default function FilterPanel({
                       />
                     </div>
                     <p className="text-[10px] text-slate-500">
-                      Dates are applied to the active event timeline. If only annual source data is
-                      available, the event date is used for matching.
+                      Filter the time window for what appears in the map and summaries.
                     </p>
                   </div>
                 </div>
@@ -558,11 +649,12 @@ export default function FilterPanel({
                 id={accordionIds.aggregation.button}
                 aria-expanded={expandedSections.aggregation}
                 aria-controls={accordionIds.aggregation.panel}
+                aria-label="Aggregation"
                 className={sectionTriggerClass}
               >
                 <Target className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Aggregation
+                  Map detail level
                 </h3>
                 {!expandedSections.aggregation && (
                   <span className="text-[10px] text-slate-500 ml-auto mr-2">
@@ -618,11 +710,12 @@ export default function FilterPanel({
                 id={accordionIds.sectors.button}
                 aria-expanded={expandedSections.sectors}
                 aria-controls={accordionIds.sectors.panel}
+                aria-label="Sectors"
                 className={sectionTriggerClass}
               >
                 <Database className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Sectors
+                  Sector focus
                 </h3>
                 {filters.selectedSectors.length > 0 && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
@@ -716,7 +809,7 @@ export default function FilterPanel({
               >
                 <Keyboard className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Accessibility
+                  Keyboard access
                 </h3>
                 {!isDistrictListOpen && (
                   <span className="text-[10px] text-slate-500 ml-auto mr-2">District list</span>
@@ -761,7 +854,7 @@ export default function FilterPanel({
                 <Wind className="w-4 h-4 text-cyan-400" />
                 <div>
                   <h3 className="text-xs font-semibold text-slate-200">Cyclone Timeline</h3>
-                  <p className="text-[10px] text-slate-500">Animation & metrics</p>
+                  <p className="text-[10px] text-slate-500">Track, playback, and key moments</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
