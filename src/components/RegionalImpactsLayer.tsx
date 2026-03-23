@@ -106,6 +106,16 @@ export default function RegionalImpactsLayer({
   const mountedRef = useRef(true);
   const loadEventListenerRef = useRef<(() => void) | null>(null);
   const layersAddedRef = useRef(false);
+  const selectedRegionRef = useRef<string | null>(selectedRegion);
+  const onRegionSelectRef = useRef<typeof onRegionSelect>(onRegionSelect);
+
+  useEffect(() => {
+    selectedRegionRef.current = selectedRegion;
+  }, [selectedRegion]);
+
+  useEffect(() => {
+    onRegionSelectRef.current = onRegionSelect;
+  }, [onRegionSelect]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -391,10 +401,10 @@ export default function RegionalImpactsLayer({
             const regionId = getFeatureRegionId(props);
 
             // Update selected region (for filtering charts/analytics)
-            if (onRegionSelect) {
+            if (onRegionSelectRef.current) {
               const isAlreadySelected =
-                selectedRegion === regionId || selectedRegion === regionName;
-              onRegionSelect(isAlreadySelected ? null : regionId);
+                selectedRegionRef.current === regionId || selectedRegionRef.current === regionName;
+              onRegionSelectRef.current(isAlreadySelected ? null : regionId);
             }
 
             // Get sector-specific data for this region
@@ -612,7 +622,7 @@ export default function RegionalImpactsLayer({
         isLoadingRef.current = false;
       }
     };
-  }, [map, visible, styleChangeCounter, selectedRegion, onRegionSelect, mapStyle, countryCode]); // styleChangeCounter needed to recreate layers after basemap changes
+  }, [map, visible, styleChangeCounter, countryCode]); // styleChangeCounter needed to recreate layers after basemap changes
 
   // Separate effect to update colors when style changes (without recreating layers)
   useEffect(() => {
