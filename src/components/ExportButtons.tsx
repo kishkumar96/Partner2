@@ -336,23 +336,37 @@ export default function ExportButtons({
       doc.setFont('helvetica', 'normal');
       doc.text(`No. 01  |  ${reportDate}`, PW - MX, 10, { align: 'right' });
 
-      // Event name
+      // Event name (wrap to keep title block consistent with SVG template)
+      const RIGHT_BRAND_W = 62;
+      const leftHeaderW = CONTENT_W - RIGHT_BRAND_W - 6;
       doc.setFontSize(17);
       doc.setFont('helvetica', 'bold');
-      doc.text(eventName, MX, 23);
+      const eventLines = doc.splitTextToSize(eventName, leftHeaderW).slice(0, 2);
+      doc.text(eventLines, MX, 20);
 
       // Country full name
       doc.setFontSize(9.5);
       doc.setFont('helvetica', 'normal');
-      doc.text(cFull, MX, 31);
+      const countryY = 20 + eventLines.length * 6 + 1;
+      doc.text(cFull, MX, countryY);
+
+      // Divider between left title content and right branding
+      const dividerX = PW - MX - RIGHT_BRAND_W - 3;
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(dividerX, 14, dividerX, 32.5);
 
       // Branding right
       doc.setFontSize(7.5);
-      doc.text('Pacific Disaster Impact & Exposure  |  PDIE Dashboard', PW - MX, 31, {
-        align: 'right',
-      });
+      doc.setFont('helvetica', 'normal');
+      const brandLines = doc.splitTextToSize(
+        'Pacific Disaster Impact & Exposure | PDIE Dashboard',
+        RIGHT_BRAND_W
+      );
+      doc.text(brandLines, PW - MX, 20, { align: 'right' });
 
-      let y = 49;
+      // Start content after header irrespective of wrapped text length.
+      let y = Math.max(49, countryY + 16);
       const ensureSpace = (requiredHeight: number) => {
         if (y + requiredHeight <= CONTENT_BOTTOM) return;
         doc.addPage();
