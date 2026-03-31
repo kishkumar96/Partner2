@@ -3,7 +3,7 @@ import './globals.css';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Environment variables
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Pacific Disaster Platform';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Resilience Atlas';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: `%s | ${APP_NAME}`,
   },
   description:
-    'Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis. Monitor cyclones, assess damages, and analyze regional impacts across the Pacific region.',
+    'Advanced WebGIS platform for country-level climate risk intelligence, hazard monitoring, and disaster impact analysis.',
   keywords: [
     'climate risk',
     'disaster management',
@@ -24,7 +24,6 @@ export const metadata: Metadata = {
     'risk analysis',
     'climate adaptation',
     'disaster resilience',
-    'Pacific region',
     'Vanuatu',
     'hazard mapping',
   ],
@@ -60,7 +59,7 @@ export const metadata: Metadata = {
     siteName: APP_NAME,
     title: `${APP_NAME} | Real-Time Climate Risk Assessment`,
     description:
-      'Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis.',
+      'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis.',
     images: [
       {
         url: `${APP_URL}/og-image.png`,
@@ -76,7 +75,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${APP_NAME} | Real-Time Climate Risk Assessment`,
     description:
-      'Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis.',
+      'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis.',
     images: [`${APP_URL}/og-image.png`],
     creator: '@yourtwitterhandle',
   },
@@ -134,7 +133,7 @@ export default function RootLayout({
               '@type': 'WebApplication',
               name: APP_NAME,
               description:
-                'Advanced WebGIS platform for real-time climate risk assessment and disaster impact analysis',
+                'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis',
               url: APP_URL,
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web Browser',

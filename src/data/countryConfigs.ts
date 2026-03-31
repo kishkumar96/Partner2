@@ -25,6 +25,10 @@ export interface CountryConfig {
   };
 }
 
+export function getCountryAppName(countryCode: CountryCode): string {
+  return `${COUNTRIES[countryCode].name} Resilience Atlas`;
+}
+
 const emptyConfig = (country: CountryCode): CountryConfig => ({
   hazards: [],
   // Use the standard PDIE sector taxonomy across countries.
@@ -35,7 +39,7 @@ const emptyConfig = (country: CountryCode): CountryConfig => ({
   defaultZoom: COUNTRIES[country].zoom,
   dataAvailable: false,
   ui: {
-    appName: 'Pacific Disaster Platform',
+    appName: getCountryAppName(country),
     focusAreaSingular: 'Region',
     focusAreaPlural: 'Regions',
     broaderAreaSingular: 'Region',
@@ -58,7 +62,7 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     defaultZoom: COUNTRIES.VU.zoom,
     dataAvailable: true,
     ui: {
-      appName: 'Pacific Disaster Platform',
+      appName: getCountryAppName('VU'),
       focusAreaSingular: 'District',
       focusAreaPlural: 'Districts',
       broaderAreaSingular: 'Province',
@@ -70,11 +74,27 @@ export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
     ...emptyConfig('WS'),
     hazards: coreHazardsForWmsCountries,
     dataAvailable: true,
+    ui: {
+      appName: getCountryAppName('WS'),
+      focusAreaSingular: 'District',
+      focusAreaPlural: 'Districts',
+      broaderAreaSingular: 'District',
+      broaderAreaPlural: 'Districts',
+      nationalLabel: 'National',
+    },
   },
   TO: {
     ...emptyConfig('TO'),
     hazards: coreHazardsForWmsCountries,
     dataAvailable: true,
+    ui: {
+      appName: getCountryAppName('TO'),
+      focusAreaSingular: 'District',
+      focusAreaPlural: 'Districts',
+      broaderAreaSingular: 'District',
+      broaderAreaPlural: 'Districts',
+      nationalLabel: 'National',
+    },
   },
   CK: {
     ...emptyConfig('CK'),

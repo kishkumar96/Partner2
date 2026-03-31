@@ -227,8 +227,8 @@ export default function CycloneAnimationLayer({
     }
 
     // Smart positioning: Top-right corner, avoiding sidebars
-    // Left panel is 288px wide, right panel is 320px wide
-    const baseLeftMargin = isLeftPanelOpen ? 304 : 20; // Clear of left panel when open
+    // Left panel is 320px wide, right panel is 320px wide
+    const baseLeftMargin = isLeftPanelOpen ? 336 : 20; // Clear of left panel when open (320px + 16px gap)
     const windowWidth = window.innerWidth;
 
     // Position in top-right quadrant for minimal clutter

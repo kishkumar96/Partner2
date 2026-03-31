@@ -1,7 +1,7 @@
 {
-  "name": "Pacific Disaster Platform",
-  "short_name": "Pacific Disaster",
-  "description": "Operational WebGIS platform for hazard, exposure, and impact assessment across Pacific countries",
+  "name": "Resilience Atlas",
+  "short_name": "Atlas",
+  "description": "Operational WebGIS platform for country-level hazard, exposure, and impact intelligence",
   "start_url": "/partner2/",
   "display": "standalone",
   "background_color": "#0f172a",

@@ -22,12 +22,14 @@ interface RankedDistrictsChartProps {
   data: AggregatedEventData[];
   metric: 'loss' | 'population';
   topN?: number;
+  areaLabelPlural?: string;
 }
 
 export default function RankedDistrictsChart({
   data,
   metric,
   topN = 10,
+  areaLabelPlural = 'districts',
 }: RankedDistrictsChartProps) {
   const chartData = useMemo(() => {
     // Sort and take top N
@@ -83,9 +85,9 @@ export default function RankedDistrictsChart({
     // Accessibility
     ariaLabel:
       metric === 'loss'
-        ? `Bar chart showing top ${topN} districts by economic loss`
-        : `Bar chart showing top ${topN} districts by affected population`,
-    ariaDescription: `Horizontal bar chart ranking districts from highest to lowest ${metric === 'loss' ? 'economic damage' : 'affected population'}`,
+        ? `Bar chart showing top ${topN} ${areaLabelPlural} by economic loss`
+        : `Bar chart showing top ${topN} ${areaLabelPlural} by affected population`,
+    ariaDescription: `Horizontal bar chart ranking ${areaLabelPlural} from highest to lowest ${metric === 'loss' ? 'economic damage' : 'affected population'}`,
     plugins: {
       legend: {
         display: false,
@@ -165,10 +167,10 @@ export default function RankedDistrictsChart({
           options={options}
           aria-label={
             metric === 'loss'
-              ? `Bar chart showing top ${topN} districts by economic loss`
+              ? `Bar chart showing top ${topN} ${areaLabelPlural} by economic loss`
               : metric === 'population'
-                ? `Bar chart showing top ${topN} districts by affected population`
-                : `Bar chart showing top ${topN} districts by high risk areas`
+                ? `Bar chart showing top ${topN} ${areaLabelPlural} by affected population`
+                : `Bar chart showing top ${topN} ${areaLabelPlural} by high risk areas`
           }
         />
       </div>

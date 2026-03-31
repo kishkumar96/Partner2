@@ -93,10 +93,15 @@ function createDistrictOutlineColorExpression(): maplibregl.ExpressionSpecificat
 
 function createDistrictOutlineWidthExpression(): maplibregl.ExpressionSpecification {
   return [
-    'case',
-    ['boolean', ['feature-state', 'hover'], false],
-    ['interpolate', ['linear'], ['zoom'], 5, 0.9, 8, 1.2, 12, 1.6],
-    ['interpolate', ['linear'], ['zoom'], 5, 0.12, 8, 0.2, 12, 0.3],
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    5,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 0.9, 0.12],
+    8,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 1.2, 0.2],
+    12,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 1.6, 0.3],
   ];
 }
 
@@ -234,6 +239,7 @@ interface MapViewProps {
   basemapStyle?: string;
   is3DView?: boolean;
   extrusionMode?: 'none' | 'loss' | 'wind';
+  extrusionExaggeration?: number;
   showWindLayer?: boolean;
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
@@ -277,6 +283,7 @@ export default function MapView({
   basemapStyle = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
   is3DView = false,
   extrusionMode = 'none',
+  extrusionExaggeration = 1,
   showWindLayer = true,
   showInundationLayer = true,
   onLayersLoadingChange,
@@ -349,6 +356,7 @@ export default function MapView({
       style: basemapStyle,
       center: initialCenter,
       zoom: initialZoom,
+      canvasContextAttributes: { preserveDrawingBuffer: true },
       maxTileCacheSize: 100, // Limit cache for better memory management
       transformRequest: (url, resourceType) => {
         // Enhanced tile request handling with credentials
@@ -651,11 +659,11 @@ export default function MapView({
             ['linear'],
             ['zoom'],
             STRONG_BUILDING_EXTRUSION_MIN_ZOOM,
-            ['max', ['*', baseHeightExpr, 1.35], 8],
+            ['max', ['*', baseHeightExpr, ['*', 1.35, extrusionExaggeration]], 8],
             14,
-            ['max', ['*', baseHeightExpr, 1.65], 14],
+            ['max', ['*', baseHeightExpr, ['*', 1.65, extrusionExaggeration]], 14],
             16,
-            ['max', ['*', baseHeightExpr, 1.9], 20],
+            ['max', ['*', baseHeightExpr, ['*', 1.9, extrusionExaggeration]], 20],
           ];
 
           const extrusionLayer: maplibregl.AddLayerObject = {
@@ -878,15 +886,15 @@ export default function MapView({
         ['linear'],
         ['zoom'],
         5,
-        ['*', rawExtrusionHeight, 0.2],
+        ['*', rawExtrusionHeight, ['*', 0.2, extrusionExaggeration]],
         7,
-        ['*', rawExtrusionHeight, 0.35],
+        ['*', rawExtrusionHeight, ['*', 0.35, extrusionExaggeration]],
         9,
-        ['*', rawExtrusionHeight, 0.55],
+        ['*', rawExtrusionHeight, ['*', 0.55, extrusionExaggeration]],
         11,
-        ['*', rawExtrusionHeight, 0.8],
+        ['*', rawExtrusionHeight, ['*', 0.8, extrusionExaggeration]],
         13,
-        ['*', rawExtrusionHeight, 1],
+        ['*', rawExtrusionHeight, extrusionExaggeration],
       ];
 
       const extrusionColorExpression =
@@ -924,7 +932,14 @@ export default function MapView({
       m.off('styledata', scheduleRegionalExtrusionUpdate);
       m.off('sourcedata', scheduleRegionalExtrusionUpdate);
     };
-  }, [mapLoaded, is3DView, extrusionMode, styleChangeCounter, selectedCountry]);
+  }, [
+    mapLoaded,
+    is3DView,
+    extrusionMode,
+    extrusionExaggeration,
+    styleChangeCounter,
+    selectedCountry,
+  ]);
 
   // Keep extrusion colors aligned with map mode changes without altering the main effect signature.
   useEffect(() => {

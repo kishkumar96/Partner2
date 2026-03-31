@@ -5,6 +5,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AlertTriangle, Factory } from 'lucide-react';
 import ExportButtons from '../ExportButtons';
 
+jest.mock('qrcode', () => ({
+  toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,qr-code'),
+}));
+
 const mockDoc = {
   addImage: jest.fn(),
   addPage: jest.fn(),
@@ -86,16 +90,72 @@ const baseProps = {
 
 describe('ExportButtons Component', () => {
   let getContextSpy: jest.SpyInstance;
+  const originalFetch = global.fetch;
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  const originalImage = window.Image;
+  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+
+  const mockCanvasContext = {
+    drawImage: jest.fn(),
+    imageSmoothingEnabled: false,
+    imageSmoothingQuality: 'low',
+  };
+
+  class MockImage {
+    onload: null | (() => void) = null;
+    onerror: null | (() => void) = null;
+    naturalWidth = 1600;
+    naturalHeight = 1144;
+
+    set src(_value: string) {
+      setTimeout(() => this.onload?.(), 0);
+    }
+  }
+
+  const mockAssetFetch = (availableAssets: string[]) => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (availableAssets.some(asset => path.includes(asset))) {
+        return {
+          ok: true,
+          text: async () => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>',
+          blob: async () => new Blob(['png'], { type: 'image/png' }),
+        } as Response;
+      }
+
+      return {
+        ok: false,
+        text: async () => '',
+        blob: async () => new Blob(),
+      } as Response;
+    }) as jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    let assetCounter = 0;
+
     getContextSpy = jest
       .spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockImplementation(() => null);
+      .mockImplementation(() => mockCanvasContext as unknown as CanvasRenderingContext2D);
+
+    HTMLCanvasElement.prototype.toDataURL = jest.fn(
+      () => `data:image/png;base64,asset-${++assetCounter}`
+    );
+    URL.createObjectURL = jest.fn(() => 'blob:mock');
+    URL.revokeObjectURL = jest.fn();
+    window.Image = MockImage as unknown as typeof window.Image;
+    mockAssetFetch([]);
   });
 
   afterEach(() => {
     getContextSpy.mockRestore();
+    global.fetch = originalFetch;
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    window.Image = originalImage;
+    HTMLCanvasElement.prototype.toDataURL = originalToDataURL;
   });
 
   it('renders PDF and CSV export buttons', () => {
@@ -151,11 +211,12 @@ describe('ExportButtons Component', () => {
     await waitFor(() => {
       expect(mockDoc.addImage).toHaveBeenCalled();
     });
+
+    // Expect 2 pages: 1 for the map, 1 for moving the table to page 2
+    expect(mockDoc.addPage).toHaveBeenCalledTimes(2);
   });
 
   it('prevents duplicate PDF exports while one is in progress', async () => {
-    jest.useFakeTimers();
-
     const sourceCanvas = document.createElement('canvas');
     sourceCanvas.width = 300;
     sourceCanvas.height = 200;
@@ -165,24 +226,22 @@ describe('ExportButtons Component', () => {
         {...baseProps}
         mapInstance={{
           getCanvas: () => sourceCanvas,
-          once: jest.fn(),
+          once: (_event, callback) => {
+            setTimeout(callback, 1000);
+          },
+          triggerRepaint: jest.fn(),
         }}
       />
     );
 
     const pdfButton = screen.getByRole('button', { name: /pdf/i });
     fireEvent.click(pdfButton);
+    fireEvent.click(pdfButton);
 
     await waitFor(() => {
       expect(pdfButton).toBeDisabled();
       expect(screen.getByText(/exporting/i)).toBeInTheDocument();
-    });
-
-    jest.advanceTimersByTime(2000);
-    jest.useRealTimers();
-
-    await waitFor(() => {
-      expect(mockDoc.save).toHaveBeenCalledTimes(1);
+      expect(jsPDFMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -197,5 +256,85 @@ describe('ExportButtons Component', () => {
     await waitFor(() => {
       expect(screen.getByText('Failed to export PDF. Please try again.')).toBeInTheDocument();
     });
+  });
+
+  it('falls back cleanly when only the first template asset loads', async () => {
+    mockAssetFetch(['Topbackdrop.svg', 'PDF1_SVG1.svg']);
+
+    render(<ExportButtons {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /pdf/i }));
+
+    await waitFor(() => {
+      expect(mockDoc.save).toHaveBeenCalled();
+    });
+
+    expect(mockDoc.addImage).not.toHaveBeenCalledWith(
+      'data:image/png;base64,asset-2',
+      'PNG',
+      0,
+      0,
+      210,
+      297,
+      undefined,
+      'FAST'
+    );
+    expect(mockDoc.addImage).toHaveBeenCalledWith(
+      'data:image/png;base64,asset-1',
+      'PNG',
+      0,
+      0,
+      210,
+      40,
+      undefined,
+      'FAST'
+    );
+  });
+
+  it('uses the page 1 template on the first page and the page 2 template on overflow pages', async () => {
+    mockAssetFetch(['Topbackdrop.svg', 'PDF1_SVG1.svg', 'PDF1_SVG2.svg']);
+
+    const impactBySector = Array.from({ length: 50 }, (_, index) => ({
+      Sector: `Sector ${index + 1}`,
+      Number_Exposed_Buildings: 100 + index,
+      Number_Damaged_Buildings: 10 + index,
+      Building_Loss: 50000 + index,
+      Total_Loss: 100000 + index,
+    }));
+
+    render(
+      <ExportButtons
+        {...baseProps}
+        exposureData={[]}
+        economicDamageData={[]}
+        impactBySector={impactBySector}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /pdf/i }));
+
+    await waitFor(() => {
+      expect(mockDoc.addPage).toHaveBeenCalled();
+      expect(mockDoc.save).toHaveBeenCalled();
+    });
+
+    expect(mockDoc.addImage).toHaveBeenCalledWith(
+      'data:image/png;base64,asset-2',
+      'PNG',
+      0,
+      0,
+      210,
+      297,
+      undefined,
+      'FAST'
+    );
+    expect(mockDoc.addImage).toHaveBeenCalledWith(
+      'data:image/png;base64,asset-3',
+      'PNG',
+      0,
+      0,
+      210,
+      297,
+      undefined,
+      'FAST'
+    );
   });
 });

@@ -130,7 +130,7 @@ export default function AdvancedCharts({
       labels: regionTotals.map(r => r.region),
       datasets: [
         {
-          label: 'Total Loss (Millions USD)',
+          label: 'Total Economic Damage (Millions USD)',
           data: regionTotals.map(r => r.total / 1000000),
           backgroundColor: SEVERITY_COLORS.critical.border,
           borderRadius: 4,

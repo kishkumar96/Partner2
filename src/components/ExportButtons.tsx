@@ -3,6 +3,8 @@
 import { useRef, useState } from 'react';
 import { FileDown, FileSpreadsheet } from 'lucide-react';
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types';
+import QRCode from 'qrcode';
+import { getCountrySlugFromCode } from '@/utils/countrySlug';
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -18,16 +20,29 @@ const PH = 297;
 const MX = 12; // horizontal margin
 const CONTENT_W = PW - 2 * MX; // 186 mm
 
-// Sector table column right-edge x-positions (mm from left page edge)
+// Sector table column boundary x-positions (mm from left page edge)
 // Widths: [Sector 44, Exposed 34, Damaged 34, Bldg Loss 42, Total Loss 32] = 186
 const TCOL_X = [MX, MX + 44, MX + 78, MX + 112, MX + 154, MX + 186];
-const TCOL_WIDTHS = [44, 34, 34, 42, 32];
 
 const FOOTER_H = 9;
 const CONTENT_TOP = 15;
 const CONTENT_BOTTOM = PH - FOOTER_H - 4;
+const TEMPLATE_PAGE1_CONTENT_TOP = 154;
+const TEMPLATE_CONTINUATION_CONTENT_TOP = 34;
+const TEMPLATE_PAGE1_MAP_SLOT = { x: 0, y: 47, w: 210, h: 96 } as const;
+const TEMPLATE_PAGE1_HEADER_RULE = { maskY: 22, lineY: 31 } as const;
+const TEMPLATE_PAGE1_QR_SLOT = { x: 177, y: 273, size: 20 } as const;
+const TEMPLATE_KEY_FIGURE_BOXES = [
+  { x: 24.7, y: 172.25, w: 45.3, h: 14.81 },
+  { x: 82.2, y: 172.25, w: 45.6, h: 14.81 },
+  { x: 143.84, y: 172.25, w: 41.16, h: 14.81 },
+  { x: 24.7, y: 205.48, w: 45.3, h: 14.81 },
+  { x: 82.2, y: 205.48, w: 45.6, h: 14.81 },
+  { x: 143.84, y: 205.48, w: 41.16, h: 14.81 },
+] as const;
 const MAP_MAX_DIMENSION_PX = 2200;
 const MAP_CAPTURE_TIMEOUT_MS = 1500;
+const ASSET_FETCH_TIMEOUT_MS = 3000; // Increased for reliable template loading
 
 /** Minimal map type — avoids importing all of maplibre-gl into this module */
 type MapLike = {
@@ -35,6 +50,15 @@ type MapLike = {
   once?: (event: string, callback: () => void) => void;
   triggerRepaint?: () => void;
 } | null;
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> => {
+  return await Promise.race([
+    promise,
+    new Promise<undefined>(resolve => {
+      setTimeout(() => resolve(undefined), timeoutMs);
+    }),
+  ]);
+};
 
 interface ExportButtonsProps {
   events: Event[];
@@ -165,6 +189,87 @@ export default function ExportButtons({
     return exportCanvas;
   };
 
+  const fetchAssetDataUrl = async (
+    path: string,
+    options?:
+      | number
+      | {
+          rasterizeWidthPx?: number;
+          targetHeightPx?: number;
+          fit?: 'contain' | 'cover';
+          cropAnchorY?: 'top' | 'center';
+        }
+  ): Promise<string | undefined> => {
+    try {
+      const response = await fetch(path);
+      if (!response.ok) return undefined;
+
+      const isSvg = path.toLowerCase().endsWith('.svg');
+      if (!isSvg) {
+        const blob = await response.blob();
+        return await new Promise<string>(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      const svgText = await response.text();
+      const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+      const objectUrl = URL.createObjectURL(svgBlob);
+
+      try {
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error(`Failed to load SVG asset: ${path}`));
+          img.src = objectUrl;
+        });
+
+        const normalizedOptions =
+          typeof options === 'number' ? { rasterizeWidthPx: options } : (options ?? {});
+        const width = normalizedOptions.rasterizeWidthPx || image.naturalWidth || 1600;
+        const aspectRatio =
+          image.naturalWidth && image.naturalHeight
+            ? image.naturalHeight / image.naturalWidth
+            : 0.714;
+        const naturalHeight = Math.max(1, Math.round(width * aspectRatio));
+        const height = Math.max(1, normalizedOptions.targetHeightPx || naturalHeight);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        if (!context) return undefined;
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+
+        if (
+          normalizedOptions.fit === 'cover' &&
+          image.naturalWidth > 0 &&
+          image.naturalHeight > 0
+        ) {
+          const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+          const drawWidth = image.naturalWidth * scale;
+          const drawHeight = image.naturalHeight * scale;
+          const dx = (width - drawWidth) / 2;
+          const dy = normalizedOptions.cropAnchorY === 'top' ? 0 : (height - drawHeight) / 2;
+
+          context.drawImage(image, dx, dy, drawWidth, drawHeight);
+        } else {
+          context.drawImage(image, 0, 0, width, height);
+        }
+
+        return canvas.toDataURL('image/png');
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch {
+      return undefined;
+    }
+  };
+
   // ─── OCHA SitRep PDF ────────────────────────────────────────────────────────
   const downloadPDF = async () => {
     if (disabled) {
@@ -189,6 +294,80 @@ export default function ExportButtons({
         month: 'long',
         year: 'numeric',
       });
+
+      // Map country code to header image
+      const countryHeaderMap: Record<string, string> = {
+        VU: '/pdf-assets/Country headers/DashBoard_Header_Vanuatu.png',
+        CK: '/pdf-assets/Country headers/DashBoard_Header_Cook Islands.png',
+        TO: '/pdf-assets/Country headers/DashBoard_Header_Tonga.png',
+        WS: '/pdf-assets/Country headers/DashBoard_Header_Samoa.png',
+      };
+      const countryFlagMap: Record<string, string> = {
+        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
+        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
+        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
+        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
+        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+      };
+      const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
+      const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
+
+      // Load all assets including icons, QR code, and country header
+      const [
+        headerBackdropSrc,
+        templatePage1Src,
+        templatePage2Src,
+        countryHeaderSrc,
+        countryFlagSrc,
+        tableFooterBannerSrc,
+        personIconSrc,
+        buildingIconSrc,
+      ] = await Promise.all([
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/Topbackdrop.svg', {
+            rasterizeWidthPx: 2400,
+            targetHeightPx: 460,
+            fit: 'cover',
+            cropAnchorY: 'top',
+          }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+            rasterizeWidthPx: 2480,
+            targetHeightPx: 3508,
+            fit: 'cover',
+            cropAnchorY: 'top',
+          }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+            rasterizeWidthPx: 2480,
+            targetHeightPx: 3508,
+            fit: 'cover',
+            cropAnchorY: 'top',
+          }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        // Load country header if available
+        countryHeaderPath
+          ? withTimeout(fetchAssetDataUrl(countryHeaderPath), ASSET_FETCH_TIMEOUT_MS)
+          : Promise.resolve(undefined),
+        countryFlagPath
+          ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
+          : Promise.resolve(undefined),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+      ]);
+      const useTemplateBackground = Boolean(templatePage1Src && templatePage2Src);
 
       doc.setProperties({
         title: `PDIE Situation Report - ${cFull}`,
@@ -295,76 +474,154 @@ export default function ExportButtons({
       const schoolsExposed = Number(ns.Exposed_Schools) || 0;
       const maxWindKmph = Number(ns.Max_Wind_Gusts) || 0;
 
-      // ── Helper: draw footer on every page ────────────────────────────────
-      const drawFooter = (page: number, total: number) => {
-        doc.setPage(page);
-        doc.setFillColor(...OCHA_BLUE);
-        doc.rect(0, PH - FOOTER_H, PW, FOOTER_H, 'F');
-        doc.setFontSize(6.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(255, 255, 255);
-        doc.text(`Page ${page} of ${total}`, MX, PH - 3);
-        doc.text(
-          'Pacific Disaster Impact & Exposure (PDIE) Dashboard  |  SPC / OCHA Pacific',
-          PW / 2,
-          PH - 3,
-          { align: 'center' }
-        );
-        doc.text(reportDate, PW - MX, PH - 3, { align: 'right' });
-      };
+      // Footer removed for PDF export.
+      const drawFooter = (_page: number, _total: number) => {};
 
       // ════════════════════════════════════════════════════════════════════
       //  PAGE 1
       // ════════════════════════════════════════════════════════════════════
 
-      // ── Header band ───────────────────────────────────────────────────────
-      doc.setFillColor(...OCHA_BLUE);
-      doc.rect(0, 0, PW, 40, 'F');
+      let currentPage = 1;
+      const drawTemplateBackground = (pageNumber: number) => {
+        if (!useTemplateBackground) return;
+        const templateSrc = pageNumber === 1 ? templatePage1Src : templatePage2Src;
+        if (!templateSrc) return;
+        doc.addImage(templateSrc, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+      };
 
-      // Accent bar
-      doc.setFillColor(...OCHA_ORANGE);
-      doc.rect(0, 34, PW, 3, 'F');
+      const addReportPage = () => {
+        doc.addPage();
+        currentPage += 1;
+        drawTemplateBackground(currentPage);
+        return useTemplateBackground ? TEMPLATE_CONTINUATION_CONTENT_TOP : CONTENT_TOP;
+      };
 
-      doc.setTextColor(255, 255, 255);
+      drawTemplateBackground(currentPage);
 
-      // "SITUATION REPORT" label
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.text('SITUATION REPORT', MX, 10);
+      if (useTemplateBackground) {
+        doc.setFillColor(236, 248, 252);
+        doc.rect(
+          0,
+          TEMPLATE_PAGE1_HEADER_RULE.maskY,
+          PW,
+          TEMPLATE_PAGE1_MAP_SLOT.y - TEMPLATE_PAGE1_HEADER_RULE.maskY,
+          'F'
+        );
+        doc.setDrawColor(...OCHA_BLUE);
+        doc.setLineWidth(0.9);
+        doc.line(0, TEMPLATE_PAGE1_HEADER_RULE.lineY, PW, TEMPLATE_PAGE1_HEADER_RULE.lineY);
+      }
 
-      // Report number / date (right)
-      doc.setFont('helvetica', 'normal');
-      doc.text(`No. 01  |  ${reportDate}`, PW - MX, 10, { align: 'right' });
+      if (useTemplateBackground && mapCanvas) {
+        const { x, y, w, h } = TEMPLATE_PAGE1_MAP_SLOT;
+        doc.setFillColor(223, 228, 231);
+        doc.rect(x, y, w, h, 'F');
+        const sourceW = mapCanvas.width;
+        const sourceH = mapCanvas.height;
+        const widthRatio = w / sourceW;
+        const heightRatio = h / sourceH;
+        const scale = Math.min(widthRatio, heightRatio);
+        const drawW = sourceW * scale;
+        const drawH = sourceH * scale;
+        const drawX = x + (w - drawW) / 2;
+        const drawY = y + (h - drawH) / 2;
+        doc.addImage(mapCanvas, 'PNG', drawX, drawY, drawW, drawH, undefined, 'FAST');
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...OCHA_BLUE);
+        doc.text(
+          'Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.',
+          PW / 2,
+          y + h + 3,
+          { align: 'center' }
+        );
+      }
 
-      // Event name
-      doc.setFontSize(17);
-      doc.setFont('helvetica', 'bold');
-      doc.text(eventName, MX, 23);
+      // Only draw header elements if NOT using template background
+      if (!useTemplateBackground) {
+        // ── Header band ─────────────────────────────────────────────────────
+        if (headerBackdropSrc) {
+          doc.addImage(headerBackdropSrc, 'PNG', 0, 0, PW, 40, undefined, 'FAST');
+        } else {
+          doc.setFillColor(...OCHA_BLUE);
+          doc.rect(0, 0, PW, 40, 'F');
 
-      // Country full name
-      doc.setFontSize(9.5);
-      doc.setFont('helvetica', 'normal');
-      doc.text(cFull, MX, 31);
+          // Accent bar
+          doc.setFillColor(...OCHA_ORANGE);
+          doc.rect(0, 34, PW, 3, 'F');
+        }
 
-      // Branding right
-      doc.setFontSize(7.5);
-      doc.text('Pacific Disaster Impact & Exposure  |  PDIE Dashboard', PW - MX, 31, {
-        align: 'right',
-      });
+        doc.setTextColor(255, 255, 255);
 
-      let y = 49;
+        // "SITUATION REPORT" label
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text('SITUATION REPORT', MX, 10);
+
+        // Report number / date (right)
+        doc.setFont('helvetica', 'normal');
+        doc.text(`No. 01  |  ${reportDate}`, PW - MX, 10, { align: 'right' });
+
+        // Country full name
+        doc.setFontSize(9.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(cFull, MX, 31);
+
+        // Branding right
+        doc.setFontSize(7.5);
+        doc.text('Pacific Disaster Impact & Exposure  |  PDIE Dashboard', PW - MX, 31, {
+          align: 'right',
+        });
+      } else {
+        // When using template, add dynamic text overlays
+        doc.setTextColor(...OCHA_DARK);
+
+        // Country header at the top of the page (above map slot)
+        if (countryHeaderSrc) {
+          const headerWidth = PW; // Full page width (210mm for A4)
+          const headerHeight = 30; // Fits above map slot (map starts at y=36)
+          doc.addImage(countryHeaderSrc, 'PNG', 0, 0, headerWidth, headerHeight, undefined, 'FAST');
+        }
+
+        doc.setFillColor(236, 248, 252);
+        doc.rect(0, 26, PW, 10, 'F');
+        doc.setDrawColor(...OCHA_BLUE);
+        doc.setLineWidth(0.9);
+        doc.line(0, TEMPLATE_PAGE1_HEADER_RULE.lineY, PW, TEMPLATE_PAGE1_HEADER_RULE.lineY);
+
+        if (countryFlagSrc) {
+          const flagX = 8;
+          const flagY = 32;
+          const flagW = 26;
+          const flagH = 12;
+          doc.addImage(countryFlagSrc, 'PNG', flagX, flagY, flagW, flagH, undefined, 'FAST');
+        }
+
+        // Report number / date
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`No. 01 | ${reportDate}`, PW - MX, 35, { align: 'right' });
+
+        // Branding line
+        doc.setFontSize(8.5);
+        doc.text('Pacific Disaster Impact & Exposure | PDIE Dashboard', PW - MX, 40, {
+          align: 'right',
+        });
+      }
+
+      // Page 1 template needs a lower content anchor than continuation pages.
+      let y = useTemplateBackground ? TEMPLATE_PAGE1_CONTENT_TOP : 49;
       const ensureSpace = (requiredHeight: number) => {
         if (y + requiredHeight <= CONTENT_BOTTOM) return;
-        doc.addPage();
-        y = CONTENT_TOP;
+        y = addReportPage();
       };
 
       // ── KEY FIGURES ───────────────────────────────────────────────────────
-      doc.setFontSize(9.5);
+      doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...TEXT_DARK);
-      doc.text('KEY FIGURES', MX, y);
-      y += 4;
+      doc.setTextColor(...OCHA_BLUE);
+      doc.text('KEY FIGURES', PW / 2, y, { align: 'center' });
+      y += useTemplateBackground ? 10 : 8;
 
       const figures: Array<{ label: string; value: string }> = [
         {
@@ -380,7 +637,7 @@ export default function ExportButtons({
           value: exposedBuildings > 0 ? formatInteger(exposedBuildings) : 'N/A',
         },
         {
-          label: 'Total Economic Loss',
+          label: 'Total Economic Damage',
           value: totalLoss > 0 ? formatCompactUsd(totalLoss) : 'N/A',
         },
         {
@@ -398,47 +655,96 @@ export default function ExportButtons({
         },
       ];
 
-      const BOX_COLS = 3;
-      const BOX_GAP = 4;
-      const BOX_W = (CONTENT_W - (BOX_COLS - 1) * BOX_GAP) / BOX_COLS; // ≈ 59.3 mm
-      const BOX_H = 20;
+      if (useTemplateBackground) {
+        TEMPLATE_KEY_FIGURE_BOXES.forEach((box, i) => {
+          const fig = figures[i];
+          const iconMap = [
+            personIconSrc,
+            undefined,
+            buildingIconSrc,
+            undefined,
+            undefined,
+            undefined,
+          ];
+          const iconSrc = iconMap[i];
+          const iconSize = 14;
+          const iconY = box.y - 19;
+          const valueY = box.y + 4.6; // Position value slightly higher for better centering
+          const labelLines = doc.splitTextToSize(fig.label.toUpperCase(), box.w - 3);
+          const labelLineHeight = 2.3;
+          const labelStartY =
+            box.y + box.h - 3.8 - labelLineHeight * Math.max(0, labelLines.length - 1);
 
-      figures.forEach((fig, i) => {
-        const col = i % BOX_COLS;
-        const row = Math.floor(i / BOX_COLS);
-        const bx = MX + col * (BOX_W + BOX_GAP);
-        const by = y + row * (BOX_H + 3);
+          if (iconSrc) {
+            doc.addImage(
+              iconSrc,
+              'PNG',
+              box.x + box.w / 2 - iconSize / 2,
+              iconY,
+              iconSize,
+              iconSize,
+              undefined,
+              'FAST'
+            );
+          }
 
-        doc.setFillColor(...STRIPE);
-        doc.roundedRect(bx, by, BOX_W, BOX_H, 2, 2, 'F');
+          // Draw value (number)
+          doc.setFontSize(15);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(255, 255, 255);
+          doc.text(fig.value, box.x + box.w / 2, valueY, { align: 'center' });
 
-        doc.setFillColor(...OCHA_ORANGE);
-        doc.rect(bx, by, 3, BOX_H, 'F');
-
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...OCHA_DARK);
-        doc.text(fig.value, bx + BOX_W / 2 + 1.5, by + BOX_H * 0.55, { align: 'center' });
-
-        doc.setFontSize(6.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...TEXT_MED);
-        doc.text(fig.label.toUpperCase(), bx + BOX_W / 2 + 1.5, by + BOX_H * 0.83, {
-          align: 'center',
+          // Draw label (description text)
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(255, 255, 255);
+          doc.text(labelLines, box.x + box.w / 2, labelStartY, {
+            align: 'center',
+            baseline: 'top',
+          });
         });
-      });
-      y += 2 * (BOX_H + 3) + 4;
+
+        y = Math.max(...TEMPLATE_KEY_FIGURE_BOXES.map(box => box.y + box.h)) + 22;
+      } else {
+        const BOX_COLS = 3;
+        const BOX_GAP = 4;
+        const BOX_W = (CONTENT_W - (BOX_COLS - 1) * BOX_GAP) / BOX_COLS; // ≈ 59.3 mm
+        const BOX_H = 20;
+
+        figures.forEach((fig, i) => {
+          const col = i % BOX_COLS;
+          const row = Math.floor(i / BOX_COLS);
+          const bx = MX + col * (BOX_W + BOX_GAP);
+          const by = y + row * (BOX_H + 3);
+
+          doc.setFillColor(...STRIPE);
+          doc.roundedRect(bx, by, BOX_W, BOX_H, 2, 2, 'F');
+
+          doc.setFillColor(...OCHA_ORANGE);
+          doc.rect(bx, by, 3, BOX_H, 'F');
+
+          doc.setFontSize(13);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(...OCHA_DARK);
+          doc.text(fig.value, bx + BOX_W / 2 + 1.5, by + BOX_H * 0.55, { align: 'center' });
+
+          doc.setFontSize(6.5);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...TEXT_MED);
+          doc.text(fig.label.toUpperCase(), bx + BOX_W / 2 + 1.5, by + BOX_H * 0.83, {
+            align: 'center',
+          });
+        });
+
+        y += 2 * (BOX_H + 3) + 4;
+      }
 
       // ── SITUATION OVERVIEW ────────────────────────────────────────────────
-      doc.setFontSize(9.5);
+      doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...TEXT_DARK);
+      doc.setTextColor(...OCHA_BLUE);
       doc.text('SITUATION OVERVIEW', MX, y);
-      y += 3;
-      doc.setDrawColor(...OCHA_BLUE);
-      doc.setLineWidth(0.5);
-      doc.line(MX, y, PW - MX, y);
-      y += 5;
+      y += 9;
 
       const narrative =
         `${eventName} impacted ${cFull}, resulting in widespread damage across multiple sectors. ` +
@@ -454,51 +760,105 @@ export default function ExportButtons({
         `This Situation Report was generated from the PDIE (Pacific Disaster Impact & Exposure) ` +
         `Dashboard using satellite-derived and modelled hazard and exposure data provided by SPC.`;
 
-      doc.setFontSize(8.5);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...TEXT_DARK);
+      doc.setTextColor(...OCHA_BLUE);
       const narLines = doc.splitTextToSize(narrative, CONTENT_W);
-      doc.text(narLines, MX, y);
-      y += narLines.length * 4.8 + 7;
+      doc.text(narLines, MX, y, { maxWidth: CONTENT_W });
+      y += narLines.length * 6.2 + 8;
+
+      // ── FORCE PAGE BREAK: Move table to page 2 ────────────────────────────
+      y = addReportPage();
 
       // ── SECTOR ANALYSIS TABLE ─────────────────────────────────────────────
-      doc.setFontSize(9.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...TEXT_DARK);
-      doc.text('SECTOR ANALYSIS', MX, y);
-      y += 3;
-      doc.setDrawColor(...OCHA_BLUE);
-      doc.setLineWidth(0.5);
-      doc.line(MX, y, PW - MX, y);
-      y += 5;
+      // Only draw section header if not using template (template has it built-in)
+      if (!useTemplateBackground) {
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...OCHA_BLUE);
+        doc.text('SECTOR ANALYSIS', MX, y);
+        y += 5;
+      }
 
-      const ROW_H = 7;
-      const THEAD_H = 7;
+      const ROW_H = 8.5;
+      const THEAD_H = 16;
+      const TABLE_TITLE_SPACE = 18;
+      const CELL_PAD_X = 2;
+      const TABLE_X = MX;
+      const TABLE_W = TCOL_X[5] - TCOL_X[0];
+      const TABLE_RIGHT = TABLE_X + TABLE_W;
+      const TABLE_BLUE: [number, number, number] = [0, 70, 173];
+      const TABLE_FILL: [number, number, number] = [241, 248, 252];
+      const TOTAL_FILL: [number, number, number] = [157, 211, 231];
+      const TABLE_RULE: [number, number, number] = [98, 211, 241];
+      const TABLE_TEXT: [number, number, number] = [0, 124, 224];
+      const TABLE_BG: [number, number, number] = [255, 255, 255];
+      const getRowsThatFit = (pageStartY: number, reserveTotalRow: boolean) => {
+        const usableHeight = CONTENT_BOTTOM - (pageStartY + 2) - (reserveTotalRow ? ROW_H + 6 : 0);
+        return Math.max(0, Math.floor(usableHeight / ROW_H));
+      };
+      const drawTableBackdrop = (rowsRemaining: number, forceTotalRow = false) => {
+        const pageStartY = y;
+        const rowsWithTotal = getRowsThatFit(pageStartY, true);
+        const includeTotalRow = forceTotalRow || rowsRemaining <= rowsWithTotal;
+        const rowsOnPage = Math.min(rowsRemaining, getRowsThatFit(pageStartY, includeTotalRow));
+        const backdropTop = pageStartY - TABLE_TITLE_SPACE;
+        const backdropHeight =
+          TABLE_TITLE_SPACE + rowsOnPage * ROW_H + (includeTotalRow ? ROW_H : 0) + 7;
+
+        doc.setFillColor(...TABLE_BG);
+        doc.rect(TABLE_X - 1, backdropTop, TABLE_W + 2, backdropHeight, 'F');
+      };
+      const drawRowRule = (ruleY: number) => {
+        doc.setDrawColor(...TABLE_RULE);
+        doc.setLineWidth(0.35);
+        doc.line(TABLE_X, ruleY, TABLE_RIGHT, ruleY);
+      };
+      const drawColumnRules = (topY: number, bottomY: number) => {
+        doc.setDrawColor(...TABLE_RULE);
+        doc.setLineWidth(0.35);
+        TCOL_X.slice(1, -1).forEach(x => {
+          doc.line(x, topY, x, bottomY);
+        });
+      };
+      const drawSectorTableTitle = () => {
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...TABLE_BLUE);
+        doc.text('SECTOR ANALYSIS', PW / 2, y - 14, { align: 'center' });
+      };
       const drawSectorTableHeader = () => {
-        doc.setFillColor(...OCHA_BLUE);
-        doc.rect(MX, y - THEAD_H + 1.5, CONTENT_W, THEAD_H, 'F');
-        doc.setFontSize(7);
+        const headerTop = y - THEAD_H + 3;
+        const headerCenterY = headerTop + THEAD_H / 2;
+        const headerLineHeight = 3.4;
+        doc.setFillColor(...TABLE_BLUE);
+        doc.rect(TABLE_X, headerTop, TABLE_W, THEAD_H, 'F');
+        doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
 
         const tHeaders = [
-          'Sector',
-          'Exposed Bldgs',
-          'Damaged Bldgs',
-          'Building Loss (USD)',
-          'Total Loss (USD)',
+          ['Sector'],
+          ['Exposed', 'Bldgs'],
+          ['Damaged', 'Bldgs'],
+          ['Building Loss', '(USD)'],
+          ['Total Loss (USD)'],
         ];
-        tHeaders.forEach((h, i) => {
-          if (i === 0) {
-            doc.text(h, TCOL_X[0] + 2, y);
-          } else {
-            doc.text(h, TCOL_X[i + 1] - 2, y, { align: 'right' });
-          }
+        tHeaders.forEach((lines, i) => {
+          const centerX = (TCOL_X[i] + TCOL_X[i + 1]) / 2;
+          const startY = headerCenterY - ((lines.length - 1) * headerLineHeight) / 2;
+          lines.forEach((line, lineIndex) => {
+            doc.text(line, centerX, startY + lineIndex * headerLineHeight, {
+              align: 'center',
+              baseline: 'middle',
+            });
+          });
         });
-        y += THEAD_H - 1;
+        y = headerTop + THEAD_H + 3;
       };
 
-      // Table header row
+      drawTableBackdrop(sectorRows.length);
+      drawSectorTableTitle();
       drawSectorTableHeader();
 
       let totalSectorLoss = 0;
@@ -508,19 +868,22 @@ export default function ExportButtons({
         totalSectorLoss += sLoss;
 
         if (y + ROW_H + 2 > CONTENT_BOTTOM) {
-          doc.addPage();
-          y = CONTENT_TOP;
+          y = addReportPage();
+          drawTableBackdrop(sectorRows.length - idx);
+          drawSectorTableTitle();
           drawSectorTableHeader();
         }
 
-        if (idx % 2 === 0) {
-          doc.setFillColor(...STRIPE);
-          doc.rect(MX, y - ROW_H + 2, CONTENT_W, ROW_H, 'F');
-        }
+        const rowTop = y - ROW_H + 2;
+        const rowBottom = y + 2;
+        doc.setFillColor(...TABLE_FILL);
+        doc.rect(TABLE_X, rowTop, TABLE_W, ROW_H, 'F');
+        drawRowRule(rowBottom);
+        drawColumnRules(rowTop, rowBottom);
 
         doc.setFontSize(7.5);
-        doc.setFont('helvetica', idx % 2 === 0 ? 'normal' : 'normal');
-        doc.setTextColor(...TEXT_DARK);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...TABLE_TEXT);
 
         const cells = [
           row.Sector || '—',
@@ -531,9 +894,9 @@ export default function ExportButtons({
         ];
         cells.forEach((cell, i) => {
           if (i === 0) {
-            doc.text(cell, TCOL_X[0] + 2, y);
+            doc.text(cell, TCOL_X[0] + CELL_PAD_X, y);
           } else {
-            doc.text(cell, TCOL_X[i + 1] - 2, y, { align: 'right' });
+            doc.text(cell, TCOL_X[i] + CELL_PAD_X, y);
           }
         });
         y += ROW_H;
@@ -542,37 +905,50 @@ export default function ExportButtons({
       // Total row
       if (sectorRows.length > 0) {
         if (y + ROW_H + 4 > CONTENT_BOTTOM) {
-          doc.addPage();
-          y = CONTENT_TOP;
+          y = addReportPage();
+          drawTableBackdrop(0, true);
+          drawSectorTableTitle();
           drawSectorTableHeader();
         }
-        doc.setFillColor(...OCHA_DARK);
-        doc.rect(MX, y - ROW_H + 2, CONTENT_W, ROW_H, 'F');
+        const totalTop = y - ROW_H + 2;
+        const totalBottom = y + 2;
+        doc.setFillColor(...TOTAL_FILL);
+        doc.rect(TABLE_X, totalTop, TABLE_W, ROW_H, 'F');
+        drawRowRule(totalBottom);
+        drawColumnRules(totalTop, totalBottom);
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(255, 255, 255);
-        doc.text('TOTAL', TCOL_X[0] + 2, y);
-        doc.text(formatUsd(totalSectorLoss), TCOL_X[5] - 2, y, {
-          align: 'right',
-        });
-        y += ROW_H + 4;
+        doc.setTextColor(...TABLE_BLUE);
+        doc.text('TOTAL', TCOL_X[0] + CELL_PAD_X, y);
+        doc.text(formatUsd(totalSectorLoss), TCOL_X[4] + CELL_PAD_X, y);
+        y += ROW_H + -2;
       }
 
       // Data source note
+      y += 2;
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'italic');
-      doc.setTextColor(...TEXT_MED);
+      doc.setTextColor(...TABLE_TEXT);
       doc.text(
         'Source: PDIE Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
-        MX,
-        y
+        PW / 2,
+        y + 0.6,
+        { align: 'center' }
       );
-      y += 8;
+      y += 10;
+
+      if (tableFooterBannerSrc) {
+        const bannerW = CONTENT_W;
+        const bannerH = (bannerW * 1153) / 2480;
+        ensureSpace(bannerH + 4);
+        doc.addImage(tableFooterBannerSrc, 'PNG', MX, y, bannerW, bannerH, undefined, 'FAST');
+        y += bannerH + 4;
+      }
 
       // ── MAP IMAGE ─────────────────────────────────────────────────────────
-      if (mapCanvas) {
+      if (mapCanvas && !useTemplateBackground) {
+        y = addReportPage();
         const mapH = 72;
-        ensureSpace(mapH + 20);
         doc.setFontSize(9.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...TEXT_DARK);
@@ -588,6 +964,31 @@ export default function ExportButtons({
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(...TEXT_MED);
         doc.text('Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.', MX, y);
+      }
+
+      // ── QR CODE ───────────────────────────────────────────────────────────
+      try {
+        // Generate country-specific URL for QR code
+        const countrySlug = countryCode ? getCountrySlugFromCode(countryCode) : null;
+        const dashboardUrl = countrySlug
+          ? `https://pdie-dashboard.spc.int/${countrySlug}`
+          : `https://pdie-dashboard.spc.int`;
+
+        const qrDataUrl = await QRCode.toDataURL(dashboardUrl, {
+          width: 256,
+          margin: 1,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+
+        // Add QR code to the reserved slot on page 1
+        const qrSize = 20;
+        doc.setPage(1);
+        const qrX = useTemplateBackground ? TEMPLATE_PAGE1_QR_SLOT.x : PW - MX - qrSize - 2;
+        const qrY = useTemplateBackground ? TEMPLATE_PAGE1_QR_SLOT.y : PH - FOOTER_H - qrSize - 8;
+        const renderQrSize = useTemplateBackground ? TEMPLATE_PAGE1_QR_SLOT.size : qrSize;
+        doc.addImage(qrDataUrl, 'PNG', qrX, qrY, renderQrSize, renderQrSize, undefined, 'FAST');
+      } catch (error) {
+        console.warn('QR code generation skipped:', error);
       }
 
       // ── Footer on all pages ───────────────────────────────────────────────

@@ -8,24 +8,27 @@ import {
   Map as MapIcon,
   AlertCircle,
   ChevronDown,
-  Globe2,
   LogOut,
   BarChart3,
   DollarSign,
   Layers,
   MapPin,
   Users,
+  Download,
+  Loader2,
+  Wind,
+  Compass,
 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import ReactCountryFlag from 'react-country-flag';
 import ActiveFilters from '@/components/ActiveFilters';
-import { MapControls } from '@/components/MapControls';
+import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
-import { COUNTRY_CONFIGS, getAggregationLabel } from '@/data/countryConfigs';
+import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
 import {
   COUNTRY_CYCLONE_CONFIG,
   loadAllRealData,
@@ -40,6 +43,12 @@ import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/url
 import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { normalizeHazardIds } from '@/utils/hazardIds';
+import {
+  hasBasemapPreference,
+  getInitialBasemap,
+  saveBasemapPreference,
+  resetBasemapPreference,
+} from '@/utils/userPreferences';
 
 function haveSameItems(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
@@ -73,6 +82,10 @@ const FilterPanel = dynamic(() => import('@/components/FilterPanel'), {
   loading: () => <PanelLoader />,
 });
 
+const MapPanel = dynamic(() => import('@/components/MapPanel'), {
+  loading: () => <PanelLoader />,
+});
+
 const SummaryPanel = dynamic(() => import('@/components/SummaryPanel'), {
   loading: () => <PanelLoader />,
 });
@@ -99,10 +112,23 @@ const Toast = dynamic(() => import('@/components/Toast'), {
   loading: () => null,
 });
 
+const BasemapPreferenceModal = dynamic(() => import('@/components/BasemapPreferenceModal'), {
+  ssr: false,
+  loading: () => null,
+});
+
 interface DashboardViewProps {
   countryCode: CountryCode;
   allowCountrySwitch?: boolean;
   showLogout?: boolean;
+}
+
+interface TourUiSnapshot {
+  showFilters: boolean;
+  showMapControls: boolean;
+  showSummary: boolean;
+  showAnalytics: boolean;
+  filterPanelTab: 'filters' | 'cyclone';
 }
 
 export default function DashboardView({
@@ -140,9 +166,9 @@ export default function DashboardView({
   const [mapStyle, setMapStyle] = useState<'loss' | 'wind'>(urlState.mapStyle || 'loss');
   const [is3DView, setIs3DView] = useState(false);
   const [extrusionMode, setExtrusionMode] = useState<'none' | 'loss' | 'wind'>('none');
-  const [basemapStyle, setBasemapStyle] = useState(
-    urlState.basemap || 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-  );
+  const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
+  const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
+  const [showBasemapPreferenceModal, setShowBasemapPreferenceModal] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
     initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
@@ -157,13 +183,20 @@ export default function DashboardView({
   const [showRoadsLayer, setShowRoadsLayer] = useState(false);
   const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
-  const [showFilters, setShowFilters] = useState(urlState.showFilters || false);
-  const [showSummary, setShowSummary] = useState(urlState.showSummary || false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const initialShowMapControls = urlState.showMapControls ?? false;
+  const [showFilters, setShowFilters] = useState(
+    initialShowMapControls ? false : (urlState.showFilters ?? true)
+  );
+  const [showMapControls, setShowMapControls] = useState(initialShowMapControls);
+  const [showSummary, setShowSummary] = useState(urlState.showSummary ?? false);
+  const [showAnalytics, setShowAnalytics] = useState(true);
   const [showMetadata, setShowMetadata] = useState(false);
   const [filterPanelTab, setFilterPanelTab] = useState<'filters' | 'cyclone'>('filters');
   const [showCycloneControls, setShowCycloneControls] = useState(false);
   const [isCyclonePlaying, setIsCyclonePlaying] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const tourUiSnapshotRef = useRef<TourUiSnapshot | null>(null);
   const [storyMode, setStoryMode] = useState(urlState.storyMode || false);
   const [currentCycloneIndex, setCurrentCycloneIndex] = useState(
     urlState.cycloneIndex !== undefined ? urlState.cycloneIndex : 0
@@ -180,6 +213,7 @@ export default function DashboardView({
   >(undefined);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const filterPanelRef = useRef<HTMLDivElement>(null);
+  const mapPanelRef = useRef<HTMLDivElement>(null);
   const summaryPanelRef = useRef<HTMLDivElement>(null);
   const [cycloneControlsHost, setCycloneControlsHost] = useState<HTMLDivElement | null>(null);
   const cycloneControlsHostRef = useCallback((node: HTMLDivElement | null) => {
@@ -188,6 +222,70 @@ export default function DashboardView({
 
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+
+  const openFilterPanel = useCallback((tab: 'filters' | 'cyclone' = 'filters') => {
+    setShowFilters(true);
+    setShowMapControls(false);
+    setFilterPanelTab(tab);
+  }, []);
+
+  const openMapPanel = useCallback(() => {
+    setShowMapControls(true);
+    setShowFilters(false);
+    setShowAnalytics(false);
+  }, []);
+
+  // Show basemap preference modal on first visit (if no preference saved and no URL state)
+  useEffect(() => {
+    if (!hasBasemapPreference() && !urlState.basemap) {
+      setShowBasemapPreferenceModal(true);
+    }
+  }, [urlState.basemap]);
+
+  const openSummaryPanel = useCallback(() => {
+    setShowSummary(true);
+    setShowFilters(false);
+    setShowMapControls(false);
+    setShowAnalytics(false);
+  }, []);
+
+  const restoreTourUiState = useCallback(() => {
+    const snapshot = tourUiSnapshotRef.current;
+    if (!snapshot) return;
+
+    setShowFilters(snapshot.showFilters);
+    setShowMapControls(snapshot.showMapControls);
+    setShowSummary(snapshot.showSummary);
+    setShowAnalytics(snapshot.showAnalytics);
+    setFilterPanelTab(snapshot.filterPanelTab);
+    tourUiSnapshotRef.current = null;
+  }, []);
+
+  const closeTour = useCallback(() => {
+    setIsTourOpen(false);
+    restoreTourUiState();
+  }, [restoreTourUiState]);
+
+  const finishTour = useCallback(() => {
+    setIsTourOpen(false);
+    restoreTourUiState();
+    setToastMessage('Guided tour completed. You can restart it anytime from the Tour button.');
+    setToastType('success');
+    setToastAction(undefined);
+    setShowToast(true);
+  }, [restoreTourUiState]);
+
+  const startTour = useCallback(() => {
+    tourUiSnapshotRef.current = {
+      showFilters,
+      showMapControls,
+      showSummary,
+      showAnalytics,
+      filterPanelTab,
+    };
+    setTourStepIndex(0);
+    setIsTourOpen(true);
+  }, [showFilters, showMapControls, showSummary, showAnalytics, filterPanelTab]);
 
   const {
     hazards: allHazards,
@@ -269,6 +367,7 @@ export default function DashboardView({
   );
   const activeCycloneName =
     events[0]?.name || COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventName || 'Tropical Cyclone';
+  const platformName = getCountryAppName(selectedCountry);
   const storyBeats = useMemo(
     () => (cycloneForecast ? detectStoryBeats(cycloneForecast, selectedCountry) : []),
     [cycloneForecast, selectedCountry]
@@ -366,6 +465,7 @@ export default function DashboardView({
           cycloneIndex: currentCycloneIndex,
           storyMode,
           showFilters,
+          showMapControls,
           showSummary,
           // Merge with any partial updates
           ...state,
@@ -395,6 +495,7 @@ export default function DashboardView({
       currentCycloneIndex,
       storyMode,
       showFilters,
+      showMapControls,
       showSummary,
       pathname,
       router,
@@ -741,6 +842,77 @@ export default function DashboardView({
     []
   );
 
+  const tourSteps = useMemo<GuidedTourStep[]>(
+    () => [
+      {
+        title: 'Welcome to the workspace',
+        body: 'This dashboard combines live hazard mapping, event filtering, and impact analysis in one operational view.',
+        selector: '[data-tour="dashboard-hero"]',
+      },
+      {
+        title: 'Start with data filters',
+        body: 'Use the left rail to narrow the dataset by event and time. This is the fastest way to orient the map and everything downstream.',
+        selector: '[data-tour="filter-panel"]',
+      },
+      {
+        title: 'Anchor on an event',
+        body: 'Open Events & Time first. Pick an event, then refine the time window before touching advanced controls.',
+        selector: '#filter-panel-temporal-button',
+      },
+      {
+        title: 'Switch to map controls',
+        body: 'Use the Map button when you want to change the visual treatment of the map without changing the underlying data slice.',
+        selector: '[data-tour="map-panel-toggle"]',
+      },
+      {
+        title: 'Tune the visual layer',
+        body: 'Basemap, color mode, and overlays determine how fast someone can read the situation at a glance.',
+        selector: '[data-tour="map-panel"]',
+      },
+      {
+        title: 'Open the impact summary',
+        body: 'Summary complements the map with ranked impacts, sector views, and regional context for briefing or decision support.',
+        selector: '[data-tour="summary-panel-toggle"]',
+      },
+      {
+        title: 'Use the data workspace',
+        body: 'The bottom workspace exposes deeper charts and tables once you are ready to validate what you are seeing on the map.',
+        selector: '[data-tour="data-workspace-toggle"]',
+      },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    if (!isTourOpen) return;
+
+    const currentStep = tourSteps[tourStepIndex];
+    if (!currentStep) return;
+
+    switch (currentStep.selector) {
+      case '[data-tour="dashboard-hero"]':
+      case '[data-tour="filter-panel"]':
+      case '#filter-panel-temporal-button':
+        openFilterPanel('filters');
+        setShowSummary(false);
+        break;
+      case '[data-tour="map-panel-toggle"]':
+      case '[data-tour="map-panel"]':
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="summary-panel-toggle"]':
+        openSummaryPanel();
+        break;
+      case '[data-tour="data-workspace-toggle"]':
+        setShowAnalytics(true);
+        setShowSummary(false);
+        break;
+      default:
+        break;
+    }
+  }, [isTourOpen, tourStepIndex, tourSteps, openFilterPanel, openMapPanel, openSummaryPanel]);
+
   const encodeCanvasToBlob = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob> => {
     if (typeof canvas.toBlob === 'function') {
       const blob = await new Promise<Blob | null>(resolve => {
@@ -791,6 +963,27 @@ export default function DashboardView({
         }, 350);
       }
     });
+  }, []);
+
+  // Basemap preference modal handlers
+  const handleBasemapSelect = useCallback((style: string) => {
+    setBasemapStyle(style);
+    saveBasemapPreference(style);
+    setShowBasemapPreferenceModal(false);
+  }, []);
+
+  const handleBasemapSkip = useCallback(() => {
+    // Save that preference has been set (even if skipped) to avoid showing modal again
+    saveBasemapPreference(basemapStyle);
+    setShowBasemapPreferenceModal(false);
+  }, [basemapStyle]);
+
+  const handleResetUserPreferences = useCallback(() => {
+    resetBasemapPreference();
+    showToastNotification(
+      'Preferences reset. Reload the page to see the basemap selection dialog again.',
+      'success'
+    );
   }, []);
 
   const handleDownloadMap = useCallback(async () => {
@@ -1041,9 +1234,32 @@ export default function DashboardView({
   }, [allHazards]);
 
   const sectors = useMemo(() => {
-    // Using real PDIE data - all 4 sectors available from CSV output
-    return allSectors;
-  }, [allSectors]);
+    // Dynamically extract sectors that exist in the actual loaded data for this country
+    const sectorIds = new Set<string>();
+
+    // Get sectors from exposure data
+    exposureData.forEach(item => {
+      if (item.sectorId) sectorIds.add(item.sectorId);
+    });
+
+    // Get sectors from economic damage data
+    economicDamageData.forEach(item => {
+      if (item.sectorId) sectorIds.add(item.sectorId);
+    });
+
+    // Get sectors from events
+    countryEvents.forEach(event => {
+      if (event.sectorId) sectorIds.add(event.sectorId);
+    });
+
+    // Filter allSectors to only include sectors that exist in the data
+    // If no data loaded yet, show all sectors
+    if (sectorIds.size === 0) {
+      return allSectors;
+    }
+
+    return allSectors.filter(sector => sectorIds.has(sector.id));
+  }, [allSectors, exposureData, economicDamageData, countryEvents]);
 
   useEffect(() => {
     const validHazardIds = new Set(hazards.map(hazard => hazard.id));
@@ -1613,9 +1829,11 @@ export default function DashboardView({
   useEffect(() => {
     const activePanel = showFilters
       ? filterPanelRef.current
-      : showSummary
-        ? summaryPanelRef.current
-        : null;
+      : showMapControls
+        ? mapPanelRef.current
+        : showSummary
+          ? summaryPanelRef.current
+          : null;
     if (!activePanel) return;
 
     const focusableSelectors = [
@@ -1643,6 +1861,7 @@ export default function DashboardView({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (showFilters) setShowFilters(false);
+        if (showMapControls) setShowMapControls(false);
         if (showSummary) setShowSummary(false);
         return;
       }
@@ -1660,7 +1879,7 @@ export default function DashboardView({
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [showFilters, showSummary]);
+  }, [showFilters, showMapControls, showSummary]);
 
   const showMapOverlays =
     (!allowCountrySwitch || !showCountrySelector) && !isLoadingData && !dataLoadError;
@@ -1689,38 +1908,89 @@ export default function DashboardView({
             <div className="flex items-center gap-2 md:hidden">
               <button
                 onClick={() => {
-                  setShowFilters(true);
-                  setFilterPanelTab('filters');
+                  openFilterPanel('filters');
                   setShowSummary(false);
                 }}
-                className="px-3 py-2 rounded-lg bg-slate-800/70 text-slate-200 text-xs font-semibold uppercase tracking-wide border border-slate-700/60"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showFilters
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
                 aria-label="Open filters panel"
+                aria-pressed={showFilters}
               >
+                <Layers className="w-3.5 h-3.5" />
                 Filters
               </button>
               <button
                 onClick={() => {
-                  setShowSummary(true);
-                  setShowFilters(false);
+                  openMapPanel();
+                  setShowSummary(false);
                 }}
-                className="px-3 py-2 rounded-lg bg-slate-800/70 text-slate-200 text-xs font-semibold uppercase tracking-wide border border-slate-700/60"
-                aria-label="Open summary panel"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showMapControls
+                    ? 'bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
+                aria-label="Open map controls panel"
+                aria-pressed={showMapControls}
               >
+                <MapIcon className="w-3.5 h-3.5" />
+                Map
+              </button>
+              <button
+                onClick={openSummaryPanel}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showSummary
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
+                aria-label="Open summary panel"
+                aria-pressed={showSummary}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
                 Summary
               </button>
+              {!!cycloneForecast && (
+                <button
+                  onClick={() => {
+                    openFilterPanel('cyclone');
+                    setShowSummary(false);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                    showFilters && filterPanelTab === 'cyclone'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
+                      : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                  }`}
+                  aria-label="Open cyclone timeline"
+                  aria-pressed={showFilters && filterPanelTab === 'cyclone'}
+                >
+                  <Wind className="w-3.5 h-3.5" />
+                  Cyclone
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center">
-                <Globe2 className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-3" data-tour="dashboard-hero">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
+                <ReactCountryFlag
+                  countryCode={selectedCountry}
+                  svg
+                  aria-label={COUNTRIES[selectedCountry].name}
+                  title={COUNTRIES[selectedCountry].name}
+                  className="h-7 w-10 rounded-[4px] shadow-sm"
+                />
               </div>
               <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-300/80">
+                  National Risk Intelligence
+                </p>
                 <h1 className="text-lg sm:text-xl font-bold text-slate-100 truncate">
-                  {countryUi.appName}
+                  {platformName}
                 </h1>
                 <p className="text-xs text-slate-400 truncate">
                   {isLoadingData
                     ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
-                    : `${COUNTRIES[selectedCountry].name} | ${activeCycloneName}`}
+                    : `Active event context: ${activeCycloneName}`}
                 </p>
               </div>
             </div>
@@ -1730,6 +2000,34 @@ export default function DashboardView({
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap lg:flex-nowrap justify-end">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/35 rounded-lg border border-slate-700/40">
               <button
+                onClick={() => openFilterPanel('filters')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                  showFilters && filterPanelTab === 'filters'
+                    ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
+                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                }`}
+                aria-pressed={showFilters && filterPanelTab === 'filters'}
+                aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
+                data-tour="filter-panel-toggle"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Filters</span>
+              </button>
+              <button
+                onClick={openMapPanel}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                  showMapControls
+                    ? 'bg-purple-500/15 text-purple-200 border border-purple-500/30'
+                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                }`}
+                aria-pressed={showMapControls}
+                aria-label={showMapControls ? 'Map controls panel open' : 'Open map controls'}
+                data-tour="map-panel-toggle"
+              >
+                <MapIcon className="w-3.5 h-3.5" />
+                <span>Map</span>
+              </button>
+              <button
                 onClick={() => setShowAnalytics(current => !current)}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
                   showAnalytics
@@ -1738,6 +2036,7 @@ export default function DashboardView({
                 }`}
                 aria-pressed={showAnalytics}
                 aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
+                data-tour="data-workspace-toggle"
               >
                 <BarChart3 className="w-3.5 h-3.5" />
                 <span>Data</span>
@@ -1751,6 +2050,7 @@ export default function DashboardView({
                 }`}
                 aria-pressed={showSummary}
                 aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
+                data-tour="summary-panel-toggle"
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>Summary</span>
@@ -1758,9 +2058,8 @@ export default function DashboardView({
               {!!cycloneForecast && (
                 <button
                   onClick={() => {
-                    setShowFilters(true);
+                    openFilterPanel('cyclone');
                     setShowSummary(false);
-                    setFilterPanelTab('cyclone');
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
                     filterPanelTab === 'cyclone' && showFilters
@@ -1770,7 +2069,7 @@ export default function DashboardView({
                   aria-label="Open cyclone workspace"
                 >
                   <MapIcon className="w-3.5 h-3.5" />
-                  <span>Cyclone</span>
+                  <span>Cyclone Timeline</span>
                 </button>
               )}
             </div>
@@ -1840,6 +2139,16 @@ export default function DashboardView({
                 </div>
               ) : null}
 
+              <button
+                onClick={startTour}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/35 hover:bg-slate-700/55 text-slate-300 rounded transition-colors text-xs"
+                aria-label="Start guided tour"
+                title="Start Guided Tour"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span className="font-medium">Tour</span>
+              </button>
+
               {showLogout && (
                 <button
                   onClick={() => void handleLogout()}
@@ -1879,6 +2188,26 @@ export default function DashboardView({
                 }}
                 compact
               />
+
+              <button
+                onClick={() => void handleDownloadMap()}
+                disabled={isDownloadingMap}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/15 disabled:opacity-60 disabled:cursor-not-allowed"
+                aria-label="Download map as PNG"
+                title="Download current map view as PNG image"
+              >
+                {isDownloadingMap ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Map PNG</span>
+                  </>
+                )}
+              </button>
 
               <ExportButtons
                 events={exportEvents}
@@ -2007,24 +2336,29 @@ export default function DashboardView({
 
       {/* Main Content */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        {/* Left Filter Panel */}
-        {showFilters && (
+        {/* Mobile Unified Backdrop - closes any open panel */}
+        {(showFilters || showMapControls || showSummary) && (
           <button
-            className="fixed inset-0 bg-black/50 z-[35] md:hidden"
-            onClick={() => setShowFilters(false)}
-            aria-label="Close filters panel"
+            className="fixed inset-0 bg-black/50 z-[35] md:hidden backdrop-blur-[2px]"
+            onClick={() => {
+              setShowFilters(false);
+              setShowMapControls(false);
+              setShowSummary(false);
+            }}
+            aria-label="Close panel"
           />
         )}
         <div
           ref={filterPanelRef}
-          className={`fixed inset-y-0 left-0 z-[40] w-72 transform transition-transform duration-300 
+          data-tour="filter-panel"
+          className={`fixed inset-y-0 left-0 z-[40] w-80 transform transition-transform duration-300 ease-out shadow-2xl
             ${showFilters ? 'translate-x-0' : '-translate-x-full'} 
-            md:static md:w-72 md:translate-x-0`}
+            md:static md:transform-none md:shadow-none ${showFilters ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
         >
-          <div className="md:hidden absolute top-3 right-3 z-[45]">
+          <div className="md:hidden absolute top-4 right-4 z-[45]">
             <button
               onClick={() => setShowFilters(false)}
-              className="w-8 h-8 rounded-full bg-slate-800/80 text-slate-200 border border-slate-700/60 shadow flex items-center justify-center"
+              className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
               aria-label="Close filters panel"
             >
               <X className="w-4 h-4" />
@@ -2061,6 +2395,51 @@ export default function DashboardView({
           />
         </div>
 
+        {/* Map Controls Panel */}
+        <div
+          ref={mapPanelRef}
+          data-tour="map-panel"
+          className={`fixed inset-y-0 left-0 z-[40] w-80 transform transition-transform duration-300 ease-out shadow-2xl
+            ${showMapControls ? 'translate-x-0' : '-translate-x-full'} 
+            md:static md:transform-none md:shadow-none ${showMapControls ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
+        >
+          <div className="md:hidden absolute top-4 right-4 z-[45]">
+            <button
+              onClick={() => setShowMapControls(false)}
+              className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
+              aria-label="Close map controls panel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <MapPanel
+            currentBasemap={basemapStyle}
+            onBasemapChange={setBasemapStyle}
+            mapStyle={mapStyle}
+            onMapStyleChange={setMapStyle}
+            is3DView={is3DView}
+            on3DViewToggle={setIs3DView}
+            extrusionMode={extrusionMode}
+            onExtrusionModeChange={setExtrusionMode}
+            extrusionExaggeration={extrusionExaggeration}
+            onExtrusionExaggerationChange={setExtrusionExaggeration}
+            showWindLayer={showWindLayer}
+            showInundationLayer={showInundationLayer}
+            onWindLayerToggle={setShowWindLayer}
+            onInundationLayerToggle={setShowInundationLayer}
+            showBuildingsLayer={showBuildingsLayer}
+            showRoadsLayer={showRoadsLayer}
+            onBuildingsLayerToggle={handleBuildingsLayerToggle}
+            onRoadsLayerToggle={handleRoadsLayerToggle}
+            layerOpacity={layerOpacity}
+            onLayerOpacityChange={setLayerOpacity}
+            isMapDataLoading={isMapDataLoading}
+            isHazardsLoading={isHazardsLoading}
+            hazardZoomBlocked={hazardZoomBlocked}
+            onResetUserPreferences={handleResetUserPreferences}
+          />
+        </div>
+
         {/* Center Map + Bottom Tabs */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Map Area */}
@@ -2071,39 +2450,6 @@ export default function DashboardView({
 
               return (
                 <>
-                  {/* Unified Map Controls (basemap + future controls) */}
-                  {!dataLoadError && (
-                    <MapControls
-                      currentBasemap={basemapStyle}
-                      onBasemapChange={setBasemapStyle}
-                      mapStyle={mapStyle}
-                      onMapStyleChange={setMapStyle}
-                      is3DView={is3DView}
-                      on3DViewToggle={setIs3DView}
-                      extrusionMode={extrusionMode}
-                      onExtrusionModeChange={setExtrusionMode}
-                      showWindLayer={showWindLayer}
-                      showInundationLayer={showInundationLayer}
-                      onWindLayerToggle={setShowWindLayer}
-                      onInundationLayerToggle={setShowInundationLayer}
-                      showBuildingsLayer={showBuildingsLayer}
-                      showRoadsLayer={showRoadsLayer}
-                      onBuildingsLayerToggle={handleBuildingsLayerToggle}
-                      onRoadsLayerToggle={handleRoadsLayerToggle}
-                      isMapDataLoading={isMapDataLoading}
-                      mapDataLoadingLabel={mapDataLoadingLabel}
-                      isHazardsLoading={isHazardsLoading}
-                      hazardsLoadingLabel={hazardsLoadingLabel}
-                      hazardZoomBlocked={hazardZoomBlocked}
-                      hazardMinZoom={hazardMinZoom}
-                      currentZoom={mapZoom ?? undefined}
-                      layerOpacity={layerOpacity}
-                      onLayerOpacityChange={setLayerOpacity}
-                      onDownloadMap={() => void handleDownloadMap()}
-                      isDownloadingMap={isDownloadingMap}
-                    />
-                  )}
-
                   {/* NEW: Unified Map Legend with data-driven breaks */}
                   {showMapOverlays && (
                     <UnifiedMapLegend
@@ -2145,6 +2491,7 @@ export default function DashboardView({
               basemapStyle={basemapStyle}
               is3DView={is3DView}
               extrusionMode={extrusionMode}
+              extrusionExaggeration={extrusionExaggeration}
               showWindLayer={showWindLayer}
               showInundationLayer={showInundationLayer}
               onLayersLoadingChange={setIsLoadingLayers}
@@ -2284,6 +2631,7 @@ export default function DashboardView({
               impactByAssetType={impactByAssetType}
               impactBySector={impactBySector || []}
               regionalSummary={regionalSummary}
+              regionalSummaryBySector={regionalSummaryBySector}
               damagedBuildings={damagedBuildings}
               damagedRoads={damagedRoads}
               onZoomToAsset={handleZoomToAsset}
@@ -2296,22 +2644,20 @@ export default function DashboardView({
         </div>
 
         {/* Right Summary Panel */}
-        {showSummary && (
-          <button
-            className="fixed inset-0 bg-black/50 z-[35] md:hidden"
-            onClick={() => setShowSummary(false)}
-            aria-label="Close summary panel"
-          />
-        )}
         <div
           ref={summaryPanelRef}
-          className={`fixed inset-y-0 right-0 z-[40] w-80 transform transition-transform duration-300 bg-transparent
-            ${showSummary ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
+          className={`fixed inset-y-0 right-0 z-[40] w-80 transform transition-transform duration-300 ease-out bg-transparent shadow-2xl
+            md:static md:inset-auto md:h-full md:flex-shrink-0 md:shadow-none
+            ${
+              showSummary
+                ? 'translate-x-0 md:w-80 md:opacity-100'
+                : 'translate-x-full pointer-events-none md:w-0 md:translate-x-0 md:overflow-hidden md:opacity-0'
+            }`}
         >
-          <div className="md:hidden absolute top-3 left-3 z-[45]">
+          <div className="md:hidden absolute top-4 left-4 z-[45]">
             <button
               onClick={() => setShowSummary(false)}
-              className="w-8 h-8 rounded-full bg-slate-800/80 text-slate-200 border border-slate-700/60 shadow flex items-center justify-center"
+              className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
               aria-label="Close summary panel"
             >
               <X className="w-4 h-4" />
@@ -2323,11 +2669,10 @@ export default function DashboardView({
             districts={resolvedDistricts}
             provinces={resolvedProvinces}
             sectors={sectors}
+            hazards={hazards}
             selectedCountry={selectedCountry}
             selectedRegion={selectedRegion}
             onRegionClear={() => setSelectedRegion(null)}
-            hasCycloneData={!!cycloneForecast}
-            showCycloneControls={showCycloneControls}
             assetExposureData={assetExposureData}
             nationalSummary={nationalSummary || []}
             regionalSummary={regionalSummary}
@@ -2346,6 +2691,21 @@ export default function DashboardView({
           onClose={() => setShowToast(false)}
         />
       )}
+
+      {/* Basemap Preference Modal - First Visit */}
+      {showBasemapPreferenceModal && BasemapPreferenceModal && (
+        <BasemapPreferenceModal onSelect={handleBasemapSelect} onSkip={handleBasemapSkip} />
+      )}
+
+      <GuidedTour
+        open={isTourOpen}
+        steps={tourSteps}
+        currentStep={tourStepIndex}
+        onPrev={() => setTourStepIndex(index => Math.max(0, index - 1))}
+        onNext={() => setTourStepIndex(index => Math.min(tourSteps.length - 1, index + 1))}
+        onClose={closeTour}
+        onFinish={finishTour}
+      />
     </div>
   );
 }

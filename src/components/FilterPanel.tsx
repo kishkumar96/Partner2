@@ -30,12 +30,20 @@ import {
   BookOpen,
   Eye,
   EyeOff,
-  RotateCcw,
+  Map as MapIcon,
+  Layers,
   Waves,
+  Building2,
+  Construction,
+  Download,
+  Loader2,
+  Globe2,
+  Satellite,
 } from 'lucide-react';
 import SearchableEventSelector from './SearchableEventSelector';
 import MapAccessibleFeatures, { type DistrictFeature } from './MapAccessibleFeatures';
 import Toast from './Toast';
+import { normalizeHazardId } from '@/utils/hazardIds';
 
 interface FilterPanelProps {
   hazards: Hazard[];
@@ -61,6 +69,32 @@ interface FilterPanelProps {
 }
 
 const noopDistrictSelect = () => {};
+const BASEMAP_OPTIONS = [
+  {
+    id: 'positron',
+    name: 'Light',
+    icon: Globe2,
+    style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  },
+  {
+    id: 'voyager',
+    name: 'Detailed',
+    icon: MapIcon,
+    style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+  },
+  {
+    id: 'dark',
+    name: 'Dark',
+    icon: Satellite,
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  },
+  {
+    id: 'osm',
+    name: 'OpenStreetMap',
+    icon: Globe2,
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+  },
+] as const;
 
 export default function FilterPanel({
   hazards,
@@ -94,13 +128,13 @@ export default function FilterPanel({
   const cycloneTabRef = useRef<HTMLButtonElement>(null);
 
   const accordionIds = {
-    quickFilters: {
-      button: 'filter-panel-quick-filters-button',
-      panel: 'filter-panel-quick-filters-panel',
-    },
     temporal: {
       button: 'filter-panel-temporal-button',
       panel: 'filter-panel-temporal-panel',
+    },
+    hazards: {
+      button: 'filter-panel-hazards-button',
+      panel: 'filter-panel-hazards-panel',
     },
     aggregation: {
       button: 'filter-panel-aggregation-button',
@@ -114,11 +148,14 @@ export default function FilterPanel({
 
   // Accordion state for each section
   const [expandedSections, setExpandedSections] = useState({
-    quickFilters: true,
-    temporal: false,
+    hazards: false,
+    temporal: true,
     aggregation: false,
-    sectors: false,
+    sectors: true,
   });
+
+  // Progressive disclosure state
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Switch to filters tab if cyclone data is not available (derive on access)
   const effectiveTab = !hasCycloneData && activeTab === 'cyclone' ? 'filters' : activeTab;
@@ -150,10 +187,6 @@ export default function FilterPanel({
       : [...filters.selectedHazards, hazardId];
 
     onFilterChange({ ...filters, selectedHazards: newHazards });
-  };
-
-  const setHazardsOnly = (hazardIds: string[]) => {
-    onFilterChange({ ...filters, selectedHazards: hazardIds });
   };
 
   const toggleEvent = (eventId: string) => {
@@ -241,8 +274,11 @@ export default function FilterPanel({
     { value: 'province', label: geographyUi.broaderAreaPlural },
     { value: 'national', label: getCountryAggregationLabel(countryCode, 'national') },
   ];
+
   const sectionTriggerClass =
     'w-full px-4 py-2.5 flex items-center gap-2.5 hover:bg-slate-800/45 transition-colors group';
+  const accessibilitySectionTriggerClass =
+    'w-full px-4 py-2.5 flex items-center gap-2.5 hover:bg-slate-800/20 transition-colors group';
 
   // Track which sectors have data available in actual events
   const activeSectorIds = useMemo(() => {
@@ -258,6 +294,36 @@ export default function FilterPanel({
     return sectorIds;
   }, [exposureData, economicDamageData]);
 
+  const activeHazardIds = useMemo(() => {
+    const hazardIds = new Set<string>();
+
+    events.forEach(event => {
+      const normalizedHazardId = normalizeHazardId(event.hazardId);
+      hazardIds.add(normalizedHazardId);
+
+      // Treat inundation-backed events as part of the flood UI bucket.
+      if (normalizedHazardId === 'inundation') {
+        hazardIds.add('flood');
+      }
+
+      // Treat wind-backed events as part of the tropical cyclone UI bucket.
+      if (normalizedHazardId === 'wind') {
+        hazardIds.add('tropical-cyclone');
+      }
+    });
+
+    return hazardIds;
+  }, [events]);
+
+  const hazardsWithAvailability = useMemo(
+    () =>
+      hazards.map(hazard => ({
+        ...hazard,
+        isAvailable: activeHazardIds.has(hazard.id),
+      })),
+    [hazards, activeHazardIds]
+  );
+
   // Show all sectors, but mark unavailable ones
   const sectorsWithAvailability = useMemo(
     () =>
@@ -266,15 +332,6 @@ export default function FilterPanel({
         isAvailable: activeSectorIds.has(sector.id),
       })),
     [sectors, activeSectorIds]
-  );
-
-  const hazardsWithAvailability = useMemo(
-    () =>
-      hazards.map(hazard => ({
-        ...hazard,
-        isAvailable: true,
-      })),
-    [hazards]
   );
 
   const updateDateRange = (bound: 'start' | 'end', value: string) => {
@@ -295,27 +352,34 @@ export default function FilterPanel({
   };
 
   return (
-    <div className="w-72 border-r border-cyan-500/15 bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/95 shadow-[inset_-1px_0_0_rgba(34,211,238,0.08)] flex flex-col flex-shrink-0 h-full min-h-0 overflow-hidden isolate">
+    <div className="w-80 border-r border-cyan-500/15 bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/95 shadow-[inset_-1px_0_0_rgba(34,211,238,0.08)] flex flex-col flex-shrink-0 h-full min-h-0 overflow-hidden isolate">
       <div className="flex-1 overflow-y-auto overscroll-contain overflow-x-hidden">
         <div className="px-4 py-3 border-b border-cyan-500/15 bg-slate-900/35">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white tracking-tight">Filters</h2>
+              <h2 aria-label="Filters" className="text-sm font-bold text-white tracking-tight">
+                Data Filters
+              </h2>
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-cyan-500/15 text-cyan-200 rounded border border-cyan-500/30">
                 <span className="w-1 h-1 rounded-full bg-cyan-300"></span>
                 LIVE
               </span>
             </div>
             <button
-              onClick={clearAllFilters}
-              className="px-2.5 py-1 text-xs font-semibold text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-400/50 rounded-lg transition-colors"
-              aria-label="Clear all filters"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`px-2.5 py-1 text-xs font-semibold border rounded-lg transition-colors ${
+                showAdvancedFilters
+                  ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                  : 'bg-slate-800/60 text-slate-300 border-slate-600/50 hover:bg-slate-700/60'
+              }`}
+              aria-label={showAdvancedFilters ? 'Hide advanced filters' : 'Show advanced filters'}
+              aria-pressed={showAdvancedFilters}
             >
-              Clear All
+              {showAdvancedFilters ? '← Basic' : 'Advanced →'}
             </button>
           </div>
           <p className="mt-1 text-[10px] text-slate-400">
-            Filters change map highlights, data, and summary results.
+            {showAdvancedFilters ? 'Advanced filter options' : 'Choose which data to analyze'}
           </p>
         </div>
 
@@ -367,7 +431,7 @@ export default function FilterPanel({
                 } focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400`}
               >
                 <Wind className="w-3 h-3" />
-                Cyclone Details
+                Cyclone Timeline
               </button>
             </div>
           </div>
@@ -379,167 +443,21 @@ export default function FilterPanel({
             role="tabpanel"
             aria-labelledby="filter-panel-tab-filters"
           >
-            <div className="mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-900/10 px-3 py-2 text-[10px] text-blue-200">
-              Start with a hazard, then narrow by time or map level.
-            </div>
-
-            {/* Hazards Section - Compact */}
-            <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => toggleSection('quickFilters')}
-                id={accordionIds.quickFilters.button}
-                aria-expanded={expandedSections.quickFilters}
-                aria-controls={accordionIds.quickFilters.panel}
-                className={sectionTriggerClass}
-              >
-                <Wind className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  What hazard do you want to explore?
+            {/* Data Filters Group */}
+            <div className="mx-3 mt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/30 to-cyan-500/0"></div>
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/90 px-2">
+                  Data Filters
                 </h3>
-                {filters.selectedHazards.length > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
-                    {filters.selectedHazards.length}
-                  </span>
-                )}
-                {!expandedSections.quickFilters && (
-                  <span className="text-[10px] text-slate-500 ml-auto mr-2">
-                    {filters.selectedHazards.length > 0
-                      ? `${filters.selectedHazards.length} selected`
-                      : `All ${hazardsWithAvailability.filter(h => h.isAvailable).length}`}
-                  </span>
-                )}
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.quickFilters ? 'rotate-180' : ''} ${!expandedSections.quickFilters ? 'ml-auto' : ''}`}
-                />
-              </button>
-              {expandedSections.quickFilters && (
-                <div
-                  id={accordionIds.quickFilters.panel}
-                  role="region"
-                  aria-labelledby={accordionIds.quickFilters.button}
-                  className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
-                >
-                  <div className="mb-3 flex flex-wrap gap-2 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cycloneHazards = hazardsWithAvailability
-                          .filter(hazard => {
-                            const id = hazard.id.toLowerCase();
-                            return id.includes('cyclone') || id.includes('wind');
-                          })
-                          .map(hazard => hazard.id);
-                        setHazardsOnly(cycloneHazards);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-500/15"
-                    >
-                      <Wind className="h-3 w-3" />
-                      Cyclone only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const floodHazards = hazardsWithAvailability
-                          .filter(hazard => {
-                            const id = hazard.id.toLowerCase();
-                            return id.includes('flood') || id.includes('inundation');
-                          })
-                          .map(hazard => hazard.id);
-                        setHazardsOnly(floodHazards);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-sky-200 transition-colors hover:bg-sky-500/15"
-                    >
-                      <Waves className="h-3 w-3" />
-                      Flood only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setHazardsOnly(
-                          hazardsWithAvailability
-                            .filter(hazard => hazard.isAvailable)
-                            .map(hazard => hazard.id)
-                        )
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600/50 bg-slate-800/60 px-2.5 py-1.5 text-[10px] font-semibold text-slate-200 transition-colors hover:bg-slate-700/70"
-                    >
-                      All hazards
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearAllFilters}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-rose-200 transition-colors hover:bg-rose-500/15"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                      Reset filters
-                    </button>
-                  </div>
-
-                  {hazardsWithAvailability.length === 0 ? (
-                    <p className="text-[10px] text-slate-500 italic py-2">
-                      No hazard data available
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {hazardsWithAvailability.map(hazard => (
-                        <label
-                          key={hazard.id}
-                          htmlFor={`hazard-${hazard.id}`}
-                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
-                            hazard.isAvailable
-                              ? filters.selectedHazards.includes(hazard.id)
-                                ? 'border-cyan-500/40 bg-cyan-500/12 text-white'
-                                : 'border-slate-700/60 bg-slate-900/60 text-slate-300 hover:bg-slate-800/70 hover:border-slate-600/70'
-                              : 'cursor-not-allowed border-slate-800/70 bg-slate-900/30 text-slate-500 opacity-50'
-                          }`}
-                          title={
-                            !hazard.isAvailable ? 'No data available for this hazard' : undefined
-                          }
-                        >
-                          <input
-                            id={`hazard-${hazard.id}`}
-                            type="checkbox"
-                            name="hazards"
-                            value={hazard.id}
-                            checked={filters.selectedHazards.includes(hazard.id)}
-                            onChange={() => hazard.isAvailable && toggleHazard(hazard.id)}
-                            disabled={!hazard.isAvailable}
-                            aria-label={hazard.name}
-                            className="sr-only"
-                          />
-                          <div
-                            className="h-3 w-3 rounded-full flex-shrink-0 ring-1 ring-slate-700/30"
-                            style={{ backgroundColor: hazard.color }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold">
-                              {hazard.id === 'tropical-cyclone'
-                                ? 'Cyclone impact'
-                                : hazard.id === 'flood'
-                                  ? 'Flood risk'
-                                  : hazard.name}
-                            </div>
-                            <div className="mt-0.5 text-[10px] text-slate-400">
-                              {filters.selectedHazards.includes(hazard.id)
-                                ? 'Shown in results'
-                                : 'Tap to explore'}
-                            </div>
-                          </div>
-                          {!hazard.isAvailable && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 font-semibold">
-                              No data
-                            </span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/30 to-cyan-500/0"></div>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-2 px-1">
+                Narrow the dataset by event, date, area level, and sector.
+              </p>
             </div>
 
-            {/* Temporal Filters Section - Compact */}
+            {/* Temporal Filters Section - Primary entry point */}
             <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
               <button
                 type="button"
@@ -552,7 +470,7 @@ export default function FilterPanel({
               >
                 <Calendar className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Time and event
+                  Events & Time
                 </h3>
                 {filters.selectedEvents.length > 0 && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
@@ -641,66 +559,185 @@ export default function FilterPanel({
               )}
             </div>
 
-            {/* Aggregation Section - Compact */}
-            <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => toggleSection('aggregation')}
-                id={accordionIds.aggregation.button}
-                aria-expanded={expandedSections.aggregation}
-                aria-controls={accordionIds.aggregation.panel}
-                aria-label="Aggregation"
-                className={sectionTriggerClass}
-              >
-                <Target className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Map detail level
-                </h3>
-                {!expandedSections.aggregation && (
-                  <span className="text-[10px] text-slate-500 ml-auto mr-2">
-                    {filters.aggregationLevel.charAt(0).toUpperCase() +
-                      filters.aggregationLevel.slice(1)}
-                  </span>
-                )}
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.aggregation ? 'rotate-180' : ''} ${!expandedSections.aggregation ? 'ml-auto' : ''}`}
-                />
-              </button>
-              {expandedSections.aggregation && (
-                <div
-                  id={accordionIds.aggregation.panel}
-                  role="region"
-                  aria-labelledby={accordionIds.aggregation.button}
-                  className="px-4 pb-3 space-y-1 border-t border-slate-700/40 bg-slate-900/35"
-                >
-                  {aggregationOptions.map(option => (
-                    <label
-                      key={option.value}
-                      htmlFor={`aggregation-${option.value}`}
-                      className="flex items-center gap-2 cursor-pointer group px-2 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
-                    >
-                      <div className="relative flex items-center justify-center">
-                        <input
-                          id={`aggregation-${option.value}`}
-                          type="radio"
-                          name="aggregation"
-                          value={option.value}
-                          checked={filters.aggregationLevel === option.value}
-                          onChange={() => setAggregationLevel(option.value)}
-                          className="appearance-none w-4 h-4 border border-slate-500/80 rounded-full cursor-pointer transition-colors hover:border-cyan-400 checked:border-cyan-400 checked:bg-cyan-500/20"
-                        />
-                        {filters.aggregationLevel === option.value && (
-                          <div className="absolute w-2 h-2 bg-cyan-400 rounded-full pointer-events-none"></div>
-                        )}
-                      </div>
-                      <span className="text-xs text-slate-300 group-hover:text-white transition-colors">
-                        {option.label}
-                      </span>
-                    </label>
-                  ))}
+            {showAdvancedFilters && (
+              <>
+                <div className="mx-3 mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/20 to-cyan-500/0"></div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-cyan-300/70 px-2">
+                      Advanced
+                    </h3>
+                    <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/20 to-cyan-500/0"></div>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('hazards')}
+                    id={accordionIds.hazards.button}
+                    aria-expanded={expandedSections.hazards}
+                    aria-controls={accordionIds.hazards.panel}
+                    aria-label="Hazards"
+                    className={sectionTriggerClass}
+                  >
+                    <Wind className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                    <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+                      Hazards
+                    </h3>
+                    {filters.selectedHazards.length > 0 && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
+                        {filters.selectedHazards.length}
+                      </span>
+                    )}
+                    {!expandedSections.hazards && (
+                      <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                        {filters.selectedHazards.length > 0
+                          ? `${filters.selectedHazards.length} selected`
+                          : `All ${hazardsWithAvailability.filter(h => h.isAvailable).length}`}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.hazards ? 'rotate-180' : ''} ${!expandedSections.hazards ? 'ml-auto' : ''}`}
+                    />
+                  </button>
+                  {expandedSections.hazards && (
+                    <div
+                      id={accordionIds.hazards.panel}
+                      role="region"
+                      aria-labelledby={accordionIds.hazards.button}
+                      className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
+                    >
+                      {hazardsWithAvailability.length === 0 ? (
+                        <p className="text-[10px] text-slate-500 italic py-2">
+                          No hazard data available
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {hazardsWithAvailability.map(hazard => {
+                            const HazardIcon = hazard.icon;
+
+                            return (
+                              <label
+                                key={hazard.id}
+                                htmlFor={`hazard-${hazard.id}`}
+                                className={`flex items-center gap-2 group relative px-2 py-1.5 rounded-lg transition-colors ${
+                                  hazard.isAvailable
+                                    ? 'cursor-pointer hover:bg-slate-800/50'
+                                    : 'cursor-not-allowed opacity-50'
+                                }`}
+                                title={
+                                  !hazard.isAvailable ? 'No data available for this hazard' : ''
+                                }
+                              >
+                                <div className="relative flex items-center justify-center">
+                                  <input
+                                    id={`hazard-${hazard.id}`}
+                                    type="checkbox"
+                                    name="hazards"
+                                    value={hazard.id}
+                                    checked={filters.selectedHazards.includes(hazard.id)}
+                                    onChange={() => hazard.isAvailable && toggleHazard(hazard.id)}
+                                    disabled={!hazard.isAvailable}
+                                    className="appearance-none w-4 h-4 border border-slate-500/80 rounded cursor-pointer transition-colors hover:border-cyan-400 checked:border-cyan-400 checked:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                  />
+                                  {filters.selectedHazards.includes(hazard.id) && (
+                                    <Check
+                                      className="absolute w-3 h-3 text-cyan-400 pointer-events-none"
+                                      strokeWidth={3}
+                                    />
+                                  )}
+                                </div>
+                                <HazardIcon className="w-3.5 h-3.5 text-slate-300" />
+                                <span className="text-xs text-slate-300 group-hover:text-white flex-1 transition-colors">
+                                  {hazard.name}
+                                </span>
+                                {!hazard.isAvailable && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 font-semibold">
+                                    No data
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('aggregation')}
+                    id={accordionIds.aggregation.button}
+                    aria-expanded={expandedSections.aggregation}
+                    aria-controls={accordionIds.aggregation.panel}
+                    aria-label="Aggregation"
+                    className={sectionTriggerClass}
+                  >
+                    <Target className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                    <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+                      Geography Level
+                    </h3>
+                    {!expandedSections.aggregation && (
+                      <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                        {filters.aggregationLevel.charAt(0).toUpperCase() +
+                          filters.aggregationLevel.slice(1)}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.aggregation ? 'rotate-180' : ''} ${!expandedSections.aggregation ? 'ml-auto' : ''}`}
+                    />
+                  </button>
+                  {expandedSections.aggregation && (
+                    <div
+                      id={accordionIds.aggregation.panel}
+                      role="region"
+                      aria-labelledby={accordionIds.aggregation.button}
+                      className="px-4 pb-3 space-y-1 border-t border-slate-700/40 bg-slate-900/35"
+                    >
+                      {aggregationOptions.map(option => (
+                        <label
+                          key={option.value}
+                          htmlFor={`aggregation-${option.value}`}
+                          className="flex items-center gap-2 cursor-pointer group px-2 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <input
+                              id={`aggregation-${option.value}`}
+                              type="radio"
+                              name="aggregation"
+                              value={option.value}
+                              checked={filters.aggregationLevel === option.value}
+                              onChange={() => setAggregationLevel(option.value)}
+                              className="appearance-none w-4 h-4 border border-slate-500/80 rounded-full cursor-pointer transition-colors hover:border-cyan-400 checked:border-cyan-400 checked:bg-cyan-500/20"
+                            />
+                            {filters.aggregationLevel === option.value && (
+                              <div className="absolute w-2 h-2 bg-cyan-400 rounded-full pointer-events-none"></div>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-300 group-hover:text-white transition-colors">
+                            {option.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mx-3 mt-2 rounded-xl border border-rose-500/20 bg-rose-950/10 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="w-full px-4 py-2.5 text-left text-xs font-semibold text-rose-200 transition-colors hover:bg-rose-500/10"
+                    aria-label="Clear all filters"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              </>
+            )}
 
             {/* Sectors Section - Compact */}
             <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
@@ -715,7 +752,7 @@ export default function FilterPanel({
               >
                 <Database className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                 <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Sector focus
+                  Sectors
                 </h3>
                 {filters.selectedSectors.length > 0 && (
                   <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
@@ -795,31 +832,42 @@ export default function FilterPanel({
               )}
             </div>
 
-            {/* Accessibility Tools - Compact */}
+            {/* Accessibility Group */}
+            <div className="mx-3 mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-slate-700/0 via-slate-700/30 to-slate-700/0"></div>
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500/90 px-2">
+                  Accessibility
+                </h3>
+                <div className="h-px flex-1 bg-gradient-to-r from-slate-700/0 via-slate-700/30 to-slate-700/0"></div>
+              </div>
+            </div>
             <div
-              className="mx-3 mt-2 mb-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden"
+              className="mx-3 mt-2 mb-2 rounded-xl border border-slate-600/30 bg-slate-900/25 overflow-hidden"
               role="region"
               aria-label="Accessibility tools"
             >
               <button
                 type="button"
                 onClick={() => setIsDistrictListOpen(!isDistrictListOpen)}
-                className={sectionTriggerClass}
+                className={accessibilitySectionTriggerClass}
                 aria-expanded={isDistrictListOpen}
               >
-                <Keyboard className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+                <Keyboard className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <h3 className="text-xs font-semibold text-slate-500 group-hover:text-slate-300 transition-colors">
                   Keyboard access
                 </h3>
                 {!isDistrictListOpen && (
-                  <span className="text-[10px] text-slate-500 ml-auto mr-2">District list</span>
+                  <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                    {geographyUi.focusAreaSingular} list
+                  </span>
                 )}
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isDistrictListOpen ? 'rotate-180' : ''} ${!isDistrictListOpen ? 'ml-auto' : ''}`}
                 />
               </button>
               {isDistrictListOpen && (
-                <div className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35">
+                <div className="px-4 pb-3 border-t border-slate-600/25 bg-slate-900/20">
                   <MapAccessibleFeatures
                     districts={accessibleDistricts}
                     visible={isDistrictListOpen && accessibleDistricts.length > 0}
@@ -831,7 +879,7 @@ export default function FilterPanel({
                   />
                   {accessibleDistricts.length === 0 && (
                     <div className="mt-2 rounded-lg border border-dashed border-slate-700/40 px-2 py-1.5 text-[10px] text-slate-500">
-                      No district data available.
+                      No {geographyUi.focusAreaSingular.toLowerCase()} data available.
                     </div>
                   )}
                 </div>

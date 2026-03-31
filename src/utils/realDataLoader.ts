@@ -9,6 +9,7 @@ import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
 import { CountryCode } from '@/types/thredds';
 import { mapCountryPartnerApis } from '@/services/partnerApiService';
+import { getAreaId, getAreaName } from '@/utils/adminNormalization';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -1118,6 +1119,25 @@ function buildNationalSummaryFromRegionalRows(
   ];
 }
 
+function normalizeRegionalSummaryContract(
+  rows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  return rows
+    .filter(row => row && typeof row === 'object')
+    .map(row => {
+      const areaId = getAreaId(row);
+      const areaName = getAreaName(row);
+
+      return {
+        ...row,
+        areaId,
+        areaName,
+        Region_ID: row.Region_ID ?? areaId,
+        Region: row.Region ?? areaName,
+      };
+    });
+}
+
 async function loadPartnerApiCountryData(
   countryCode: CountryCode,
   signal?: AbortSignal
@@ -1260,9 +1280,12 @@ export async function loadAllRealData(
     regionalSummaryFromPartner.length > 0 && !hasNonZeroLoss(regionalSummaryData)
       ? regionalSummaryFromPartner
       : regionalSummaryData;
+  const normalizedRegionalSummary = normalizeRegionalSummaryContract(
+    ((effectiveRegionalSummary || []) as Array<Record<string, unknown>>) ?? []
+  );
   const enrichedRegionalImpacts = enrichRegionalImpactsWithSummary(
     regionalImpacts,
-    (effectiveRegionalSummary || []) as Array<Record<string, unknown>>
+    normalizedRegionalSummary
   );
 
   const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
@@ -1340,7 +1363,7 @@ export async function loadAllRealData(
   // Use regional-summary-by-sector for sector-specific exposure data
   const exposureData = convertToExposureData(
     regionalSummaryBySector,
-    effectiveRegionalSummary,
+    normalizedRegionalSummary,
     countryCode
   );
 
@@ -1382,7 +1405,7 @@ export async function loadAllRealData(
     nationalSummary: (effectiveNationalSummary || []) as any,
     impactByAsset: (effectiveImpactByAsset || []) as any,
     impactBySector: (impactBySector || []) as any,
-    regionalSummary: (effectiveRegionalSummary || []) as any,
+    regionalSummary: normalizedRegionalSummary as any,
     regionalSummaryBySector: (regionalSummaryBySector || []) as any,
     damagedBuildings: (damagedBuildings as any) || null,
     damagedRoads: (damagedRoads as any) || null,

@@ -3,15 +3,15 @@
 /**
  * ARCHITECTURAL NOTE: Cyclone Controls Encapsulation
  *
- * Current Implementation: The cyclone animation control state (showCycloneControls)
- * is managed by the parent component and passed down as props.
+ * Current Implementation: The cyclone animation control state is managed by
+ * the parent component and passed down through the left workspace.
  * This creates tight coupling between the parent page and SummaryPanel.
  *
  * Recommended Refactor: Create a dedicated <CycloneControlManager /> component that:
  * - Self-manages its active/inactive state internally
  * - Listens to map events for cyclone track clicks
  * - Renders the timeline controls directly (no portal needed)
- * - Is rendered within the Cyclone tab when hasCycloneData is true
+ * - Is rendered within the cyclone workspace when data is available
  *
  * Benefits: Cleaner props interface, better separation of concerns, easier testing,
  * and improved maintainability.
@@ -31,8 +31,8 @@ import {
   Target,
   TrendingUp,
   Users,
-  Wheat,
   Wind,
+  Wheat,
   X,
   Maximize2,
 } from 'lucide-react';
@@ -55,12 +55,19 @@ import {
   District,
   Province,
   Sector,
+  Hazard,
   RegionalSummary,
   RegionalSummaryBySector,
 } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { computeFilteredData } from '../utils/filteredData';
+import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
+import {
+  areaMatchesSelection,
+  normalizeEventAreaRows,
+  normalizeSummaryAreaRows,
+} from '@/utils/adminNormalization';
 import AdvancedCharts from './AdvancedCharts';
 import HeroMetric from './HeroMetric';
 import TopInsightsCards, { createDistrictInsights } from './TopInsightsCards';
@@ -84,11 +91,10 @@ interface SummaryPanelProps {
   districts: District[];
   provinces: Province[];
   sectors: Sector[];
+  hazards: Hazard[];
   selectedCountry?: CountryCode | null;
   selectedRegion?: string | null;
   onRegionClear?: () => void;
-  hasCycloneData?: boolean;
-  showCycloneControls?: boolean;
   assetExposureData?: any;
   nationalSummary?: any[];
   regionalSummary?: RegionalSummary[];
@@ -165,27 +171,32 @@ export default function SummaryPanel({
   districts,
   provinces,
   sectors,
+  hazards,
   selectedCountry = null,
   selectedRegion = null,
   onRegionClear,
-  hasCycloneData = false,
-  showCycloneControls = false,
   assetExposureData = null,
   nationalSummary = [],
   regionalSummary = [],
   regionalSummaryBySector = [],
   impactBySector = [],
 }: SummaryPanelProps) {
-  const regionMatchesSelection = useCallback((row: any, selection: string | null) => {
-    if (!selection) return true;
-    return [row?.Region_ID, row?.['Region.ID'], row?.Region]
-      .filter(Boolean)
-      .map((value: unknown) => String(value).trim())
-      .includes(selection);
-  }, []);
-  const [activeTab, setActiveTab] = useState<
-    'summary' | 'exposure' | 'damage' | 'analytics' | 'cyclone'
-  >('summary');
+  const geographyUi = selectedCountry
+    ? COUNTRY_CONFIGS[selectedCountry].ui
+    : {
+        focusAreaSingular: 'District',
+        focusAreaPlural: 'Districts',
+        broaderAreaSingular: 'Region',
+        broaderAreaPlural: 'Regions',
+        nationalLabel: 'National',
+      };
+  const regionMatchesSelection = useCallback(
+    (row: any, selection: string | null) => areaMatchesSelection(row, selection),
+    []
+  );
+  const [activeTab, setActiveTab] = useState<'summary' | 'exposure' | 'damage' | 'analytics'>(
+    'summary'
+  );
   const [districtMetric, setDistrictMetric] = useState<'loss' | 'population'>('loss');
   const isSummaryTab = activeTab === 'summary';
 
@@ -200,24 +211,16 @@ export default function SummaryPanel({
     [events, filters, districts, provinces]
   );
 
-  // Convert CSV regional data to AggregatedEventData format for district/region charts
-  const csvAggregatedData = useMemo(() => {
-    if (!regionalSummary || regionalSummary.length === 0) return [];
+  const normalizedEventAreaData = useMemo(
+    () => normalizeEventAreaRows(aggregatedEventData as unknown as Record<string, unknown>[]),
+    [aggregatedEventData]
+  );
 
-    return regionalSummary.map(region => ({
-      id: region.Region,
-      name: region.Region,
-      totalEvents: 1, // CSV doesn't track event count
-      totalAffectedPopulation: region.Population_Exposed_To_Any_Hazard || 0,
-      totalEconomicDamage: region.Total_Loss || 0,
-    }));
-  }, [regionalSummary]);
-
-  // Use CSV data if events are empty, otherwise use event-based data
-  const displayAggregatedData = useMemo(() => {
-    const useEventData = aggregatedEventData && aggregatedEventData.length > 0;
-    return useEventData ? aggregatedEventData : csvAggregatedData;
-  }, [aggregatedEventData, csvAggregatedData]);
+  const requiresEventDerivedAreas =
+    filters.selectedHazards.length > 0 ||
+    filters.selectedEvents.length > 0 ||
+    !!filters.dateRange.start ||
+    !!filters.dateRange.end;
 
   const selectedSectorNames = useMemo(
     () =>
@@ -280,6 +283,37 @@ export default function SummaryPanel({
     return Object.values(regionTotals) as RegionalSummary[];
   }, [filteredRegionalSummaryBySector, regionalSummary]);
 
+  const normalizedSummaryAreaData = useMemo(
+    () => normalizeSummaryAreaRows(derivedRegionalSummary as unknown as Record<string, unknown>[]),
+    [derivedRegionalSummary]
+  );
+
+  const displayAggregatedData = useMemo(() => {
+    if (!requiresEventDerivedAreas && normalizedSummaryAreaData.length > 0) {
+      return normalizedSummaryAreaData;
+    }
+
+    if (filteredEvents.length > 0 && normalizedEventAreaData.length > 0) {
+      return normalizedEventAreaData;
+    }
+
+    return normalizedSummaryAreaData;
+  }, [
+    requiresEventDerivedAreas,
+    normalizedSummaryAreaData,
+    filteredEvents.length,
+    normalizedEventAreaData,
+  ]);
+
+  const isUsingEventAreaData =
+    filteredEvents.length > 0 && displayAggregatedData === normalizedEventAreaData;
+  const areaLabelSingular = isUsingEventAreaData
+    ? geographyUi.focusAreaSingular
+    : geographyUi.broaderAreaSingular;
+  const areaLabelPlural = isUsingEventAreaData
+    ? geographyUi.focusAreaPlural
+    : geographyUi.broaderAreaPlural;
+
   // Filter regional data by selected region
   const regionFilteredData = useMemo(() => {
     if (!selectedRegion) return derivedRegionalSummary;
@@ -322,6 +356,17 @@ export default function SummaryPanel({
     () => filters.selectedSectors.length > 0 || filters.selectedHazards.length > 0,
     [filters.selectedSectors.length, filters.selectedHazards.length]
   );
+
+  const activeFilterLabel = useMemo(() => {
+    const selectedSectorNames = filters.selectedSectors
+      .map(id => sectors.find(sector => sector.id === id)?.name)
+      .filter((name): name is string => !!name);
+    const selectedHazardNames = filters.selectedHazards
+      .map(id => hazards.find(hazard => hazard.id === id)?.name || id)
+      .filter(Boolean);
+
+    return [...selectedSectorNames, ...selectedHazardNames].join(' • ');
+  }, [filters.selectedHazards, filters.selectedSectors, hazards, sectors]);
 
   // Calculate summary statistics DIRECTLY from filtered events (not aggregated data)
   // This ensures stats are always accurate even when district/province IDs don't match
@@ -622,21 +667,17 @@ export default function SummaryPanel({
           <h2 className="text-lg font-semibold text-slate-100">Summary Dashboard</h2>
           <p className="text-xs text-slate-400 mt-1">
             {csvTotals
-              ? `${csvTotals.districtCount} ${csvTotals.districtCount === 1 ? 'District' : 'Districts'}`
+              ? `${csvTotals.districtCount} ${csvTotals.districtCount === 1 ? areaLabelSingular : areaLabelPlural}`
               : filteredEvents.length === events.length
-                ? `${filteredEvents.length} ${filteredEvents.length === 1 ? 'District' : 'Districts'}`
-                : `${filteredEvents.length} of ${events.length} districts`}
+                ? `${filteredEvents.length} ${filteredEvents.length === 1 ? areaLabelSingular : areaLabelPlural}`
+                : `${filteredEvents.length} of ${events.length} ${areaLabelPlural.toLowerCase()}`}
           </p>
           {/* Active Filters Indicator */}
           {hasActiveFilters && (
             <div className="flex flex-wrap items-start gap-1.5 px-2 py-1 mt-2 bg-blue-500/10 border border-blue-500/30 rounded-md">
               <BarChart3 className="w-3 h-3 text-blue-400" />
               <span className="text-xs font-medium text-blue-300 break-words max-w-full">
-                {filters.selectedSectors.length > 0 ? filters.selectedSectors.join(', ') : ''}
-                {filters.selectedSectors.length > 0 && filters.selectedHazards.length > 0
-                  ? ' • '
-                  : ''}
-                {filters.selectedHazards.length > 0 ? filters.selectedHazards.join(', ') : ''}
+                {activeFilterLabel}
               </span>
             </div>
           )}
@@ -708,22 +749,22 @@ export default function SummaryPanel({
               {hasActiveFilters && (
                 <span className="text-[10px] text-blue-300 font-medium">
                   {csvTotals
-                    ? `${csvTotals.districtCount} of ${regionalSummary?.length || 0} districts`
-                    : `${filteredEvents.length} of ${events.length} districts`}
+                    ? `${csvTotals.districtCount} of ${regionalSummary?.length || 0} ${areaLabelPlural.toLowerCase()}`
+                    : `${filteredEvents.length} of ${events.length} ${areaLabelPlural.toLowerCase()}`}
                 </span>
               )}
             </div>
 
             {/* Hero Metrics */}
             <div className="space-y-3">
-              {/* Total Economic Loss */}
+              {/* Total Economic Damage */}
               <HeroMetric
-                label="Total Economic Loss"
+                label="Total Economic Damage"
                 value={formatCurrency(csvTotals?.totalLoss ?? stats.totalEconomicDamage)}
                 subtitle={
                   csvTotals
-                    ? `Across ${csvTotals.districtCount} district${csvTotals.districtCount !== 1 ? 's' : ''}`
-                    : `Across ${filteredEvents.length} district${filteredEvents.length !== 1 ? 's' : ''}`
+                    ? `Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                    : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                 }
                 icon={DollarSign}
                 color="red"
@@ -736,7 +777,7 @@ export default function SummaryPanel({
                 subtitle={
                   csvTotals && csvTotals.totalPopulation > 0
                     ? `${((csvTotals.affectedPopulation / csvTotals.totalPopulation) * 100 || 0).toFixed(1)}% of total population`
-                    : `${filteredEvents.length} district${filteredEvents.length !== 1 ? 's' : ''} affected`
+                    : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
                 }
                 icon={Users}
                 color="orange"
@@ -885,7 +926,7 @@ export default function SummaryPanel({
                             <span className="text-3xl font-bold text-white">
                               ${damageDoughnutData.total.toFixed(0)}M
                             </span>
-                            <span className="text-xs text-slate-400 mt-1">Total Loss</span>
+                            <span className="text-xs text-slate-400 mt-1">Total Damage</span>
                           </div>
                         </div>
                         {/* Legend */}
@@ -978,7 +1019,7 @@ export default function SummaryPanel({
 
                     <div className="space-y-3 text-xs">
                       {(() => {
-                        const topDistrict = displayAggregatedData.sort(
+                        const topDistrict = [...displayAggregatedData].sort(
                           (a, b) => b.totalEconomicDamage - a.totalEconomicDamage
                         )[0];
                         const totalDamage = displayAggregatedData.reduce(
@@ -986,11 +1027,14 @@ export default function SummaryPanel({
                           0
                         );
                         const topDistrictShare =
-                          (topDistrict.totalEconomicDamage / totalDamage) * 100;
-                        const avgDamagePerDistrict = totalDamage / displayAggregatedData.length;
-                        const highImpactDistricts = displayAggregatedData.filter(
-                          d => d.totalEconomicDamage > avgDamagePerDistrict * 1.5
+                          totalDamage > 0
+                            ? (topDistrict.totalEconomicDamage / totalDamage) * 100
+                            : 0;
+                        const avgDamagePerArea = totalDamage / displayAggregatedData.length;
+                        const highImpactAreas = displayAggregatedData.filter(
+                          d => d.totalEconomicDamage > avgDamagePerArea * 1.5
                         ).length;
+                        const hasEconomicDamage = totalDamage > 0;
 
                         return (
                           <>
@@ -1006,7 +1050,10 @@ export default function SummaryPanel({
                                 </span>
                                 <span className="text-slate-400">
                                   {' '}
-                                  of total damage — highest vulnerability
+                                  of total damage
+                                  {hasEconomicDamage
+                                    ? ' — highest vulnerability'
+                                    : ' — no recorded economic loss in current view'}
                                 </span>
                               </div>
                             </div>
@@ -1015,7 +1062,10 @@ export default function SummaryPanel({
                               <div className="w-1.5 h-1.5 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
                               <div>
                                 <span className="text-orange-400 font-bold">
-                                  {highImpactDistricts} districts
+                                  {highImpactAreas}{' '}
+                                  {highImpactAreas === 1
+                                    ? areaLabelSingular.toLowerCase()
+                                    : areaLabelPlural.toLowerCase()}
                                 </span>
                                 <span className="text-slate-400"> exceed </span>
                                 <span className="text-slate-300">150% of average</span>
@@ -1030,10 +1080,10 @@ export default function SummaryPanel({
                               <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0" />
                               <div>
                                 <span className="text-slate-400">
-                                  Average damage per district:{' '}
+                                  Average damage per {areaLabelSingular.toLowerCase()}:{' '}
                                 </span>
                                 <span className="text-cyan-400 font-bold font-mono">
-                                  {formatCurrency(avgDamagePerDistrict)}
+                                  {formatCurrency(avgDamagePerArea)}
                                 </span>
                                 <span className="text-slate-400"> — use for prioritization</span>
                               </div>
@@ -1058,7 +1108,10 @@ export default function SummaryPanel({
                       )}
                     </div>
                     <TopInsightsCards
-                      insights={createDistrictInsights(displayAggregatedData)}
+                      insights={createDistrictInsights(displayAggregatedData, undefined, {
+                        singular: areaLabelSingular.toLowerCase(),
+                        plural: areaLabelPlural.toLowerCase(),
+                      })}
                       className="grid-cols-1 md:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1"
                     />
                   </div>
@@ -1140,7 +1193,7 @@ export default function SummaryPanel({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              Agricultural Loss
+                              Agricultural Damage
                             </p>
                             <p className="text-2xl font-bold text-green-400 mt-1 tabular-nums">
                               {formatCurrency(nationalSummary[0]?.Crop_Loss || 0)}
@@ -1192,22 +1245,22 @@ export default function SummaryPanel({
                       (sum, d) => sum + d.totalEconomicDamage,
                       0
                     );
-                    const top5Districts = displayAggregatedData
+                    const top5Districts = [...displayAggregatedData]
                       .sort((a, b) => b.totalEconomicDamage - a.totalEconomicDamage)
                       .slice(0, 5);
                     const top5Total = top5Districts.reduce(
                       (sum, d) => sum + d.totalEconomicDamage,
                       0
                     );
-                    const top5Share = ((top5Total / nationalTotal) * 100).toFixed(1);
+                    const top5Share =
+                      nationalTotal > 0 ? ((top5Total / nationalTotal) * 100).toFixed(1) : '0.0';
 
                     return (
                       <div className="glass-panel rounded-xl p-3 border border-slate-700/50 animate-fadeSlide">
                         <div className="flex items-center gap-2 mb-3">
                           <Target className="w-4 h-4 text-amber-400" />
                           <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-                            Top 5 Impacted{' '}
-                            {aggregatedEventData.length > 0 ? 'Districts' : 'Regions'}
+                            Top 5 Impacted {areaLabelPlural}
                           </h4>
                           {hasActiveFilters && (
                             <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] font-bold rounded-full">
@@ -1219,17 +1272,17 @@ export default function SummaryPanel({
                         {/* Table Header */}
                         <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider pb-2 border-b border-slate-700">
                           <span>#</span>
-                          <span className="ml-2">District</span>
+                          <span className="ml-2">{areaLabelSingular}</span>
                           <span className="ml-auto">Damage</span>
                         </div>
 
                         {/* Table Rows */}
                         <div className="space-y-2 mt-2">
                           {top5Districts.map((district, idx) => {
-                            const shareOfTotal = (
-                              (district.totalEconomicDamage / nationalTotal) *
-                              100
-                            ).toFixed(1);
+                            const shareOfTotal =
+                              nationalTotal > 0
+                                ? ((district.totalEconomicDamage / nationalTotal) * 100).toFixed(1)
+                                : '0.0';
 
                             return (
                               <div
@@ -1304,6 +1357,13 @@ export default function SummaryPanel({
                               <span className="font-semibold">% Share:</span> Portion of national
                               damage
                             </div>
+                            {nationalTotal <= 0 && (
+                              <div>
+                                <span className="text-slate-400">
+                                  No economic loss values available for the current filters.
+                                </span>
+                              </div>
+                            )}
                             <div>
                               <span className="text-amber-400 font-semibold">
                                 Top 5 = {top5Share}% of total impact
@@ -1333,7 +1393,7 @@ export default function SummaryPanel({
             </div>
             {hasActiveFilters && (
               <span className="text-[10px] text-blue-300 font-medium">
-                {filteredEvents.length} of {events.length} districts
+                {filteredEvents.length} of {events.length} {areaLabelPlural.toLowerCase()}
               </span>
             )}
           </div>
@@ -1580,7 +1640,7 @@ export default function SummaryPanel({
             </div>
             {hasActiveFilters && (
               <span className="text-[10px] text-blue-300 font-medium">
-                {filteredEvents.length} of {events.length} districts
+                {filteredEvents.length} of {events.length} {areaLabelPlural.toLowerCase()}
               </span>
             )}
           </div>
@@ -1864,7 +1924,7 @@ export default function SummaryPanel({
             </div>
             {hasActiveFilters && (
               <span className="text-[10px] text-blue-300 font-medium">
-                {filteredEvents.length} of {events.length} districts
+                {filteredEvents.length} of {events.length} {areaLabelPlural.toLowerCase()}
               </span>
             )}
           </div>
@@ -1873,8 +1933,7 @@ export default function SummaryPanel({
             <div className="glass-panel rounded-xl p-3 border border-slate-700/50">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  Top {aggregatedEventData.length > 0 ? 'Districts' : 'Regions'} by{' '}
-                  {districtMetric === 'loss' ? 'Loss' : 'Population'}
+                  Top {areaLabelPlural} by {districtMetric === 'loss' ? 'Loss' : 'Population'}
                 </h4>
                 <div className="flex gap-2">
                   <button
@@ -1902,13 +1961,14 @@ export default function SummaryPanel({
                 </div>
               </div>
               <PopoutVisualization
-                title="Top Districts Ranking"
-                subtitle={`Top ${aggregatedEventData.length > 0 ? 'districts' : 'regions'} by ${districtMetric === 'loss' ? 'economic loss' : 'affected population'}`}
+                title={`Top ${areaLabelPlural} Ranking`}
+                subtitle={`Top ${areaLabelPlural.toLowerCase()} by ${districtMetric === 'loss' ? 'economic loss' : 'affected population'}`}
               >
                 <RankedDistrictsChart
                   data={displayAggregatedData}
                   metric={districtMetric}
                   topN={8}
+                  areaLabelPlural={areaLabelPlural.toLowerCase()}
                 />
               </PopoutVisualization>
             </div>
@@ -1934,39 +1994,6 @@ export default function SummaryPanel({
               </p>
             )}
           </div>
-        </div>
-
-        {/* Cyclone Tab - Always mounted, visibility controlled by CSS */}
-        <div className={activeTab === 'cyclone' ? 'space-y-4' : 'hidden'}>
-          {hasCycloneData && (
-            <>
-              {/* Cyclone Animation Controls Note */}
-              <div className="glass-panel rounded-xl p-4 border border-slate-700/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Wind className="w-4 h-4 text-blue-400" />
-                    <h3 className="text-sm font-semibold text-slate-100">
-                      Cyclone Timeline Controls
-                    </h3>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded border ${
-                      showCycloneControls
-                        ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
-                        : 'text-amber-300 bg-amber-500/10 border-amber-500/30'
-                    }`}
-                  >
-                    {showCycloneControls ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Open the <span className="font-semibold text-blue-300">Filters</span> panel and
-                  use the <span className="font-semibold text-blue-300">Cyclone</span> tab to access
-                  the timeline controls.
-                </p>
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>

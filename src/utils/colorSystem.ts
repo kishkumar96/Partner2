@@ -50,12 +50,12 @@ export const HAZARD_CATEGORICAL_COLORS = {
  * - Catastrophic: > $50M (deep red)
  */
 export const LOSS_SEQUENTIAL_COLORS = [
-  { threshold: 0, color: '#e8f5e9', label: 'Minimal' }, // Very pale green
-  { threshold: 1000000, color: '#fff9c4', label: 'Low' }, // Pale yellow
-  { threshold: 5000000, color: '#ffe082', label: 'Moderate' }, // Light yellow
-  { threshold: 10000000, color: '#ffcc80', label: 'High' }, // Muted peach
-  { threshold: 20000000, color: '#ef9a9a', label: 'Severe' }, // Muted red
-  { threshold: 50000000, color: '#c62828', label: 'Catastrophic' }, // Deep red
+  { threshold: 0, color: '#e8f5e9' }, // Very pale green
+  { threshold: 1000000, color: '#fff9c4' }, // Pale yellow
+  { threshold: 5000000, color: '#ffe082' }, // Light yellow
+  { threshold: 10000000, color: '#ffcc80' }, // Muted peach
+  { threshold: 20000000, color: '#ef9a9a' }, // Muted red
+  { threshold: 50000000, color: '#c62828' }, // Deep red
 ] as const;
 
 // Samoa (TC Gita) has much lower regional losses than the other country datasets.

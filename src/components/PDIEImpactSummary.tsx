@@ -39,7 +39,7 @@ export default function PDIEImpactSummary({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="glass-panel glass-panel-hover rounded-xl p-6 border-l-4 border-neon-coral">
           <h3 className="text-sm font-semibold tracking-widest text-slate-300 uppercase">
-            Total Economic Loss
+            Total Economic Damage
           </h3>
           <p className="text-3xl font-bold mt-2 text-neon-coral">{formatCurrency(totalLoss)}</p>
         </div>

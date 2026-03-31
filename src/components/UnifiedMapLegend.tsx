@@ -112,8 +112,12 @@ export default function UnifiedMapLegend({
 
   // Legend classes mirror the exact static thresholds used by map paint expressions.
   const legendClasses = useMemo(() => {
-    const colorScale =
-      mode === 'loss' ? getLossSequentialColors(countryCode) : WIND_SEQUENTIAL_COLORS;
+    const colorScale = (
+      mode === 'loss' ? getLossSequentialColors(countryCode) : WIND_SEQUENTIAL_COLORS
+    ).map(item => ({
+      threshold: item.threshold,
+      color: item.color,
+    }));
 
     return colorScale.map((item, index) => {
       const nextItem = colorScale[index + 1];
@@ -122,7 +126,6 @@ export default function UnifiedMapLegend({
         label: formatContinuousRangeLabel(item.threshold, nextItem?.threshold ?? null, mode),
         color: item.color,
         textColor: 'text-slate-900 dark:text-white',
-        range: item.label,
         minValue: item.threshold,
         maxValue: nextItem ? nextItem.threshold : Infinity,
       };
@@ -166,11 +169,11 @@ export default function UnifiedMapLegend({
     if (!showBuildings) return [];
 
     return [
-      { label: '< $10K', color: BUILDING_DAMAGE_COLORS.minimal, range: 'Minimal' },
-      { label: '$10K - $50K', color: BUILDING_DAMAGE_COLORS.moderate, range: 'Moderate' },
-      { label: '$50K - $100K', color: BUILDING_DAMAGE_COLORS.substantial, range: 'Substantial' },
-      { label: '$100K - $500K', color: BUILDING_DAMAGE_COLORS.severe, range: 'Severe' },
-      { label: '> $500K', color: BUILDING_DAMAGE_COLORS.catastrophic, range: 'Catastrophic' },
+      { label: '< $10K', color: BUILDING_DAMAGE_COLORS.minimal },
+      { label: '$10K - $50K', color: BUILDING_DAMAGE_COLORS.moderate },
+      { label: '$50K - $100K', color: BUILDING_DAMAGE_COLORS.substantial },
+      { label: '$100K - $500K', color: BUILDING_DAMAGE_COLORS.severe },
+      { label: '> $500K', color: BUILDING_DAMAGE_COLORS.catastrophic },
     ];
   }, [showBuildings]);
 
@@ -179,10 +182,10 @@ export default function UnifiedMapLegend({
     if (!showRoads) return [];
 
     return [
-      { label: '< $1K', color: ROAD_DAMAGE_COLORS.light, range: 'Light', width: '4px' },
-      { label: '$1K - $2K', color: ROAD_DAMAGE_COLORS.moderate, range: 'Moderate', width: '5px' },
-      { label: '$2K - $3K', color: ROAD_DAMAGE_COLORS.heavy, range: 'Heavy', width: '7px' },
-      { label: '> $3K', color: ROAD_DAMAGE_COLORS.severe, range: 'Severe', width: '9px' },
+      { label: '< $1K', color: ROAD_DAMAGE_COLORS.light, width: '4px' },
+      { label: '$1K - $2K', color: ROAD_DAMAGE_COLORS.moderate, width: '5px' },
+      { label: '$2K - $3K', color: ROAD_DAMAGE_COLORS.heavy, width: '7px' },
+      { label: '> $3K', color: ROAD_DAMAGE_COLORS.severe, width: '9px' },
     ];
   }, [showRoads]);
 
@@ -252,7 +255,7 @@ export default function UnifiedMapLegend({
         fixed bottom-8 z-50 
         transition-all duration-300 ease-in-out 
         pointer-events-auto
-        ${isLeftPanelOpen ? 'left-[304px]' : 'left-8'}
+        ${isLeftPanelOpen ? 'left-[336px]' : 'left-8'}
         max-md:left-4 max-md:bottom-20
         ${isExpanded ? 'max-md:w-[calc(100vw-2rem)]' : ''}
       `}
@@ -363,12 +366,9 @@ export default function UnifiedMapLegend({
                   />
 
                   {/* Compact labels */}
-                  <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
                     <span className="text-xs font-semibold font-mono text-slate-200">
                       {item.label}
-                    </span>
-                    <span className="text-xs text-slate-500 uppercase tracking-wide">
-                      {item.range}
                     </span>
                   </div>
                 </div>
@@ -503,12 +503,9 @@ export default function UnifiedMapLegend({
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: item.color }}
                       />
-                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
                         <span className="text-xs font-semibold font-mono text-slate-200">
                           {item.label}
-                        </span>
-                        <span className="text-xs text-slate-500 uppercase tracking-wide">
-                          {item.range}
                         </span>
                       </div>
                     </div>
@@ -555,12 +552,9 @@ export default function UnifiedMapLegend({
                           borderRadius: '2px',
                         }}
                       />
-                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
                         <span className="text-xs font-semibold font-mono text-slate-200">
                           {item.label}
-                        </span>
-                        <span className="text-xs text-slate-500 uppercase tracking-wide">
-                          {item.range}
                         </span>
                       </div>
                     </div>

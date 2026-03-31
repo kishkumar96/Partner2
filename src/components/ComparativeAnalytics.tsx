@@ -122,19 +122,19 @@ export default function ComparativeAnalytics({
           {/* Regional Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Loss</div>
+              <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Damage</div>
               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                 {formatCurrency(regionalStats.total)}
               </div>
             </div>
             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-              <div className="text-sm text-green-600 dark:text-green-400 mb-1">Average Loss</div>
+              <div className="text-sm text-green-600 dark:text-green-400 mb-1">Average Damage</div>
               <div className="text-2xl font-bold text-green-900 dark:text-green-100">
                 {formatCurrency(regionalStats.avg)}
               </div>
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
-              <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">Median Loss</div>
+              <div className="text-sm text-amber-600 dark:text-amber-400 mb-1">Median Damage</div>
               <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">
                 {formatCurrency(regionalStats.median)}
               </div>

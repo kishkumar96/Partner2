@@ -12,11 +12,23 @@ describe('MapControls', () => {
     currentBasemap: POSITRON_URL,
   };
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('renders map controls toggle', () => {
     render(<MapControls {...defaultProps} />);
     expect(screen.getByRole('button', { name: /map controls/i })).toBeInTheDocument();
+  });
+
+  it('shows quick shading controls without opening map tools', () => {
+    const onMapStyleChange = jest.fn();
+
+    render(<MapControls {...defaultProps} mapStyle="loss" onMapStyleChange={onMapStyleChange} />);
+
+    expect(screen.getByRole('button', { name: /economic loss coloring/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /wind exposure coloring/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /basemap/i })).toBeInTheDocument();
   });
 
   it('announces pressed state and calls onMapStyleChange for display mode buttons', async () => {
@@ -94,7 +106,20 @@ describe('MapControls', () => {
     await waitFor(() => {
       expect(screen.queryByRole('menu', { name: /basemap options/i })).not.toBeInTheDocument();
     });
-    expect(basemapTrigger).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the basemap chooser after a basemap is selected', async () => {
+    const user = userEvent.setup();
+    const onBasemapChange = jest.fn();
+
+    render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
+
+    await user.click(screen.getByRole('button', { name: /basemap/i }));
+    await user.click(screen.getByRole('menuitemradio', { name: /detailed/i }));
+
+    expect(onBasemapChange).toHaveBeenCalledWith(VOYAGER_URL);
+    expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
   });
 
   it('disables actionable controls while loading', async () => {

@@ -105,7 +105,8 @@ export default function TopInsightsCards({ insights, className = '' }: TopInsigh
 // Utility function to create top insights from district data
 export function createDistrictInsights(
   districts: AggregatedEventData[],
-  onDistrictClick?: (districtId: string) => void
+  onDistrictClick?: (districtId: string) => void,
+  labels: { singular: string; plural: string } = { singular: 'district', plural: 'districts' }
 ): TopInsight[] {
   if (!districts || districts.length === 0) return [];
 
@@ -131,7 +132,7 @@ export function createDistrictInsights(
     const lossPercent = totalLoss > 0 ? ((lossValue / totalLoss) * 100).toFixed(1) : '0.0';
     insights.push({
       id: 'top-loss',
-      label: 'Highest Economic Loss',
+      label: 'Highest Economic Damage',
       value: formatCurrency(lossValue),
       subtitle: `${topByLoss.name} (${lossPercent}% of total)`,
       icon: DollarSign,
@@ -165,9 +166,9 @@ export function createDistrictInsights(
   if (highRiskCount > 0) {
     insights.push({
       id: 'high-risk-count',
-      label: 'High Risk Districts',
+      label: `High Risk ${labels.plural}`,
       value: highRiskCount,
-      subtitle: `${((highRiskCount / districts.length) * 100).toFixed(0)}% of total districts`,
+      subtitle: `${((highRiskCount / districts.length) * 100).toFixed(0)}% of total ${labels.plural}`,
       icon: AlertTriangle,
       color: 'border-yellow-500/40 text-slate-100',
       trend: 'neutral',

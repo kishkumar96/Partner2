@@ -16,7 +16,6 @@ import { useCallback, useMemo } from 'react';
 import { Building2, Search, ChevronDown, ChevronUp, MapPin, X } from 'lucide-react';
 import type { BuildingAsset } from '@/types/assetTables';
 import { useAssetTableData, transformBuildingData } from '@/hooks/useAssetTableData';
-import { getBuildingDamageColor } from '@/theme/colors';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface BuildingsTableProps {
@@ -40,17 +39,6 @@ function SortIndicator({
     <ChevronDown className="w-3 h-3" />
   ) : (
     <ChevronUp className="w-3 h-3" />
-  );
-}
-
-// Damage indicator component (moved outside to avoid recreation on every render)
-function DamageIndicator({ level, loss }: { level: string; loss: number }) {
-  const color = getBuildingDamageColor(loss);
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-      <span className="text-xs capitalize">{level}</span>
-    </div>
   );
 }
 
@@ -163,11 +151,10 @@ export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: Bu
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-1">
-                  Loss (USD)
+                  Damage (USD)
                   <SortIndicator columnKey="loss" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-left p-3 text-white/80 font-medium">Damage Level</th>
               <th
                 onClick={() => handleSort('buildingType')}
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
@@ -208,9 +195,6 @@ export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: Bu
                 }`}
               >
                 <td className="p-3 text-white font-mono">{formatCurrency(building.loss)}</td>
-                <td className="p-3 text-white/80">
-                  <DamageIndicator level={building.damageLevel} loss={building.loss} />
-                </td>
                 <td className="p-3 text-white/80">{building.buildingType}</td>
                 <td className="p-3 text-white/80">{building.occupancy}</td>
                 <td className="p-3 text-white/80">{building.region}</td>

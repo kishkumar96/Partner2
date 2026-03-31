@@ -3,7 +3,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import SummaryPanel from '../SummaryPanel';
-import { Event, FilterState, District, Province, Sector } from '@/types';
+import { Event, FilterState, District, Province, Sector, Hazard } from '@/types';
 
 describe('SummaryPanel Component', () => {
   const mockEvents: Event[] = [
@@ -29,6 +29,7 @@ describe('SummaryPanel Component', () => {
   const mockDistricts: District[] = [];
   const mockProvinces: Province[] = [];
   const mockSectors: Sector[] = [];
+  const mockHazards: Hazard[] = [];
 
   it('renders summary panel', () => {
     render(
@@ -38,6 +39,7 @@ describe('SummaryPanel Component', () => {
         districts={mockDistricts}
         provinces={mockProvinces}
         sectors={mockSectors}
+        hazards={mockHazards}
       />
     );
     expect(screen.getByRole('heading', { name: /summary dashboard/i })).toBeInTheDocument();
@@ -51,6 +53,7 @@ describe('SummaryPanel Component', () => {
         districts={mockDistricts}
         provinces={mockProvinces}
         sectors={mockSectors}
+        hazards={mockHazards}
       />
     );
 
@@ -61,7 +64,14 @@ describe('SummaryPanel Component', () => {
 
   it('handles missing data gracefully', () => {
     render(
-      <SummaryPanel events={[]} filters={mockFilters} districts={[]} provinces={[]} sectors={[]} />
+      <SummaryPanel
+        events={[]}
+        filters={mockFilters}
+        districts={[]}
+        provinces={[]}
+        sectors={[]}
+        hazards={mockHazards}
+      />
     );
 
     expect(screen.getByText(/No Impact Data Available/i)).toBeInTheDocument();
@@ -89,6 +99,7 @@ describe('SummaryPanel Component', () => {
         districts={mockDistricts}
         provinces={mockProvinces}
         sectors={mockSectors}
+        hazards={mockHazards}
       />
     );
 
@@ -103,6 +114,7 @@ describe('SummaryPanel Component', () => {
         districts={mockDistricts}
         provinces={mockProvinces}
         sectors={mockSectors}
+        hazards={mockHazards}
       />
     );
 
@@ -127,6 +139,7 @@ describe('SummaryPanel Component', () => {
         districts={mockDistricts}
         provinces={mockProvinces}
         sectors={mockSectors}
+        hazards={mockHazards}
       />
     );
 

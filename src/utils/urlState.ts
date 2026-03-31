@@ -38,6 +38,7 @@ export interface MapURLState {
 
   // Panel states
   showFilters?: boolean;
+  showMapControls?: boolean;
   showSummary?: boolean;
 }
 
@@ -77,6 +78,7 @@ export function serializeMapState(state: MapURLState): URLSearchParams {
   }
   if (state.storyMode) params.set('story', 'true');
   if (state.showFilters) params.set('filters', 'true');
+  if (state.showMapControls) params.set('map', 'true');
   if (state.showSummary) params.set('summary', 'true');
 
   return params;
@@ -129,6 +131,7 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
 
   if (params.get('story') === 'true') state.storyMode = true;
   if (params.get('filters') === 'true') state.showFilters = true;
+  if (params.get('map') === 'true') state.showMapControls = true;
   if (params.get('summary') === 'true') state.showSummary = true;
 
   return state;

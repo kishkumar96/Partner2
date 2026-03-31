@@ -12,11 +12,10 @@
 
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Construction, Search, ChevronDown, ChevronUp, MapPin, X } from 'lucide-react';
 import type { RoadAsset } from '@/types/assetTables';
 import { useAssetTableData, transformRoadData } from '@/hooks/useAssetTableData';
-import { ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface RoadsTableProps {
@@ -65,54 +64,17 @@ function SortIndicator({
   );
 }
 
-// Damage indicator component (moved outside to avoid recreation on every render)
-function DamageIndicator({ level }: { level: RoadAsset['damageLevel'] }) {
-  const color = ROAD_DAMAGE_COLORS[level];
-  const widths = {
-    light: '3px',
-    moderate: '5px',
-    heavy: '7px',
-    severe: '9px',
-  };
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className="h-3 rounded-sm flex-shrink-0"
-        style={{
-          backgroundColor: color,
-          width: widths[level as keyof typeof widths] || '3px',
-        }}
-      />
-      <span className="text-xs capitalize">{level}</span>
-    </div>
-  );
-}
-
 export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsTableProps) {
-  const [thresholds, setThresholds] = useState<RoadDamageThresholds>(
-    DEFAULT_ROAD_DAMAGE_THRESHOLDS
-  );
-  const [thresholdDraft, setThresholdDraft] = useState<RoadDamageThresholds>(
-    DEFAULT_ROAD_DAMAGE_THRESHOLDS
-  );
-
-  // Transform and classify roads using editable thresholds
+  // Transform and classify roads using the default thresholds
   const baseRoads = useMemo(() => transformRoadData(data), [data]);
   const roads = useMemo(
     () =>
       baseRoads.map(road => ({
         ...road,
-        damageLevel: classifyRoadDamageLevel(road.loss, thresholds),
+        damageLevel: classifyRoadDamageLevel(road.loss, DEFAULT_ROAD_DAMAGE_THRESHOLDS),
       })),
-    [baseRoads, thresholds]
+    [baseRoads]
   );
-
-  const thresholdsValid =
-    thresholdDraft.moderate < thresholdDraft.heavy && thresholdDraft.heavy < thresholdDraft.severe;
-  const hasThresholdChanges =
-    thresholdDraft.moderate !== thresholds.moderate ||
-    thresholdDraft.heavy !== thresholds.heavy ||
-    thresholdDraft.severe !== thresholds.severe;
 
   const {
     data: displayData,
@@ -207,84 +169,6 @@ export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsT
             </button>
           )}
         </div>
-
-        {/* Editable road damage thresholds */}
-        <div className="mt-3 p-3 bg-slate-900/40 border border-white/10 rounded-lg">
-          <div className="flex flex-wrap items-end gap-2">
-            <span className="text-xs text-slate-300 font-medium mr-1">Damage thresholds (USD)</span>
-            <label className="flex items-center gap-1 text-xs text-slate-300">
-              Moderate
-              <input
-                type="number"
-                min={0}
-                step={100}
-                value={thresholdDraft.moderate}
-                onChange={e =>
-                  setThresholdDraft(prev => ({
-                    ...prev,
-                    moderate: Number(e.target.value) || 0,
-                  }))
-                }
-                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </label>
-            <label className="flex items-center gap-1 text-xs text-slate-300">
-              Heavy
-              <input
-                type="number"
-                min={0}
-                step={100}
-                value={thresholdDraft.heavy}
-                onChange={e =>
-                  setThresholdDraft(prev => ({
-                    ...prev,
-                    heavy: Number(e.target.value) || 0,
-                  }))
-                }
-                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </label>
-            <label className="flex items-center gap-1 text-xs text-slate-300">
-              Severe
-              <input
-                type="number"
-                min={0}
-                step={100}
-                value={thresholdDraft.severe}
-                onChange={e =>
-                  setThresholdDraft(prev => ({
-                    ...prev,
-                    severe: Number(e.target.value) || 0,
-                  }))
-                }
-                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setThresholds(thresholdDraft)}
-              disabled={!thresholdsValid || !hasThresholdChanges}
-              className="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Apply
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setThresholds(DEFAULT_ROAD_DAMAGE_THRESHOLDS);
-                setThresholdDraft(DEFAULT_ROAD_DAMAGE_THRESHOLDS);
-              }}
-              className="px-2 py-1 text-xs rounded bg-slate-700/50 text-slate-300 border border-slate-600 hover:bg-slate-700 transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-          {!thresholdsValid && (
-            <p className="mt-2 text-[11px] text-red-300">
-              Thresholds must be ascending: Moderate &lt; Heavy &lt; Severe.
-            </p>
-          )}
-        </div>
       </div>
 
       {/* Table */}
@@ -306,11 +190,10 @@ export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsT
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-1">
-                  Loss (USD)
+                  Damage (USD)
                   <SortIndicator columnKey="loss" sortConfig={sortConfig} />
                 </div>
               </th>
-              <th className="text-left p-3 text-white/80 font-medium">Damage Level</th>
               <th
                 onClick={() => handleSort('roadType')}
                 className="text-left p-3 text-white/80 font-medium cursor-pointer hover:bg-white/5 transition-colors"
@@ -352,9 +235,6 @@ export default function RoadsTable({ data, onZoom, maxHeight = '600px' }: RoadsT
               >
                 <td className="p-3 text-white/90">{road.name || `Road ${road.id}`}</td>
                 <td className="p-3 text-white font-mono">{formatCurrency(road.loss)}</td>
-                <td className="p-3 text-white/80">
-                  <DamageIndicator level={road.damageLevel} />
-                </td>
                 <td className="p-3 text-white/80">{road.roadType}</td>
                 <td className="p-3 text-white/80">{road.surface}</td>
                 <td className="p-3 text-white/80">{road.region}</td>

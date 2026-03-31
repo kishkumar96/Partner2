@@ -21,6 +21,7 @@ import {
   getAggregationLabel as getCountryAggregationLabel,
 } from '@/data/countryConfigs';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { areaMatchesSelection } from '@/utils/adminNormalization';
 import { computeFilteredData } from '../utils/filteredData';
 import { aggregateEventsByLevel, filterEconomicDamageData } from '@/utils/filterUtils';
 import {
@@ -44,6 +45,7 @@ interface BottomTabsProps {
   impactByAssetType?: any[];
   impactBySector?: any[];
   regionalSummary?: any[];
+  regionalSummaryBySector?: any[]; // Regional breakdown by sector - filterable
   filters: FilterState;
   districts: District[];
   provinces: Province[];
@@ -77,6 +79,7 @@ export default function BottomTabs({
   impactByAssetType = [],
   impactBySector = [],
   regionalSummary = [],
+  regionalSummaryBySector = [],
   filters,
   districts,
   provinces,
@@ -89,13 +92,8 @@ export default function BottomTabs({
 }: BottomTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>('events');
   const geographyUi = COUNTRY_CONFIGS[countryCode].ui;
-  const regionMatchesSelection = (row: any, selection: string | null) => {
-    if (!selection) return true;
-    return [row?.Region_ID, row?.['Region.ID'], row?.Region]
-      .filter(Boolean)
-      .map((value: unknown) => String(value).trim())
-      .includes(selection);
-  };
+  const regionMatchesSelection = (row: any, selection: string | null) =>
+    areaMatchesSelection(row, selection);
 
   useEffect(() => {
     if (activeTab === 'roads' && !damagedRoads) {
@@ -362,16 +360,61 @@ export default function BottomTabs({
   }, [impactByAssetType]);
 
   const filteredImpactBySector = useMemo(() => {
+    // Use regional-summary-by-sector data if available (filterable by all dimensions)
+    // Otherwise fall back to national impact-by-sector (only filterable by sector)
+    if (regionalSummaryBySector && regionalSummaryBySector.length > 0) {
+      let filtered = regionalSummaryBySector;
+
+      // Filter by sector
+      if (selectedSectorNames.length > 0) {
+        filtered = filtered.filter((row: any) => {
+          const sectorName = row.Sector || '';
+          return selectedSectorNames.includes(sectorName);
+        });
+      }
+
+      // Filter by region (if a specific region is selected)
+      if (selectedRegion) {
+        filtered = filtered.filter((row: any) => {
+          const regionName = row.Region || '';
+          return regionName === selectedRegion;
+        });
+      }
+
+      // Aggregate by sector (sum across all regions)
+      const bySector = new Map<string, any>();
+      filtered.forEach((row: any) => {
+        const sector = row.Sector || 'Unknown';
+        if (!bySector.has(sector)) {
+          bySector.set(sector, {
+            Sector: sector,
+            Number_Exposed_Buildings: 0,
+            Number_Damaged_Buildings: 0,
+            Building_Loss: 0,
+            Total_Loss: 0,
+          });
+        }
+        const aggregate = bySector.get(sector)!;
+        aggregate.Number_Exposed_Buildings += Number(row.Number_Exposed_Buildings) || 0;
+        aggregate.Number_Damaged_Buildings += Number(row.Number_Damaged_Buildings) || 0;
+        aggregate.Building_Loss += Number(row.Building_Loss) || 0;
+        aggregate.Total_Loss += Number(row.Total_Loss) || 0;
+      });
+
+      return Array.from(bySector.values());
+    }
+
+    // Fallback to national impact-by-sector (only sector filter applies)
     if (!impactBySector || impactBySector.length === 0) return [];
-    // Could filter by sector if filters.selectedSectors is active and matches CSV Sector field
     if (selectedSectorNames.length > 0) {
       return impactBySector.filter((row: any) => {
         const sectorName = row.Sector || '';
         return selectedSectorNames.includes(sectorName);
       });
     }
+
     return impactBySector;
-  }, [impactBySector, selectedSectorNames]);
+  }, [regionalSummaryBySector, impactBySector, selectedSectorNames, selectedRegion]);
 
   // Filtered regional summary for Damage tab
   const filteredRegionalSummary = useMemo(() => {
@@ -558,7 +601,7 @@ export default function BottomTabs({
                         Population
                       </th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Economic Loss
+                        Economic Damage
                       </th>
                     </tr>
                   </thead>
@@ -708,7 +751,7 @@ export default function BottomTabs({
           <div className="space-y-4">
             <div className="flex items-center justify-between px-4 py-2">
               <div className="text-sm text-slate-400">
-                Economic losses aggregated by sector. For asset-specific details, see the
+                Economic Damage aggregated by sector. For asset-specific details, see the
                 &ldquo;Economic by Asset&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
@@ -748,10 +791,10 @@ export default function BottomTabs({
                       Sector
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Wind Loss
+                      Wind Damage
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Total Loss
+                      Total Damage
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                       Buildings
@@ -804,8 +847,8 @@ export default function BottomTabs({
           <div className="space-y-4">
             <div className="flex items-center justify-between px-4 py-2">
               <div className="text-sm text-slate-400">
-                Economic losses by individual asset type. For sector-level aggregates, see the
-                &ldquo;Economic by Sector&rdquo; tab.
+                Economic damage aggregated by individual asset type. For sector-level aggregates,
+                see the &ldquo;Economic by Sector&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
                   <div className="text-[10px] text-slate-500 mt-1">
                     Hazard, event, date, and sector filters are applied to these event-linked
@@ -847,10 +890,10 @@ export default function BottomTabs({
                       Count
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Wind Loss
+                      Wind Damage
                     </th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                      Total Loss
+                      Total Damage
                     </th>
                   </tr>
                 </thead>
@@ -898,14 +941,51 @@ export default function BottomTabs({
 
         {activeTab === 'details' && (
           <div className="space-y-4">
+            {/* Warning when incompatible filters are active */}
+            {hasHazardEventOrDateFilters && (
+              <div className="text-xs px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded flex items-start gap-2">
+                <AlertCircle
+                  className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"
+                  aria-hidden="true"
+                />
+                <div className="text-amber-200">
+                  <strong>Limited Filter Support:</strong> This tab shows pre-aggregated CSV data.
+                  {filters.selectedHazards.length > 0 && (
+                    <div className="mt-1">
+                      • Hazard filter is <strong>not applied</strong> (data contains all hazards)
+                    </div>
+                  )}
+                  {hasEventOrDateFilters && (
+                    <div className="mt-1">
+                      • Event/Date filters are <strong>not applied</strong> (data contains all
+                      events)
+                    </div>
+                  )}
+                  <div className="mt-1.5 text-[10px] text-amber-300/80">
+                    For fully filtered results, use the &quot;Economic by Sector&quot; or
+                    &quot;Economic by Asset&quot; tabs.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="text-xs text-slate-400 px-4 py-2 bg-slate-900/30 rounded border border-slate-700/50">
               <span className="inline-flex items-center gap-1">
                 <Info className="w-3.5 h-3.5" aria-hidden="true" />
-                <strong>Note:</strong>
+                <strong>Data Source:</strong>
               </span>{' '}
-              This tab shows aggregated impact data from CSV files.{' '}
-              <strong>Sector filter is active</strong> (if selected). Hazard and date filters do not
-              apply as CSV data lacks that granularity. Event filters also do not apply.
+              This tab displays national-level CSV aggregates.{' '}
+              {regionalSummaryBySector && regionalSummaryBySector.length > 0 ? (
+                <>
+                  <strong>Sector and region filters apply.</strong> Other filters (hazard, date,
+                  event) do not affect this data as the CSV lacks that granularity.
+                </>
+              ) : (
+                <>
+                  <strong>Only sector filter applies.</strong> Hazard, date, and event filters do
+                  not affect this data as the CSV lacks that granularity.
+                </>
+              )}
             </div>
             {filteredImpactByAssetType && filteredImpactByAssetType.length > 0 && (
               <div className="overflow-x-auto">
@@ -959,15 +1039,27 @@ export default function BottomTabs({
 
             {filteredImpactBySector && filteredImpactBySector.length > 0 && (
               <div className="overflow-x-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold text-slate-200">Impact by Sector</div>
+                {/* Title and Export Button */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-2xl font-bold text-blue-600 uppercase tracking-wide">
+                    Sector Analysis
+                  </h3>
                   <button
                     onClick={() => {
                       const dataToExport = filteredImpactBySector.map(row => ({
                         Sector: row.Sector || 'Unknown',
+                        'Exposed Buildings': Number(row.Number_Exposed_Buildings) || 0,
+                        'Damaged Buildings': Number(row.Number_Damaged_Buildings) || 0,
+                        'Building Loss': Number(row.Building_Loss) || 0,
                         'Total Loss': Number(row.Total_Loss) || 0,
                       }));
-                      exportToCSV(dataToExport, 'impact-by-sector', ['Sector', 'Total Loss']);
+                      exportToCSV(dataToExport, 'impact-by-sector', [
+                        'Sector',
+                        'Exposed Buildings',
+                        'Damaged Buildings',
+                        'Building Loss',
+                        'Total Loss',
+                      ]);
                     }}
                     className="px-3 py-1 text-xs rounded border bg-emerald-500/10 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/20 transition-colors"
                     title="Export to CSV"
@@ -978,32 +1070,104 @@ export default function BottomTabs({
                     </span>
                   </button>
                 </div>
-                <table className="min-w-full divide-y divide-slate-700/60">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Sector
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                        Loss
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/60">
-                    {[...filteredImpactBySector]
-                      .sort((a, b) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0))
-                      .map((row, idx) => (
-                        <tr key={row.Sector || `sector-${idx}`} className="hover:bg-white/5">
-                          <td className="px-4 py-3 text-sm text-slate-100">
-                            {row.Sector || 'Unknown'}
+
+                {/* Table */}
+                <div className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="bg-blue-700">
+                        <th className="px-6 py-4 text-left text-sm font-bold text-white uppercase tracking-wider border-r border-blue-600">
+                          Sector
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-r border-blue-600">
+                          Exposed
+                          <br />
+                          Buildings
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-r border-blue-600">
+                          Damaged
+                          <br />
+                          Buildings
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-white uppercase tracking-wider border-r border-blue-600">
+                          Building Loss
+                          <br />
+                          (USD)
+                        </th>
+                        <th className="px-6 py-4 text-center text-sm font-bold text-white uppercase tracking-wider">
+                          Total Damage (USD)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...filteredImpactBySector]
+                        .sort((a, b) => (Number(b.Total_Loss) || 0) - (Number(a.Total_Loss) || 0))
+                        .map((row, idx) => (
+                          <tr
+                            key={row.Sector || `sector-${idx}`}
+                            className={`${
+                              idx % 2 === 0 ? 'bg-cyan-50/30' : 'bg-white'
+                            } hover:bg-blue-50/50 transition-colors border-b border-cyan-200`}
+                          >
+                            <td className="px-6 py-4 text-sm text-blue-600 font-semibold border-r border-cyan-200">
+                              {row.Sector || 'Unknown'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-blue-700 text-center tabular-nums border-r border-cyan-200">
+                              {formatNumber(Number(row.Number_Exposed_Buildings) || 0)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-blue-700 text-center tabular-nums border-r border-cyan-200">
+                              {formatNumber(Number(row.Number_Damaged_Buildings) || 0)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-blue-700 text-center tabular-nums border-r border-cyan-200">
+                              {formatCurrency(Number(row.Building_Loss) || 0)}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-blue-700 text-center font-semibold tabular-nums">
+                              {formatCurrency(Number(row.Total_Loss) || 0)}
+                            </td>
+                          </tr>
+                        ))}
+                      {filteredImpactBySector.length > 0 && (
+                        <tr className="bg-cyan-200/60 font-bold border-t-2 border-blue-400">
+                          <td className="px-6 py-4 text-sm text-blue-900 uppercase tracking-wide border-r border-cyan-300">
+                            Total
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-100 text-right font-semibold">
-                            {formatCurrency(Number(row.Total_Loss) || 0)}
+                          <td className="px-6 py-4 text-sm text-blue-900 text-center tabular-nums border-r border-cyan-300">
+                            {formatNumber(
+                              filteredImpactBySector.reduce(
+                                (sum, row) => sum + (Number(row.Number_Exposed_Buildings) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-blue-900 text-center tabular-nums border-r border-cyan-300">
+                            {formatNumber(
+                              filteredImpactBySector.reduce(
+                                (sum, row) => sum + (Number(row.Number_Damaged_Buildings) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-blue-900 text-center tabular-nums border-r border-cyan-300">
+                            {formatCurrency(
+                              filteredImpactBySector.reduce(
+                                (sum, row) => sum + (Number(row.Building_Loss) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-blue-900 text-center font-bold tabular-nums">
+                            {formatCurrency(
+                              filteredImpactBySector.reduce(
+                                (sum, row) => sum + (Number(row.Total_Loss) || 0),
+                                0
+                              )
+                            )}
                           </td>
                         </tr>
-                      ))}
-                  </tbody>
-                </table>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

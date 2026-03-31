@@ -5,6 +5,7 @@ import { COUNTRIES } from '@/types/thredds';
 import { isCountryProtected } from '@/lib/countryAuth';
 import { CODE_TO_SLUG, getCountryCodeFromSlug } from '@/utils/countrySlug';
 import { getTenantCountryCodeFromEnv } from '@/utils/tenantCountry';
+import { getCountryAppName } from '@/data/countryConfigs';
 
 interface CountryPageProps {
   params: Promise<{ country: string }>;
@@ -31,10 +32,11 @@ export async function generateMetadata({ params }: CountryPageProps): Promise<Me
   }
 
   const countryInfo = COUNTRIES[countryCode];
+  const appName = getCountryAppName(countryCode);
 
   return {
-    title: `${countryInfo.name} Pacific Disaster Platform`,
-    description: `Operational hazard, exposure, and impact view for ${countryInfo.fullName}.`,
+    title: appName,
+    description: `Operational hazard, exposure, and impact intelligence for ${countryInfo.fullName}.`,
   };
 }
 

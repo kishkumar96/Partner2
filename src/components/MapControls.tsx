@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 interface MapControlsProps {
+  layout?: 'overlay' | 'panel';
   onBasemapChange: (basemap: string) => void;
   currentBasemap: string;
   mapStyle?: 'loss' | 'wind';
@@ -84,6 +85,7 @@ export { BASEMAPS };
  * Now with prominent layer toggles that are always visible
  */
 export function MapControls({
+  layout = 'overlay',
   onBasemapChange,
   currentBasemap,
   mapStyle,
@@ -116,6 +118,7 @@ export function MapControls({
 }: MapControlsProps) {
   const [isBasemapOpen, setIsBasemapOpen] = useState(false);
   const [isControlsOpen, setIsControlsOpen] = useState(false);
+  const [showBasemapSelector, setShowBasemapSelector] = useState(true);
   const basemapTriggerRef = useRef<HTMLButtonElement | null>(null);
   const basemapOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -162,8 +165,13 @@ export function MapControls({
     basemapOptionRefs.current[wrappedIndex]?.focus();
   };
 
+  const rootContainerClass =
+    layout === 'panel'
+      ? 'w-full pointer-events-auto flex flex-col gap-2 overflow-x-hidden'
+      : 'absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100%-1rem)] flex flex-col gap-2 overflow-x-hidden';
+
   return (
-    <div className="absolute top-4 left-4 z-[15] pointer-events-auto w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100%-1rem)] flex flex-col gap-2 overflow-x-hidden">
+    <div className={rootContainerClass}>
       {/* Loading Indicators */}
       {isMapDataLoading && (
         <div
@@ -204,19 +212,68 @@ export function MapControls({
         </div>
       )}
 
+      {(hasMapStyleControls || !!onBasemapChange) && (
+        <div className="glass-panel rounded-lg p-3 shadow-lg">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Quick Controls
+            </span>
+            <span className="text-[10px] text-slate-500">High-frequency actions</span>
+          </div>
+
+          {hasMapStyleControls && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={controlsBusy}
+                aria-pressed={mapStyle === 'loss'}
+                aria-label="Economic loss coloring"
+                onClick={() => onMapStyleChange?.('loss')}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  mapStyle === 'loss'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                Damage shading
+              </button>
+              <button
+                type="button"
+                disabled={controlsBusy}
+                aria-pressed={mapStyle === 'wind'}
+                aria-label="Wind exposure coloring"
+                onClick={() => onMapStyleChange?.('wind')}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  mapStyle === 'wind'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                Wind shading
+              </button>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500 mt-2">
+            Regional shading is independent from overlays and filter selections.
+          </p>
+        </div>
+      )}
+
       <button
         onClick={() => {
           const next = !isControlsOpen;
           setIsControlsOpen(next);
           if (!next) setIsBasemapOpen(false);
         }}
+        aria-label="Map Controls"
         className="glass-panel px-3 py-2 rounded-lg flex items-center gap-2 text-xs font-semibold text-slate-200 hover:text-white transition-all"
-        title={isControlsOpen ? 'Hide map controls' : 'Show map controls'}
+        title={isControlsOpen ? 'Hide advanced map tools' : 'Show advanced map tools'}
         aria-expanded={isControlsOpen}
         aria-controls="map-controls-panel"
       >
         <Settings2 className="w-4 h-4" />
-        <span className="flex-1 text-left">Map Controls</span>
+        <span className="flex-1 text-left">Map Tools</span>
         <span className="text-[10px] font-semibold text-slate-300">
           {isControlsOpen ? 'On' : 'Off'}
         </span>
@@ -230,58 +287,14 @@ export function MapControls({
             className="space-y-2 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 pb-1"
           >
             {/* Core map controls grouped by intent */}
-            {(hasMapStyleControls ||
-              has3DControls ||
+            {(has3DControls ||
               hasLayerToggles ||
               hasDamageLayerToggles ||
               !!onLayerOpacityChange ||
               !!onDownloadMap) && (
               <div className="glass-panel rounded-lg p-3 shadow-lg">
-                {/* View Mode */}
-                {hasMapStyleControls && (
-                  <>
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                      Regional Colors
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <button
-                        type="button"
-                        disabled={controlsBusy}
-                        aria-pressed={mapStyle === 'loss'}
-                        aria-label="Economic Loss Coloring"
-                        onClick={() => onMapStyleChange?.('loss')}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                          mapStyle === 'loss'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                            : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                        }`}
-                      >
-                        Economic Loss
-                      </button>
-                      <button
-                        type="button"
-                        disabled={controlsBusy}
-                        aria-pressed={mapStyle === 'wind'}
-                        aria-label="Wind Exposure Coloring"
-                        onClick={() => onMapStyleChange?.('wind')}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                          mapStyle === 'wind'
-                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                            : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                        }`}
-                      >
-                        Wind Exposure
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Affects region coloring only. Does not toggle hazard layers.
-                    </p>
-                  </>
-                )}
-
                 {has3DControls && (
                   <>
-                    <div className="border-t border-slate-700 mb-3 pt-3"></div>
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
                       3D Geometry
                     </div>
@@ -334,7 +347,7 @@ export function MapControls({
                             type="button"
                             disabled={extrusionControlsDisabled}
                             aria-pressed={extrusionMode === 'loss'}
-                            aria-label="Economic loss extrusion"
+                            aria-label="Economic Da extrusion"
                             onClick={() => onExtrusionModeChange('loss')}
                             className={`px-2 py-1.5 rounded text-[11px] font-semibold transition-all ${
                               extrusionMode === 'loss'
@@ -342,7 +355,7 @@ export function MapControls({
                                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                             } ${extrusionControlsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
-                            Economic Loss
+                            Economic Damage
                           </button>
                           <button
                             type="button"
@@ -367,14 +380,12 @@ export function MapControls({
                 {/* Overlays */}
                 {(hasLayerToggles || hasDamageLayerToggles) && (
                   <>
-                    {hasMapStyleControls && (
-                      <div className="border-t border-slate-700 mb-3 pt-3"></div>
-                    )}
+                    {has3DControls && <div className="border-t border-slate-700 mb-3 pt-3"></div>}
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                      Hazard Layers
+                      Map Overlays
                     </div>
                     <p className="text-[11px] text-slate-500 mb-2">
-                      Layer visibility only. Independent from regional color mode.
+                      Overlay visibility only. Separate from regional shading and data filters.
                     </p>
                     <div className="space-y-2">
                       {onWindLayerToggle && (
@@ -386,11 +397,12 @@ export function MapControls({
                             checked={showWindLayer}
                             disabled={controlsBusy}
                             onChange={e => onWindLayerToggle(e.target.checked)}
+                            aria-label="Wind layer"
                             className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-2 focus:ring-cyan-500/50 cursor-pointer"
                           />
                           <Wind className="w-4 h-4 text-cyan-400" />
                           <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Wind Layer
+                            Wind overlay
                           </span>
                           <span className="ml-auto text-[10px] font-semibold text-slate-300">
                             {showWindLayer ? 'Visible' : 'Hidden'}
@@ -410,7 +422,7 @@ export function MapControls({
                           />
                           <Waves className="w-4 h-4 text-blue-400" />
                           <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Flood Layer
+                            Flood overlay
                           </span>
                           <span className="ml-auto text-[10px] font-semibold text-slate-300">
                             {showInundationLayer ? 'Visible' : 'Hidden'}
@@ -523,109 +535,113 @@ export function MapControls({
               </button>
             </div>
           )}
-
-          {/* Collapsible: Basemap Selector - outside overflow container to prevent popup clipping */}
-          <div className="relative">
-            <button
-              ref={basemapTriggerRef}
-              onClick={() => setIsBasemapOpen(!isBasemapOpen)}
-              disabled={controlsBusy}
-              className="glass-panel px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white transition-all w-full"
-              title="Change basemap"
-              aria-expanded={isBasemapOpen}
-              aria-controls="basemap-panel"
-              aria-haspopup="menu"
-            >
-              <Settings2 className="w-5 h-5" />
-              <span className="flex-1 text-left">Basemap</span>
-              <span className="text-xs text-slate-400">{isBasemapOpen ? '▼' : '▶'}</span>
-            </button>
-
-            {isBasemapOpen && (
-              <>
-                {/* Backdrop to close on click */}
-                <button
-                  type="button"
-                  className="fixed inset-0 z-[14]"
-                  onClick={() => closeBasemapMenu(true)}
-                  aria-label="Close basemap menu"
-                />
-
-                {/* Basemap options popover */}
-                <div
-                  id="basemap-panel"
-                  role="menu"
-                  aria-label="Basemap options"
-                  onKeyDown={event => {
-                    const activeIndex = basemapOptionRefs.current.findIndex(
-                      item => item === document.activeElement
-                    );
-
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      focusBasemapIndex(activeIndex + 1);
-                      return;
-                    }
-
-                    if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      focusBasemapIndex(activeIndex - 1);
-                      return;
-                    }
-
-                    if (event.key === 'Home') {
-                      event.preventDefault();
-                      focusBasemapIndex(0);
-                      return;
-                    }
-
-                    if (event.key === 'End') {
-                      event.preventDefault();
-                      focusBasemapIndex(BASEMAPS.length - 1);
-                    }
-                  }}
-                  className="absolute bottom-full left-0 mb-2 glass-panel rounded-lg p-3 w-[min(calc(100vw-3rem),320px)] max-w-[320px] z-[16] shadow-2xl"
-                >
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                    Basemap
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {BASEMAPS.map((basemap, idx) => {
-                      const Icon = basemap.icon;
-                      const isActive = currentBasemap === basemap.style;
-
-                      return (
-                        <button
-                          key={basemap.id}
-                          ref={el => {
-                            basemapOptionRefs.current[idx] = el;
-                          }}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={isActive}
-                          onClick={() => {
-                            onBasemapChange(basemap.style);
-                            closeBasemapMenu(true);
-                          }}
-                          className={`w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm font-medium transition-all ${
-                            isActive
-                              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                              : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                          }`}
-                        >
-                          <Icon className="w-5 h-5 flex-shrink-0" />
-                          <span className="flex-1 text-left">{basemap.name}</span>
-                          {isActive && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
         </>
+      )}
+
+      {/* Basemap Selector - shown only until the user confirms a choice */}
+      {showBasemapSelector && (
+        <div className="relative">
+          <button
+            ref={basemapTriggerRef}
+            onClick={() => setIsBasemapOpen(!isBasemapOpen)}
+            disabled={controlsBusy}
+            className="glass-panel px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white transition-all w-full"
+            title="Change basemap"
+            aria-label="Basemap"
+            aria-expanded={isBasemapOpen}
+            aria-controls="basemap-panel"
+            aria-haspopup="menu"
+          >
+            <Settings2 className="w-5 h-5" />
+            <span className="flex-1 text-left">Basemap</span>
+            <span className="text-xs text-slate-400">{isBasemapOpen ? '▼' : '▶'}</span>
+          </button>
+
+          {isBasemapOpen && (
+            <>
+              {/* Backdrop to close on click */}
+              <button
+                type="button"
+                className="fixed inset-0 z-[14]"
+                onClick={() => closeBasemapMenu(true)}
+                aria-label="Close basemap menu"
+              />
+
+              {/* Basemap options popover */}
+              <div
+                id="basemap-panel"
+                role="menu"
+                aria-label="Basemap options"
+                onKeyDown={event => {
+                  const activeIndex = basemapOptionRefs.current.findIndex(
+                    item => item === document.activeElement
+                  );
+
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    focusBasemapIndex(activeIndex + 1);
+                    return;
+                  }
+
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    focusBasemapIndex(activeIndex - 1);
+                    return;
+                  }
+
+                  if (event.key === 'Home') {
+                    event.preventDefault();
+                    focusBasemapIndex(0);
+                    return;
+                  }
+
+                  if (event.key === 'End') {
+                    event.preventDefault();
+                    focusBasemapIndex(BASEMAPS.length - 1);
+                  }
+                }}
+                className="absolute bottom-full left-0 mb-2 glass-panel rounded-lg p-3 w-[min(calc(100vw-3rem),320px)] max-w-[320px] z-[16] shadow-2xl"
+              >
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                  Basemap
+                </div>
+
+                <div className="space-y-1.5">
+                  {BASEMAPS.map((basemap, idx) => {
+                    const Icon = basemap.icon;
+                    const isActive = currentBasemap === basemap.style;
+
+                    return (
+                      <button
+                        key={basemap.id}
+                        ref={el => {
+                          basemapOptionRefs.current[idx] = el;
+                        }}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                        onClick={() => {
+                          onBasemapChange(basemap.style);
+                          setShowBasemapSelector(false);
+                          closeBasemapMenu(true);
+                        }}
+                        className={`w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm font-medium transition-all ${
+                          isActive
+                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                            : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        <span className="flex-1 text-left">{basemap.name}</span>
+                        {isActive && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

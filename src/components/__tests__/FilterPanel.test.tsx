@@ -112,12 +112,16 @@ describe('FilterPanel Component', () => {
   // 1. Basic render
   it('renders the filter panel container', () => {
     renderPanel();
-    expect(screen.getByRole('heading', { name: /filters/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /filters/i })).toBeInTheDocument();
   });
 
-  // 2. Real options rendered from props (hazards section is expanded by default)
+  // 2. Real options rendered from props (hazards are in the advanced section)
   it('displays hazard options sourced from the hazards prop', () => {
     renderPanel();
+    // Expand advanced filters first
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
+    // Expand hazards section (collapsed by default)
+    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     // Both hazard NAMES must appear as checkbox labels.
     // Use anchored regex so we match "Flood" (hazard label) but not
     // "Select Flood 2024" (event checkbox aria-label).
@@ -125,10 +129,9 @@ describe('FilterPanel Component', () => {
     expect(screen.getByRole('checkbox', { name: /^flood$/i })).toBeInTheDocument();
   });
 
-  it('displays sector options sourced from the sectors prop after expanding the Sectors section', () => {
+  it('displays sector options sourced from the sectors prop (sectors section is expanded by default)', () => {
     renderPanel();
-    // Sectors section is collapsed by default – expand it first
-    fireEvent.click(screen.getByRole('button', { name: /sectors/i }));
+    // Sectors section is expanded by default - no need to click
     expect(screen.getByRole('checkbox', { name: /agriculture/i })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /housing/i })).toBeInTheDocument();
   });
@@ -137,6 +140,9 @@ describe('FilterPanel Component', () => {
   it('calls onFilterChange with the checked hazard when a hazard checkbox is toggled on', () => {
     const { onFilterChange } = renderPanel({ selectedHazards: [] });
 
+    // Expand advanced filters and hazards section
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
+    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -149,6 +155,9 @@ describe('FilterPanel Component', () => {
     // Start with TC already selected
     const { onFilterChange } = renderPanel({ selectedHazards: ['tropical-cyclone'] });
 
+    // Expand advanced filters and hazards section
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
+    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -159,8 +168,7 @@ describe('FilterPanel Component', () => {
   it('calls onFilterChange with the checked sector when a sector checkbox is toggled on', () => {
     const { onFilterChange } = renderPanel({ selectedSectors: [] });
 
-    // expand
-    fireEvent.click(screen.getByRole('button', { name: /sectors/i }));
+    // Sectors section is expanded by default - no need to click
     fireEvent.click(screen.getByRole('checkbox', { name: /agriculture/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -173,7 +181,8 @@ describe('FilterPanel Component', () => {
   it('calls onFilterChange with the new aggregation level when a radio is selected', () => {
     const { onFilterChange } = renderPanel({ aggregationLevel: 'district' });
 
-    // Aggregation section starts collapsed – expand it
+    // Expand advanced filters section first, then aggregation section
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
     fireEvent.click(screen.getByRole('button', { name: /aggregation/i }));
     fireEvent.click(screen.getByRole('radio', { name: /province/i }));
 
@@ -193,6 +202,8 @@ describe('FilterPanel Component', () => {
       aggregationLevel: 'province',
     });
 
+    // Expand advanced filters section first
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
     fireEvent.click(screen.getByRole('button', { name: /clear all filters/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -210,7 +221,7 @@ describe('FilterPanel Component', () => {
       dateRange: { start: '2024-12-31', end: '2024-12-31' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /temporal/i }));
+    // Temporal section is expanded by default - no need to click
     fireEvent.change(screen.getByLabelText(/to date/i), {
       target: { value: '2024-01-01' },
     });
@@ -239,6 +250,10 @@ describe('FilterPanel Component', () => {
     ];
 
     renderPanel({}, jest.fn(), { events: aliasEvents });
+
+    // Expand advanced filters and hazards section
+    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
+    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
 
     const floodCheckbox = screen.getByRole('checkbox', { name: /^flood$/i });
     expect(floodCheckbox).not.toBeDisabled();
