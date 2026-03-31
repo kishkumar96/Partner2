@@ -1153,6 +1153,7 @@ export default function MapView({
       {map.current && (
         <>
           <RealDataLayers
+            key={`real-data-${basemapStyle}-${styleChangeCounter}`}
             map={map.current}
             countryCode={selectedCountry}
             visible={true}
@@ -1172,6 +1173,7 @@ export default function MapView({
             layerOpacityScale={layerOpacity}
           />
           <RegionalImpactsLayer
+            key={`regional-impacts-${basemapStyle}-${styleChangeCounter}`}
             map={map.current}
             visible={true}
             mapStyle={mapStyle}
@@ -1182,12 +1184,14 @@ export default function MapView({
             layerOpacityScale={layerOpacity}
           />
           <DamagedBuildingsLayer
+            key={`damaged-buildings-${basemapStyle}-${styleChangeCounter}`}
             map={map.current}
             data={damagedBuildings ?? null}
             visible={!!damagedBuildings}
             styleChangeCounter={styleChangeCounter}
           />
           <DamagedRoadsLayer
+            key={`damaged-roads-${basemapStyle}-${styleChangeCounter}`}
             map={map.current}
             data={damagedRoads ?? null}
             visible={!!damagedRoads}
