@@ -92,7 +92,7 @@ describe('ThresholdRow', () => {
         />
       );
 
-      const labelInput = screen.getByLabelText('Economic Loss threshold 1 label');
+      const labelInput = screen.getByLabelText('Economic Loss threshold 1 range label');
       expect(labelInput).toBeInTheDocument();
     });
 
@@ -205,7 +205,7 @@ describe('ThresholdRow', () => {
         />
       );
 
-      expect(screen.getByPlaceholderText('Label')).toHaveValue('');
+      expect(screen.getByPlaceholderText('Range label')).toHaveValue('');
     });
 
     it('validates numeric input for value changes', () => {
