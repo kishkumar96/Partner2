@@ -512,7 +512,7 @@ export default function BottomTabs({
                   Impact Breakdown by {getAggregationLabel()}
                 </div>
                 {filters.aggregationLevel === 'district' && (
-                  <div className="text-[10px] text-slate-500 mt-0.5">
+                  <div className="text-[10px] text-slate-400 mt-0.5">
                     {geographyUi.focusAreaSingular}-level data unavailable, showing{' '}
                     {geographyUi.broaderAreaPlural.toLowerCase()} totals
                   </div>
@@ -646,7 +646,7 @@ export default function BottomTabs({
               <div className="text-sm font-semibold text-slate-200">
                 Exposure Data ({exposureDisplayData.length} entries)
                 {hasEventOrDateFilters && (
-                  <div className="text-[10px] text-slate-500 mt-1">
+                  <div className="text-[10px] text-slate-400 mt-1">
                     Event and date filters are applied using the active event metadata.
                   </div>
                 )}
@@ -754,7 +754,7 @@ export default function BottomTabs({
                 Economic Damage aggregated by sector. For asset-specific details, see the
                 &ldquo;Economic by Asset&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
-                  <div className="text-[10px] text-slate-500 mt-1">
+                  <div className="text-[10px] text-slate-400 mt-1">
                     Hazard, event, date, and sector filters are applied to these event-linked
                     economic records.
                   </div>
@@ -850,7 +850,7 @@ export default function BottomTabs({
                 Economic damage aggregated by individual asset type. For sector-level aggregates,
                 see the &ldquo;Economic by Sector&rdquo; tab.
                 {hasHazardEventOrDateFilters && (
-                  <div className="text-[10px] text-slate-500 mt-1">
+                  <div className="text-[10px] text-slate-400 mt-1">
                     Hazard, event, date, and sector filters are applied to these event-linked
                     economic records.
                   </div>

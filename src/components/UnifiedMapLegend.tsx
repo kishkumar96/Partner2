@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { DollarSign, Wind, ChevronDown, ChevronUp, Info, Droplet } from 'lucide-react';
-import { LegendSettings } from '@/data/realThreddsLayers';
+import {
+  getLegendDisplayLabel,
+  getLegendRangeLabel,
+  LegendSettings,
+} from '@/data/realThreddsLayers';
 import { formatCurrency } from '@/utils/formatters';
 import { WIND_SEQUENTIAL_COLORS, getLossSequentialColors } from '@/utils/colorSystem';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
@@ -129,6 +133,22 @@ function formatContinuousRangeLabel(
   return `${current}-${Math.round(nextValue)} km/h`;
 }
 
+function mapLegendThresholdItem(threshold: {
+  label: string;
+  color: string;
+  rangeLabel?: string;
+  descriptiveLabel?: string;
+}) {
+  const displayLabel = getLegendDisplayLabel(threshold);
+  const rangeLabel = getLegendRangeLabel(threshold);
+
+  return {
+    label: displayLabel,
+    range: displayLabel === rangeLabel ? undefined : rangeLabel,
+    color: threshold.color,
+  };
+}
+
 export default function UnifiedMapLegend({
   mode,
   visible = true,
@@ -153,7 +173,7 @@ export default function UnifiedMapLegend({
   const legendClasses = useMemo(() => {
     if (legendSettings) {
       const settings = mode === 'loss' ? legendSettings.loss : legendSettings.wind;
-      return settings.map(s => ({ label: s.label, color: s.color }));
+      return settings.map(mapLegendThresholdItem);
     }
 
     // Fallback to old logic if settings are not provided
@@ -163,6 +183,7 @@ export default function UnifiedMapLegend({
       const nextItem = colorScale[index + 1];
       return {
         label: formatContinuousRangeLabel(item.threshold, nextItem?.threshold ?? null, mode),
+        range: undefined,
         color: item.color,
         textColor: 'text-slate-900 dark:text-white',
         minValue: item.threshold,
@@ -206,10 +227,15 @@ export default function UnifiedMapLegend({
   const buildingLegendClasses = useMemo(() => {
     if (!showBuildings) return [];
     if (legendSettings?.buildings) {
-      return legendSettings.buildings.map(s => ({ label: s.label, color: s.color }));
+      return legendSettings.buildings.map(mapLegendThresholdItem);
     }
-    // Fallback
-    return [];
+    return [
+      { label: '< $10K', range: undefined, color: BUILDING_DAMAGE_COLORS.minimal },
+      { label: '$10K - $50K', range: undefined, color: BUILDING_DAMAGE_COLORS.moderate },
+      { label: '$50K - $100K', range: undefined, color: BUILDING_DAMAGE_COLORS.substantial },
+      { label: '$100K - $500K', range: undefined, color: BUILDING_DAMAGE_COLORS.severe },
+      { label: '> $500K', range: undefined, color: BUILDING_DAMAGE_COLORS.catastrophic },
+    ];
   }, [showBuildings, legendSettings]);
 
   const roadLegendClasses = useMemo(() => {
@@ -218,12 +244,17 @@ export default function UnifiedMapLegend({
       // Calculate dynamic widths matching DamagedRoadsLayer logic:
       // Width progression: 4px base, +1.5px per threshold step
       return legendSettings.roads.map((s, index) => ({
-        label: s.label,
+        ...mapLegendThresholdItem(s),
         color: s.color,
         width: `${4 + index * 1.5}px`,
       }));
     }
-    return [];
+    return [
+      { label: '< $1K', range: undefined, color: ROAD_DAMAGE_COLORS.light, width: '4px' },
+      { label: '$1K - $2K', range: undefined, color: ROAD_DAMAGE_COLORS.moderate, width: '5.5px' },
+      { label: '$2K - $3K', range: undefined, color: ROAD_DAMAGE_COLORS.heavy, width: '7px' },
+      { label: '> $3K', range: undefined, color: ROAD_DAMAGE_COLORS.severe, width: '8.5px' },
+    ];
   }, [showRoads, legendSettings]);
 
   const cycloneSwathLegendClasses = useMemo(() => {
@@ -329,11 +360,11 @@ export default function UnifiedMapLegend({
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <div>
-                  <span className="text-slate-500">Source:</span>
+                  <span className="text-slate-400">Source:</span>
                   <span className="font-medium text-slate-200 ml-1">{dataSource}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">Scope:</span>
+                  <span className="text-slate-400">Scope:</span>
                   <span className="font-medium text-slate-200 ml-1">{temporalScope}</span>
                 </div>
               </div>
@@ -350,7 +381,7 @@ export default function UnifiedMapLegend({
               <p className="text-xs text-slate-400">{config.subtitle}</p>
               {/* Show data range if available */}
               {dataRange && (
-                <p className="text-xs text-slate-500 font-mono mt-1">
+                <p className="text-xs text-slate-400 font-mono mt-1">
                   <span className="font-sans mr-1">{config.rangeLabel}:</span>
                   {mode === 'loss'
                     ? formatCurrency(dataRange.min)
@@ -384,9 +415,10 @@ export default function UnifiedMapLegend({
 
                   {/* Compact labels */}
                   <div className="flex-1 min-w-0">
-                    <span className="text-xs font-semibold font-mono text-slate-200">
-                      {item.label}
-                    </span>
+                    <div className="text-xs font-semibold text-slate-200">{item.label}</div>
+                    {item.range && (
+                      <div className="text-[10px] font-mono text-slate-500">{item.range}</div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -394,7 +426,7 @@ export default function UnifiedMapLegend({
 
             {/* Compact footer */}
             <div className="px-3 py-2 bg-black/10">
-              <p className="text-xs text-slate-500 leading-relaxed">{config.footer}</p>
+              <p className="text-xs text-slate-400 leading-relaxed">{config.footer}</p>
               {dataValues && dataValues.length > 0 && (
                 <p className="text-xs text-blue-400 mt-1">✓ {dataValues.length} data points</p>
               )}
@@ -411,7 +443,7 @@ export default function UnifiedMapLegend({
                   <p className="text-xs text-slate-400">
                     Event-specific THREDDS rasters from Pacific Ocean Portal
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Ranges and units come from layer metadata. Palette bars are visual previews of
                     the server style, not exact sampled legends.
                   </p>
@@ -464,17 +496,17 @@ export default function UnifiedMapLegend({
                             </span>
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500 font-mono">
+                          <div className="text-xs text-slate-400 font-mono">
                             Range unavailable in WMS metadata
                           </div>
                         )}
 
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-slate-400 mt-1">
                           {isWind
                             ? `Wind speed intensity (${units})`
                             : `Flood inundation depth (${units})`}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-400">
                           Palette: {styleLabel}
                           {layer.styleConfig?.numColorBands
                             ? ` · ${layer.styleConfig.numColorBands} bands`
@@ -521,9 +553,10 @@ export default function UnifiedMapLegend({
                         style={{ backgroundColor: item.color }}
                       />
                       <div className="flex-1 min-w-0">
-                        <span className="text-xs font-semibold font-mono text-slate-200">
-                          {item.label}
-                        </span>
+                        <div className="text-xs font-semibold text-slate-200">{item.label}</div>
+                        {item.range && (
+                          <div className="text-[10px] font-mono text-slate-500">{item.range}</div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -570,9 +603,10 @@ export default function UnifiedMapLegend({
                         }}
                       />
                       <div className="flex-1 min-w-0">
-                        <span className="text-xs font-semibold font-mono text-slate-200">
-                          {item.label}
-                        </span>
+                        <div className="text-xs font-semibold text-slate-200">{item.label}</div>
+                        {item.range && (
+                          <div className="text-[10px] font-mono text-slate-500">{item.range}</div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -608,7 +642,7 @@ export default function UnifiedMapLegend({
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold text-slate-200">{item.label}</div>
-                        <div className="text-xs text-slate-500">{item.description}</div>
+                        <div className="text-xs text-slate-400">{item.description}</div>
                       </div>
                     </div>
                   ))}

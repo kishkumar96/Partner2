@@ -225,12 +225,12 @@ const MapPanel = memo(function MapPanel({
                 Map Shading
               </h3>
               {!expandedSections.shading && (
-                <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                <span className="text-[10px] text-slate-400 ml-auto mr-2">
                   {mapStyle === 'loss' ? 'Estimated damage' : 'Wind intensity'}
                 </span>
               )}
               <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.shading ? 'rotate-180' : ''} ${!expandedSections.shading ? 'ml-auto' : ''}`}
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.shading ? 'rotate-180' : ''} ${!expandedSections.shading ? 'ml-auto' : ''}`}
               />
             </button>
             {expandedSections.shading && (
@@ -273,7 +273,7 @@ const MapPanel = memo(function MapPanel({
           onBuildingsLayerToggle ||
           onRoadsLayerToggle) && (
           <div className="mx-3 mt-2 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 px-1 mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 px-1 mb-1">
               Overlays
             </p>
 
@@ -355,13 +355,13 @@ const MapPanel = memo(function MapPanel({
                       </span>
                       <span
                         className={`text-[10px] font-semibold mr-2 ${
-                          checked ? 'text-slate-300' : 'text-slate-500'
+                          checked ? 'text-slate-300' : 'text-slate-400'
                         }`}
                       >
                         {checked ? 'On' : 'Off'}
                       </span>
                       <ChevronDown
-                        className={`w-3.5 h-3.5 text-slate-500 transition-transform ${
+                        className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
                           isOpen ? 'rotate-180' : ''
                         }`}
                       />
@@ -413,7 +413,7 @@ const MapPanel = memo(function MapPanel({
                           </label>
 
                           {id === 'cyclone' && (
-                            <p className="text-[10px] text-slate-500">
+                            <p className="text-[10px] text-slate-400">
                               Playback and timeline controls are in Advanced.
                             </p>
                           )}
@@ -468,14 +468,14 @@ const MapPanel = memo(function MapPanel({
                       <CloudRain className="h-3.5 w-3.5 text-violet-400" />
                       <div>
                         <h3 className="text-xs font-semibold text-slate-300">Cyclone Timeline</h3>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-[10px] text-slate-400">
                           Playback and forecast progression controls
                         </p>
                       </div>
                     </div>
                     <span
                       className={`text-[10px] font-semibold ${
-                        showCycloneLayer ? 'text-slate-300' : 'text-slate-500'
+                        showCycloneLayer ? 'text-slate-300' : 'text-slate-400'
                       }`}
                     >
                       {showCycloneLayer ? 'Track visible' : 'Track hidden'}
@@ -495,7 +495,7 @@ const MapPanel = memo(function MapPanel({
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                           isCyclonePlaying
                             ? 'bg-blue-500/15 text-blue-300'
-                            : 'bg-slate-700/30 text-slate-500'
+                            : 'bg-slate-700/30 text-slate-400'
                         }`}
                       >
                         <div
@@ -539,9 +539,9 @@ const MapPanel = memo(function MapPanel({
                   ) : (
                     <div className="rounded-lg border border-dashed border-slate-700/40 bg-slate-800/20 p-3">
                       <div className="flex flex-col items-center gap-1.5 text-center">
-                        <CloudRain className="w-4 h-4 text-slate-500" />
+                        <CloudRain className="w-4 h-4 text-slate-400" />
                         <p className="text-xs font-medium text-slate-400">No cyclone data</p>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-[10px] text-slate-400">
                           Select an event with track data.
                         </p>
                       </div>
@@ -574,12 +574,12 @@ const MapPanel = memo(function MapPanel({
                     3D View
                   </h3>
                   {!expandedSections.view3D && (
-                    <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                    <span className="text-[10px] text-slate-400 ml-auto mr-2">
                       {is3DView ? 'Enabled' : 'Disabled'}
                     </span>
                   )}
                   <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.view3D ? 'rotate-180' : ''} ${!expandedSections.view3D ? 'ml-auto' : ''}`}
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.view3D ? 'rotate-180' : ''} ${!expandedSections.view3D ? 'ml-auto' : ''}`}
                   />
                 </button>
                 {expandedSections.view3D && (
@@ -635,7 +635,7 @@ const MapPanel = memo(function MapPanel({
                           ))}
                         </div>
                         {!is3DView && (
-                          <p className="mt-1.5 text-[10px] text-slate-500">
+                          <p className="mt-1.5 text-[10px] text-slate-400">
                             Enable 3D Buildings to choose an extrusion source.
                           </p>
                         )}
@@ -662,7 +662,7 @@ const MapPanel = memo(function MapPanel({
                           onChange={e => onExtrusionExaggerationChange(Number(e.target.value))}
                           className="w-full h-1.5 rounded-full appearance-none bg-slate-700 accent-purple-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                         />
-                        <p className="mt-1.5 text-[10px] text-slate-500">
+                        <p className="mt-1.5 text-[10px] text-slate-400">
                           Adjusts the height of 3D buildings and impact extrusions.
                         </p>
                       </div>

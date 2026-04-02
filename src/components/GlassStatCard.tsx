@@ -50,9 +50,9 @@ export function GlassStatCard(props: {
         <div className="min-w-0 flex-1">
           {/* Title with improved contrast - 12px, muted */}
           <div className="flex items-center gap-2">
-            {icon && <div className="shrink-0 text-slate-500">{icon}</div>}
+            {icon && <div className="shrink-0 text-slate-400">{icon}</div>}
 
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{title}</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">{title}</p>
 
             {metricInfo && (
               <MetricTooltip
@@ -88,7 +88,7 @@ export function GlassStatCard(props: {
       </div>
 
       {/* Subtitle - 12px, muted */}
-      {subtitle && <p className="text-xs text-slate-500 font-normal">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-slate-400 font-normal">{subtitle}</p>}
     </div>
   );
 }

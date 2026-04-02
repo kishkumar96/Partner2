@@ -224,7 +224,7 @@ export default function MapAccessibleFeatures({
                 aria-label="Search districts"
               />
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-400">
               Use ↑/↓ arrows to navigate, Enter to select, Esc to close
             </p>
           </div>
@@ -282,7 +282,7 @@ export default function MapAccessibleFeatures({
 
           {/* Footer */}
           <div className="px-4 py-2 border-t border-white/10 bg-white/5 dark:bg-black/20">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               Showing {filteredDistricts.length} of {districts.length} districts
             </p>
           </div>

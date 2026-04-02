@@ -3108,7 +3108,7 @@ export default function CycloneAnimationLayer({
           {currentPoint && (
             <div className="grid grid-cols-3 gap-1.5 mb-2">
               <div className="px-2 py-1.5 bg-slate-800/20 rounded-lg border border-slate-700/20">
-                <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">
+                <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">
                   WIND
                 </div>
                 <div className="text-xs font-bold text-cyan-300">
@@ -3117,7 +3117,7 @@ export default function CycloneAnimationLayer({
                 </div>
               </div>
               <div className="px-2 py-1.5 bg-slate-800/20 rounded-lg border border-slate-700/20">
-                <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">
+                <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">
                   GUST
                 </div>
                 <div className="text-xs font-bold text-blue-300">
@@ -3126,7 +3126,7 @@ export default function CycloneAnimationLayer({
                 </div>
               </div>
               <div className="px-2 py-1.5 bg-slate-800/20 rounded-lg border border-slate-700/20">
-                <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">
+                <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide">
                   PRESSURE
                 </div>
                 <div className="text-xs font-bold text-slate-200">
@@ -3143,7 +3143,7 @@ export default function CycloneAnimationLayer({
               {/* Dvorak T-Number */}
               {currentPoint.dvorakTNumber > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">Dvorak T:</span>
+                  <span className="text-slate-400">Dvorak T:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.dvorakTNumber.toFixed(1)}
                   </span>
@@ -3153,7 +3153,7 @@ export default function CycloneAnimationLayer({
               {/* Eye Radius */}
               {currentPoint.eyeRadius > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">Eye:</span>
+                  <span className="text-slate-400">Eye:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.eyeRadius.toFixed(0)} km
                   </span>
@@ -3168,7 +3168,7 @@ export default function CycloneAnimationLayer({
               {/* Vertical Extent */}
               {currentPoint.verticalExtent > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">Vert Ext:</span>
+                  <span className="text-slate-400">Vert Ext:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.verticalExtent.toFixed(1)}
                   </span>
@@ -3178,7 +3178,7 @@ export default function CycloneAnimationLayer({
               {/* OCI Circulation Extent */}
               {currentPoint.radiusOCI > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">OCI:</span>
+                  <span className="text-slate-400">OCI:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.radiusOCI.toFixed(0)} km
                   </span>
@@ -3188,7 +3188,7 @@ export default function CycloneAnimationLayer({
               {/* P5Wind Alternative Metric */}
               {currentPoint.p5Wind > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">P5 Wind:</span>
+                  <span className="text-slate-400">P5 Wind:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.p5Wind.toFixed(0)} kt
                   </span>
@@ -3198,7 +3198,7 @@ export default function CycloneAnimationLayer({
               {/* Current Intensity */}
               {currentPoint.currentIntensity > 0 && (
                 <div className="bg-slate-800/15 rounded px-2 py-1 border border-slate-700/10">
-                  <span className="text-slate-500">Intensity:</span>
+                  <span className="text-slate-400">Intensity:</span>
                   <span className="text-cyan-300 font-semibold ml-1">
                     {currentPoint.currentIntensity.toFixed(1)}
                   </span>
@@ -3273,7 +3273,7 @@ export default function CycloneAnimationLayer({
                   })}
               </div>
 
-              <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+              <div className="flex justify-between text-[10px] text-slate-400 mt-1">
                 <span>
                   {new Date(forecastTrack[0].time).toLocaleDateString('en-US', {
                     month: 'short',
@@ -3405,7 +3405,7 @@ export default function CycloneAnimationLayer({
             <button
               type="button"
               onClick={() => setShowDetails(v => !v)}
-              className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-[10px] text-slate-400 hover:text-slate-300 transition-colors"
               aria-expanded={showDetails}
             >
               {showDetails ? '▲ Less' : '▼ Details'}

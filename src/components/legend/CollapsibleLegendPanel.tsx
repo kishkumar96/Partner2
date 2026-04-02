@@ -70,9 +70,25 @@ const CollapsibleLegendPanel = memo(function CollapsibleLegendPanel({
 
   // Handler factories for each category
   const createCategoryHandler = useCallback(
-    (category: keyof LegendSettings) => (index: number, label: string) => {
+    (category: keyof LegendSettings) => (index: number, rangeLabel: string) => {
       const newThresholds = [...legendSettings[category]];
-      newThresholds[index] = { ...newThresholds[index], label };
+      newThresholds[index] = {
+        ...newThresholds[index],
+        label: rangeLabel,
+        rangeLabel,
+      };
+      onLegendSettingsChange({
+        ...legendSettings,
+        [category]: newThresholds,
+      });
+    },
+    [legendSettings, onLegendSettingsChange]
+  );
+
+  const createCategoryDescriptionHandler = useCallback(
+    (category: keyof LegendSettings) => (index: number, descriptiveLabel: string) => {
+      const newThresholds = [...legendSettings[category]];
+      newThresholds[index] = { ...newThresholds[index], descriptiveLabel };
       onLegendSettingsChange({
         ...legendSettings,
         [category]: newThresholds,
@@ -88,22 +104,6 @@ const CollapsibleLegendPanel = memo(function CollapsibleLegendPanel({
       onLegendSettingsChange({
         ...legendSettings,
         [category]: defaults[category],
-      });
-    },
-    [countryCode, legendSettings, onLegendSettingsChange]
-  );
-
-  const createMultiCategoryReset = useCallback(
-    (categories: Array<keyof LegendSettings>) => () => {
-      if (!countryCode) return;
-      const defaults = createDefaultLegendSettings(countryCode);
-      const updates = categories.reduce((acc, cat) => {
-        acc[cat] = defaults[cat];
-        return acc;
-      }, {} as Partial<LegendSettings>);
-      onLegendSettingsChange({
-        ...legendSettings,
-        ...updates,
       });
     },
     [countryCode, legendSettings, onLegendSettingsChange]
@@ -132,10 +132,10 @@ const CollapsibleLegendPanel = memo(function CollapsibleLegendPanel({
           Legend Symbology
         </h3>
         {!isExpanded && (
-          <span className="text-[10px] text-slate-500 ml-auto mr-2">Custom thresholds</span>
+          <span className="text-[10px] text-slate-400 ml-auto mr-2">Custom thresholds</span>
         )}
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 
                     ${isExpanded ? 'rotate-180' : ''} 
                     ${!isExpanded ? 'ml-auto' : ''}`}
           aria-hidden="true"
@@ -162,6 +162,7 @@ const CollapsibleLegendPanel = memo(function CollapsibleLegendPanel({
               categoryKey="loss"
               thresholds={legendSettings.loss}
               onThresholdChange={createCategoryHandler('loss')}
+              onDescriptionChange={createCategoryDescriptionHandler('loss')}
               onReset={createCategoryReset('loss')}
               aria-labelledby={`${headingId}-loss`}
             />
@@ -172,20 +173,33 @@ const CollapsibleLegendPanel = memo(function CollapsibleLegendPanel({
               categoryKey="wind"
               thresholds={legendSettings.wind}
               onThresholdChange={createCategoryHandler('wind')}
+              onDescriptionChange={createCategoryDescriptionHandler('wind')}
               onReset={createCategoryReset('wind')}
               aria-labelledby={`${headingId}-wind`}
             />
 
-            {/* Buildings & Roads Section (Read-only info) */}
+            {/* Building Damage Section */}
             <LegendSection
-              title="Buildings & Roads"
-              categoryKey="buildings-roads"
+              title="Building Damage"
               thresholds={legendSettings.buildings}
-              onThresholdChange={() => {}}
-              onReset={createMultiCategoryReset(['buildings', 'roads'])}
-              readonly={true}
-              helpText="Asset damage thresholds are managed via default settings."
-              aria-labelledby={`${headingId}-assets`}
+              categoryKey="buildings"
+              onThresholdChange={createCategoryHandler('buildings')}
+              onDescriptionChange={createCategoryDescriptionHandler('buildings')}
+              onReset={createCategoryReset('buildings')}
+              helpText="Edit the labels shown for damaged building legend ranges."
+              aria-labelledby={`${headingId}-buildings`}
+            />
+
+            {/* Road Damage Section */}
+            <LegendSection
+              title="Road Damage"
+              categoryKey="roads"
+              thresholds={legendSettings.roads}
+              onThresholdChange={createCategoryHandler('roads')}
+              onDescriptionChange={createCategoryDescriptionHandler('roads')}
+              onReset={createCategoryReset('roads')}
+              helpText="Edit the labels shown for damaged road legend ranges."
+              aria-labelledby={`${headingId}-roads`}
             />
           </div>
         </div>

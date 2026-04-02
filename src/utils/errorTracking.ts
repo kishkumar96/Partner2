@@ -20,12 +20,35 @@ export type ErrorContext = {
   user?: {
     id?: string;
     email?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   tags?: Record<string, string>;
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
   level?: ErrorSeverity;
 };
+
+type ErrorBoundaryInfo = {
+  componentStack: string;
+};
+
+type SentryCaptureContext = {
+  level?: ErrorSeverity;
+};
+
+type SentryBreadcrumb = {
+  category: string;
+  message: string;
+  level: ErrorSeverity;
+};
+
+interface SentryClient {
+  setUser(user: NonNullable<ErrorContext['user']>): void;
+  setTag(key: string, value: string): void;
+  setContext(name: string, context: Record<string, unknown>): void;
+  captureException(error: Error, context?: SentryCaptureContext): void;
+  captureMessage(message: string, level: ErrorSeverity): void;
+  addBreadcrumb(breadcrumb: SentryBreadcrumb): void;
+}
 
 /**
  * Initialize error tracking service (e.g., Sentry)
@@ -58,7 +81,7 @@ export const initErrorTracking = () => {
           replaysOnErrorSampleRate: 1.0,
 
           // Filter out noise
-          beforeSend(event: any, hint: any) {
+          beforeSend(event, hint) {
             // Don't send console errors in development
             if (process.env.NODE_ENV === 'development') {
               return null;
@@ -101,23 +124,24 @@ export const logError = (error: Error, context?: ErrorContext) => {
 
   // Send to Sentry
   if (typeof window !== 'undefined' && window.Sentry) {
+    const sentry = window.Sentry;
     const { user, tags, extra, level } = context || {};
 
     if (user) {
-      window.Sentry.setUser(user);
+      sentry.setUser(user);
     }
 
     if (tags) {
       Object.entries(tags).forEach(([key, value]) => {
-        window.Sentry.setTag(key, value);
+        sentry.setTag(key, value);
       });
     }
 
     if (extra) {
-      window.Sentry.setContext('additional', extra);
+      sentry.setContext('additional', extra);
     }
 
-    window.Sentry.captureException(error, {
+    sentry.captureException(error, {
       level: level || ErrorSeverity.Error,
     });
   }
@@ -138,23 +162,24 @@ export const logMessage = (
   if (!isErrorTrackingEnabled) return;
 
   if (typeof window !== 'undefined' && window.Sentry) {
+    const sentry = window.Sentry;
     const { user, tags, extra } = context || {};
 
     if (user) {
-      window.Sentry.setUser(user);
+      sentry.setUser(user);
     }
 
     if (tags) {
       Object.entries(tags).forEach(([key, value]) => {
-        window.Sentry.setTag(key, value);
+        sentry.setTag(key, value);
       });
     }
 
     if (extra) {
-      window.Sentry.setContext('additional', extra);
+      sentry.setContext('additional', extra);
     }
 
-    window.Sentry.captureMessage(message, level);
+    sentry.captureMessage(message, level);
   }
 };
 
@@ -169,7 +194,8 @@ export const trackPerformance = (metric: string, value: number, unit: string = '
   if (!isErrorTrackingEnabled) return;
 
   if (typeof window !== 'undefined' && window.Sentry) {
-    window.Sentry.addBreadcrumb({
+    const sentry = window.Sentry;
+    sentry.addBreadcrumb({
       category: 'performance',
       message: `${metric}: ${value}${unit}`,
       level: ErrorSeverity.Info,
@@ -181,7 +207,7 @@ export const trackPerformance = (metric: string, value: number, unit: string = '
  * Create error boundary handler
  */
 export const createErrorHandler = (componentName: string) => {
-  return (error: Error, errorInfo: any) => {
+  return (error: Error, errorInfo: ErrorBoundaryInfo) => {
     logError(error, {
       tags: {
         component: componentName,
@@ -198,7 +224,7 @@ export const createErrorHandler = (componentName: string) => {
 // Extend Window interface
 declare global {
   interface Window {
-    Sentry: any;
+    Sentry?: SentryClient;
   }
 }
 

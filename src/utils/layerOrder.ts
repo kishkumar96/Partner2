@@ -23,6 +23,18 @@
  * Canonical layer ordering from bottom (0) to top (highest number)
  * Lower z-index = rendered first (below other layers)
  */
+
+interface MapStyleLayer {
+  id: string;
+  type?: string;
+}
+
+interface LayerOrderMap {
+  getStyle?: () => {
+    layers?: MapStyleLayer[];
+  } | null;
+}
+
 export const LAYER_ORDER = {
   // WMS raster layers at the bottom (basemap-like)
   'wms-wind-layer': 10,
@@ -71,7 +83,10 @@ export const LAYER_ORDER = {
  * @param targetLayerId - The layer you want to add
  * @returns The ID of the layer to insert before, or undefined (top)
  */
-export function getBeforeLayerId(map: any, targetLayerId: string): string | undefined {
+export function getBeforeLayerId(
+  map: LayerOrderMap | null | undefined,
+  targetLayerId: string
+): string | undefined {
   if (!map || !map.getStyle) return undefined;
 
   const targetOrder = LAYER_ORDER[targetLayerId as keyof typeof LAYER_ORDER];
@@ -100,7 +115,7 @@ export function getBeforeLayerId(map: any, targetLayerId: string): string | unde
 
   // If no layer has a higher order, insert before the first symbol layer
   // This prevents our layers from covering up map labels
-  const firstSymbolLayer = existingLayers.find((layer: any) => layer.type === 'symbol');
+  const firstSymbolLayer = existingLayers.find(layer => layer.type === 'symbol');
   return firstSymbolLayer?.id;
 }
 
@@ -111,7 +126,7 @@ export function getBeforeLayerId(map: any, targetLayerId: string): string | unde
  * @param map - MapLibre map instance
  * @returns Array of layers in current order with their expected order
  */
-export function validateLayerOrder(map: any): Array<{
+export function validateLayerOrder(map: LayerOrderMap | null | undefined): Array<{
   id: string;
   currentIndex: number;
   expectedOrder: number | undefined;
@@ -163,7 +178,7 @@ export function validateLayerOrder(map: any): Array<{
  * Log the current layer order for debugging
  * @param map - MapLibre map instance
  */
-export function debugLayerOrder(map: any): void {
+export function debugLayerOrder(map: LayerOrderMap | null | undefined): void {
   const validation = validateLayerOrder(map);
   console.group('🗺️ Layer Z-Order Validation');
   console.table(validation);

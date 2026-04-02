@@ -31,7 +31,7 @@ describe('MapControls', () => {
     expect(
       screen.getByRole('button', { name: /shade map by wind intensity/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /basemap/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
   });
 
   it('announces pressed state and calls onMapStyleChange for display mode buttons', async () => {
@@ -75,58 +75,15 @@ describe('MapControls', () => {
     expect(onWindLayerToggle).not.toHaveBeenCalled();
   });
 
-  it('supports keyboard navigation and focus return in basemap menu', async () => {
+  it('keeps basemap selection out of map controls', async () => {
     const user = userEvent.setup();
-    const onBasemapChange = jest.fn();
 
-    render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
+    render(<MapControls {...defaultProps} />);
 
-    const controlsTrigger = screen.getByRole('button', { name: /map controls/i });
-    await user.click(controlsTrigger);
+    await user.click(screen.getByRole('button', { name: /map controls/i }));
 
-    const basemapTrigger = screen.getByRole('button', { name: /basemap/i });
-    await user.click(basemapTrigger);
-
-    const basemapPanel = screen.getByRole('menu', { name: /basemap options/i });
-    expect(basemapPanel).toBeInTheDocument();
-
-    const lightOption = screen.getByRole('menuitemradio', { name: /light/i });
-    const darkOption = screen.getByRole('menuitemradio', { name: /dark/i });
-
-    await waitFor(() => {
-      expect(lightOption).toHaveFocus();
-    });
-    expect(lightOption).toHaveAttribute('aria-checked', 'true');
-
-    await user.keyboard('{ArrowDown}');
-    await waitFor(() => {
-      expect(darkOption).toHaveFocus();
-    });
-
-    await user.keyboard('{Enter}');
-    expect(onBasemapChange).toHaveBeenCalledWith(
-      'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByRole('menu', { name: /basemap options/i })).not.toBeInTheDocument();
-    });
     expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
-  });
-
-  it('hides the basemap chooser after a basemap is selected', async () => {
-    const user = userEvent.setup();
-    const onBasemapChange = jest.fn();
-
-    render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
-
-    await user.click(screen.getByRole('button', { name: /basemap/i }));
-    await user.click(screen.getByRole('menuitemradio', { name: /dark/i }));
-
-    expect(onBasemapChange).toHaveBeenCalledWith(
-      'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    );
-    expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: /basemap options/i })).not.toBeInTheDocument();
   });
 
   it('disables actionable controls while loading', async () => {
@@ -156,7 +113,7 @@ describe('MapControls', () => {
     expect(screen.getByRole('button', { name: /shade map by wind intensity/i })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: /3d buildings/i })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: /maximum wind/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /basemap/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
     expect(screen.getByRole('slider', { name: /layer opacity/i })).toBeDisabled();
     // This assertion doesn't work with the new structure, let's look for the loading indicator text
     // expect(screen.getAllByRole('status').length).toBeGreaterThan(0);

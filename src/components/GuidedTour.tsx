@@ -429,7 +429,7 @@ export default function GuidedTour({
                 <Sparkles className="h-3 w-3" />
                 {step.category || 'Guided Tour'}
               </span>
-              <span className="text-[11px] font-medium text-slate-500">
+              <span className="text-[11px] font-medium text-slate-400">
                 {currentStep + 1} / {steps.length}
               </span>
             </div>

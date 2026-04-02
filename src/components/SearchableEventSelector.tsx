@@ -171,7 +171,7 @@ export default function SearchableEventSelector({
         {paginatedEvents.length === 0 ? (
           <div className="p-8 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800/50 flex items-center justify-center">
-              <Search className="w-8 h-8 text-slate-500" />
+              <Search className="w-8 h-8 text-slate-400" />
             </div>
             <p className="text-sm font-semibold text-slate-400 mb-2">No events found</p>
             {searchQuery && (
@@ -211,7 +211,7 @@ export default function SearchableEventSelector({
                     className={`mt-0.5 transition-all duration-200 ${
                       isSelected
                         ? 'text-blue-400 scale-110'
-                        : 'text-slate-500 group-hover:text-slate-400'
+                        : 'text-slate-400 group-hover:text-slate-400'
                     }`}
                   >
                     {isSelected ? (

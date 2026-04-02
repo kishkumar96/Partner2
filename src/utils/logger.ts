@@ -4,32 +4,33 @@
  */
 
 const isDevelopment = process.env.NODE_ENV === 'development';
+type LogArgs = unknown[];
 
 export const logger = {
-  log: (...args: any[]) => {
+  log: (...args: LogArgs) => {
     if (isDevelopment) {
       console.log(...args);
     }
   },
 
-  warn: (...args: any[]) => {
+  warn: (...args: LogArgs) => {
     if (isDevelopment) {
       console.warn(...args);
     }
   },
 
-  error: (...args: any[]) => {
+  error: (...args: LogArgs) => {
     // Always log errors, but in production send to error monitoring service
     console.error(...args);
   },
 
-  info: (...args: any[]) => {
+  info: (...args: LogArgs) => {
     if (isDevelopment) {
       console.info(...args);
     }
   },
 
-  debug: (...args: any[]) => {
+  debug: (...args: LogArgs) => {
     if (isDevelopment) {
       console.debug(...args);
     }

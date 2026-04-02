@@ -28,6 +28,10 @@ interface OllamaResponse {
   done: boolean;
 }
 
+interface OllamaTagsResponse {
+  models?: Array<{ name: string }>;
+}
+
 class OllamaClient {
   private host: string;
   private defaultModel: string;
@@ -67,8 +71,8 @@ class OllamaClient {
         throw new Error('Failed to fetch models');
       }
 
-      const data = await response.json();
-      return data.models?.map((m: any) => m.name) || [];
+      const data: OllamaTagsResponse = await response.json();
+      return data.models?.map(m => m.name) || [];
     } catch (error) {
       console.error('Error listing models:', error);
       return [];
@@ -195,7 +199,7 @@ class OllamaClient {
             if (data.done) {
               return;
             }
-          } catch (_e) {
+          } catch {
             // Skip invalid JSON
           }
         }

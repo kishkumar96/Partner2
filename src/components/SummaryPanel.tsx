@@ -641,11 +641,11 @@ export default function SummaryPanel({
               )}
             </p>
             <div className="pt-4 border-t border-slate-700">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>Available: Cyclone track data and WMS hazard layers</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+              <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
                 <Hourglass className="w-4 h-4 text-amber-400" />
                 <span>Pending: Impact analysis and economic damage data</span>
               </div>
@@ -863,7 +863,7 @@ export default function SummaryPanel({
                                     <span className="text-slate-300 font-semibold">
                                       ${value.toFixed(1)}M
                                     </span>
-                                    <span className="text-slate-500 text-[10px]">•</span>
+                                    <span className="text-slate-400 text-[10px]">•</span>
                                     <span className="text-cyan-400 font-bold">{percentage}%</span>
                                   </div>
                                 </div>
@@ -955,7 +955,7 @@ export default function SummaryPanel({
                                     <span className="text-slate-300 font-semibold">
                                       ${value.toFixed(1)}M
                                     </span>
-                                    <span className="text-slate-500 text-[10px]">•</span>
+                                    <span className="text-slate-400 text-[10px]">•</span>
                                     <span className="text-cyan-400 font-bold">{percentage}%</span>
                                   </div>
                                 </div>
@@ -1797,7 +1797,7 @@ export default function SummaryPanel({
                       <div className="text-lg font-bold text-red-400">
                         {formatNumber(damagedBuildings)}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-400">
                         {((damagedBuildings / totalBuildings) * 100).toFixed(1)}%
                       </div>
                     </div>
@@ -1806,7 +1806,7 @@ export default function SummaryPanel({
                       <div className="text-lg font-bold text-amber-400">
                         {formatNumber(exposedBuildings)}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-400">
                         {((exposedBuildings / totalBuildings) * 100).toFixed(1)}%
                       </div>
                     </div>
@@ -1815,7 +1815,7 @@ export default function SummaryPanel({
                       <div className="text-lg font-bold text-slate-300">
                         {formatNumber(totalBuildings)}
                       </div>
-                      <div className="text-xs text-slate-500">100%</div>
+                      <div className="text-xs text-slate-400">100%</div>
                     </div>
                   </div>
                   <PopoutVisualization
@@ -1875,7 +1875,7 @@ export default function SummaryPanel({
                           {formatCurrency(exposedValue)}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                         <span>{((exposedValue / totalValue) * 100).toFixed(1)}% of total</span>
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-2">
@@ -1893,7 +1893,7 @@ export default function SummaryPanel({
                           {formatCurrency(totalLoss)}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                         <span>{((totalLoss / totalValue) * 100).toFixed(2)}% of total</span>
                         <span>{((totalLoss / exposedValue) * 100).toFixed(1)}% of exposed</span>
                       </div>
@@ -1989,7 +1989,7 @@ export default function SummaryPanel({
                 />
               </PopoutVisualization>
             ) : (
-              <p className="text-xs text-slate-500 text-center py-6 italic">
+              <p className="text-xs text-slate-400 text-center py-6 italic">
                 No regional sector data available
               </p>
             )}

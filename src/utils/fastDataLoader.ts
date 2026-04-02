@@ -17,14 +17,26 @@ export interface FastLoadOptions {
   useWorker?: boolean;
   priority?: 'critical' | 'high' | 'low';
   defer?: boolean;
-  filter?: any;
+  filter?: Record<string, unknown>;
   onProgress?: (progress: number) => void;
 }
+
+type GeoJSONFeatureWithProperties = {
+  properties?: Record<string, unknown>;
+};
+
+type GeoJSONCollectionWithFeatures = {
+  features?: GeoJSONFeatureWithProperties[];
+  [key: string]: unknown;
+};
 
 /**
  * Ultra-fast GeoJSON loader with all optimizations
  */
-export async function loadGeoJSONFast(url: string, options: FastLoadOptions = {}): Promise<any> {
+export async function loadGeoJSONFast(
+  url: string,
+  options: FastLoadOptions = {}
+): Promise<unknown> {
   const {
     useCache = true,
     useWorker = true,
@@ -73,10 +85,12 @@ export async function loadGeoJSONFast(url: string, options: FastLoadOptions = {}
       data = JSON.parse(text);
 
       // Apply filter if needed
-      if (filter && data.features) {
-        data.features = data.features.filter((feature: any) => {
+      const collection = data as GeoJSONCollectionWithFeatures;
+      if (filter && collection.features) {
+        collection.features = collection.features.filter(feature => {
+          const properties = feature.properties || {};
           for (const key in filter) {
-            if (feature.properties[key] !== filter[key]) return false;
+            if (properties[key] !== filter[key]) return false;
           }
           return true;
         });
@@ -107,13 +121,17 @@ export async function loadCSVFast(url: string, options: FastLoadOptions = {}): P
   try {
     // Use lazy loader if deferred
     if (defer) {
-      return await lazyLoader.load(url, { priority, defer });
+      const deferredData = await lazyLoader.load(url, { priority, defer });
+      if (typeof deferredData !== 'string') {
+        throw new Error(`Expected CSV text from lazy loader for ${url}`);
+      }
+      return deferredData;
     }
 
     // Try cache first
     if (useCache) {
       const cached = await dataCache.get(url);
-      if (cached) {
+      if (typeof cached === 'string') {
         console.log(`${url} loaded from cache`);
         return cached;
       }
@@ -148,7 +166,7 @@ export async function loadConditional(
   url: string,
   condition: () => boolean,
   options: FastLoadOptions = {}
-): Promise<any | null> {
+): Promise<unknown | null> {
   if (!condition()) {
     console.log(`Skipping ${url} - condition not met`);
     return null;

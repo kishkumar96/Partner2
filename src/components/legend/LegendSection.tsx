@@ -8,7 +8,8 @@ export interface LegendSectionProps {
   title: string;
   categoryKey: string;
   thresholds: LegendThreshold[];
-  onThresholdChange: (index: number, label: string) => void;
+  onThresholdChange: (index: number, rangeLabel: string) => void;
+  onDescriptionChange?: (index: number, descriptiveLabel: string) => void;
   onValueChange?: (index: number, value: number) => void;
   onReset: () => void;
   readonly?: boolean;
@@ -32,6 +33,7 @@ const LegendSection = memo(function LegendSection({
   categoryKey,
   thresholds,
   onThresholdChange,
+  onDescriptionChange,
   onValueChange,
   onReset,
   readonly = false,
@@ -55,6 +57,13 @@ const LegendSection = memo(function LegendSection({
       }
     },
     [onValueChange]
+  );
+
+  const handleThresholdDescriptionChange = useCallback(
+    (index: number) => (value: string) => {
+      onDescriptionChange?.(index, value);
+    },
+    [onDescriptionChange]
   );
 
   return (
@@ -83,7 +92,7 @@ const LegendSection = memo(function LegendSection({
       </div>
 
       {helpText && (
-        <p className="text-[10px] text-slate-500 italic mb-2" role="note">
+        <p className="text-[10px] text-slate-400 italic mb-2" role="note">
           {helpText}
         </p>
       )}
@@ -96,6 +105,7 @@ const LegendSection = memo(function LegendSection({
               index={index}
               categoryLabel={title}
               onChange={handleThresholdLabelChange(index)}
+              onDescriptionChange={handleThresholdDescriptionChange(index)}
               onValueChange={showValues ? handleThresholdValueChange(index) : undefined}
               readonly={readonly}
               showValue={showValues}

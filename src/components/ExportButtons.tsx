@@ -19,7 +19,7 @@ const OCHA_BLUE: [number, number, number] = [0, 124, 224];
 const OCHA_DARK: [number, number, number] = [2, 64, 116];
 const OCHA_ORANGE: [number, number, number] = [243, 154, 34];
 const TEXT_DARK: [number, number, number] = [47, 47, 47];
-const TEXT_MED: [number, number, number] = [110, 110, 110];
+const TEXT_MED: [number, number, number] = [84, 84, 84];
 const STRIPE: [number, number, number] = [240, 246, 252];
 
 // A4 page geometry (mm)
@@ -834,7 +834,7 @@ export default function ExportButtons({
           doc.addImage(mapCanvas, 'PNG', MX, mapY + 7, CONTENT_W, mapH, undefined, 'FAST');
           doc.setFontSize(6.5);
           doc.setFont('helvetica', 'italic');
-          doc.setTextColor(...TEXT_MED);
+          doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, MX, mapY + 7 + mapH + 3);
         }
       } else {
@@ -935,7 +935,7 @@ export default function ExportButtons({
           doc.addImage(mapCanvas, 'PNG', drawX, drawY, drawW, drawH, undefined, 'FAST');
           doc.setFontSize(8);
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(...OCHA_BLUE);
+          doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, PW / 2, y + h + 3, { align: 'center' });
         }
       }
@@ -1097,7 +1097,7 @@ export default function ExportButtons({
 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...OCHA_BLUE);
+      doc.setTextColor(...OCHA_DARK);
       const narLines = doc.splitTextToSize(narrative, CONTENT_W);
       doc.text(narLines, MX, y, { maxWidth: CONTENT_W });
       y += narLines.length * 6.2 + 8;
@@ -1126,7 +1126,7 @@ export default function ExportButtons({
       const TABLE_FILL: [number, number, number] = [241, 248, 252];
       const TOTAL_FILL: [number, number, number] = [157, 211, 231];
       const TABLE_RULE: [number, number, number] = [98, 211, 241];
-      const TABLE_TEXT: [number, number, number] = [0, 124, 224];
+      const TABLE_TEXT: [number, number, number] = OCHA_DARK;
       const TABLE_BG: [number, number, number] = [255, 255, 255];
       const getRowsThatFit = (pageStartY: number, reserveTotalRow: boolean) => {
         const usableHeight = CONTENT_BOTTOM - (pageStartY + 2) - (reserveTotalRow ? ROW_H + 6 : 0);
@@ -1255,7 +1255,7 @@ export default function ExportButtons({
         drawColumnRules(totalTop, totalBottom);
         doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...TABLE_BLUE);
+        doc.setTextColor(...OCHA_DARK);
         doc.text('TOTAL', TCOL_X[0] + CELL_PAD_X, y);
         doc.text(formatUsd(totalSectorLoss), TCOL_X[4] + CELL_PAD_X, y);
         y += ROW_H + -2;

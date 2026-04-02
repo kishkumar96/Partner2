@@ -237,12 +237,13 @@ export function parseValueFromLabel(label: string): number | null {
   if (!match) return null;
 
   const num = parseFloat(match[1]);
+  const suffix = cleaned.slice(match.index! + match[1].length).trim();
 
   // Check for multipliers
-  if (cleaned.includes('M') || cleaned.includes('m')) {
+  if (/^[m](?:\b|$)/i.test(suffix) && !/^m\/s/i.test(suffix)) {
     return num * 1e6;
   }
-  if (cleaned.includes('K') || cleaned.includes('k')) {
+  if (/^[k](?:\b|$)/i.test(suffix)) {
     return num * 1e3;
   }
 

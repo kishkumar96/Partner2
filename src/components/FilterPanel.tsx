@@ -338,14 +338,14 @@ export default function FilterPanel({
                   </span>
                 )}
                 {!expandedSections.temporal && (
-                  <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                  <span className="text-[10px] text-slate-400 ml-auto mr-2">
                     {filters.selectedEvents.length > 0
                       ? `${filters.selectedEvents.length} event${filters.selectedEvents.length !== 1 ? 's' : ''}`
                       : 'All'}
                   </span>
                 )}
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.temporal ? 'rotate-180' : ''} ${!expandedSections.temporal ? 'ml-auto' : ''}`}
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.temporal ? 'rotate-180' : ''} ${!expandedSections.temporal ? 'ml-auto' : ''}`}
                 />
               </button>
               {expandedSections.temporal && (
@@ -411,7 +411,7 @@ export default function FilterPanel({
                         className="w-full px-3 py-1.5 text-xs border border-slate-600/60 hover:border-cyan-500/40 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 rounded-lg bg-slate-950/50 text-white transition-colors"
                       />
                     </div>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[10px] text-slate-400">
                       Filter the time window for what appears in the map and summaries.
                     </p>
                   </div>
@@ -452,14 +452,14 @@ export default function FilterPanel({
                     </span>
                   )}
                   {!expandedSections.hazards && (
-                    <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                    <span className="text-[10px] text-slate-400 ml-auto mr-2">
                       {filters.selectedHazards.length > 0
                         ? `${filters.selectedHazards.length} selected`
                         : `All ${hazardsWithAvailability.filter(h => h.isAvailable).length}`}
                     </span>
                   )}
                   <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.hazards ? 'rotate-180' : ''} ${!expandedSections.hazards ? 'ml-auto' : ''}`}
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.hazards ? 'rotate-180' : ''} ${!expandedSections.hazards ? 'ml-auto' : ''}`}
                   />
                 </button>
                 {expandedSections.hazards && (
@@ -470,7 +470,7 @@ export default function FilterPanel({
                     className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
                   >
                     {hazardsWithAvailability.length === 0 ? (
-                      <p className="text-[10px] text-slate-500 italic py-2">
+                      <p className="text-[10px] text-slate-400 italic py-2">
                         No hazard data available
                       </p>
                     ) : (
@@ -512,7 +512,7 @@ export default function FilterPanel({
                                 {hazard.name}
                               </span>
                               {!hazard.isAvailable && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 font-semibold">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-semibold">
                                   No data
                                 </span>
                               )}
@@ -540,13 +540,13 @@ export default function FilterPanel({
                     Geography Level
                   </h3>
                   {!expandedSections.aggregation && (
-                    <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                    <span className="text-[10px] text-slate-400 ml-auto mr-2">
                       {filters.aggregationLevel.charAt(0).toUpperCase() +
                         filters.aggregationLevel.slice(1)}
                     </span>
                   )}
                   <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.aggregation ? 'rotate-180' : ''} ${!expandedSections.aggregation ? 'ml-auto' : ''}`}
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.aggregation ? 'rotate-180' : ''} ${!expandedSections.aggregation ? 'ml-auto' : ''}`}
                   />
                 </button>
                 {expandedSections.aggregation && (
@@ -619,14 +619,14 @@ export default function FilterPanel({
                 </span>
               )}
               {!expandedSections.sectors && (
-                <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                <span className="text-[10px] text-slate-400 ml-auto mr-2">
                   {filters.selectedSectors.length > 0
                     ? `${filters.selectedSectors.length} selected`
                     : `All ${sectorsWithAvailability.filter(s => s.isAvailable).length}`}
                 </span>
               )}
               <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-500 transition-transform ${expandedSections.sectors ? 'rotate-180' : ''} ${!expandedSections.sectors ? 'ml-auto' : ''}`}
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.sectors ? 'rotate-180' : ''} ${!expandedSections.sectors ? 'ml-auto' : ''}`}
               />
             </button>
             {expandedSections.sectors && (
@@ -637,7 +637,7 @@ export default function FilterPanel({
                 className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
               >
                 {sectorsWithAvailability.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 italic py-2">No sector data available</p>
+                  <p className="text-[10px] text-slate-400 italic py-2">No sector data available</p>
                 ) : (
                   <div role="radiogroup" aria-label="Sectors" className="space-y-1 mt-2">
                     {sectorsWithAvailability.map(sector => {
@@ -674,7 +674,7 @@ export default function FilterPanel({
                             {sector.name}
                           </span>
                           {!sector.isAvailable && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-500 font-semibold">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-semibold">
                               No data
                             </span>
                           )}
@@ -691,7 +691,7 @@ export default function FilterPanel({
           <div className="mx-3 mt-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="h-px flex-1 bg-gradient-to-r from-slate-700/0 via-slate-700/30 to-slate-700/0"></div>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500/90 px-2">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400/90 px-2">
                 Accessibility
               </h3>
               <div className="h-px flex-1 bg-gradient-to-r from-slate-700/0 via-slate-700/30 to-slate-700/0"></div>
@@ -708,17 +708,17 @@ export default function FilterPanel({
               className={accessibilitySectionTriggerClass}
               aria-expanded={isDistrictListOpen}
             >
-              <Keyboard className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-              <h3 className="text-xs font-semibold text-slate-500 group-hover:text-slate-300 transition-colors">
+              <Keyboard className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <h3 className="text-xs font-semibold text-slate-400 group-hover:text-slate-300 transition-colors">
                 Keyboard access
               </h3>
               {!isDistrictListOpen && (
-                <span className="text-[10px] text-slate-500 ml-auto mr-2">
+                <span className="text-[10px] text-slate-400 ml-auto mr-2">
                   {geographyUi.focusAreaSingular} list
                 </span>
               )}
               <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isDistrictListOpen ? 'rotate-180' : ''} ${!isDistrictListOpen ? 'ml-auto' : ''}`}
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isDistrictListOpen ? 'rotate-180' : ''} ${!isDistrictListOpen ? 'ml-auto' : ''}`}
               />
             </button>
             {isDistrictListOpen && (
@@ -733,7 +733,7 @@ export default function FilterPanel({
                   onClose={() => setIsDistrictListOpen(false)}
                 />
                 {accessibleDistricts.length === 0 && (
-                  <div className="mt-2 rounded-lg border border-dashed border-slate-700/40 px-2 py-1.5 text-[10px] text-slate-500">
+                  <div className="mt-2 rounded-lg border border-dashed border-slate-700/40 px-2 py-1.5 text-[10px] text-slate-400">
                     No {geographyUi.focusAreaSingular.toLowerCase()} data available.
                   </div>
                 )}
@@ -754,19 +754,19 @@ export default function FilterPanel({
             </summary>
             <div className="mt-1.5 space-y-0.5 text-[10px]">
               <div className="flex justify-between items-center py-1 px-1.5 rounded hover:bg-slate-800/30">
-                <span className="text-slate-500">Navigate</span>
+                <span className="text-slate-400">Navigate</span>
                 <kbd className="px-1.5 py-0.5 bg-slate-800/60 border border-slate-700/50 rounded text-slate-400 font-mono text-[9px]">
                   Tab
                 </kbd>
               </div>
               <div className="flex justify-between items-center py-1 px-1.5 rounded hover:bg-slate-800/30">
-                <span className="text-slate-500">Toggle</span>
+                <span className="text-slate-400">Toggle</span>
                 <kbd className="px-1.5 py-0.5 bg-slate-800/60 border border-slate-700/50 rounded text-slate-400 font-mono text-[9px]">
                   Space
                 </kbd>
               </div>
               <div className="flex justify-between items-center py-1 px-1.5 rounded hover:bg-slate-800/30">
-                <span className="text-slate-500">Close</span>
+                <span className="text-slate-400">Close</span>
                 <kbd className="px-1.5 py-0.5 bg-slate-800/60 border border-slate-700/50 rounded text-slate-400 font-mono text-[9px]">
                   Esc
                 </kbd>

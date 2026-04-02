@@ -16,6 +16,14 @@ export type Metric = {
   navigationType: string;
 };
 
+type BrowserPerformance = Performance & {
+  memory?: {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+};
+
 /**
  * Report Web Vitals to analytics
  */
@@ -116,7 +124,7 @@ export const monitorMemory = () => {
   }
 
   // Check if Performance Memory API is available
-  const performance = window.performance as any;
+  const performance = window.performance as BrowserPerformance;
   if (performance.memory) {
     const memoryInfo = {
       usedJSHeapSize: performance.memory.usedJSHeapSize / 1048576, // MB
@@ -162,7 +170,7 @@ export const observeLongTasks = () => {
     });
 
     observer.observe({ entryTypes: ['longtask'] });
-  } catch (_e) {
+  } catch {
     // PerformanceObserver may not be fully supported
     console.warn('Long task observer not available');
   }

@@ -35,7 +35,7 @@ const ActiveFilters = memo(function ActiveFilters({
   if (!hasActiveFilters) {
     return (
       <div
-        className={`flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase text-slate-500 ${className}`}
+        className={`flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase text-slate-400 ${className}`}
       >
         <Filter className="w-3.5 h-3.5" />
         <span>No filters applied</span>
@@ -133,7 +133,7 @@ const ActiveFilters = memo(function ActiveFilters({
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-slate-500 flex-shrink-0">
+      <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-slate-400 flex-shrink-0">
         <Filter className="w-3.5 h-3.5" />
         <span>Active:</span>
       </div>

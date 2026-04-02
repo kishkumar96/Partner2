@@ -8,6 +8,10 @@ import {
   getPdfKeyFigureIconLayout,
 } from './pdfTemplateConfig';
 
+const PDF_TEXT_PRIMARY = 'rgb(2, 64, 116)';
+const PDF_TEXT_MUTED = 'rgb(84, 84, 84)';
+const PDF_TEXT_ACCENT = 'rgb(0, 70, 173)';
+
 interface PDFPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -309,7 +313,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'rgb(0, 124, 224)',
+                    color: PDF_TEXT_PRIMARY,
                     fontSize: '8pt',
                     textAlign: 'center',
                     padding: `0 ${PDF_TEMPLATE_CONFIG.map.captionPaddingXmm}mm`,
@@ -446,7 +450,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                       >
                         <div
                           style={{
-                            color: 'rgb(2, 64, 116)',
+                            color: PDF_TEXT_PRIMARY,
                             fontSize: '13pt',
                             fontWeight: 'bold',
                             marginBottom: '2mm',
@@ -456,7 +460,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         </div>
                         <div
                           style={{
-                            color: 'rgb(110, 110, 110)',
+                            color: PDF_TEXT_MUTED,
                             fontSize: '6.5pt',
                             textTransform: 'uppercase',
                             letterSpacing: '0.3px',
@@ -483,7 +487,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
               >
                 <h2
                   style={{
-                    color: 'rgb(0, 124, 224)',
+                    color: PDF_TEXT_ACCENT,
                     fontSize: '13pt',
                     fontWeight: 'bold',
                     marginBottom: '6mm',
@@ -493,7 +497,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                 </h2>
                 <p
                   style={{
-                    color: 'rgb(0, 124, 224)',
+                    color: PDF_TEXT_PRIMARY,
                     fontSize: '11pt',
                     lineHeight: '1.5',
                   }}
@@ -575,7 +579,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                 textAlign: 'center',
                 fontSize: '15pt',
                 fontWeight: 'bold',
-                color: 'rgb(0, 70, 173)',
+                color: PDF_TEXT_ACCENT,
               }}
             >
               {PDF_TEMPLATE_CONFIG.labels.sectorAnalysisTitle}
@@ -681,7 +685,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         <td
                           style={{
                             backgroundColor: 'rgb(241, 248, 252)',
-                            color: 'rgb(0, 124, 224)',
+                            color: PDF_TEXT_PRIMARY,
                             padding: '2mm 2mm',
                             fontSize: '7pt',
                             borderTop: '0.35mm solid rgb(98, 211, 241)',
@@ -692,7 +696,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         <td
                           style={{
                             backgroundColor: 'rgb(241, 248, 252)',
-                            color: 'rgb(0, 124, 224)',
+                            color: PDF_TEXT_PRIMARY,
                             padding: '2mm 2mm',
                             fontSize: '7pt',
                             borderTop: '0.35mm solid rgb(98, 211, 241)',
@@ -704,7 +708,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         <td
                           style={{
                             backgroundColor: 'rgb(241, 248, 252)',
-                            color: 'rgb(0, 124, 224)',
+                            color: PDF_TEXT_PRIMARY,
                             padding: '2mm 2mm',
                             fontSize: '7pt',
                             borderTop: '0.35mm solid rgb(98, 211, 241)',
@@ -716,7 +720,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         <td
                           style={{
                             backgroundColor: 'rgb(241, 248, 252)',
-                            color: 'rgb(0, 124, 224)',
+                            color: PDF_TEXT_PRIMARY,
                             padding: '2mm 2mm',
                             fontSize: '7pt',
                             borderTop: '0.35mm solid rgb(98, 211, 241)',
@@ -728,7 +732,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         <td
                           style={{
                             backgroundColor: 'rgb(241, 248, 252)',
-                            color: 'rgb(0, 124, 224)',
+                            color: PDF_TEXT_PRIMARY,
                             padding: '2mm 2mm',
                             fontSize: '7pt',
                             borderTop: '0.35mm solid rgb(98, 211, 241)',
@@ -746,7 +750,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                         style={{
                           padding: '10mm',
                           textAlign: 'center',
-                          color: 'rgb(110, 110, 110)',
+                          color: PDF_TEXT_MUTED,
                           fontSize: '10pt',
                         }}
                       >
@@ -760,7 +764,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                       <td
                         style={{
                           backgroundColor: 'rgb(157, 211, 231)',
-                          color: 'rgb(0, 124, 224)',
+                          color: PDF_TEXT_PRIMARY,
                           padding: '2mm 2mm',
                           fontSize: '7pt',
                           fontWeight: 'bold',
@@ -793,7 +797,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                       <td
                         style={{
                           backgroundColor: 'rgb(157, 211, 231)',
-                          color: 'rgb(0, 124, 224)',
+                          color: PDF_TEXT_PRIMARY,
                           padding: '2mm 2mm',
                           fontSize: '7pt',
                           fontWeight: 'bold',
@@ -820,7 +824,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                   textAlign: 'center',
                   fontSize: '6.5pt',
                   fontStyle: 'italic',
-                  color: 'rgb(0, 124, 224)',
+                  color: PDF_TEXT_PRIMARY,
                 }}
               >
                 {PDF_TEMPLATE_CONFIG.labels.dataSourceNote}

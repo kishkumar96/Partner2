@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Globe2, Satellite, Check } from 'lucide-react';
+import { Globe2, Map, Satellite, Check } from 'lucide-react';
 import { saveBasemapPreference } from '@/utils/userPreferences';
 import { BASEMAP_STYLES } from '@/utils/basemaps';
 
@@ -20,6 +20,14 @@ const BASEMAP_OPTIONS = [
     icon: Globe2,
     style: BASEMAP_STYLES.positron,
     preview: 'bg-gradient-to-br from-slate-100 to-slate-200',
+  },
+  {
+    id: 'voyager',
+    name: 'Detailed',
+    description: 'Balanced detail - roads and labels without a dark theme',
+    icon: Map,
+    style: BASEMAP_STYLES.voyager,
+    preview: 'bg-gradient-to-br from-stone-200 to-slate-300',
   },
   {
     id: 'dark',
@@ -86,7 +94,7 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
           </p>
 
           {/* Options Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             {BASEMAP_OPTIONS.map(option => {
               const Icon = option.icon;
               const isSelected = selectedId === option.id;

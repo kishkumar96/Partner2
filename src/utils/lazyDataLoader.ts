@@ -61,13 +61,13 @@ export const DEFERRED_LARGE_FILES = [
 ];
 
 class LazyDataLoader {
-  private loadedFiles = new Map<string, any>();
-  private loadingPromises = new Map<string, Promise<any>>();
+  private loadedFiles = new Map<string, unknown>();
+  private loadingPromises = new Map<string, Promise<unknown>>();
 
   /**
    * Load data with specified priority
    */
-  async load(url: string, options: LoadOptions = {}): Promise<any> {
+  async load(url: string, options: LoadOptions = {}): Promise<unknown> {
     const { priority = 'high', defer = false, useCache = true, onProgress } = options;
 
     // Return cached if already loaded
@@ -106,9 +106,9 @@ class LazyDataLoader {
   async loadGroup(
     priority: 'critical' | 'high' | 'low',
     onProgress?: (loaded: number, total: number) => void
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     const files = DATA_MANIFEST[priority];
-    const results: Record<string, any> = {};
+    const results: Record<string, unknown> = {};
 
     let loaded = 0;
     const total = files.length;
@@ -132,9 +132,9 @@ class LazyDataLoader {
   async loadProgressive(
     onProgress?: (stage: string, loaded: number, total: number) => void
   ): Promise<{
-    critical: Record<string, any>;
-    high: Record<string, any>;
-    low: Record<string, any>;
+    critical: Record<string, unknown>;
+    high: Record<string, unknown>;
+    low: Record<string, unknown>;
   }> {
     console.log('Starting progressive data load...');
 
@@ -178,7 +178,7 @@ class LazyDataLoader {
     url: string,
     condition: () => boolean,
     onProgress?: (loaded: number, total: number) => void
-  ): Promise<any> {
+  ): Promise<unknown | null> {
     if (!condition()) {
       console.log(`Skipping large file ${url} - condition not met`);
       return null;
@@ -191,7 +191,7 @@ class LazyDataLoader {
   /**
    * Defer loading until idle time
    */
-  private deferLoad(url: string, options: LoadOptions): Promise<any> {
+  private deferLoad(url: string, options: LoadOptions): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if ('requestIdleCallback' in window) {
         requestIdleCallback(
@@ -226,7 +226,7 @@ class LazyDataLoader {
     url: string,
     useCache: boolean,
     onProgress?: (loaded: number, total: number) => void
-  ): Promise<any> {
+  ): Promise<unknown> {
     if (useCache) {
       return fetchWithCache(url);
     }
@@ -284,7 +284,7 @@ class LazyDataLoader {
     loading: number;
     totalSize: number;
   } {
-    const totalSize = Array.from(this.loadedFiles.values()).reduce((sum, data) => {
+    const totalSize = Array.from(this.loadedFiles.values()).reduce<number>((sum, data) => {
       return sum + JSON.stringify(data).length;
     }, 0);
 

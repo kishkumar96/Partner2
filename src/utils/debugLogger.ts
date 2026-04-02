@@ -26,7 +26,7 @@ interface LogEntry {
   category: LogCategory;
   message: string;
   timestamp: Date;
-  details?: any;
+  details?: unknown;
 }
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -120,7 +120,7 @@ function formatLogEntry(entry: LogEntry): string {
 /**
  * Core logging function
  */
-function log(level: LogLevel, category: LogCategory, message: string, details?: any) {
+function log(level: LogLevel, category: LogCategory, message: string, details?: unknown) {
   // Skip logging in production
   if (!isDevelopment) return;
 
@@ -163,7 +163,7 @@ function log(level: LogLevel, category: LogCategory, message: string, details?: 
         originalConsole.error(formattedMessage, formattedDetails);
         break;
     }
-  } catch (_err) {
+  } catch {
     // Failsafe: If logging itself fails, use bare console.log
     // This should never happen, but prevents any possible crash
     try {
@@ -181,21 +181,21 @@ export const debugLogger = {
   /**
    * Log debug information (verbose, development only)
    */
-  debug(message: string, category: LogCategory = 'general', details?: any) {
+  debug(message: string, category: LogCategory = 'general', details?: unknown) {
     log('debug', category, message, details);
   },
 
   /**
    * Log informational messages
    */
-  info(message: string, category: LogCategory = 'general', details?: any) {
+  info(message: string, category: LogCategory = 'general', details?: unknown) {
     log('info', category, message, details);
   },
 
   /**
    * Log warnings (may indicate issues)
    */
-  warn(message: string, category: LogCategory = 'general', details?: any) {
+  warn(message: string, category: LogCategory = 'general', details?: unknown) {
     // Check if this is a known non-critical warning
     if (isNonCriticalWarning(message)) {
       // Log at debug level instead of warn
@@ -208,7 +208,7 @@ export const debugLogger = {
   /**
    * Log errors (critical issues)
    */
-  error(message: string, category: LogCategory = 'general', details?: any) {
+  error(message: string, category: LogCategory = 'general', details?: unknown) {
     log('error', category, message, details);
   },
 
@@ -216,7 +216,7 @@ export const debugLogger = {
    * Create a console.warn wrapper that categorizes MapLibre warnings
    */
   createMapLibreWarningHandler(originalWarn: typeof console.warn): typeof console.warn {
-    return (...args: any[]) => {
+    return (...args: unknown[]) => {
       // Prevent infinite recursion
       if (isInWarningHandler) {
         originalWarn(...args);
@@ -230,7 +230,7 @@ export const debugLogger = {
 
         // Use our warning handler
         debugLogger.warn(message, category, args.length > 1 ? args.slice(1) : undefined);
-      } catch (_error) {
+      } catch {
         // Fallback to original warn if our handler fails
         originalWarn(...args);
       } finally {

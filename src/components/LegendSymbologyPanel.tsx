@@ -97,7 +97,16 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
           });
         }
 
-        newThresholds[index] = { ...newThresholds[index], label: labelValue };
+        newThresholds[index] = {
+          ...newThresholds[index],
+          label: labelValue,
+          rangeLabel: labelValue,
+        };
+      } else if (field === 'descriptiveLabel') {
+        newThresholds[index] = {
+          ...newThresholds[index],
+          descriptiveLabel: value as string,
+        };
       } else if (field === 'color') {
         newThresholds[index] = { ...newThresholds[index], color: value as string };
       }
@@ -133,8 +142,15 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
   }, [countryCode, onLegendSettingsChange]);
 
   const createCategoryHandler = useCallback(
-    (category: keyof LegendSettings) => (index: number, label: string) => {
-      handleThresholdChange(category, index, 'label', label);
+    (category: keyof LegendSettings) => (index: number, rangeLabel: string) => {
+      handleThresholdChange(category, index, 'label', rangeLabel);
+    },
+    [handleThresholdChange]
+  );
+
+  const createCategoryDescriptionHandler = useCallback(
+    (category: keyof LegendSettings) => (index: number, descriptiveLabel: string) => {
+      handleThresholdChange(category, index, 'descriptiveLabel', descriptiveLabel);
     },
     [handleThresholdChange]
   );
@@ -197,7 +213,7 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
           <button
             type="button"
             onClick={() => setShowAdvanced(prev => !prev)}
-            className="mt-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+            className="mt-2 text-[10px] text-slate-400 hover:text-slate-300 transition-colors"
             aria-pressed={showAdvanced}
           >
             {showAdvanced ? '▼' : '▶'} Advanced: Edit numeric values
@@ -227,6 +243,7 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
             categoryKey="loss"
             thresholds={legendSettings.loss}
             onThresholdChange={createCategoryHandler('loss')}
+            onDescriptionChange={createCategoryDescriptionHandler('loss')}
             onValueChange={showAdvanced ? createCategoryValueHandler('loss') : undefined}
             onReset={createCategoryReset('loss')}
             showValues={showAdvanced}
@@ -237,6 +254,7 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
             categoryKey="wind"
             thresholds={legendSettings.wind}
             onThresholdChange={createCategoryHandler('wind')}
+            onDescriptionChange={createCategoryDescriptionHandler('wind')}
             onValueChange={showAdvanced ? createCategoryValueHandler('wind') : undefined}
             onReset={createCategoryReset('wind')}
             showValues={showAdvanced}
@@ -247,6 +265,7 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
             categoryKey="buildings"
             thresholds={legendSettings.buildings}
             onThresholdChange={createCategoryHandler('buildings')}
+            onDescriptionChange={createCategoryDescriptionHandler('buildings')}
             onValueChange={showAdvanced ? createCategoryValueHandler('buildings') : undefined}
             onReset={createCategoryReset('buildings')}
             showValues={showAdvanced}
@@ -257,6 +276,7 @@ const LegendSymbologyPanel = memo(function LegendSymbologyPanel({
             categoryKey="roads"
             thresholds={legendSettings.roads}
             onThresholdChange={createCategoryHandler('roads')}
+            onDescriptionChange={createCategoryDescriptionHandler('roads')}
             onValueChange={showAdvanced ? createCategoryValueHandler('roads') : undefined}
             onReset={createCategoryReset('roads')}
             showValues={showAdvanced}

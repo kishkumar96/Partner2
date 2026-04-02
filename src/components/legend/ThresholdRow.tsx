@@ -1,13 +1,14 @@
 'use client';
 
 import { memo, useCallback, useId } from 'react';
-import type { LegendThreshold } from '@/data/realThreddsLayers';
+import { getLegendRangeLabel, type LegendThreshold } from '@/data/realThreddsLayers';
 
 export interface ThresholdRowProps {
   threshold: LegendThreshold;
   index: number;
   categoryLabel: string;
   onChange: (value: string) => void;
+  onDescriptionChange?: (value: string) => void;
   readonly?: boolean;
   showValue?: boolean;
   onValueChange?: (value: number) => void;
@@ -29,6 +30,7 @@ const ThresholdRow = memo(function ThresholdRow({
   index,
   categoryLabel,
   onChange,
+  onDescriptionChange,
   readonly = false,
   showValue = false,
   onValueChange,
@@ -36,27 +38,40 @@ const ThresholdRow = memo(function ThresholdRow({
 }: ThresholdRowProps) {
   const labelId = useId();
   const valueId = useId();
+  const descriptionId = useId();
   const isInfinite = !isFinite(threshold.value);
 
   const handleLabelChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readonly) return;
       onChange(e.target.value);
     },
-    [onChange]
+    [onChange, readonly]
   );
 
   const handleValueChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const numValue = Number(e.target.value);
+      if (readonly) return;
+      const rawValue = e.target.value.trim();
+      if (rawValue === '') return;
+      const numValue = Number(rawValue);
       if (onValueChange && !isNaN(numValue) && numValue >= 0) {
         onValueChange(numValue);
       }
     },
-    [onValueChange]
+    [onValueChange, readonly]
+  );
+
+  const handleDescriptionChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readonly) return;
+      onDescriptionChange?.(e.target.value);
+    },
+    [onDescriptionChange, readonly]
   );
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-start gap-2 ${className}`}>
       {/* Color Swatch with accessible description */}
       <div
         role="img"
@@ -96,22 +111,38 @@ const ThresholdRow = memo(function ThresholdRow({
       )}
 
       {/* Label Input */}
-      <div className="flex-1">
+      <div className="flex-1 space-y-1">
         <label htmlFor={labelId} className="sr-only">
-          {categoryLabel} threshold {index + 1} display label
+          {categoryLabel} threshold {index + 1} range label
         </label>
         <input
           id={labelId}
           type="text"
-          value={threshold.label}
+          value={getLegendRangeLabel(threshold)}
           onChange={handleLabelChange}
           disabled={readonly}
-          placeholder="Label"
+          placeholder="Range label"
           className="w-full px-2 py-1 text-[11px] border border-slate-600/60 rounded bg-slate-950/50 text-white 
                    focus:border-purple-400/60 focus:outline-none focus:ring-1 focus:ring-purple-400/30
                    disabled:opacity-60 disabled:cursor-not-allowed
                    transition-colors placeholder:text-slate-600"
-          aria-label={`${categoryLabel} threshold ${index + 1} label`}
+          aria-label={`${categoryLabel} threshold ${index + 1} range label`}
+        />
+        <label htmlFor={descriptionId} className="sr-only">
+          {categoryLabel} threshold {index + 1} descriptive label
+        </label>
+        <input
+          id={descriptionId}
+          type="text"
+          value={threshold.descriptiveLabel || ''}
+          onChange={handleDescriptionChange}
+          disabled={readonly || !onDescriptionChange}
+          placeholder="Descriptive label (optional)"
+          className="w-full px-2 py-1 text-[11px] border border-slate-600/60 rounded bg-slate-950/30 text-slate-200 
+                   focus:border-purple-400/60 focus:outline-none focus:ring-1 focus:ring-purple-400/30
+                   disabled:opacity-60 disabled:cursor-not-allowed
+                   transition-colors placeholder:text-slate-600"
+          aria-label={`${categoryLabel} threshold ${index + 1} descriptive label`}
         />
       </div>
     </div>

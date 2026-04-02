@@ -30,7 +30,7 @@ export interface AppError {
   category: ErrorCategory;
   severity: ErrorSeverity;
   originalError?: Error;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   retryable: boolean;
   userMessage: string;
   timestamp: Date;
@@ -45,7 +45,7 @@ export function createAppError(
     category?: ErrorCategory;
     severity?: ErrorSeverity;
     originalError?: Error;
-    context?: Record<string, any>;
+    context?: Record<string, unknown>;
     retryable?: boolean;
     userMessage?: string;
   } = {}
@@ -164,8 +164,13 @@ export function handleError(
  * Check if an error is retryable
  */
 export function isRetryableError(error: Error | AppError | unknown): boolean {
-  if ('retryable' in (error as AppError)) {
-    return (error as AppError).retryable;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'retryable' in error &&
+    typeof error.retryable === 'boolean'
+  ) {
+    return error.retryable;
   }
 
   // Network errors are typically retryable

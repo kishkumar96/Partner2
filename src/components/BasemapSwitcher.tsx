@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe2, Moon } from 'lucide-react';
+import { Globe2, Map, Moon } from 'lucide-react';
 import { BASEMAP_STYLES } from '@/utils/basemaps';
 
 interface BasemapSwitcherProps {
@@ -14,6 +14,12 @@ const BASEMAPS = [
     name: 'Light',
     icon: Globe2,
     style: BASEMAP_STYLES.positron,
+  },
+  {
+    id: 'voyager',
+    name: 'Detailed',
+    icon: Map,
+    style: BASEMAP_STYLES.voyager,
   },
   {
     id: 'dark',

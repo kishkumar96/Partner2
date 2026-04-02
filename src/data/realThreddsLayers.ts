@@ -5,7 +5,21 @@ import { CountryCode } from '@/types/thredds';
 export interface LegendThreshold {
   value: number;
   label: string;
+  rangeLabel?: string;
+  descriptiveLabel?: string;
   color: string;
+}
+
+export function getLegendRangeLabel(
+  threshold: Pick<LegendThreshold, 'label' | 'rangeLabel'>
+): string {
+  return threshold.rangeLabel || threshold.label;
+}
+
+export function getLegendDisplayLabel(
+  threshold: Pick<LegendThreshold, 'label' | 'rangeLabel' | 'descriptiveLabel'>
+): string {
+  return threshold.descriptiveLabel?.trim() || getLegendRangeLabel(threshold);
 }
 
 export interface LegendSettings {
@@ -26,6 +40,9 @@ export const createDefaultLegendSettings = (countryCode?: CountryCode | null): L
         label: nextValue
           ? `$${item.threshold / 1e6}M - $${nextValue / 1e6}M`
           : `> $${item.threshold / 1e6}M`,
+        rangeLabel: nextValue
+          ? `$${item.threshold / 1e6}M - $${nextValue / 1e6}M`
+          : `> $${item.threshold / 1e6}M`,
         color: item.color,
       };
     }),
@@ -35,22 +52,60 @@ export const createDefaultLegendSettings = (countryCode?: CountryCode | null): L
         return {
           value: item.threshold,
           label: nextValue ? `${item.threshold}-${nextValue} km/h` : `> ${item.threshold} km/h`,
+          rangeLabel: nextValue
+            ? `${item.threshold}-${nextValue} km/h`
+            : `> ${item.threshold} km/h`,
           color: item.color,
         };
       }
     ),
     buildings: [
-      { value: 10000, color: BUILDING_DAMAGE_COLORS.minimal, label: '< $10K' },
-      { value: 50000, color: BUILDING_DAMAGE_COLORS.moderate, label: '$10K - $50K' },
-      { value: 100000, color: BUILDING_DAMAGE_COLORS.substantial, label: '$50K - $100K' },
-      { value: 500000, color: BUILDING_DAMAGE_COLORS.severe, label: '$100K - $500K' },
-      { value: Infinity, color: BUILDING_DAMAGE_COLORS.catastrophic, label: '> $500K' },
+      {
+        value: 10000,
+        color: BUILDING_DAMAGE_COLORS.minimal,
+        label: '< $10K',
+        rangeLabel: '< $10K',
+      },
+      {
+        value: 50000,
+        color: BUILDING_DAMAGE_COLORS.moderate,
+        label: '$10K - $50K',
+        rangeLabel: '$10K - $50K',
+      },
+      {
+        value: 100000,
+        color: BUILDING_DAMAGE_COLORS.substantial,
+        label: '$50K - $100K',
+        rangeLabel: '$50K - $100K',
+      },
+      {
+        value: 500000,
+        color: BUILDING_DAMAGE_COLORS.severe,
+        label: '$100K - $500K',
+        rangeLabel: '$100K - $500K',
+      },
+      {
+        value: Infinity,
+        color: BUILDING_DAMAGE_COLORS.catastrophic,
+        label: '> $500K',
+        rangeLabel: '> $500K',
+      },
     ],
     roads: [
-      { value: 1000, color: ROAD_DAMAGE_COLORS.light, label: '< $1K' },
-      { value: 2000, color: ROAD_DAMAGE_COLORS.moderate, label: '$1K - $2K' },
-      { value: 3000, color: ROAD_DAMAGE_COLORS.heavy, label: '$2K - $3K' },
-      { value: Infinity, color: ROAD_DAMAGE_COLORS.severe, label: '> $3K' },
+      { value: 1000, color: ROAD_DAMAGE_COLORS.light, label: '< $1K', rangeLabel: '< $1K' },
+      {
+        value: 2000,
+        color: ROAD_DAMAGE_COLORS.moderate,
+        label: '$1K - $2K',
+        rangeLabel: '$1K - $2K',
+      },
+      {
+        value: 3000,
+        color: ROAD_DAMAGE_COLORS.heavy,
+        label: '$2K - $3K',
+        rangeLabel: '$2K - $3K',
+      },
+      { value: Infinity, color: ROAD_DAMAGE_COLORS.severe, label: '> $3K', rangeLabel: '> $3K' },
     ],
   };
 };
