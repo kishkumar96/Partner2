@@ -5,12 +5,12 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import {
-  createLossColorExpression,
-  createWindColorExpression,
   createRegionalFillOpacity,
   createRegionalLineColor,
   createRegionalLineWidth,
   LAYER_OPACITY,
+  createLossColorExpression,
+  createWindColorExpression,
 } from '@/utils/colorSystem';
 import { getBeforeLayerId } from '@/utils/layerOrder';
 import { debugLogger } from '@/utils/debugLogger';
@@ -22,6 +22,7 @@ import {
   getCountryDataFilePath,
   loadRegionalSummary,
 } from '@/utils/realDataLoader';
+import type { LegendSettings } from '@/data/realThreddsLayers';
 
 function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
   if (!map) return false;
@@ -65,6 +66,32 @@ function removeRegionalLayersAndSource(map: MapLibreMap) {
   }
 }
 
+/**
+ * Creates a MapLibre 'step' expression from dynamic legend thresholds.
+ * This should ideally be in colorSystem.ts but is placed here for demonstration.
+ * @param field The GeoJSON property to base the steps on.
+ * @param thresholds An array of legend thresholds.
+ * @returns A MapLibre expression specification.
+ */
+function createDynamicColorExpression(
+  field: string,
+  thresholds: { value: number; color: string }[]
+): maplibregl.ExpressionSpecification {
+  const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);
+
+  const stops: (string | number)[] = [];
+  sortedThresholds.forEach(threshold => {
+    if (isFinite(threshold.value)) {
+      stops.push(threshold.value, threshold.color);
+    }
+  });
+
+  // The last color is for values >= the last finite stop.
+  const fallbackColor = sortedThresholds.find(t => !isFinite(t.value))?.color || '#cccccc';
+
+  return ['step', ['get', field], fallbackColor, ...stops];
+}
+
 interface RegionalImpactsLayerProps {
   map: MapLibreMap | null;
   visible: boolean;
@@ -75,6 +102,8 @@ interface RegionalImpactsLayerProps {
   countryCode?: CountryCode | null;
   /** 0–100 opacity scale for regional fill layers */
   layerOpacityScale?: number;
+  // Custom legend settings
+  legendSettings?: LegendSettings;
 }
 
 export default function RegionalImpactsLayer({
@@ -86,6 +115,7 @@ export default function RegionalImpactsLayer({
   styleChangeCounter = 0,
   countryCode = null,
   layerOpacityScale = 70,
+  legendSettings,
 }: RegionalImpactsLayerProps) {
   // Store event handlers as refs to enable proper cleanup
   const handlersRef = useRef<{
@@ -292,8 +322,13 @@ export default function RegionalImpactsLayer({
           console.log('✅ Source added successfully');
 
           // Define color expressions using unified color system
-          const lossColorExpression = createLossColorExpression(countryCode);
-          const windColorExpression = createWindColorExpression();
+          const lossColorExpression = legendSettings
+            ? createDynamicColorExpression('Total_Loss', legendSettings.loss)
+            : createLossColorExpression(countryCode);
+
+          const windColorExpression = legendSettings
+            ? createDynamicColorExpression('Max_Wind_Gusts', legendSettings.wind)
+            : createWindColorExpression();
 
           // Use deterministic z-order system for consistent layer placement
           const fillBeforeId = getBeforeLayerId(map, 'regional-impacts-fill');
@@ -636,9 +671,12 @@ export default function RegionalImpactsLayer({
 
     try {
       if (map.getLayer(fillLayerId)) {
-        // Use consistent color expressions from colorSystem.ts
-        const colorExpression =
-          mapStyle === 'wind'
+        const colorExpression = legendSettings
+          ? createDynamicColorExpression(
+              mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss',
+              mapStyle === 'wind' ? legendSettings.wind : legendSettings.loss
+            )
+          : mapStyle === 'wind'
             ? createWindColorExpression()
             : createLossColorExpression(countryCode);
         const opacityExpression = createRegionalFillOpacity(
@@ -670,7 +708,16 @@ export default function RegionalImpactsLayer({
     } catch (e) {
       console.warn('Error updating map style:', e);
     }
-  }, [map, visible, mapStyle, selectedRegion, styleChangeCounter, layerOpacityScale, countryCode]);
+  }, [
+    map,
+    visible,
+    mapStyle,
+    selectedRegion,
+    styleChangeCounter,
+    layerOpacityScale,
+    countryCode,
+    legendSettings,
+  ]);
 
   return null;
 }

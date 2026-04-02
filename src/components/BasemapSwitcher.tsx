@@ -1,42 +1,39 @@
 'use client';
 
+import { Globe2, Moon } from 'lucide-react';
+import { BASEMAP_STYLES } from '@/utils/basemaps';
+
 interface BasemapSwitcherProps {
   onBasemapChange: (basemap: string) => void;
   currentBasemap: string;
 }
-
-import { Globe2, Map, Satellite } from 'lucide-react';
 
 const BASEMAPS = [
   {
     id: 'positron',
     name: 'Light',
     icon: Globe2,
-    style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-  },
-  {
-    id: 'voyager',
-    name: 'Detailed',
-    icon: Map,
-    style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+    style: BASEMAP_STYLES.positron,
   },
   {
     id: 'dark',
     name: 'Dark',
-    icon: Satellite,
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    icon: Moon,
+    style: BASEMAP_STYLES.dark,
   },
 ];
 
 export function BasemapSwitcher({ onBasemapChange, currentBasemap }: BasemapSwitcherProps) {
+  const isActive = (basemapStyle: string) => currentBasemap === basemapStyle;
+
   return (
-    <div className="absolute top-4 left-4 z-[15] flex gap-2 bg-slate-900/80 backdrop-blur-sm rounded-lg p-2 border border-slate-700 max-w-[calc(100vw-5rem)] overflow-x-auto pointer-events-auto">
+    <div className="absolute top-3 left-3 md:top-4 md:left-4 z-[45] flex gap-2 bg-slate-900/82 backdrop-blur-md rounded-xl p-2 border border-slate-700/80 shadow-xl max-w-[calc(100%-1.5rem)] overflow-x-auto pointer-events-auto">
       {BASEMAPS.map(basemap => (
         <button
           key={basemap.id}
           onClick={() => onBasemapChange(basemap.style)}
-          className={`px-3 py-2 rounded transition-all text-sm font-medium flex items-center gap-1 ${
-            currentBasemap === basemap.style
+          className={`px-3 py-2 rounded-lg transition-all text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${
+            isActive(basemap.style)
               ? 'bg-neon-cyan/30 text-neon-cyan border border-neon-cyan/50'
               : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/50'
           }`}

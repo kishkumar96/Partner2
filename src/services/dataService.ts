@@ -5,6 +5,7 @@
 
 import { loadGeoJSON, loadTextData } from '@/utils/dataLoader';
 import { parseCSV } from '@/utils/csvParser';
+import { logger } from '@/utils/logger';
 
 // Check if backend is available
 let backendAvailable: boolean | null = null;
@@ -46,7 +47,7 @@ export async function loadDamagedBuildings(bbox?: [number, number, number, numbe
         return await response.json();
       }
     } catch (error) {
-      console.warn('API failed, falling back to file:', error);
+      logger.warn('API failed, falling back to file:', error);
     }
   }
 
@@ -68,7 +69,7 @@ export async function loadDamagedRoads(bbox?: [number, number, number, number]) 
         return await response.json();
       }
     } catch (error) {
-      console.warn('API failed, falling back to file:', error);
+      logger.warn('API failed, falling back to file:', error);
     }
   }
 
@@ -90,7 +91,7 @@ export async function loadRegionalImpacts() {
         return await response.json();
       }
     } catch (error) {
-      console.warn('API failed, falling back to file:', error);
+      logger.warn('API failed, falling back to file:', error);
     }
   }
 
@@ -112,7 +113,7 @@ export async function loadCycloneTrack() {
         return await response.json();
       }
     } catch (error) {
-      console.warn('API failed, falling back to file:', error);
+      logger.warn('API failed, falling back to file:', error);
     }
   }
 
@@ -134,7 +135,7 @@ export async function loadStats() {
         return await response.json();
       }
     } catch (error) {
-      console.warn('API failed, falling back to files:', error);
+      logger.warn('API failed, falling back to files:', error);
     }
   }
 

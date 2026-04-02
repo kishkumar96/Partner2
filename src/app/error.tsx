@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function Error({
@@ -16,7 +17,7 @@ export default function Error({
 }) {
   useEffect(() => {
     // Log the error to an error reporting service
-    console.error('Application error:', error);
+    logger.error('Application error:', error);
 
     // You can send to error tracking service here
     // logErrorToService(error);

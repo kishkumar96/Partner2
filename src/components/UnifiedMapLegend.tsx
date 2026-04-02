@@ -2,12 +2,57 @@
 
 import { useMemo, useState } from 'react';
 import { DollarSign, Wind, ChevronDown, ChevronUp, Info, Droplet } from 'lucide-react';
+import { LegendSettings } from '@/data/realThreddsLayers';
 import { formatCurrency } from '@/utils/formatters';
 import { WIND_SEQUENTIAL_COLORS, getLossSequentialColors } from '@/utils/colorSystem';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
 import { CountryCode } from '@/types/thredds';
 
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
+
+const WMS_LEGEND_PALETTES: Record<string, string[]> = {
+  'x-sst': [
+    '#1a1333',
+    '#2b4ea2',
+    '#2c7fb8',
+    '#41b6c4',
+    '#7fcdbb',
+    '#c7e9b4',
+    '#edf8b1',
+    '#fee08b',
+    '#fdae61',
+    '#f46d43',
+    '#d73027',
+    '#7f0000',
+  ],
+  'seq-blues': [
+    '#f7fbff',
+    '#deebf7',
+    '#c6dbef',
+    '#9ecae1',
+    '#6baed6',
+    '#4292c6',
+    '#2171b5',
+    '#08519c',
+    '#08306b',
+  ],
+  'seq-ylorrd': [
+    '#ffffcc',
+    '#ffeda0',
+    '#fed976',
+    '#feb24c',
+    '#fd8d3c',
+    '#fc4e2a',
+    '#e31a1c',
+    '#bd0026',
+    '#800026',
+  ],
+  default: ['#f0f0f0', '#d0d0d0', '#a0a0a0', '#707070', '#404040'],
+};
+
+function normalizeWmsStyleName(styleName: string): string {
+  return styleName.trim().toLowerCase().split('/').pop() || 'default';
+}
 
 interface UnifiedMapLegendProps {
   mode: 'loss' | 'wind';
@@ -19,6 +64,8 @@ interface UnifiedMapLegendProps {
   dataValues?: number[];
   // Sidebar state for responsive positioning
   isLeftPanelOpen?: boolean;
+  // Custom legend settings
+  legendSettings?: LegendSettings;
   // Active layers visibility
   showBuildings?: boolean;
   showRoads?: boolean;
@@ -31,24 +78,15 @@ interface UnifiedMapLegendProps {
 }
 
 function getWmsLegendGradient(styleName: string, hazardType: string): string {
-  const normalizedStyle = styleName.toLowerCase();
+  const normalizedStyle = normalizeWmsStyleName(styleName);
   const isFloodLike =
     hazardType === 'flood' || hazardType === 'inundation' || hazardType === 'fluvial-depth';
+  const palette =
+    WMS_LEGEND_PALETTES[normalizedStyle] ||
+    (isFloodLike ? WMS_LEGEND_PALETTES['seq-blues'] : undefined) ||
+    WMS_LEGEND_PALETTES.default;
 
-  if (normalizedStyle.includes('x-sst')) {
-    // Approximate ncWMS x-Sst ramp used by the rendered WMS layers.
-    return 'linear-gradient(to right, #fff7bc, #fee391, #fec44f, #fe9929, #ec7014, #cc4c02, #993404, #662506)';
-  }
-
-  if (normalizedStyle.includes('blues') || (isFloodLike && !normalizedStyle.includes('ylorrd'))) {
-    return 'linear-gradient(to right, #f7fbff, #deebf7, #c6dbef, #9ecae1, #6baed6, #4292c6, #2171b5, #08519c, #08306b)';
-  }
-
-  if (normalizedStyle.includes('ylorrd')) {
-    return 'linear-gradient(to right, #ffffcc, #ffeda0, #fed976, #feb24c, #fd8d3c, #fc4e2a, #e31a1c, #bd0026, #800026)';
-  }
-
-  return 'linear-gradient(to right, #f0f0f0, #d0d0d0, #a0a0a0, #707070, #404040)';
+  return `linear-gradient(to right, ${palette.join(', ')})`;
 }
 
 function getWmsLegendUnits(hazardType: string): string {
@@ -68,7 +106,7 @@ function formatWmsStyleName(styleName: string): string {
     return 'default';
   }
 
-  return trimmed.split('/').pop() || trimmed;
+  return normalizeWmsStyleName(trimmed);
 }
 
 function formatContinuousRangeLabel(
@@ -106,22 +144,23 @@ export default function UnifiedMapLegend({
   onZoomToRoads,
   activeWmsLayers = [],
   countryCode = null,
+  legendSettings,
 }: UnifiedMapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasActiveWmsLayers = activeWmsLayers.length > 0;
 
   // Legend classes mirror the exact static thresholds used by map paint expressions.
   const legendClasses = useMemo(() => {
-    const colorScale = (
-      mode === 'loss' ? getLossSequentialColors(countryCode) : WIND_SEQUENTIAL_COLORS
-    ).map(item => ({
-      threshold: item.threshold,
-      color: item.color,
-    }));
+    if (legendSettings) {
+      const settings = mode === 'loss' ? legendSettings.loss : legendSettings.wind;
+      return settings.map(s => ({ label: s.label, color: s.color }));
+    }
 
+    // Fallback to old logic if settings are not provided
+    const colorScale =
+      mode === 'loss' ? getLossSequentialColors(countryCode) : WIND_SEQUENTIAL_COLORS;
     return colorScale.map((item, index) => {
       const nextItem = colorScale[index + 1];
-
       return {
         label: formatContinuousRangeLabel(item.threshold, nextItem?.threshold ?? null, mode),
         color: item.color,
@@ -130,7 +169,7 @@ export default function UnifiedMapLegend({
         maxValue: nextItem ? nextItem.threshold : Infinity,
       };
     });
-  }, [mode, countryCode]);
+  }, [mode, countryCode, legendSettings]);
 
   const config = useMemo(() => {
     if (mode === 'loss') {
@@ -164,35 +203,31 @@ export default function UnifiedMapLegend({
     }
   }, [mode, hasActiveWmsLayers]);
 
-  // Building damage legend classes (when buildings are visible)
   const buildingLegendClasses = useMemo(() => {
     if (!showBuildings) return [];
+    if (legendSettings?.buildings) {
+      return legendSettings.buildings.map(s => ({ label: s.label, color: s.color }));
+    }
+    // Fallback
+    return [];
+  }, [showBuildings, legendSettings]);
 
-    return [
-      { label: '< $10K', color: BUILDING_DAMAGE_COLORS.minimal },
-      { label: '$10K - $50K', color: BUILDING_DAMAGE_COLORS.moderate },
-      { label: '$50K - $100K', color: BUILDING_DAMAGE_COLORS.substantial },
-      { label: '$100K - $500K', color: BUILDING_DAMAGE_COLORS.severe },
-      { label: '> $500K', color: BUILDING_DAMAGE_COLORS.catastrophic },
-    ];
-  }, [showBuildings]);
-
-  // Road damage legend classes (when roads are visible)
   const roadLegendClasses = useMemo(() => {
     if (!showRoads) return [];
+    if (legendSettings?.roads) {
+      // Calculate dynamic widths matching DamagedRoadsLayer logic:
+      // Width progression: 4px base, +1.5px per threshold step
+      return legendSettings.roads.map((s, index) => ({
+        label: s.label,
+        color: s.color,
+        width: `${4 + index * 1.5}px`,
+      }));
+    }
+    return [];
+  }, [showRoads, legendSettings]);
 
-    return [
-      { label: '< $1K', color: ROAD_DAMAGE_COLORS.light, width: '4px' },
-      { label: '$1K - $2K', color: ROAD_DAMAGE_COLORS.moderate, width: '5px' },
-      { label: '$2K - $3K', color: ROAD_DAMAGE_COLORS.heavy, width: '7px' },
-      { label: '> $3K', color: ROAD_DAMAGE_COLORS.severe, width: '9px' },
-    ];
-  }, [showRoads]);
-
-  // Cyclone swath legend classes (when cyclone layer is visible)
   const cycloneSwathLegendClasses = useMemo(() => {
     if (!showCyclone) return [];
-
     return [
       {
         label: 'Hurricane Swath',
@@ -217,7 +252,6 @@ export default function UnifiedMapLegend({
 
   const IconComponent = config.icon;
 
-  // Find min and max from data
   const dataRange = useMemo(() => {
     if (!dataValues || dataValues.length === 0) return null;
     const validValues = dataValues.filter(v => v != null && !isNaN(v));
@@ -229,37 +263,20 @@ export default function UnifiedMapLegend({
     };
   }, [dataValues]);
 
-  // Smart positioning strategy:
-  // - Desktop: Position dynamically based on sidebar states
-  // - Mobile: Bottom-left with compact design
-  // - Avoid overlap with cyclone controls (bottom-right)
-  // - Higher z-index for proper stacking
-  // - Responsive width that adapts to available space
-
-  const getResponsiveStyles = () => {
-    return {
-      width: isExpanded
-        ? 'clamp(280px, calc(100vw - 2rem), 340px)' // Responsive width: min 280px, max 340px, adapts with 2rem margin
-        : '56px',
-      maxHeight: 'calc(100vh - 180px)', // Prevent vertical overflow
-    };
-  };
-
   // Hide only when globally disabled.
   // This must come AFTER all hooks to comply with Rules of Hooks
   if (!visible) return null;
 
   return (
     <div
-      className={`
-        fixed bottom-8 z-50 
-        transition-all duration-300 ease-in-out 
+      className={`fixed bottom-8 z-50 transition-all duration-300 ease-in-out 
         pointer-events-auto
+        max-h-[calc(100vh-180px)]
+        overflow-y-auto overflow-x-visible overscroll-contain
         ${isLeftPanelOpen ? 'left-[336px]' : 'left-8'}
         max-md:left-4 max-md:bottom-20
-        ${isExpanded ? 'max-md:w-[calc(100vw-2rem)]' : ''}
+        ${isExpanded ? 'w-[clamp(280px,calc(100vw-2rem),340px)]' : 'w-14'}
       `}
-      style={getResponsiveStyles()}
       role="region"
       aria-label="Map legend"
     >

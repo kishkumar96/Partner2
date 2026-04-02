@@ -9,6 +9,7 @@
  */
 
 import { fetchWithCache } from './dataCache';
+import { logger } from './logger';
 
 export interface LoadOptions {
   priority?: 'critical' | 'high' | 'low';
@@ -118,7 +119,7 @@ class LazyDataLoader {
         loaded++;
         onProgress?.(loaded, total);
       } catch (error) {
-        console.error(`Failed to load ${file}:`, error);
+        logger.error(`Failed to load ${file}:`, error);
       }
     }
 

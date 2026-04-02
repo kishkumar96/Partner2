@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { MapControls } from '../MapControls';
 
 const POSITRON_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
-const VOYAGER_URL = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 describe('MapControls', () => {
   const defaultProps = {
@@ -26,8 +25,12 @@ describe('MapControls', () => {
 
     render(<MapControls {...defaultProps} mapStyle="loss" onMapStyleChange={onMapStyleChange} />);
 
-    expect(screen.getByRole('button', { name: /economic loss coloring/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /wind exposure coloring/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /shade map by estimated damage/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /shade map by wind intensity/i })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /basemap/i })).toBeInTheDocument();
   });
 
@@ -38,8 +41,8 @@ describe('MapControls', () => {
 
     await user.click(screen.getByRole('button', { name: /map controls/i }));
 
-    const lossButton = screen.getByRole('button', { name: /economic loss coloring/i });
-    const windButton = screen.getByRole('button', { name: /wind exposure coloring/i });
+    const lossButton = screen.getByRole('button', { name: /shade map by estimated damage/i });
+    const windButton = screen.getByRole('button', { name: /shade map by wind intensity/i });
 
     expect(lossButton).toHaveAttribute('aria-pressed', 'true');
     expect(windButton).toHaveAttribute('aria-pressed', 'false');
@@ -64,7 +67,7 @@ describe('MapControls', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /map controls/i }));
-    const windExposureButton = screen.getByRole('button', { name: /wind exposure coloring/i });
+    const windExposureButton = screen.getByRole('button', { name: /shade map by wind intensity/i });
 
     await user.click(windExposureButton);
 
@@ -88,7 +91,7 @@ describe('MapControls', () => {
     expect(basemapPanel).toBeInTheDocument();
 
     const lightOption = screen.getByRole('menuitemradio', { name: /light/i });
-    const detailedOption = screen.getByRole('menuitemradio', { name: /detailed/i });
+    const darkOption = screen.getByRole('menuitemradio', { name: /dark/i });
 
     await waitFor(() => {
       expect(lightOption).toHaveFocus();
@@ -97,11 +100,13 @@ describe('MapControls', () => {
 
     await user.keyboard('{ArrowDown}');
     await waitFor(() => {
-      expect(detailedOption).toHaveFocus();
+      expect(darkOption).toHaveFocus();
     });
 
     await user.keyboard('{Enter}');
-    expect(onBasemapChange).toHaveBeenCalledWith(VOYAGER_URL);
+    expect(onBasemapChange).toHaveBeenCalledWith(
+      'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+    );
 
     await waitFor(() => {
       expect(screen.queryByRole('menu', { name: /basemap options/i })).not.toBeInTheDocument();
@@ -116,9 +121,11 @@ describe('MapControls', () => {
     render(<MapControls {...defaultProps} onBasemapChange={onBasemapChange} />);
 
     await user.click(screen.getByRole('button', { name: /basemap/i }));
-    await user.click(screen.getByRole('menuitemradio', { name: /detailed/i }));
+    await user.click(screen.getByRole('menuitemradio', { name: /dark/i }));
 
-    expect(onBasemapChange).toHaveBeenCalledWith(VOYAGER_URL);
+    expect(onBasemapChange).toHaveBeenCalledWith(
+      'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+    );
     expect(screen.queryByRole('button', { name: /basemap/i })).not.toBeInTheDocument();
   });
 
@@ -143,15 +150,37 @@ describe('MapControls', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /map controls/i }));
+    await user.click(screen.getByRole('button', { name: /maximum wind/i }));
 
-    expect(screen.getByRole('button', { name: /economic loss coloring/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /wind exposure coloring/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /shade map by estimated damage/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /shade map by wind intensity/i })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: /3d buildings/i })).toBeDisabled();
-    expect(screen.getByRole('checkbox', { name: /wind layer/i })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: /maximum wind/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /basemap/i })).toBeDisabled();
     expect(screen.getByRole('slider', { name: /layer opacity/i })).toBeDisabled();
     // This assertion doesn't work with the new structure, let's look for the loading indicator text
     // expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+  });
+
+  it('shows overlay controls inside layer accordions', async () => {
+    const user = userEvent.setup();
+    const onWindLayerToggle = jest.fn();
+
+    render(
+      <MapControls {...defaultProps} showWindLayer={false} onWindLayerToggle={onWindLayerToggle} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /map controls/i }));
+
+    expect(screen.queryByRole('checkbox', { name: /maximum wind/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /maximum wind/i }));
+
+    const windToggle = screen.getByRole('checkbox', { name: /maximum wind/i });
+    expect(windToggle).toBeInTheDocument();
+
+    await user.click(windToggle);
+    expect(onWindLayerToggle).toHaveBeenCalledWith(true);
   });
 
   it('exposes opacity slider semantic values', async () => {

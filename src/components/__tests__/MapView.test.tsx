@@ -5,11 +5,41 @@ import { render, waitFor } from '@testing-library/react';
 import MapView from '../MapView';
 import { Event, Hazard, FilterState } from '@/types';
 import { Wind } from 'lucide-react';
+import type { ComponentProps } from 'react';
 
 // Avoid deck.gl ESM dependency chain in this unit test suite
 jest.mock('../CycloneAnimationLayer', () => {
   const MockComponent = () => null;
   MockComponent.displayName = 'CycloneAnimationLayer';
+  return MockComponent;
+});
+
+type RealDataLayersProps = ComponentProps<typeof import('../RealDataLayers').default>;
+const realDataLayersMock = jest.fn<void, [RealDataLayersProps]>();
+jest.mock('../RealDataLayers', () => {
+  const MockComponent = (props: RealDataLayersProps) => {
+    realDataLayersMock(props);
+    return null;
+  };
+  MockComponent.displayName = 'RealDataLayers';
+  return MockComponent;
+});
+
+jest.mock('../RegionalImpactsLayer', () => {
+  const MockComponent = () => null;
+  MockComponent.displayName = 'RegionalImpactsLayer';
+  return MockComponent;
+});
+
+jest.mock('../DamagedBuildingsLayer', () => {
+  const MockComponent = () => null;
+  MockComponent.displayName = 'DamagedBuildingsLayer';
+  return MockComponent;
+});
+
+jest.mock('../DamagedRoadsLayer', () => {
+  const MockComponent = () => null;
+  MockComponent.displayName = 'DamagedRoadsLayer';
   return MockComponent;
 });
 
@@ -119,5 +149,89 @@ describe('MapView Component', () => {
 
     // Map cleanup should be called
     expect(mockRemove).toHaveBeenCalled();
+  });
+
+  it('keeps the static cyclone track hidden when animated cyclone data is toggled off', async () => {
+    const MapLibreGL = require('maplibre-gl');
+
+    MapLibreGL.Map.mockImplementationOnce(() => ({
+      on: jest.fn((event, handler) => {
+        if (event === 'load') {
+          setTimeout(() => handler(), 0);
+        }
+      }),
+      once: jest.fn(),
+      off: jest.fn(),
+      remove: jest.fn(),
+      addControl: jest.fn(),
+      addLayer: jest.fn(),
+      addSource: jest.fn(),
+      getSource: jest.fn(() => null),
+      getLayer: jest.fn(() => null),
+      getCanvas: jest.fn(() => ({ style: {} })),
+      getStyle: jest.fn(() => ({ layers: [] })),
+      setFeatureState: jest.fn(),
+      setPaintProperty: jest.fn(),
+      setLayoutProperty: jest.fn(),
+      getCenter: jest.fn(() => ({ lng: 0, lat: 0 })),
+      getZoom: jest.fn(() => 10),
+      getBearing: jest.fn(() => 0),
+      getPitch: jest.fn(() => 0),
+      flyTo: jest.fn(),
+      easeTo: jest.fn(),
+      stop: jest.fn(),
+      isStyleLoaded: jest.fn(() => true),
+    }));
+
+    realDataLayersMock.mockClear();
+
+    render(
+      <MapView
+        events={mockEvents}
+        hazards={mockHazards}
+        filters={mockFilters}
+        showCycloneAnimation={false}
+        cycloneForecast={[
+          {
+            time: new Date('2026-04-01T00:00:00Z'),
+            timeString: '2026-04-01T00:00:00Z',
+            latitude: -17.5,
+            longitude: 179.1,
+            category: 3,
+            pressure: 960,
+            meanWind: 80,
+            windGust: 100,
+            uncertainty: 20,
+            galeRadiusNE: 100,
+            galeRadiusSE: 90,
+            galeRadiusSW: 80,
+            galeRadiusNW: 95,
+            stormRadiusNE: 60,
+            stormRadiusSE: 55,
+            stormRadiusSW: 50,
+            stormRadiusNW: 58,
+            hurricaneRadiusNE: 30,
+            hurricaneRadiusSE: 28,
+            hurricaneRadiusSW: 25,
+            hurricaneRadiusNW: 26,
+            eyeRadius: 10,
+            eyeRadiusUncertainty: 2,
+            verticalExtent: 3,
+            pressureOCI: 1005,
+            radiusOCI: 180,
+            dvorakTNumber: 4.5,
+            currentIntensity: 3,
+            p5Wind: 75,
+          },
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(realDataLayersMock).toHaveBeenCalled();
+    });
+
+    const latestCall = realDataLayersMock.mock.calls.at(-1)?.[0];
+    expect(latestCall?.showCycloneTrack).toBe(false);
   });
 });

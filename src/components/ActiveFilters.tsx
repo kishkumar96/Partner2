@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, memo, type ReactNode } from 'react';
 import { FilterState, Hazard, Sector } from '@/types';
 import { Calendar, Filter, X } from 'lucide-react';
 import { normalizeHazardId } from '@/utils/hazardIds';
@@ -13,7 +13,7 @@ interface ActiveFiltersProps {
   className?: string;
 }
 
-export default function ActiveFilters({
+const ActiveFilters = memo(function ActiveFilters({
   filters,
   hazards,
   sectors,
@@ -34,7 +34,9 @@ export default function ActiveFilters({
 
   if (!hasActiveFilters) {
     return (
-      <div className={`flex items-center gap-2 text-xs text-slate-400 ${className}`}>
+      <div
+        className={`flex items-center gap-2 text-[11px] font-bold tracking-wider uppercase text-slate-500 ${className}`}
+      >
         <Filter className="w-3.5 h-3.5" />
         <span>No filters applied</span>
       </div>
@@ -131,7 +133,7 @@ export default function ActiveFilters({
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400 flex-shrink-0">
+      <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider uppercase text-slate-500 flex-shrink-0">
         <Filter className="w-3.5 h-3.5" />
         <span>Active:</span>
       </div>
@@ -169,4 +171,6 @@ export default function ActiveFilters({
       </button>
     </div>
   );
-}
+});
+
+export default ActiveFilters;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { logger } from '@/utils/logger';
 import { getCountrySlugFromCode, SLUG_TO_CODE } from '@/utils/countrySlug';
 import {
   getCountryAuthCookieName,
@@ -116,7 +117,7 @@ export async function proxy(request: NextRequest) {
     const countrySlug = getSlugFromCountryCode(countryCode);
 
     if (isCountryProtected(countryCode) && isCountryAuthMisconfigured(countryCode)) {
-      console.error(`[auth] middleware misconfigured country=${countryCode}`);
+      logger.error(`[auth] middleware misconfigured country=${countryCode}`);
       return new NextResponse('Country access is misconfigured.', { status: 503 });
     }
 
@@ -127,7 +128,7 @@ export async function proxy(request: NextRequest) {
     if (isCountryProtected(countryCode)) {
       const isValid = await verifySessionInMiddleware(request, countryCode, countrySlug);
       if (!isValid) {
-        console.warn(`[auth] middleware denied country_route slug=${slug}`);
+        logger.warn(`[auth] middleware denied country_route slug=${slug}`);
         const loginUrl = request.nextUrl.clone();
         loginUrl.pathname = `/${slug}/login`;
         loginUrl.search = '';
@@ -149,7 +150,7 @@ export async function proxy(request: NextRequest) {
     }
 
     if (isCountryProtected(countryCode) && isCountryAuthMisconfigured(countryCode)) {
-      console.error(`[auth] middleware misconfigured api country=${countryCode} path=${pathname}`);
+      logger.error(`[auth] middleware misconfigured api country=${countryCode} path=${pathname}`);
       return NextResponse.json(
         { error: `Country access for ${countryCode} is misconfigured.` },
         { status: 503 }
@@ -164,7 +165,7 @@ export async function proxy(request: NextRequest) {
       const countrySlug = getSlugFromCountryCode(countryCode);
       const isValid = await verifySessionInMiddleware(request, countryCode, countrySlug);
       if (!isValid) {
-        console.warn(`[auth] middleware denied api country=${countryCode} path=${pathname}`);
+        logger.warn(`[auth] middleware denied api country=${countryCode} path=${pathname}`);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     }

@@ -28,7 +28,7 @@ export default function MapHUD({
   const legendConfig =
     mapStyle === 'loss'
       ? {
-          title: 'Economic Loss',
+          title: 'Economic Damage',
           icon: DollarSign,
           iconColor: 'text-green-500',
           classes: [

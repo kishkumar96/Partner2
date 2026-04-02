@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
+import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import { LegendSettings } from '@/data/realThreddsLayers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
 import type { BuildingProperties, RoadProperties } from '@/types/realData';
@@ -17,6 +18,7 @@ import {
   createWindColorExpression,
 } from '@/utils/colorSystem';
 import { debugLogger } from '@/utils/debugLogger';
+import { logger } from '@/utils/logger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
 import RealDataLayers from './RealDataLayers';
@@ -236,7 +238,7 @@ interface MapViewProps {
 
   selectedCountry?: CountryCode | null;
   mapStyle?: 'loss' | 'wind';
-  basemapStyle?: string;
+  basemapStyle?: string | StyleSpecification;
   is3DView?: boolean;
   extrusionMode?: 'none' | 'loss' | 'wind';
   extrusionExaggeration?: number;
@@ -246,6 +248,7 @@ interface MapViewProps {
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
+  cycloneTrackData?: GeoJSON.FeatureCollection | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
   aggregationLevel?: string;
   showOverlays?: boolean;
@@ -268,6 +271,7 @@ interface MapViewProps {
   onStoryModeChange?: (enabled: boolean) => void;
   onMapReady?: (map: maplibregl.Map) => void;
   onStoryIndexChange?: (index: number) => void;
+  legendSettings?: LegendSettings;
   /** 0–100 opacity scale applied to all hazard/data layers */
   layerOpacity?: number;
 }
@@ -290,6 +294,7 @@ export default function MapView({
   onActiveWmsLayersChange,
   damagedBuildings,
   damagedRoads,
+  cycloneTrackData = null,
   cycloneForecast,
   showOverlays = true,
   onCycloneTimestepChange,
@@ -308,10 +313,12 @@ export default function MapView({
   onMapReady,
   onStoryIndexChange,
   layerOpacity = 70,
+  legendSettings,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [styleChangeCounter, setStyleChangeCounter] = useState(0); // Track style changes to trigger layer reload
   const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
@@ -320,6 +327,8 @@ export default function MapView({
   const tileErrorCountRef = useRef(0);
   const styleLoadAttemptsRef = useRef(0);
   const mapStyleRef = useRef(mapStyle);
+  const appliedBasemapStyleRef = useRef<string | StyleSpecification | null>(null);
+  const skipNextCountryFlyToRef = useRef(false);
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -335,151 +344,304 @@ export default function MapView({
     },
     [onCyclonePlayingChange]
   );
+  const hasAnimatedCycloneForecast = !!cycloneForecast && cycloneForecast.length > 0;
+  const hasStaticCycloneTrack =
+    !!cycloneTrackData &&
+    Array.isArray((cycloneTrackData as GeoJSON.FeatureCollection).features) &&
+    (cycloneTrackData as GeoJSON.FeatureCollection).features.length > 0;
   const basemapRequestIdRef = useRef(0);
   const pendingStyleLoadHandlerRef = useRef<(() => void) | null>(null);
 
   // Filter events based on current filters using shared utility
   const filteredEvents = useMemo(() => filterEvents(events, filters), [events, filters]);
 
+  const attachMapEventHandlers = useCallback(
+    (
+      instance: maplibregl.Map,
+      styleUrl: string | StyleSpecification,
+      center: [number, number],
+      zoom: number
+    ) => {
+      debugLogger.info('Map initialized', 'map-initialization', {
+        center,
+        zoom,
+        style: typeof styleUrl === 'string' ? styleUrl : styleUrl.name || 'custom',
+      });
+
+      onMapReady?.(instance);
+      appliedBasemapStyleRef.current = styleUrl;
+
+      instance.addControl(new maplibregl.NavigationControl(), 'top-right');
+      instance.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+      instance.on('load', () => {
+        setMapLoaded(true);
+      });
+
+      instance.on('error', (e: any) => {
+        // Suppress expected WMS/THREDDS network errors (external server issues are common)
+        const errorMessage = e?.error?.message || String(e?.error || e);
+
+        // Capture additional error context for debugging
+        const errorContext = {
+          message: errorMessage,
+          sourceId: e?.sourceId,
+          sourceType: e?.source?.type,
+          type: e?.type,
+          target: e?.target?.id || 'unknown',
+        };
+
+        const isWMSError =
+          errorMessage.includes('thredds') ||
+          errorMessage.includes('WMS') ||
+          errorMessage.includes('Failed to fetch');
+
+        // Suppress style diff and filesystem warnings (non-critical MapLibre internal warnings)
+        const isStyleDiffWarning =
+          errorMessage.includes('style diff') || errorMessage.includes('setState');
+        const isFileSystemWarning =
+          errorMessage.includes('filesystem') || errorMessage.includes('illegal path');
+
+        // Detect basemap tile/resource loading errors
+        const isTileError =
+          errorMessage.includes('tile') ||
+          errorMessage.includes('sprite') ||
+          errorMessage.includes('glyph') ||
+          errorMessage.includes('style');
+        const isNetworkError =
+          errorMessage.includes('network') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('fetch');
+        const isCORSError = errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin');
+
+        if (isWMSError && !isTileError) {
+          setWmsWarning(prev => prev ?? 'Hazard layer unavailable. Check THREDDS connectivity.');
+          return;
+        }
+
+        if (isStyleDiffWarning || isFileSystemWarning) {
+          // Silently ignore - these are expected warnings that don't affect functionality
+          return;
+        }
+
+        // NEW: Specifically handle JSON parsing errors which often indicate a 404 HTML page was returned
+        const isJsonParseError = errorMessage.includes('not valid JSON');
+        if (isJsonParseError) {
+          debugLogger.error('Basemap JSON parse error', 'map-initialization', errorContext);
+          setBasemapError(
+            'A map resource (e.g., style, fonts) failed to load. The server may have returned an error page. Please check the basemap URL or your network connection.'
+          );
+          // Don't show the generic console.error for this case
+          return;
+        }
+
+        // Critical basemap errors - notify user
+        if (isTileError || isNetworkError || isCORSError) {
+          tileErrorCountRef.current += 1;
+          const basemapErrorDetails = {
+            ...errorContext,
+            errorCount: tileErrorCountRef.current,
+          };
+
+          // A single missing external tile is usually transient and self-recovers.
+          // Keep it visible in dev tools without surfacing it as a hard runtime error.
+          if (tileErrorCountRef.current < 3) {
+            debugLogger.warn(
+              'Transient basemap fetch failure',
+              'map-initialization',
+              basemapErrorDetails
+            );
+            return;
+          }
+
+          debugLogger.error(
+            'Basemap error threshold exceeded',
+            'map-initialization',
+            basemapErrorDetails
+          );
+
+          // Show error to user after multiple failures
+          if (tileErrorCountRef.current >= 3) {
+            let errorMsg = 'Basemap tiles failed to load. ';
+            if (isCORSError) {
+              errorMsg += 'CORS configuration issue detected.';
+            } else if (isNetworkError) {
+              errorMsg += 'Check your internet connection.';
+            } else {
+              errorMsg += 'Please try switching to a different basemap.';
+            }
+            setBasemapError(errorMsg);
+          }
+          return;
+        }
+
+        // Log other critical errors
+        if (e?.error) {
+          logger.error('Map error:', e.error.message || e.error);
+        } else if (e && typeof e === 'object' && 'sourceId' in e) {
+          logger.error(`Map source error (${(e as any).sourceId}):`, e);
+        } else {
+          logger.warn('Map warning:', e);
+        }
+      });
+
+      instance.on('sourcedataloading', e => {
+        if (e.sourceId && e.sourceId.includes('riskscape')) {
+          logger.log(`Loading RiskScape layer: ${e.sourceId}`);
+        }
+      });
+    },
+    [onMapReady]
+  );
+
+  const createMapInstance = useCallback(
+    ({
+      styleUrl,
+      center,
+      zoom,
+      bearing,
+      pitch,
+    }: {
+      styleUrl: string | StyleSpecification;
+      center: [number, number];
+      zoom: number;
+      bearing?: number;
+      pitch?: number;
+    }) => {
+      if (!mapContainer.current) return;
+
+      // Defensive check to prevent maplibre from crashing on invalid center coordinates.
+      const safeCenter: [number, number] =
+        Array.isArray(center) &&
+        center.length === 2 &&
+        Number.isFinite(center[0]) &&
+        Number.isFinite(center[1])
+          ? center
+          : [175.0, -18.0]; // A safe fallback.
+
+      if (safeCenter !== center) {
+        logger.error('MapView: Invalid center provided, falling back to default.', { center });
+      }
+
+      // Validate zoom parameter
+      const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 5;
+      if (safeZoom !== zoom) {
+        logger.error('MapView: Invalid zoom provided, falling back to 5.', { zoom });
+      }
+
+      // Validate bearing and pitch
+      const safeBearing = Number.isFinite(bearing) ? bearing : 0;
+      const safePitch = Number.isFinite(pitch) ? pitch : 0;
+
+      const instance = new maplibregl.Map({
+        container: mapContainer.current,
+        style: styleUrl,
+        center: safeCenter,
+        zoom: safeZoom,
+        bearing: safeBearing,
+        pitch: safePitch,
+        canvasContextAttributes: { preserveDrawingBuffer: true },
+        maxTileCacheSize: 100,
+        transformRequest: (url, resourceType) => {
+          if (resourceType === 'Tile' || resourceType === 'Source') {
+            debugLogger.debug(`Loading ${resourceType}: ${url}`);
+            return {
+              url,
+              credentials: 'same-origin',
+            };
+          }
+          return { url };
+        },
+      });
+
+      map.current = instance;
+      setMapInstance(instance);
+      attachMapEventHandlers(instance, styleUrl, safeCenter, safeZoom);
+    },
+    [attachMapEventHandlers]
+  );
+
+  const getFallbackCenter = useCallback((): [number, number] => {
+    // Guard against undefined COUNTRIES object or invalid country code
+    if (!selectedCountry || !COUNTRIES || !COUNTRIES[selectedCountry]) {
+      if (selectedCountry && !COUNTRIES[selectedCountry]) {
+        logger.warn('MapView: Invalid selectedCountry value:', selectedCountry);
+      }
+      return [175.0, -18.0];
+    }
+
+    const countryData = COUNTRIES[selectedCountry];
+    const center = countryData?.center;
+
+    if (
+      Array.isArray(center) &&
+      center.length === 2 &&
+      Number.isFinite(center[0]) &&
+      Number.isFinite(center[1])
+    ) {
+      return [center[0], center[1]];
+    }
+
+    logger.warn('MapView: Country data has invalid center:', {
+      selectedCountry,
+      center,
+    });
+    return [175.0, -18.0];
+  }, [selectedCountry]);
+
   // Initialize map
   useEffect(() => {
     if (map.current) return;
 
-    // Use selected country's center if available, otherwise show Pacific region view
-    const initialCenter: [number, number] = selectedCountry
-      ? COUNTRIES[selectedCountry].center
-      : [175.0, -18.0]; // Central Pacific - shows all island nations
-    const initialZoom = selectedCountry ? COUNTRIES[selectedCountry].zoom : 5; // Zoomed out to see all countries
+    // Safely get country center, with fallback if country is invalid
+    const countryData = selectedCountry && COUNTRIES ? COUNTRIES[selectedCountry] : null;
+    let initialCenter = getFallbackCenter();
+    let initialZoom = countryData?.zoom ?? 5;
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current!,
-      style: basemapStyle,
-      center: initialCenter,
+    // Final safety check: ensure we have valid finite numbers
+    if (
+      !Array.isArray(initialCenter) ||
+      initialCenter.length !== 2 ||
+      !Number.isFinite(initialCenter[0]) ||
+      !Number.isFinite(initialCenter[1])
+    ) {
+      logger.error('MapView: Invalid initialCenter detected, using hardcoded fallback', {
+        initialCenter,
+        selectedCountry,
+      });
+      initialCenter = [175.0, -18.0];
+    }
+
+    if (!Number.isFinite(initialZoom) || initialZoom <= 0) {
+      logger.error('MapView: Invalid initialZoom detected, using fallback', {
+        initialZoom,
+        selectedCountry,
+      });
+      initialZoom = 5;
+    }
+
+    createMapInstance({
+      styleUrl: basemapStyle,
+      center: initialCenter as [number, number],
       zoom: initialZoom,
-      canvasContextAttributes: { preserveDrawingBuffer: true },
-      maxTileCacheSize: 100, // Limit cache for better memory management
-      transformRequest: (url, resourceType) => {
-        // Enhanced tile request handling with credentials
-        if (resourceType === 'Tile' || resourceType === 'Source') {
-          debugLogger.debug(`Loading ${resourceType}: ${url}`);
-
-          // Add credentials for same-origin requests
-          return {
-            url,
-            credentials: 'same-origin',
-          };
-        }
-        return { url };
-      },
-    });
-
-    // Log map initialization
-    debugLogger.info('Map initialized', 'map-initialization', {
-      center: initialCenter,
-      zoom: initialZoom,
-      style: basemapStyle,
-    });
-
-    onMapReady?.(map.current);
-
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.current.addControl(new maplibregl.ScaleControl(), 'bottom-left');
-
-    map.current.on('load', () => {
-      setMapLoaded(true);
-    });
-
-    map.current.on('error', (e: any) => {
-      // Suppress expected WMS/THREDDS network errors (external server issues are common)
-      const errorMessage = e?.error?.message || String(e?.error || e);
-      const isWMSError =
-        errorMessage.includes('thredds') ||
-        errorMessage.includes('WMS') ||
-        errorMessage.includes('Failed to fetch');
-
-      // Suppress style diff and filesystem warnings (non-critical MapLibre internal warnings)
-      const isStyleDiffWarning =
-        errorMessage.includes('style diff') || errorMessage.includes('setState');
-      const isFileSystemWarning =
-        errorMessage.includes('filesystem') || errorMessage.includes('illegal path');
-
-      // Detect basemap tile/resource loading errors
-      const isTileError =
-        errorMessage.includes('tile') ||
-        errorMessage.includes('sprite') ||
-        errorMessage.includes('glyph') ||
-        errorMessage.includes('style');
-      const isNetworkError =
-        errorMessage.includes('network') ||
-        errorMessage.includes('NetworkError') ||
-        errorMessage.includes('fetch');
-      const isCORSError = errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin');
-
-      if (isWMSError && !isTileError) {
-        setWmsWarning(prev => prev ?? 'Hazard layer unavailable. Check THREDDS connectivity.');
-        return;
-      }
-
-      if (isStyleDiffWarning || isFileSystemWarning) {
-        // Silently ignore - these are expected warnings that don't affect functionality
-        return;
-      }
-
-      // Critical basemap errors - notify user
-      if (isTileError || isNetworkError || isCORSError) {
-        tileErrorCountRef.current += 1;
-        // Log only via debugLogger to avoid duplicate console output
-        debugLogger.error('Basemap error', 'map-initialization', {
-          error: errorMessage,
-          errorCount: tileErrorCountRef.current,
-          url: e?.sourceId || 'unknown',
-        });
-
-        // Show error to user after multiple failures
-        if (tileErrorCountRef.current >= 3) {
-          let errorMsg = 'Basemap tiles failed to load. ';
-          if (isCORSError) {
-            errorMsg += 'CORS configuration issue detected.';
-          } else if (isNetworkError) {
-            errorMsg += 'Check your internet connection.';
-          } else {
-            errorMsg += 'Please try switching to a different basemap.';
-          }
-          setBasemapError(errorMsg);
-        }
-        return;
-      }
-
-      // Log other critical errors
-      if (e?.error) {
-        console.error('Map error:', e.error.message || e.error);
-      } else if (e && typeof e === 'object' && 'sourceId' in e) {
-        console.error(`Map source error (${(e as any).sourceId}):`, e);
-      } else {
-        console.warn('Map warning:', e);
-      }
-    });
-
-    // Handle tile loading errors gracefully
-    map.current.on('sourcedataloading', e => {
-      if (e.sourceId && e.sourceId.includes('riskscape')) {
-        console.log(`Loading RiskScape layer: ${e.sourceId}`);
-      }
     });
 
     return () => {
       if (map.current) {
         map.current.remove();
         map.current = null;
+        setMapInstance(null);
       }
     };
-    // Map instance must be created once; country updates are handled by flyTo below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [basemapStyle, createMapInstance, getFallbackCenter, selectedCountry]);
 
   // Handle country-based map positioning when real data is enabled
   useEffect(() => {
     if (!map.current || !mapLoaded || !selectedCountry) return;
+    if (skipNextCountryFlyToRef.current) {
+      skipNextCountryFlyToRef.current = false;
+      return;
+    }
 
     const country = COUNTRIES[selectedCountry];
     if (country) {
@@ -506,79 +668,66 @@ export default function MapView({
     return () => window.clearTimeout(id);
   }, [wmsWarning]);
 
-  // Handle basemap style changes with error handling and attempt tracking
+  // Recreate the map on basemap change to avoid flaky style swap behavior.
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
-    const requestId = basemapRequestIdRef.current + 1;
-    basemapRequestIdRef.current = requestId;
 
-    if (pendingStyleLoadHandlerRef.current) {
-      map.current.off('style.load', pendingStyleLoadHandlerRef.current);
-      pendingStyleLoadHandlerRef.current = null;
-    }
+    // Compare basemap styles - handle both string URLs and style objects
+    const isSameBasemap =
+      appliedBasemapStyleRef.current === basemapStyle ||
+      (typeof appliedBasemapStyleRef.current === 'object' &&
+        typeof basemapStyle === 'object' &&
+        JSON.stringify(appliedBasemapStyleRef.current) === JSON.stringify(basemapStyle));
 
-    // Reset error counters on style change
+    if (isSameBasemap) return;
+
+    logger.log('[Basemap] Recreating map for basemap change', {
+      from:
+        typeof appliedBasemapStyleRef.current === 'string'
+          ? appliedBasemapStyleRef.current
+          : (appliedBasemapStyleRef.current as any)?.name || 'custom',
+      to: typeof basemapStyle === 'string' ? basemapStyle : (basemapStyle as any)?.name || 'custom',
+    });
+
     tileErrorCountRef.current = 0;
     setBasemapError(null);
     styleLoadAttemptsRef.current = 0;
 
-    const applyBasemapStyle = () => {
-      if (!map.current) return;
-      styleLoadAttemptsRef.current += 1;
+    const currentCenter = map.current.getCenter();
+    const safeCenter: [number, number] =
+      Number.isFinite(currentCenter.lng) && Number.isFinite(currentCenter.lat)
+        ? [currentCenter.lng, currentCenter.lat]
+        : getFallbackCenter();
+    const currentZoom = map.current.getZoom();
+    const countryData = selectedCountry ? COUNTRIES[selectedCountry] : null;
+    const safeZoom = Number.isFinite(currentZoom) ? currentZoom : (countryData?.zoom ?? 5);
+    const currentBearing = map.current.getBearing();
+    const safeBearing = Number.isFinite(currentBearing) ? currentBearing : 0;
+    const currentPitch = map.current.getPitch();
+    const safePitch = Number.isFinite(currentPitch) ? currentPitch : 0;
 
-      try {
-        // Store current center and zoom to restore after style change
-        const center = map.current.getCenter();
-        const zoom = map.current.getZoom();
-
-        console.log(
-          `Applying basemap style (attempt ${styleLoadAttemptsRef.current}):`,
-          basemapStyle
-        );
-        map.current.setStyle(basemapStyle, { diff: false });
-
-        const handleStyleLoad = () => {
-          if (!map.current) return;
-          if (basemapRequestIdRef.current !== requestId) return;
-
-          console.log('Basemap style loaded successfully');
-          styleLoadAttemptsRef.current = 0;
-          tileErrorCountRef.current = 0;
-
-          // Restore position
-          map.current.setCenter(center);
-          map.current.setZoom(zoom);
-
-          // Increment counter to trigger district layers effect
-          setStyleChangeCounter(prev => prev + 1);
-        };
-
-        pendingStyleLoadHandlerRef.current = handleStyleLoad;
-        map.current.once('style.load', handleStyleLoad);
-      } catch (e) {
-        // Silently handle - basemap changes are non-critical
-      }
-    };
-
-    // Only change style if the current style is fully loaded; otherwise,
-    // wait for the current style to finish loading and then apply.
-    if (!map.current.isStyleLoaded()) {
-      const handleStyleLoad = () => {
-        if (!map.current || !map.current.isStyleLoaded()) return;
-        if (basemapRequestIdRef.current !== requestId) return;
-        applyBasemapStyle();
-      };
-
-      pendingStyleLoadHandlerRef.current = handleStyleLoad;
-      map.current.once('style.load', handleStyleLoad);
-
-      return () => {
-        map.current?.off('style.load', handleStyleLoad);
-      };
+    if (safeCenter[0] !== currentCenter.lng || safeCenter[1] !== currentCenter.lat) {
+      logger.error('MapView: Invalid current center during basemap recreation, using fallback.', {
+        currentCenter,
+        safeCenter,
+      });
     }
 
-    applyBasemapStyle();
-  }, [basemapStyle, mapLoaded]);
+    skipNextCountryFlyToRef.current = true;
+    setMapLoaded(false);
+    map.current.remove();
+    map.current = null;
+    setMapInstance(null);
+
+    createMapInstance({
+      styleUrl: basemapStyle,
+      center: safeCenter,
+      zoom: safeZoom,
+      bearing: safeBearing,
+      pitch: safePitch,
+    });
+    setStyleChangeCounter(prev => prev + 1);
+  }, [basemapStyle, mapLoaded, createMapInstance, getFallbackCenter, selectedCountry]);
 
   // Apply 2D/3D camera and best-effort basemap building extrusions.
   useEffect(() => {
@@ -730,71 +879,88 @@ export default function MapView({
     const districtOutlineWidthExpression = createDistrictOutlineWidthExpression();
 
     const addDistrictLayers = () => {
-      // Add source for district polygons if not exists
-      if (!m.getSource(DISTRICTS_SOURCE_ID)) {
-        m.addSource(DISTRICTS_SOURCE_ID, {
-          type: 'geojson',
-          data: districtsGeoJSON as GeoJSON.FeatureCollection,
-          promoteId: 'id', // Required for feature state
-        });
+      logger.log(
+        '[Districts] Adding district layers (styleChangeCounter:',
+        styleChangeCounter,
+        ')'
+      );
 
-        // Find first symbol layer for proper z-ordering
-        // District polygons should render BELOW roads, buildings, and cyclone layers
-        // but ABOVE the basemap
-        const layers = m.getStyle()?.layers || [];
-        const firstSymbolLayer = layers.find(layer => layer.type === 'symbol');
-        const beforeId = firstSymbolLayer?.id;
-
-        // Add fill layer for districts with scale-dependent opacity
-        m.addLayer(
-          {
-            id: DISTRICTS_FILL_LAYER_ID,
-            type: 'fill',
-            source: DISTRICTS_SOURCE_ID,
-            paint: {
-              'fill-color': hazardColorExpression,
-              'fill-opacity': createScaleDependentOpacity(LAYER_OPACITY.district.fill),
-              'fill-opacity-transition': { duration: 300 },
-            },
-          },
-          beforeId
-        );
-
-        // Add outline layer for clean borders
-        m.addLayer(
-          {
-            id: DISTRICTS_OUTLINE_LAYER_ID,
-            type: 'line',
-            source: DISTRICTS_SOURCE_ID,
-            paint: {
-              'line-color': districtOutlineColorExpression,
-              'line-width': districtOutlineWidthExpression,
-              'line-opacity': LAYER_OPACITY.district.outline,
-            },
-          },
-          beforeId
-        );
-
-        // Add hover highlight layer (initially invisible)
-        m.addLayer(
-          {
-            id: DISTRICTS_HOVER_LAYER_ID,
-            type: 'fill',
-            source: DISTRICTS_SOURCE_ID,
-            paint: {
-              'fill-color': '#ffffff',
-              'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0],
-            },
-          },
-          beforeId
-        );
+      // Remove existing layers and source if they exist (handles both initial load and basemap changes)
+      try {
+        if (m.getLayer(DISTRICTS_HOVER_LAYER_ID)) m.removeLayer(DISTRICTS_HOVER_LAYER_ID);
+        if (m.getLayer(DISTRICTS_OUTLINE_LAYER_ID)) m.removeLayer(DISTRICTS_OUTLINE_LAYER_ID);
+        if (m.getLayer(DISTRICTS_FILL_LAYER_ID)) m.removeLayer(DISTRICTS_FILL_LAYER_ID);
+        if (m.getSource(DISTRICTS_SOURCE_ID)) m.removeSource(DISTRICTS_SOURCE_ID);
+      } catch (e) {
+        logger.warn('[Districts] Cleanup error (expected on first load):', e);
       }
+
+      // Add source for district polygons
+      m.addSource(DISTRICTS_SOURCE_ID, {
+        type: 'geojson',
+        data: districtsGeoJSON as GeoJSON.FeatureCollection,
+        promoteId: 'id', // Required for feature state
+      });
+
+      // Find first symbol layer for proper z-ordering
+      // District polygons should render BELOW roads, buildings, and cyclone layers
+      // but ABOVE the basemap
+      const layers = m.getStyle()?.layers || [];
+      const firstSymbolLayer = layers.find(layer => layer.type === 'symbol');
+      const beforeId = firstSymbolLayer?.id;
+
+      // Add fill layer for districts with scale-dependent opacity
+      m.addLayer(
+        {
+          id: DISTRICTS_FILL_LAYER_ID,
+          type: 'fill',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'fill-color': hazardColorExpression,
+            'fill-opacity': createScaleDependentOpacity(LAYER_OPACITY.district.fill),
+            'fill-opacity-transition': { duration: 300 },
+          },
+        },
+        beforeId
+      );
+
+      // Add outline layer for clean borders
+      m.addLayer(
+        {
+          id: DISTRICTS_OUTLINE_LAYER_ID,
+          type: 'line',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'line-color': districtOutlineColorExpression,
+            'line-width': districtOutlineWidthExpression,
+            'line-opacity': LAYER_OPACITY.district.outline,
+          },
+        },
+        beforeId
+      );
+
+      // Add hover highlight layer (initially invisible)
+      m.addLayer(
+        {
+          id: DISTRICTS_HOVER_LAYER_ID,
+          type: 'fill',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'fill-color': '#ffffff',
+            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0],
+          },
+        },
+        beforeId
+      );
+
+      logger.log('[Districts] District layers added successfully');
     };
 
     // If style already loaded, add layers immediately, otherwise wait for style.load
     if (m.isStyleLoaded && m.isStyleLoaded()) {
       addDistrictLayers();
     } else {
+      logger.log('[Districts] Waiting for style.load event');
       m.once('style.load', addDistrictLayers);
     }
   }, [mapLoaded, styleChangeCounter]); // Re-run when style changes
@@ -807,6 +973,8 @@ export default function MapView({
     let rafId = 0;
 
     const ensureRegionalExtrusionLayer = () => {
+      // Guard against stale map references after map recreation
+      if (!m || !m.getStyle() || !m.isStyleLoaded()) return;
       if (!m.getSource(REGIONAL_IMPACTS_SOURCE_ID)) return;
 
       const beforeId = m.getStyle()?.layers?.find(layer => layer.type === 'symbol')?.id;
@@ -838,6 +1006,9 @@ export default function MapView({
     };
 
     const applyRegionalExtrusion = () => {
+      // Guard against stale map references after map recreation
+      if (!m || !m.getStyle() || !m.isStyleLoaded()) return;
+
       ensureRegionalExtrusionLayer();
       if (!m.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) return;
 
@@ -913,6 +1084,8 @@ export default function MapView({
     };
 
     const scheduleRegionalExtrusionUpdate = () => {
+      // Guard against scheduling updates after map has been destroyed
+      if (!m || !m.getStyle()) return;
       if (rafId) return;
       rafId = window.requestAnimationFrame(() => {
         rafId = 0;
@@ -920,7 +1093,10 @@ export default function MapView({
       });
     };
 
-    scheduleRegionalExtrusionUpdate();
+    // Only schedule initial update if style is loaded
+    if (m.isStyleLoaded()) {
+      scheduleRegionalExtrusionUpdate();
+    }
 
     m.on('styledata', scheduleRegionalExtrusionUpdate);
     m.on('sourcedata', scheduleRegionalExtrusionUpdate);
@@ -1136,9 +1312,9 @@ export default function MapView({
         </div>
       )}
 
-      {showOverlays && showCycloneAnimation && storyMode && map.current && (
+      {showOverlays && showCycloneAnimation && storyMode && mapInstance && (
         <CycloneStoryOverlay
-          map={map.current}
+          map={mapInstance}
           forecastTrack={cycloneForecast ?? null}
           storyBeats={storyBeats}
           currentIndex={currentCycloneIndex}
@@ -1150,18 +1326,17 @@ export default function MapView({
       {/* Map Title Overlay */}
       {/* MapTitleOverlay removed - info now in UnifiedMapLegend and top controls */}
       {/* Real Data Layers */}
-      {map.current && (
+      {mapInstance && (
         <>
           <RealDataLayers
             key={`real-data-${basemapStyle}-${styleChangeCounter}`}
-            map={map.current}
+            map={mapInstance}
             countryCode={selectedCountry}
             visible={true}
-            // Show static cyclone track by default; hide it only when animated cyclone
-            // forecast is actively visible to avoid duplicate lines.
-            showCycloneTrack={
-              !showCycloneAnimation || !cycloneForecast || cycloneForecast.length === 0
-            }
+            cycloneTrackData={cycloneTrackData}
+            // Render static track whenever it exists and animated forecast is unavailable.
+            // When animated forecast is present, CycloneAnimationLayer owns track rendering.
+            showCycloneTrack={hasStaticCycloneTrack && !hasAnimatedCycloneForecast}
             mapStyle={mapStyle}
             basemapStyle={basemapStyle}
             styleChangeCounter={styleChangeCounter}
@@ -1171,35 +1346,39 @@ export default function MapView({
             onLoadingChange={onLayersLoadingChange}
             onActiveLayersChange={onActiveWmsLayersChange}
             layerOpacityScale={layerOpacity}
+            legendSettings={legendSettings}
           />
           <RegionalImpactsLayer
             key={`regional-impacts-${basemapStyle}-${styleChangeCounter}`}
-            map={map.current}
+            map={mapInstance}
             visible={true}
             mapStyle={mapStyle}
             styleChangeCounter={styleChangeCounter}
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
             countryCode={selectedCountry}
+            legendSettings={legendSettings}
             layerOpacityScale={layerOpacity}
           />
           <DamagedBuildingsLayer
             key={`damaged-buildings-${basemapStyle}-${styleChangeCounter}`}
-            map={map.current}
+            map={mapInstance}
             data={damagedBuildings ?? null}
+            thresholds={legendSettings?.buildings}
             visible={!!damagedBuildings}
             styleChangeCounter={styleChangeCounter}
           />
           <DamagedRoadsLayer
             key={`damaged-roads-${basemapStyle}-${styleChangeCounter}`}
-            map={map.current}
+            map={mapInstance}
+            thresholds={legendSettings?.roads}
             data={damagedRoads ?? null}
             visible={!!damagedRoads}
             styleChangeCounter={styleChangeCounter}
           />
-          {cycloneForecast && cycloneForecast.length > 0 && (
+          {hasAnimatedCycloneForecast && (
             <CycloneAnimationLayer
-              map={map.current}
+              map={mapInstance}
               forecastTrack={cycloneForecast}
               isVisible={showCycloneAnimation}
               uiVisible={showOverlays && showCycloneAnimation}
@@ -1229,7 +1408,7 @@ export default function MapView({
       /> */}
 
       {/* Cyclone Animation Toggle Button */}
-      {cycloneForecast && showOverlays && showCycloneToggle && (
+      {hasAnimatedCycloneForecast && showOverlays && showCycloneToggle && (
         <CycloneAnimationToggle
           isVisible={showCycloneAnimation}
           isPlaying={isAnimationPlaying}

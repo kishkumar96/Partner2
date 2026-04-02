@@ -112,6 +112,9 @@ export async function loadData<T>(
 
         const response = await fetch(fullUrl, {
           signal: controller.signal,
+          // Keep freshness at the HTTP layer; the utility's own in-memory cache
+          // already handles dedupe/reuse within the current app session.
+          cache: 'no-store',
         });
 
         clearTimeout(timeoutId);
@@ -208,6 +211,8 @@ export async function loadTextData(
 
         const response = await fetch(fullUrl, {
           signal: controller.signal,
+          // Avoid stale CSV/text responses being served from the browser cache.
+          cache: 'no-store',
         });
 
         clearTimeout(timeoutId);

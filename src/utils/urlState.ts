@@ -8,6 +8,8 @@
  * /vanuatu?lat=-17.7&lng=168.3&zoom=10&hazards=cyclone&layers=buildings,roads
  */
 
+import { BASEMAP_STYLES, DEFAULT_BASEMAP_STYLE } from '@/utils/basemaps';
+
 /**
  * Map state that can be persisted in URL
  */
@@ -139,18 +141,16 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
 
 function encodeBasemapUrl(url: string): string {
   const shortcuts: Record<string, string> = {
-    'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json': 'positron',
-    'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json': 'dark',
-    'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json': 'voyager',
+    [BASEMAP_STYLES.positron]: 'positron',
+    [BASEMAP_STYLES.dark]: 'dark',
   };
   return shortcuts[url] || encodeURIComponent(url);
 }
 
 function decodeBasemapUrl(encoded: string): string {
   const shortcuts: Record<string, string> = {
-    positron: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-    dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    voyager: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+    positron: BASEMAP_STYLES.positron,
+    dark: BASEMAP_STYLES.dark,
   };
   return shortcuts[encoded] || decodeURIComponent(encoded);
 }

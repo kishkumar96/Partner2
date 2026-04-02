@@ -5,6 +5,12 @@
  * Gracefully handles cases where localStorage is unavailable (SSR, private browsing).
  */
 
+import {
+  DEFAULT_BASEMAP_STYLE,
+  isSupportedBasemapStyle,
+  normalizeBasemapStyle,
+} from '@/utils/basemaps';
+
 const STORAGE_KEYS = {
   BASEMAP_PREFERENCE_SET: 'basemap-preference-set',
   PREFERRED_BASEMAP: 'preferred-basemap',
@@ -46,7 +52,15 @@ export function getPreferredBasemap(): string | null {
   if (!isLocalStorageAvailable()) return null;
 
   try {
-    return localStorage.getItem(STORAGE_KEYS.PREFERRED_BASEMAP);
+    const savedBasemap = localStorage.getItem(STORAGE_KEYS.PREFERRED_BASEMAP);
+    if (!savedBasemap) return null;
+
+    if (!isSupportedBasemapStyle(savedBasemap)) {
+      localStorage.removeItem(STORAGE_KEYS.PREFERRED_BASEMAP);
+      return null;
+    }
+
+    return savedBasemap;
   } catch {
     return null;
   }
@@ -59,8 +73,9 @@ export function saveBasemapPreference(basemapStyle: string): void {
   if (!isLocalStorageAvailable()) return;
 
   try {
+    const normalizedBasemap = normalizeBasemapStyle(basemapStyle);
     localStorage.setItem(STORAGE_KEYS.BASEMAP_PREFERENCE_SET, 'true');
-    localStorage.setItem(STORAGE_KEYS.PREFERRED_BASEMAP, basemapStyle);
+    localStorage.setItem(STORAGE_KEYS.PREFERRED_BASEMAP, normalizedBasemap);
   } catch (error) {
     console.warn('Failed to save basemap preference:', error);
   }
@@ -89,11 +104,9 @@ export function resetBasemapPreference(): void {
  * 3. Default (Light basemap)
  */
 export function getInitialBasemap(urlBasemap?: string): string {
-  const defaultBasemap = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
-
   // URL state has highest priority (for shareable links)
   if (urlBasemap) {
-    return urlBasemap;
+    return normalizeBasemapStyle(urlBasemap);
   }
 
   // Check localStorage preference
@@ -103,5 +116,5 @@ export function getInitialBasemap(urlBasemap?: string): string {
   }
 
   // Fall back to default
-  return defaultBasemap;
+  return DEFAULT_BASEMAP_STYLE;
 }

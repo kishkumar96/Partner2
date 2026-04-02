@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Users, DollarSign, AlertTriangle, ChevronRight } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { AggregatedEventData } from '@/types';
@@ -20,7 +21,13 @@ interface TopInsightsCardsProps {
   className?: string;
 }
 
-export default function TopInsightsCards({ insights, className = '' }: TopInsightsCardsProps) {
+const TopInsightsCards = memo(function TopInsightsCards({
+  insights,
+  className = '',
+}: TopInsightsCardsProps) {
+  // Temporarily disabled.
+  return null;
+
   if (insights.length === 0) return null;
 
   return (
@@ -100,7 +107,7 @@ export default function TopInsightsCards({ insights, className = '' }: TopInsigh
       })}
     </div>
   );
-}
+});
 
 // Utility function to create top insights from district data
 export function createDistrictInsights(
@@ -177,3 +184,5 @@ export function createDistrictInsights(
 
   return insights;
 }
+
+export default TopInsightsCards;

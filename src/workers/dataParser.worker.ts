@@ -3,6 +3,12 @@
  * Prevents main thread blocking when parsing 35MB+ files
  */
 
+// Simple dev-only logging for workers
+const isDev = process.env.NODE_ENV === 'development';
+const workerLog = (...args: any[]) => {
+  if (isDev) console.log(...args);
+};
+
 interface WorkerMessage {
   type: 'parse' | 'parseGeoJSON' | 'filter';
   data: string;
@@ -61,7 +67,7 @@ function handleParse(jsonString: string, id: string): void {
   const result = JSON.parse(jsonString);
   const parseTime = performance.now() - startTime;
 
-  console.log(`Worker: Parsed JSON in ${parseTime.toFixed(0)}ms`);
+  workerLog(`Worker: Parsed JSON in ${parseTime.toFixed(0)}ms`);
 
   sendProgress(id, 100);
   sendSuccess(id, result);
@@ -88,11 +94,11 @@ function handleParseGeoJSON(jsonString: string, id: string, filter?: any): void 
       return matchesFilter(feature.properties, filter);
     });
 
-    console.log(`Worker: Filtered ${originalCount} -> ${geojson.features.length} features`);
+    workerLog(`Worker: Filtered ${originalCount} -> ${geojson.features.length} features`);
   }
 
   const parseTime = performance.now() - startTime;
-  console.log(`Worker: Parsed GeoJSON in ${parseTime.toFixed(0)}ms`);
+  workerLog(`Worker: Parsed GeoJSON in ${parseTime.toFixed(0)}ms`);
 
   sendProgress(id, 100);
   sendSuccess(id, geojson);
@@ -118,17 +124,17 @@ function handleFilter(data: any, id: string, filter: any): void {
       }),
     };
 
-    console.log(`Worker: Filtered ${originalCount} -> ${result.features.length} features`);
+    workerLog(`Worker: Filtered ${originalCount} -> ${result.features.length} features`);
   } else if (Array.isArray(data)) {
     // Array filtering
     const originalCount = data.length;
     result = data.filter((item: any) => matchesFilter(item, filter));
 
-    console.log(`Worker: Filtered ${originalCount} -> ${result.length} items`);
+    workerLog(`Worker: Filtered ${originalCount} -> ${result.length} items`);
   }
 
   const filterTime = performance.now() - startTime;
-  console.log(`Worker: Filtered in ${filterTime.toFixed(0)}ms`);
+  workerLog(`Worker: Filtered in ${filterTime.toFixed(0)}ms`);
 
   sendProgress(id, 100);
   sendSuccess(id, result);

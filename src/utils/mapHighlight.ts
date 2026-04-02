@@ -6,6 +6,7 @@
  */
 
 import { Map as MapLibreMap } from 'maplibre-gl';
+import { logger } from '@/utils/logger';
 
 export interface HighlightOptions {
   duration?: number; // Animation duration in ms (default: 2000)
@@ -104,7 +105,7 @@ export function highlightPoint(
     // Start animation
     animationFrame = requestAnimationFrame(animate);
   } catch (error) {
-    console.warn('Failed to create highlight animation:', error);
+    logger.warn('Failed to create highlight animation:', error);
   }
 
   // Cleanup function
@@ -198,7 +199,7 @@ export function highlightLine(
 
     animationFrame = requestAnimationFrame(animate);
   } catch (error) {
-    console.warn('Failed to create line highlight:', error);
+    logger.warn('Failed to create line highlight:', error);
   }
 
   const cleanup = () => {
@@ -311,7 +312,7 @@ export function highlightPolygon(
 
     animationFrame = requestAnimationFrame(animate);
   } catch (error) {
-    console.warn('Failed to create polygon highlight:', error);
+    logger.warn('Failed to create polygon highlight:', error);
   }
 
   const cleanup = () => {
@@ -379,6 +380,6 @@ export function highlightFeature(
     );
   }
 
-  console.warn('Unsupported geometry type for highlight:', geometry.type);
+  logger.warn('Unsupported geometry type for highlight:', geometry.type);
   return () => {}; // No-op cleanup
 }

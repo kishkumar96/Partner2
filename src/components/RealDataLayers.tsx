@@ -129,7 +129,7 @@ interface RealDataLayersProps {
   countryCode: CountryCode | null; // Allow null to load all countries
   visible: boolean;
   mapStyle?: 'loss' | 'wind';
-  basemapStyle?: string;
+  basemapStyle?: string | Record<string, any>;
   styleChangeCounter?: number; // Used to trigger re-render when basemap changes
   filters?: FilterState;
   showWindLayer?: boolean;
@@ -139,6 +139,8 @@ interface RealDataLayersProps {
   /** 0–100 scale applied to all raster layer opacities */
   layerOpacityScale?: number;
   showCycloneTrack?: boolean;
+  cycloneTrackData?: GeoJSON.FeatureCollection | null;
+  legendSettings?: any;
 }
 
 export default function RealDataLayers({
@@ -155,6 +157,8 @@ export default function RealDataLayers({
   onActiveLayersChange,
   layerOpacityScale = 70,
   showCycloneTrack = true,
+  cycloneTrackData = null,
+  legendSettings,
 }: RealDataLayersProps) {
   const loadingStateRef = useRef<{
     cycloneTracks: boolean;
@@ -310,24 +314,36 @@ export default function RealDataLayers({
           return;
         }
 
-        // Load forecast data first so we can synthesize a track if GeoJSON is empty.
-        const forecastData = forecastFile ? await loadCycloneForecastTrack({ forecastFile }) : null;
-        const fallbackTrack =
-          forecastData &&
-          typeof buildCycloneTrackFromForecastPoints === 'function' &&
-          Array.isArray(forecastData) &&
-          forecastData.length > 0
-            ? buildCycloneTrackFromForecastPoints(forecastData)
-            : null;
-
-        // Load from public directory using dataLoader (handles basePath)
-        const geojson = await loadCycloneTrackData({ trackFile });
-        const hasGeojsonFeatures = Boolean(
-          geojson &&
-          Array.isArray((geojson as any).features) &&
-          (geojson as any).features.length > 0
+        const hasExternalTrack = Boolean(
+          cycloneTrackData &&
+          Array.isArray((cycloneTrackData as any).features) &&
+          (cycloneTrackData as any).features.length > 0
         );
-        const effectiveTrackGeojson = hasGeojsonFeatures ? geojson : fallbackTrack;
+
+        let forecastData = null;
+        let effectiveTrackGeojson = hasExternalTrack ? cycloneTrackData : null;
+
+        if (!effectiveTrackGeojson) {
+          // Load forecast data first so we can synthesize a track if GeoJSON is empty.
+          forecastData = forecastFile ? await loadCycloneForecastTrack({ forecastFile }) : null;
+          const fallbackTrack =
+            forecastData &&
+            typeof buildCycloneTrackFromForecastPoints === 'function' &&
+            Array.isArray(forecastData) &&
+            forecastData.length > 0
+              ? buildCycloneTrackFromForecastPoints(forecastData)
+              : null;
+
+          // Load from public directory using dataLoader (handles basePath)
+          const geojson = await loadCycloneTrackData({ trackFile });
+          const hasGeojsonFeatures = Boolean(
+            geojson &&
+            Array.isArray((geojson as any).features) &&
+            (geojson as any).features.length > 0
+          );
+          effectiveTrackGeojson = hasGeojsonFeatures ? geojson : fallbackTrack;
+        }
+
         if (!effectiveTrackGeojson) {
           console.warn('Could not load cyclone track data');
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
@@ -337,7 +353,8 @@ export default function RealDataLayers({
         const sourceId = 'cyclone-tracks-real';
         const layerId = 'cyclone-tracks-layer-real';
 
-        const forecastConeData = forecastData ? generateForecastCone(forecastData) : null;
+        const forecastConeData =
+          forecastData && !hasExternalTrack ? generateForecastCone(forecastData) : null;
 
         // Remove existing layers and source if present
         try {
@@ -563,7 +580,7 @@ export default function RealDataLayers({
         // Silently ignore cleanup errors
       }
     };
-  }, [map, countryCode, visible, styleChangeCounter, showCycloneTrack]); // Re-load cyclone tracks when basemap changes
+  }, [map, countryCode, visible, styleChangeCounter, showCycloneTrack, cycloneTrackData]); // Re-load cyclone tracks when basemap changes
 
   // Load real WMS hazard layers from THREDDS (with lazy loading based on zoom)
   useEffect(() => {
@@ -618,7 +635,10 @@ export default function RealDataLayers({
         );
 
         const getBasemapCategory = (): 'light' | 'dark' | 'imagery' => {
-          const value = basemapStyle.toLowerCase();
+          const value =
+            typeof basemapStyle === 'string'
+              ? basemapStyle.toLowerCase()
+              : (basemapStyle?.name || '').toLowerCase();
           if (
             value.includes('satellite') ||
             value.includes('imagery') ||

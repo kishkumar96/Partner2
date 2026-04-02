@@ -214,11 +214,12 @@ export default function CycloneAnimationLayer({
   const [storyModeInternal, setStoryModeInternal] = useState(false);
   const [storyBeatsInternal, setStoryBeatsInternal] = useState<StoryBeat[]>([]);
   const [showShareCard, setShowShareCard] = useState(false);
-  const [qualityMode, setQualityMode] = useState<'balanced' | 'high' | 'cinematic'>('balanced');
+  const [qualityMode, setQualityMode] = useState<'balanced' | 'high' | 'cinematic'>('high');
   const [windGlowActivated, setWindGlowActivated] = useState(uiVisible);
   const [panelPosition, setPanelPosition] = useState({ x: 20, y: 80 }); // Will be set correctly on mount
   const [beatFeedbackEnabled, setBeatFeedbackEnabled] = useState(false);
   const [isLooping, setIsLooping] = useState(true); // Loop animation by default
+  const [showDetails, setShowDetails] = useState(false); // Secondary metrics hidden by default
 
   // Helper function to calculate optimal panel position
   const getDefaultPanelPosition = useCallback(() => {
@@ -2681,9 +2682,6 @@ export default function CycloneAnimationLayer({
         [
           'cyclone-forecast-track-line',
           'cyclone-forecast-points',
-          // Legacy/static track layers from RealDataLayers (defensive)
-          'cyclone-tracks-layer-real',
-          'cyclone-tracks-layer-real-points',
           'cyclone-forecast-cone-layer',
           'cyclone-forecast-cone-layer-outline',
           'cyclone-oci-layer',
@@ -3139,8 +3137,8 @@ export default function CycloneAnimationLayer({
             </div>
           )}
 
-          {/* Additional Metrics Grid */}
-          {currentPoint && (
+          {/* Additional Metrics Grid - collapsed by default */}
+          {currentPoint && showDetails && (
             <div className="grid grid-cols-2 gap-1.5 mb-2 text-[10px]">
               {/* Dvorak T-Number */}
               {currentPoint.dvorakTNumber > 0 && (
@@ -3402,34 +3400,35 @@ export default function CycloneAnimationLayer({
             </div>
           </div>
 
-          {/* Quality Toggle */}
-          <div className="flex items-center justify-center gap-1.5">
-            <span className="text-white text-[10px] font-medium">Quality:</span>
-            {(['balanced', 'high', 'cinematic'] as const).map(mode => (
-              <button
-                key={mode}
-                onClick={() => setQualityMode(mode)}
-                className={`px-2 py-0.5 rounded text-[10px] min-w-[56px] font-medium transition-colors ${
-                  qualityMode === mode
-                    ? 'bg-emerald-500/80 text-white'
-                    : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/60 hover:text-slate-300'
-                }`}
-                title={`${mode === 'balanced' ? 'Balanced' : mode === 'high' ? 'High' : 'Cinematic'} quality - ${
-                  mode === 'balanced'
-                    ? '500 particles, basic effects'
-                    : mode === 'high'
-                      ? '1400 particles, enhanced effects'
-                      : '2200 particles, full visual fidelity with storm eye, rain bands, wind shear'
-                }`}
-              >
-                {mode === 'balanced' ? 'Balanced' : mode === 'high' ? 'High' : 'Cinematic'}
-              </button>
-            ))}
-          </div>
-
-          {/* Keyboard Shortcuts Hint */}
-          <div className="mt-1.5 pt-1.5 border-t border-slate-700/30 text-[9px] text-slate-500 text-center leading-tight">
-            <div>Space: Play • ←→: Step • R: Loop • Home/End: Jump</div>
+          {/* Details / Quality toggle row */}
+          <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-700/30">
+            <button
+              type="button"
+              onClick={() => setShowDetails(v => !v)}
+              className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+              aria-expanded={showDetails}
+            >
+              {showDetails ? '▲ Less' : '▼ Details'}
+            </button>
+            {showDetails && (
+              <div className="flex items-center gap-1">
+                <span className="text-white text-[10px] font-medium">Quality:</span>
+                {(['balanced', 'high', 'cinematic'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setQualityMode(mode)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                      qualityMode === mode
+                        ? 'bg-emerald-500/80 text-white'
+                        : 'bg-slate-700/50 text-slate-400 hover:bg-slate-600/60 hover:text-slate-300'
+                    }`}
+                    title={`${mode} quality`}
+                  >
+                    {mode === 'balanced' ? 'Bal' : mode === 'high' ? 'Hi' : 'Cin'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -27,7 +27,11 @@ import TopInsightsCards from '@/components/TopInsightsCards';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
-import { RealWMSLayer } from '@/data/realThreddsLayers';
+import {
+  RealWMSLayer,
+  createDefaultLegendSettings,
+  LegendSettings,
+} from '@/data/realThreddsLayers';
 import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
 import {
   COUNTRY_CYCLONE_CONFIG,
@@ -190,6 +194,9 @@ export default function DashboardView({
   const [showMapControls, setShowMapControls] = useState(initialShowMapControls);
   const [showSummary, setShowSummary] = useState(urlState.showSummary ?? false);
   const [showAnalytics, setShowAnalytics] = useState(true);
+  const [legendSettings, setLegendSettings] = useState<LegendSettings>(() =>
+    createDefaultLegendSettings(countryCode)
+  );
   const [showMetadata, setShowMetadata] = useState(false);
   const [filterPanelTab, setFilterPanelTab] = useState<'filters' | 'cyclone'>('filters');
   const [showCycloneControls, setShowCycloneControls] = useState(false);
@@ -197,6 +204,7 @@ export default function DashboardView({
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const tourUiSnapshotRef = useRef<TourUiSnapshot | null>(null);
+
   const [storyMode, setStoryMode] = useState(urlState.storyMode || false);
   const [currentCycloneIndex, setCurrentCycloneIndex] = useState(
     urlState.cycloneIndex !== undefined ? urlState.cycloneIndex : 0
@@ -241,6 +249,11 @@ export default function DashboardView({
       setShowBasemapPreferenceModal(true);
     }
   }, [urlState.basemap]);
+
+  // Sync legend settings when country changes
+  useEffect(() => {
+    setLegendSettings(createDefaultLegendSettings(countryCode));
+  }, [countryCode]);
 
   const openSummaryPanel = useCallback(() => {
     setShowSummary(true);
@@ -845,42 +858,55 @@ export default function DashboardView({
   const tourSteps = useMemo<GuidedTourStep[]>(
     () => [
       {
-        title: 'Welcome to the workspace',
-        body: 'This dashboard combines live hazard mapping, event filtering, and impact analysis in one operational view.',
+        title: 'Welcome to the Risk Intelligence Dashboard',
+        body: 'This overview bar gives you the current country context, the active dashboard lens, and the fastest path into the rest of the workflow.',
         selector: '[data-tour="dashboard-hero"]',
+        category: 'Overview',
+        targetLabel: 'Dashboard header',
+        placement: 'bottom',
       },
       {
-        title: 'Start with data filters',
-        body: 'Use the left rail to narrow the dataset by event and time. This is the fastest way to orient the map and everything downstream.',
-        selector: '[data-tour="filter-panel"]',
+        title: 'Filter Your Data',
+        body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
+        selector: '[data-tour="filter-panel-toggle"]',
+        category: 'Inputs',
+        targetLabel: 'Filter panel',
+        placement: 'bottom',
       },
       {
-        title: 'Anchor on an event',
-        body: 'Open Events & Time first. Pick an event, then refine the time window before touching advanced controls.',
-        selector: '#filter-panel-temporal-button',
-      },
-      {
-        title: 'Switch to map controls',
-        body: 'Use the Map button when you want to change the visual treatment of the map without changing the underlying data slice.',
+        title: 'Control the Map View',
+        body: 'Map controls change the visual story: shading mode, visible overlays, opacity, cyclone playback, and other presentation settings live here.',
         selector: '[data-tour="map-panel-toggle"]',
+        category: 'Map',
+        targetLabel: 'Map controls',
+        placement: 'bottom',
       },
       {
-        title: 'Tune the visual layer',
-        body: 'Basemap, color mode, and overlays determine how fast someone can read the situation at a glance.',
-        selector: '[data-tour="map-panel"]',
-      },
-      {
-        title: 'Open the impact summary',
-        body: 'Summary complements the map with ranked impacts, sector views, and regional context for briefing or decision support.',
-        selector: '[data-tour="summary-panel-toggle"]',
-      },
-      {
-        title: 'Use the data workspace',
-        body: 'The bottom workspace exposes deeper charts and tables once you are ready to validate what you are seeing on the map.',
+        title: 'Dive into the Data',
+        body: 'The workspace holds the detailed tables and charts. This is where you move from visual scanning into actual evidence and ranked impacts.',
         selector: '[data-tour="data-workspace-toggle"]',
+        category: 'Analysis',
+        targetLabel: 'Data workspace',
+        placement: 'top',
+      },
+      {
+        title: 'Get the Big Picture',
+        body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
+        selector: '[data-tour="summary-panel-toggle"]',
+        category: 'Summary',
+        targetLabel: 'Summary panel',
+        placement: 'bottom',
+      },
+      {
+        title: 'Share & Export Your Findings',
+        body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
+        selector: '[data-tour="export-controls"]',
+        category: 'Output',
+        targetLabel: 'Export controls',
+        placement: 'bottom',
       },
     ],
-    []
+    [cycloneForecast] // Re-create tour if cyclone data becomes available
   );
 
   useEffect(() => {
@@ -891,13 +917,15 @@ export default function DashboardView({
 
     switch (currentStep.selector) {
       case '[data-tour="dashboard-hero"]':
-      case '[data-tour="filter-panel"]':
-      case '#filter-panel-temporal-button':
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="filter-panel-toggle"]':
         openFilterPanel('filters');
         setShowSummary(false);
         break;
       case '[data-tour="map-panel-toggle"]':
-      case '[data-tour="map-panel"]':
         openMapPanel();
         setShowSummary(false);
         break;
@@ -906,6 +934,13 @@ export default function DashboardView({
         break;
       case '[data-tour="data-workspace-toggle"]':
         setShowAnalytics(true);
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="export-controls"]':
+        setShowFilters(false);
+        setShowMapControls(false);
         setShowSummary(false);
         break;
       default:
@@ -1902,10 +1937,10 @@ export default function DashboardView({
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 sm:px-6 py-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0 flex-1">
-            <div className="flex items-center gap-2 md:hidden">
+      <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(320px,1.05fr)_minmax(460px,0.95fr)_auto] xl:items-start">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2 md:hidden">
               <button
                 onClick={() => {
                   openFilterPanel('filters');
@@ -1970,8 +2005,11 @@ export default function DashboardView({
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-3" data-tour="dashboard-hero">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
+            <div
+              className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-700/40 bg-slate-900/35 px-3 py-3 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)] sm:px-4"
+              data-tour="dashboard-hero"
+            >
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
                 <ReactCountryFlag
                   countryCode={selectedCountry}
                   svg
@@ -1981,13 +2019,13 @@ export default function DashboardView({
                 />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-300/80">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/85 sm:text-[11px] sm:tracking-[0.28em]">
                   National Risk Intelligence
                 </p>
-                <h1 className="text-lg sm:text-xl font-bold text-slate-100 truncate">
+                <h1 className="truncate text-lg font-bold tracking-tight text-white sm:text-[1.7rem] sm:leading-[1.05]">
                   {platformName}
                 </h1>
-                <p className="text-xs text-slate-400 truncate">
+                <p className="truncate pt-1 text-xs text-slate-400 sm:text-sm">
                   {isLoadingData
                     ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
                     : `Active event context: ${activeCycloneName}`}
@@ -1996,234 +2034,229 @@ export default function DashboardView({
             </div>
           </div>
 
-          {/* Actions Group - Right aligned, consistent spacing */}
-          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap lg:flex-nowrap justify-end">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/35 rounded-lg border border-slate-700/40">
+          <div className="hidden min-w-0 md:flex xl:justify-center">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]">
               <button
                 onClick={() => openFilterPanel('filters')}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   showFilters && filterPanelTab === 'filters'
-                    ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
-                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                    ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
+                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                 }`}
                 aria-pressed={showFilters && filterPanelTab === 'filters'}
                 aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
                 data-tour="filter-panel-toggle"
               >
-                <Layers className="w-3.5 h-3.5" />
+                <Layers className="h-4 w-4" />
                 <span>Filters</span>
               </button>
               <button
                 onClick={openMapPanel}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   showMapControls
-                    ? 'bg-purple-500/15 text-purple-200 border border-purple-500/30'
-                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                    ? 'border border-purple-500/35 bg-purple-500/15 text-purple-200'
+                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                 }`}
                 aria-pressed={showMapControls}
                 aria-label={showMapControls ? 'Map controls panel open' : 'Open map controls'}
                 data-tour="map-panel-toggle"
               >
-                <MapIcon className="w-3.5 h-3.5" />
+                <MapIcon className="h-4 w-4" />
                 <span>Map</span>
               </button>
               <button
                 onClick={() => setShowAnalytics(current => !current)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   showAnalytics
-                    ? 'bg-blue-500/15 text-blue-200 border border-blue-500/30'
-                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                    ? 'border border-blue-500/35 bg-blue-500/15 text-blue-200'
+                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                 }`}
                 aria-pressed={showAnalytics}
                 aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
                 data-tour="data-workspace-toggle"
               >
-                <BarChart3 className="w-3.5 h-3.5" />
+                <BarChart3 className="h-4 w-4" />
                 <span>Data</span>
               </button>
               <button
                 onClick={() => setShowSummary(current => !current)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   showSummary
-                    ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
-                    : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
+                    ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
+                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                 }`}
                 aria-pressed={showSummary}
                 aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
                 data-tour="summary-panel-toggle"
               >
-                <Layers className="w-3.5 h-3.5" />
+                <Layers className="h-4 w-4" />
                 <span>Summary</span>
               </button>
-              {!!cycloneForecast && (
-                <button
-                  onClick={() => {
-                    openFilterPanel('cyclone');
-                    setShowSummary(false);
-                  }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs ${
-                    filterPanelTab === 'cyclone' && showFilters
-                      ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
-                      : 'bg-slate-700/30 text-slate-300 hover:bg-slate-700/50'
-                  }`}
-                  aria-label="Open cyclone workspace"
-                >
-                  <MapIcon className="w-3.5 h-3.5" />
-                  <span>Cyclone Timeline</span>
-                </button>
-              )}
             </div>
+          </div>
 
-            {/* Header Actions */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/25 rounded-lg border border-slate-700/40">
-              <button
-                onClick={() => setShowMetadata(current => !current)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/15 hover:border-cyan-500/40"
-                aria-expanded={showMetadata}
-                aria-controls="dashboard-metadata"
-                aria-label={showMetadata ? 'Hide metadata' : 'Show metadata'}
+          <div className="min-w-0 xl:justify-self-end">
+            <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+              <div
+                className="flex min-w-max items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]"
+                data-tour="export-controls"
               >
-                <span>Metadata</span>
-                <ChevronDown
-                  className={`h-3.5 w-3.5 transition-transform duration-300 ${
-                    showMetadata ? 'rotate-0' : 'rotate-180'
-                  }`}
-                />
-              </button>
-
-              {allowCountrySwitch ? (
                 <button
-                  onClick={() => setShowCountrySelector(!showCountrySelector)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/35 hover:bg-slate-700/55 text-slate-300 rounded transition-colors text-xs"
-                  aria-label={
-                    selectedCountry
-                      ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
-                      : 'Select country'
-                  }
-                  aria-expanded={showCountrySelector}
-                  aria-haspopup="dialog"
-                  aria-controls="country-selector-panel"
-                  title="Select country"
+                  onClick={() => setShowMetadata(current => !current)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 transition-colors hover:border-cyan-500/45 hover:bg-cyan-500/15 sm:min-h-12 sm:text-sm"
+                  aria-expanded={showMetadata}
+                  aria-controls="dashboard-metadata"
+                  aria-label={showMetadata ? 'Hide metadata' : 'Show metadata'}
                 >
-                  {selectedCountry ? (
+                  <span>Metadata</span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform duration-300 ${
+                      showMetadata ? 'rotate-0' : 'rotate-180'
+                    }`}
+                  />
+                </button>
+
+                {allowCountrySwitch ? (
+                  <button
+                    onClick={() => setShowCountrySelector(!showCountrySelector)}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/35 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/55 sm:min-h-12 sm:text-sm"
+                    aria-label={
+                      selectedCountry
+                        ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
+                        : 'Select country'
+                    }
+                    aria-expanded={showCountrySelector}
+                    aria-haspopup="dialog"
+                    aria-controls="country-selector-panel"
+                    title="Select country"
+                  >
+                    {selectedCountry ? (
+                      <>
+                        <ReactCountryFlag
+                          countryCode={selectedCountry}
+                          svg
+                          aria-label={COUNTRIES[selectedCountry].name}
+                          title={COUNTRIES[selectedCountry].name}
+                          className="h-4 w-4"
+                        />
+                        <span className="font-medium max-[420px]:hidden">
+                          {COUNTRIES[selectedCountry].name}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <MapIcon className="h-4 w-4" />
+                        <span>Region</span>
+                      </>
+                    )}
+                  </button>
+                ) : selectedCountry ? (
+                  <div
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/40 px-3 py-2 text-xs text-slate-300 sm:min-h-12 sm:text-sm"
+                    aria-label={`Country: ${COUNTRIES[selectedCountry].name}`}
+                  >
+                    <ReactCountryFlag
+                      countryCode={selectedCountry}
+                      svg
+                      aria-label={COUNTRIES[selectedCountry].name}
+                      title={COUNTRIES[selectedCountry].name}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-medium max-[420px]:hidden">
+                      {COUNTRIES[selectedCountry].name}
+                    </span>
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={startTour}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/35 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/55 sm:min-h-12 sm:text-sm"
+                  aria-label="Start guided tour"
+                  title="Start Guided Tour"
+                >
+                  <Compass className="h-4 w-4" />
+                  <span className="font-medium">Tour</span>
+                </button>
+
+                {showLogout && (
+                  <button
+                    onClick={() => void handleLogout()}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/30 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/50 sm:min-h-12 sm:text-sm"
+                    aria-label="Log out of country dashboard"
+                    title="Log out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </button>
+                )}
+
+                <ShareLinkButton
+                  path={`/${CODE_TO_SLUG[selectedCountry]}`}
+                  mapState={{
+                    center: mapInstance
+                      ? {
+                          lat: mapInstance.getCenter().lat,
+                          lng: mapInstance.getCenter().lng,
+                        }
+                      : undefined,
+                    zoom: mapInstance?.getZoom(),
+                    region: selectedRegion,
+                    hazards: filters.selectedHazards,
+                    sectors: filters.selectedSectors,
+                    events: filters.selectedEvents,
+                    dateStart: filters.dateRange.start || undefined,
+                    dateEnd: filters.dateRange.end || undefined,
+                    aggregation:
+                      filters.aggregationLevel === 'national'
+                        ? undefined
+                        : filters.aggregationLevel,
+                    mapStyle,
+                    basemap: basemapStyle,
+                    cycloneIndex: currentCycloneIndex,
+                    storyMode,
+                    showSummary,
+                    showFilters,
+                  }}
+                  compact
+                  className="min-h-11 rounded-xl border-slate-600/60 bg-slate-700/35 px-3 py-2 hover:bg-slate-700/55 sm:min-h-12"
+                />
+
+                <button
+                  onClick={() => void handleDownloadMap()}
+                  disabled={isDownloadingMap}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:text-sm"
+                  aria-label="Download map as PNG"
+                  title="Download current map view as PNG image"
+                >
+                  {isDownloadingMap ? (
                     <>
-                      <ReactCountryFlag
-                        countryCode={selectedCountry}
-                        svg
-                        aria-label={COUNTRIES[selectedCountry].name}
-                        title={COUNTRIES[selectedCountry].name}
-                        className="w-4 h-4"
-                      />
-                      <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Exporting...</span>
                     </>
                   ) : (
                     <>
-                      <MapIcon className="w-3.5 h-3.5" />
-                      <span>Region</span>
+                      <Download className="h-4 w-4" />
+                      <span>Map PNG</span>
                     </>
                   )}
                 </button>
-              ) : selectedCountry ? (
-                <div
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/40 text-slate-300 rounded text-xs"
-                  aria-label={`Country: ${COUNTRIES[selectedCountry].name}`}
-                >
-                  <ReactCountryFlag
-                    countryCode={selectedCountry}
-                    svg
-                    aria-label={COUNTRIES[selectedCountry].name}
-                    title={COUNTRIES[selectedCountry].name}
-                    className="w-4 h-4"
-                  />
-                  <span className="font-medium">{COUNTRIES[selectedCountry].name}</span>
-                </div>
-              ) : null}
 
-              <button
-                onClick={startTour}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/35 hover:bg-slate-700/55 text-slate-300 rounded transition-colors text-xs"
-                aria-label="Start guided tour"
-                title="Start Guided Tour"
-              >
-                <Compass className="w-3.5 h-3.5" />
-                <span className="font-medium">Tour</span>
-              </button>
-
-              {showLogout && (
-                <button
-                  onClick={() => void handleLogout()}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 rounded transition-colors text-xs"
-                  aria-label="Log out of country dashboard"
-                  title="Log out"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Logout</span>
-                </button>
-              )}
-
-              <ShareLinkButton
-                path={`/${CODE_TO_SLUG[selectedCountry]}`}
-                mapState={{
-                  center: mapInstance
-                    ? {
-                        lat: mapInstance.getCenter().lat,
-                        lng: mapInstance.getCenter().lng,
-                      }
-                    : undefined,
-                  zoom: mapInstance?.getZoom(),
-                  region: selectedRegion,
-                  hazards: filters.selectedHazards,
-                  sectors: filters.selectedSectors,
-                  events: filters.selectedEvents,
-                  dateStart: filters.dateRange.start || undefined,
-                  dateEnd: filters.dateRange.end || undefined,
-                  aggregation:
-                    filters.aggregationLevel === 'national' ? undefined : filters.aggregationLevel,
-                  mapStyle,
-                  basemap: basemapStyle,
-                  cycloneIndex: currentCycloneIndex,
-                  storyMode,
-                  showSummary,
-                  showFilters,
-                }}
-                compact
-              />
-
-              <button
-                onClick={() => void handleDownloadMap()}
-                disabled={isDownloadingMap}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/15 disabled:opacity-60 disabled:cursor-not-allowed"
-                aria-label="Download map as PNG"
-                title="Download current map view as PNG image"
-              >
-                {isDownloadingMap ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Exporting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Map PNG</span>
-                  </>
-                )}
-              </button>
-
-              <ExportButtons
-                events={exportEvents}
-                exposureData={exportExposureData}
-                economicDamageData={exportEconomicDamageData}
-                hazards={hazards}
-                sectors={sectors}
-                disabled={isExportDisabled}
-                countryName={COUNTRIES[selectedCountry].name}
-                fullCountryName={COUNTRIES[selectedCountry].fullName}
-                countryCode={selectedCountry}
-                cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
-                impactBySector={impactBySector}
-                nationalSummary={nationalSummary}
-                mapInstance={mapInstance}
-              />
+                <ExportButtons
+                  events={exportEvents}
+                  exposureData={exportExposureData}
+                  economicDamageData={exportEconomicDamageData}
+                  hazards={hazards}
+                  sectors={sectors}
+                  disabled={isExportDisabled}
+                  countryName={COUNTRIES[selectedCountry].name}
+                  fullCountryName={COUNTRIES[selectedCountry].fullName}
+                  countryCode={selectedCountry}
+                  cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
+                  impactBySector={impactBySector}
+                  nationalSummary={nationalSummary}
+                  mapInstance={mapInstance}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -2272,7 +2305,7 @@ export default function DashboardView({
         )}
 
         {/* Active Filters Bar - Single line with horizontal scroll */}
-        <div className="mt-2 pt-2 border-t border-slate-800">
+        <div className="mt-1 pt-1.5 border-t border-slate-800/60">
           <ActiveFilters
             filters={filters}
             hazards={hazards}
@@ -2351,7 +2384,7 @@ export default function DashboardView({
         <div
           ref={filterPanelRef}
           data-tour="filter-panel"
-          className={`fixed inset-y-0 left-0 z-[40] w-80 transform transition-transform duration-300 ease-out shadow-2xl
+          className={`fixed inset-y-0 left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
             ${showFilters ? 'translate-x-0' : '-translate-x-full'} 
             md:static md:transform-none md:shadow-none ${showFilters ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
         >
@@ -2370,20 +2403,11 @@ export default function DashboardView({
             events={events}
             districts={resolvedDistricts}
             countryCode={selectedCountry}
-            activeTabOverride={filterPanelTab}
-            onActiveTabChange={setFilterPanelTab}
             filters={filters}
             onFilterChange={setFilters}
             exposureData={exposureData}
             economicDamageData={economicDamageData}
-            isCyclonePlaying={isCyclonePlaying}
-            onToggleCyclonePlaying={setIsCyclonePlaying}
-            isCycloneVisible={showCycloneControls}
-            onToggleCycloneVisibility={handleCycloneVisibilityChange}
-            hasCycloneData={!!cycloneForecast}
-            cycloneControlsHostRef={cycloneControlsHostRef}
             accessibleDistricts={accessibleDistricts}
-            storyMode={storyMode}
             onDistrictSelect={districtId => {
               const region = regionalSummary.find(
                 (r: any) => r.Region_ID === districtId || r.Region === districtId
@@ -2399,7 +2423,7 @@ export default function DashboardView({
         <div
           ref={mapPanelRef}
           data-tour="map-panel"
-          className={`fixed inset-y-0 left-0 z-[40] w-80 transform transition-transform duration-300 ease-out shadow-2xl
+          className={`fixed inset-y-0 left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
             ${showMapControls ? 'translate-x-0' : '-translate-x-full'} 
             md:static md:transform-none md:shadow-none ${showMapControls ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
         >
@@ -2413,8 +2437,6 @@ export default function DashboardView({
             </button>
           </div>
           <MapPanel
-            currentBasemap={basemapStyle}
-            onBasemapChange={setBasemapStyle}
             mapStyle={mapStyle}
             onMapStyleChange={setMapStyle}
             is3DView={is3DView}
@@ -2431,8 +2453,18 @@ export default function DashboardView({
             showRoadsLayer={showRoadsLayer}
             onBuildingsLayerToggle={handleBuildingsLayerToggle}
             onRoadsLayerToggle={handleRoadsLayerToggle}
+            showCycloneLayer={showCycloneControls}
+            onCycloneLayerToggle={handleCycloneVisibilityChange}
+            hasCycloneData={!!cycloneForecast}
+            isCyclonePlaying={isCyclonePlaying}
+            onToggleCyclonePlaying={setIsCyclonePlaying}
+            cycloneControlsHostRef={cycloneControlsHostRef}
+            storyMode={storyMode}
             layerOpacity={layerOpacity}
             onLayerOpacityChange={setLayerOpacity}
+            legendSettings={legendSettings}
+            onLegendSettingsChange={setLegendSettings}
+            countryCode={selectedCountry}
             isMapDataLoading={isMapDataLoading}
             isHazardsLoading={isHazardsLoading}
             hazardZoomBlocked={hazardZoomBlocked}
@@ -2450,7 +2482,6 @@ export default function DashboardView({
 
               return (
                 <>
-                  {/* NEW: Unified Map Legend with data-driven breaks */}
                   {showMapOverlays && (
                     <UnifiedMapLegend
                       mode={mapStyle}
@@ -2467,6 +2498,7 @@ export default function DashboardView({
                       onZoomToRoads={handleZoomToRoads}
                       activeWmsLayers={activeWmsLayers}
                       countryCode={selectedCountry}
+                      legendSettings={legendSettings}
                     />
                   )}
 
@@ -2497,6 +2529,7 @@ export default function DashboardView({
               onLayersLoadingChange={setIsLoadingLayers}
               onActiveWmsLayersChange={setActiveWmsLayers}
               layerOpacity={layerOpacity}
+              legendSettings={legendSettings}
               damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
               damagedRoads={showRoadsLayer ? damagedRoads : null}
               cycloneForecast={cycloneForecast}
@@ -2646,7 +2679,7 @@ export default function DashboardView({
         {/* Right Summary Panel */}
         <div
           ref={summaryPanelRef}
-          className={`fixed inset-y-0 right-0 z-[40] w-80 transform transition-transform duration-300 ease-out bg-transparent shadow-2xl
+          className={`fixed inset-y-0 right-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out bg-transparent shadow-2xl
             md:static md:inset-auto md:h-full md:flex-shrink-0 md:shadow-none
             ${
               showSummary
@@ -2703,6 +2736,7 @@ export default function DashboardView({
         currentStep={tourStepIndex}
         onPrev={() => setTourStepIndex(index => Math.max(0, index - 1))}
         onNext={() => setTourStepIndex(index => Math.min(tourSteps.length - 1, index + 1))}
+        onStepSelect={setTourStepIndex}
         onClose={closeTour}
         onFinish={finishTour}
       />

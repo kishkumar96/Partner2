@@ -14,6 +14,8 @@ import { render } from '@testing-library/react';
 import RealDataLayers from '../RealDataLayers';
 import { FilterState } from '@/types';
 import { getLayersForCountry } from '@/data/realThreddsLayers';
+import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
+import { loadCycloneTrackData } from '@/utils/realDataLoader';
 
 // Mock heavy utilities that make external network calls
 jest.mock('@/utils/cycloneAnimationLoader', () => ({
@@ -36,6 +38,12 @@ jest.mock('@/data/realThreddsLayers', () => ({
 
 const mockGetLayersForCountry = getLayersForCountry as jest.MockedFunction<
   typeof getLayersForCountry
+>;
+const mockLoadCycloneForecastTrack = loadCycloneForecastTrack as jest.MockedFunction<
+  typeof loadCycloneForecastTrack
+>;
+const mockLoadCycloneTrackData = loadCycloneTrackData as jest.MockedFunction<
+  typeof loadCycloneTrackData
 >;
 
 const mockMap = {
@@ -127,6 +135,37 @@ describe('RealDataLayers', () => {
       />
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('uses externally provided cyclone track data without reloading cyclone files', () => {
+    render(
+      <RealDataLayers
+        map={mockMap}
+        countryCode="VU"
+        visible
+        filters={baseFilters}
+        showCycloneTrack
+        cycloneTrackData={{
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [179, -17],
+                  [179.5, -17.4],
+                ],
+              },
+              properties: {},
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(mockLoadCycloneForecastTrack).not.toHaveBeenCalled();
+    expect(mockLoadCycloneTrackData).not.toHaveBeenCalled();
   });
 
   it('hides flood layers immediately when inundation toggle is off', () => {

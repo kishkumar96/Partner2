@@ -2,12 +2,14 @@
 
 import { useEffect } from 'react';
 import maplibregl, { Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
+import { LegendThreshold } from '@/data/realThreddsLayers';
 import { BUILDING_DAMAGE_COLORS } from '@/theme/colors';
 import type { BuildingProperties } from '@/types/realData';
 
 interface DamagedBuildingsLayerProps {
   map: MapLibreMap | null;
   data: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
+  thresholds?: LegendThreshold[];
   visible?: boolean;
   styleChangeCounter?: number;
 }
@@ -23,6 +25,7 @@ interface DamagedBuildingsLayerProps {
 export default function DamagedBuildingsLayer({
   map,
   data,
+  thresholds,
   visible = true,
   styleChangeCounter = 0,
 }: DamagedBuildingsLayerProps) {
@@ -160,6 +163,36 @@ export default function DamagedBuildingsLayer({
         source.setData(data as GeoJSON.FeatureCollection);
       }
 
+      // Build color expression from thresholds
+      let colorExpression: maplibregl.ExpressionSpecification;
+      if (thresholds && thresholds.length > 0) {
+        const stops: (string | number)[] = [];
+        const sorted = [...thresholds].sort((a, b) => a.value - b.value);
+        sorted.forEach(t => {
+          if (isFinite(t.value)) {
+            stops.push(t.value, t.color);
+          }
+        });
+        const fallbackColor =
+          sorted.find(t => !isFinite(t.value))?.color || BUILDING_DAMAGE_COLORS.severe;
+        colorExpression = ['step', ['get', 'Wind_Loss'], fallbackColor, ...stops];
+      } else {
+        // Fallback to original hardcoded expression
+        colorExpression = [
+          'step',
+          ['get', 'Wind_Loss'],
+          BUILDING_DAMAGE_COLORS.minimal,
+          10000,
+          BUILDING_DAMAGE_COLORS.moderate,
+          50000,
+          BUILDING_DAMAGE_COLORS.substantial,
+          100000,
+          BUILDING_DAMAGE_COLORS.severe,
+          500000,
+          BUILDING_DAMAGE_COLORS.catastrophic,
+        ];
+      }
+
       // Add cluster circle layer - MUST render above regional polygons
       if (!map.getLayer(clusterLayerId)) {
         map.addLayer(
@@ -243,19 +276,7 @@ export default function DamagedBuildingsLayer({
                 14,
               ],
               // Color by damage severity - using theme colors
-              'circle-color': [
-                'step',
-                ['get', 'Wind_Loss'],
-                BUILDING_DAMAGE_COLORS.minimal, // < $10K
-                10000,
-                BUILDING_DAMAGE_COLORS.moderate, // $10K-$50K
-                50000,
-                BUILDING_DAMAGE_COLORS.substantial, // $50K-$100K
-                100000,
-                BUILDING_DAMAGE_COLORS.severe, // $100K-$500K
-                500000,
-                BUILDING_DAMAGE_COLORS.catastrophic, // > $500K
-              ],
+              'circle-color': colorExpression,
               // Reduced opacity for better integration with regional context
               'circle-opacity': 0.9,
               'circle-stroke-width': 2.5,
@@ -324,7 +345,7 @@ export default function DamagedBuildingsLayer({
         // Silently ignore cleanup errors when map is destroyed
       }
     };
-  }, [map, styleChangeCounter, visible, data]); // Include data for style-load races
+  }, [map, styleChangeCounter, visible, data, thresholds]); // Re-run if thresholds change
 
   // Effect 2: Update data in existing source when data changes
   // This avoids recreating layers/sources and eliminates flicker

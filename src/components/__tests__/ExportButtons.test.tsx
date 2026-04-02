@@ -337,4 +337,29 @@ describe('ExportButtons Component', () => {
       'FAST'
     );
   });
+
+  it('prefers impact-by-sector rows for damaged building counts in the PDF', async () => {
+    render(
+      <ExportButtons
+        {...baseProps}
+        impactBySector={[
+          {
+            Sector: 'Health',
+            Number_Exposed_Buildings: 12,
+            Number_Damaged_Buildings: 7,
+            Building_Loss: 250000,
+            Total_Loss: 300000,
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /pdf/i }));
+
+    await waitFor(() => {
+      expect(mockDoc.save).toHaveBeenCalled();
+    });
+
+    expect(mockDoc.text).toHaveBeenCalledWith('7', expect.any(Number), expect.any(Number));
+  });
 });

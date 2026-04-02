@@ -132,8 +132,8 @@ describe('FilterPanel Component', () => {
   it('displays sector options sourced from the sectors prop (sectors section is expanded by default)', () => {
     renderPanel();
     // Sectors section is expanded by default - no need to click
-    expect(screen.getByRole('checkbox', { name: /agriculture/i })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /housing/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /agriculture/i })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /housing/i })).toBeInTheDocument();
   });
 
   // 3. Hazard toggle – specific payload assertion
@@ -165,11 +165,11 @@ describe('FilterPanel Component', () => {
   });
 
   // 4. Sector toggle
-  it('calls onFilterChange with the checked sector when a sector checkbox is toggled on', () => {
+  it('calls onFilterChange with the checked sector when a sector radio is selected', () => {
     const { onFilterChange } = renderPanel({ selectedSectors: [] });
 
     // Sectors section is expanded by default - no need to click
-    fireEvent.click(screen.getByRole('checkbox', { name: /agriculture/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /agriculture/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
     expect(onFilterChange).toHaveBeenCalledWith(

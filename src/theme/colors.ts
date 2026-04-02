@@ -93,12 +93,13 @@ export const BUILDING_DAMAGE_COLORS: DamageSeverity = {
 /**
  * Road damage colors (line features)
  * Vibrant colors appropriate for linear features - need higher saturation than polygons
+ * Thresholds: < $1K (light), $1K-$2K (moderate), $2K-$3K (heavy), > $3K (severe)
  */
 export const ROAD_DAMAGE_COLORS = {
-  light: '#FBBF24', // Amber-400 - < $5K (bright yellow-orange)
-  moderate: '#FB923C', // Orange-400 - $5K-$25K (vivid orange)
-  heavy: '#F97316', // Orange-500 - $25K-$75K (bright orange)
-  severe: '#EF4444', // Red-500 - > $75K (bright red)
+  light: '#FBBF24', // Amber-400 - < $1K (bright yellow-orange)
+  moderate: '#FB923C', // Orange-400 - $1K-$2K (vivid orange)
+  heavy: '#F97316', // Orange-500 - $2K-$3K (bright orange)
+  severe: '#EF4444', // Red-500 - > $3K (bright red)
 };
 
 /**
@@ -114,11 +115,12 @@ export function getBuildingDamageColor(lossUSD: number): string {
 
 /**
  * Get road damage color by loss amount
+ * Thresholds aligned with legend: $1K, $2K, $3K
  */
 export function getRoadDamageColor(lossUSD: number): string {
-  if (lossUSD >= 75000) return ROAD_DAMAGE_COLORS.severe;
-  if (lossUSD >= 25000) return ROAD_DAMAGE_COLORS.heavy;
-  if (lossUSD >= 5000) return ROAD_DAMAGE_COLORS.moderate;
+  if (lossUSD >= 3000) return ROAD_DAMAGE_COLORS.severe;
+  if (lossUSD >= 2000) return ROAD_DAMAGE_COLORS.heavy;
+  if (lossUSD >= 1000) return ROAD_DAMAGE_COLORS.moderate;
   return ROAD_DAMAGE_COLORS.light;
 }
 

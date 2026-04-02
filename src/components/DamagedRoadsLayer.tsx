@@ -2,12 +2,14 @@
 
 import { useEffect } from 'react';
 import maplibregl, { Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
+import { LegendThreshold } from '@/data/realThreddsLayers';
 import { ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import type { RoadProperties } from '@/types/realData';
 
 interface DamagedRoadsLayerProps {
   map: MapLibreMap | null;
   data: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
+  thresholds?: LegendThreshold[];
   visible?: boolean;
   styleChangeCounter?: number;
 }
@@ -19,6 +21,7 @@ interface DamagedRoadsLayerProps {
 export default function DamagedRoadsLayer({
   map,
   data,
+  thresholds,
   visible = true,
   styleChangeCounter = 0,
 }: DamagedRoadsLayerProps) {
@@ -92,10 +95,59 @@ export default function DamagedRoadsLayer({
         });
       }
 
-      // If data already exists when layers initialize, hydrate source immediately.
-      const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
-      if (source && source.setData && data) {
-        source.setData(data as GeoJSON.FeatureCollection);
+      // Build color and width expressions from thresholds
+      let colorExpression: maplibregl.ExpressionSpecification;
+      let widthExpression: maplibregl.ExpressionSpecification;
+      let outlineWidthExpression: maplibregl.ExpressionSpecification;
+
+      if (thresholds && thresholds.length > 0) {
+        const sorted = [...thresholds].sort((a, b) => a.value - b.value);
+        const finiteThresholds = sorted.filter(t => isFinite(t.value));
+
+        // Use first color as base (for values below first threshold)
+        const baseColor = finiteThresholds[0]?.color || ROAD_DAMAGE_COLORS.light;
+        const colorStops: (string | number)[] = [];
+        const widthStops: number[] = [];
+        const outlineStops: number[] = [];
+
+        finiteThresholds.forEach((t, index) => {
+          colorStops.push(t.value, t.color);
+          // Width progression: 4px base, +1.5px per threshold step
+          const width = 4 + index * 1.5;
+          widthStops.push(t.value, width);
+          // Outline is always 2px wider than main line
+          outlineStops.push(t.value, width + 2);
+        });
+
+        // Use coalesce to handle null/undefined values
+        const lossProperty: maplibregl.ExpressionSpecification = [
+          'coalesce',
+          ['get', 'Total_Loss'],
+          0,
+        ];
+        colorExpression = ['step', lossProperty, baseColor, ...colorStops];
+        widthExpression = ['step', lossProperty, 4, ...widthStops];
+        outlineWidthExpression = ['step', lossProperty, 6, ...outlineStops];
+      } else {
+        // Default thresholds: $1K, $2K, $3K (aligned with legend)
+        const lossProperty: maplibregl.ExpressionSpecification = [
+          'coalesce',
+          ['get', 'Total_Loss'],
+          0,
+        ];
+        colorExpression = [
+          'step',
+          lossProperty,
+          ROAD_DAMAGE_COLORS.light,
+          1000,
+          ROAD_DAMAGE_COLORS.moderate,
+          2000,
+          ROAD_DAMAGE_COLORS.heavy,
+          3000,
+          ROAD_DAMAGE_COLORS.severe,
+        ];
+        widthExpression = ['step', lossProperty, 4, 1000, 5.5, 2000, 7, 3000, 8.5];
+        outlineWidthExpression = ['step', lossProperty, 6, 1000, 7.5, 2000, 9, 3000, 10.5];
       }
 
       // Add outline layer for visibility
@@ -106,25 +158,15 @@ export default function DamagedRoadsLayer({
           source: sourceId,
           paint: {
             'line-color': '#000000',
-            'line-width': [
-              'step',
-              ['get', 'Total_Loss'],
-              5, // < $5K
-              5000,
-              7, // $5K-$25K
-              25000,
-              9, // $25K-$75K
-              75000,
-              11, // > $75K
-            ],
+            'line-width': outlineWidthExpression,
             'line-opacity': 0.4,
           },
         });
       }
 
-      // Add main line layer - MUST render above regional polygons
+      // Add main line layer - render above regional polygons, below symbols
       if (!map.getLayer(layerId)) {
-        // Find the first symbol layer to insert before
+        // Find the first symbol layer to insert before (roads should be above fills, below labels)
         const layers = map.getStyle()?.layers || [];
         const firstSymbolId = layers.find(layer => layer.type === 'symbol')?.id;
 
@@ -134,31 +176,11 @@ export default function DamagedRoadsLayer({
             type: 'line',
             source: sourceId,
             paint: {
-              // Width based on damage severity - adjusted for actual data range ($500-$5K)
-              'line-width': [
-                'step',
-                ['get', 'Total_Loss'],
-                4, // < $1K - base roads
-                1000,
-                5, // $1K-$2K - light damage
-                2000,
-                7, // $2K-$3K - moderate damage
-                3000,
-                9, // > $3K - severe damage
-              ],
-              // Color by damage severity - using theme colors
-              'line-color': [
-                'step',
-                ['get', 'Total_Loss'],
-                ROAD_DAMAGE_COLORS.light, // < $1K
-                1000,
-                ROAD_DAMAGE_COLORS.moderate, // $1K-$2K
-                2000,
-                ROAD_DAMAGE_COLORS.heavy, // $2K-$3K
-                3000,
-                ROAD_DAMAGE_COLORS.severe, // > $3K
-              ],
-              // Zoom-based opacity: more subtle at mid-zoom, clearer when zoomed in
+              // Dynamic width based on thresholds - scales with damage severity
+              'line-width': widthExpression,
+              // Color by damage severity - uses theme colors or custom thresholds
+              'line-color': colorExpression,
+              // Zoom-based opacity: subtle at mid-zoom, clearer when zoomed in
               // Prevents overwhelming regional fills while maintaining detail at high zoom
               'line-opacity': [
                 'interpolate',
@@ -223,7 +245,7 @@ export default function DamagedRoadsLayer({
         // Layers/sources might not exist
       }
     };
-  }, [map, styleChangeCounter, visible, data]); // Include data for style-load races
+  }, [map, styleChangeCounter, visible, thresholds]); // Re-run if thresholds/visibility/style change (data handled in Effect 2)
 
   // Effect 2: Update data in existing source when data changes
   useEffect(() => {

@@ -5,6 +5,14 @@ import { FileDown, FileSpreadsheet } from 'lucide-react';
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types';
 import QRCode from 'qrcode';
 import { getCountrySlugFromCode } from '@/utils/countrySlug';
+import { logger } from '@/utils/logger';
+import PDFPreviewModal, { PDFTemplate } from './PDFPreviewModal';
+import {
+  PDF_TEMPLATE_CONFIG,
+  getPdfContentBottomMm,
+  getPdfContentWidthMm,
+  getPdfKeyFigureIconLayout,
+} from './pdfTemplateConfig';
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -15,31 +23,23 @@ const TEXT_MED: [number, number, number] = [110, 110, 110];
 const STRIPE: [number, number, number] = [240, 246, 252];
 
 // A4 page geometry (mm)
-const PW = 210;
-const PH = 297;
-const MX = 12; // horizontal margin
-const CONTENT_W = PW - 2 * MX; // 186 mm
+const PW = PDF_TEMPLATE_CONFIG.page.widthMm;
+const PH = PDF_TEMPLATE_CONFIG.page.heightMm;
+const MX = PDF_TEMPLATE_CONFIG.page.horizontalMarginMm;
+const CONTENT_W = getPdfContentWidthMm();
 
 // Sector table column boundary x-positions (mm from left page edge)
 // Widths: [Sector 44, Exposed 34, Damaged 34, Bldg Loss 42, Total Loss 32] = 186
 const TCOL_X = [MX, MX + 44, MX + 78, MX + 112, MX + 154, MX + 186];
 
-const FOOTER_H = 9;
-const CONTENT_TOP = 15;
-const CONTENT_BOTTOM = PH - FOOTER_H - 4;
-const TEMPLATE_PAGE1_CONTENT_TOP = 154;
-const TEMPLATE_CONTINUATION_CONTENT_TOP = 34;
-const TEMPLATE_PAGE1_MAP_SLOT = { x: 0, y: 47, w: 210, h: 96 } as const;
-const TEMPLATE_PAGE1_HEADER_RULE = { maskY: 22, lineY: 31 } as const;
-const TEMPLATE_PAGE1_QR_SLOT = { x: 177, y: 273, size: 20 } as const;
-const TEMPLATE_KEY_FIGURE_BOXES = [
-  { x: 24.7, y: 172.25, w: 45.3, h: 14.81 },
-  { x: 82.2, y: 172.25, w: 45.6, h: 14.81 },
-  { x: 143.84, y: 172.25, w: 41.16, h: 14.81 },
-  { x: 24.7, y: 205.48, w: 45.3, h: 14.81 },
-  { x: 82.2, y: 205.48, w: 45.6, h: 14.81 },
-  { x: 143.84, y: 205.48, w: 41.16, h: 14.81 },
-] as const;
+const FOOTER_H = PDF_TEMPLATE_CONFIG.page.footerHeightMm;
+const CONTENT_TOP = PDF_TEMPLATE_CONFIG.page.contentTopMm;
+const CONTENT_BOTTOM = getPdfContentBottomMm();
+const TEMPLATE_PAGE1_CONTENT_TOP = PDF_TEMPLATE_CONFIG.template.page1ContentTopMm;
+const TEMPLATE_CONTINUATION_CONTENT_TOP = PDF_TEMPLATE_CONFIG.template.continuationContentTopMm;
+const TEMPLATE_PAGE1_MAP_SLOT = PDF_TEMPLATE_CONFIG.map.slot;
+const TEMPLATE_PAGE1_QR_SLOT = PDF_TEMPLATE_CONFIG.template.qrSlot;
+const TEMPLATE_KEY_FIGURE_BOXES = PDF_TEMPLATE_CONFIG.keyFigures.boxes;
 const MAP_MAX_DIMENSION_PX = 2200;
 const MAP_CAPTURE_TIMEOUT_MS = 1500;
 const ASSET_FETCH_TIMEOUT_MS = 3000; // Increased for reliable template loading
@@ -58,6 +58,36 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
       setTimeout(() => resolve(undefined), timeoutMs);
     }),
   ]);
+};
+
+const getImageElementDimensions = async (src: string): Promise<{ width: number; height: number }> =>
+  await new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () =>
+      resolve({
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
+      });
+    image.onerror = () => reject(new Error('Failed to measure image'));
+    image.src = src;
+  });
+
+const getContainRect = (
+  sourceWidth: number,
+  sourceHeight: number,
+  boxWidth: number,
+  boxHeight: number
+) => {
+  const scale = Math.min(boxWidth / sourceWidth, boxHeight / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+
+  return {
+    width: drawWidth,
+    height: drawHeight,
+    offsetX: (boxWidth - drawWidth) / 2,
+    offsetY: (boxHeight - drawHeight) / 2,
+  };
 };
 
 interface ExportButtonsProps {
@@ -99,6 +129,9 @@ export default function ExportButtons({
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingCSV, setIsExportingCSV] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const previewTemplateRef = useRef<HTMLDivElement>(null);
   const pdfExportInFlightRef = useRef(false);
   const csvExportInFlightRef = useRef(false);
 
@@ -136,6 +169,12 @@ export default function ExportButtons({
       .replace(/\s+/g, '-')
       .replace(/[^A-Za-z0-9_-]/g, '')
       .replace(/-+/g, '-');
+
+  const buildPdfFilename = () => {
+    const safeCountryName = sanitizeFilenamePart(countryName || 'country');
+    const isoDate = new Date().toISOString().split('T')[0];
+    return `PDIE-SitRep-${safeCountryName}-${isoDate}.pdf`;
+  };
 
   const waitForMapRender = async (map: MapLike) => {
     if (!map) return;
@@ -270,7 +309,234 @@ export default function ExportButtons({
     }
   };
 
-  // ─── OCHA SitRep PDF ────────────────────────────────────────────────────────
+  const downloadPDFFromPreview = async () => {
+    const templateRoot = previewTemplateRef.current;
+    if (!templateRoot) return false;
+
+    const pageNodes = Array.from(templateRoot.children).filter(
+      (node): node is HTMLDivElement => node instanceof HTMLDivElement
+    );
+    if (pageNodes.length === 0) return false;
+
+    const [{ jsPDF }, html2canvasModule] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas'),
+    ]);
+    const html2canvas = html2canvasModule.default;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    for (let index = 0; index < pageNodes.length; index += 1) {
+      const pageNode = pageNodes[index];
+      const canvas = await html2canvas(pageNode, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: pageNode.scrollWidth,
+        windowHeight: pageNode.scrollHeight,
+      });
+
+      const imageData = canvas.toDataURL('image/png');
+      if (index > 0) {
+        doc.addPage();
+      }
+      doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+    }
+
+    doc.save(buildPdfFilename());
+    return true;
+  };
+
+  // ─── Open PDF Preview Modal ────────────────────────────────────────────────
+  const openPDFPreview = async () => {
+    if (disabled) {
+      setExportError('No data available to export');
+      setTimeout(() => setExportError(null), 3000);
+      return;
+    }
+    if (pdfExportInFlightRef.current) return;
+
+    pdfExportInFlightRef.current = true;
+    setIsExportingPDF(true);
+
+    try {
+      setExportError(null);
+
+      const cFull = fullCountryName || countryName;
+      const eventName = cycloneEventName || events[0]?.name || 'Tropical Cyclone Assessment';
+      const reportDate = new Date().toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+
+      // Map country code to assets
+      const countryHeaderMap: Record<string, string> = {
+        VU: '/pdf-assets/Country headers/DashBoard_Header_Vanuatu.png',
+        CK: '/pdf-assets/Country headers/DashBoard_Header_Cook Islands.png',
+        TO: '/pdf-assets/Country headers/DashBoard_Header_Tonga.png',
+        WS: '/pdf-assets/Country headers/DashBoard_Header_Samoa.png',
+      };
+      const countryFlagMap: Record<string, string> = {
+        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
+        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
+        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
+        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
+        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+      };
+      const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
+      const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
+
+      // Load assets including templates
+      const [
+        countryHeaderSrc,
+        countryFlagSrc,
+        templatePage1Src,
+        templatePage2Src,
+        personIconSrc,
+        buildingIconSrc,
+        tableFooterBannerSrc,
+      ] = await Promise.all([
+        countryHeaderPath
+          ? withTimeout(fetchAssetDataUrl(countryHeaderPath), ASSET_FETCH_TIMEOUT_MS)
+          : Promise.resolve(undefined),
+        countryFlagPath
+          ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
+          : Promise.resolve(undefined),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+            rasterizeWidthPx: 2480,
+            targetHeightPx: 3508,
+            fit: 'cover',
+            cropAnchorY: 'top',
+          }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+            rasterizeWidthPx: 2480,
+            targetHeightPx: 3508,
+            fit: 'cover',
+            cropAnchorY: 'top',
+          }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+      ]);
+
+      // Capture map if available
+      let mapImageUrl: string | undefined;
+      if (includeMapInPdf && mapInstance) {
+        try {
+          const canvas = await captureMapCanvas(mapInstance);
+          if (canvas) {
+            mapImageUrl = canvas.toDataURL('image/png');
+          }
+        } catch (error) {
+          logger.warn('Map capture skipped for preview:', error);
+        }
+      }
+
+      // Prepare key figures
+      const ns: Record<string, string> = nationalSummary?.[0] ?? {};
+      const totalAffectedPop = Number(ns.Population_Exposed_To_Any_Hazard) || 0;
+      const exposedBuildings = Number(ns.Buildings_Exposed_To_Any_Hazard) || 0;
+      const damagedBuildings = Number(ns.Damaged_Buildings) || 0;
+      const totalLoss = Number(ns.Total_Loss) || 0;
+
+      const keyFigures = [
+        {
+          label: 'People Affected',
+          value: totalAffectedPop > 0 ? integerFormatter.format(totalAffectedPop) : 'N/A',
+        },
+        {
+          label: 'Buildings Damaged',
+          value: damagedBuildings > 0 ? integerFormatter.format(damagedBuildings) : 'N/A',
+        },
+        {
+          label: 'Buildings Exposed',
+          value: exposedBuildings > 0 ? integerFormatter.format(exposedBuildings) : 'N/A',
+        },
+        {
+          label: 'Total Economic Damage',
+          value: totalLoss > 0 ? formatCompactUsd(totalLoss) : 'N/A',
+        },
+        {
+          label: 'Evacuation Centres',
+          value: integerFormatter.format(Number(ns.Total_Evacuation_Centres) || 0),
+        },
+        {
+          label: 'Max Wind (km/h)',
+          value: `${Number(ns.Max_Wind_Gusts) || 0}`,
+        },
+      ];
+
+      // Generate situation narrative
+      const situationNarrative =
+        `${eventName} impacted ${cFull}, resulting in widespread damage across multiple sectors. ` +
+        (totalAffectedPop > 0
+          ? `Approximately ${integerFormatter.format(totalAffectedPop)} people were exposed to hazard impacts. `
+          : '') +
+        (damagedBuildings > 0
+          ? `${integerFormatter.format(damagedBuildings)} buildings were damaged out of ${integerFormatter.format(exposedBuildings)} in the exposed area. `
+          : '') +
+        (totalLoss > 0
+          ? `Total estimated economic losses amount to ${formatCompactUsd(totalLoss)}. `
+          : '') +
+        `This Situation Report was generated from the PDIE (Pacific Disaster Impact & Exposure) ` +
+        `Dashboard using satellite-derived and modelled hazard and exposure data provided by SPC.`;
+
+      const countrySlug = countryCode ? getCountrySlugFromCode(countryCode) : null;
+      const dashboardUrl = countrySlug
+        ? `https://pdie-dashboard.spc.int/${countrySlug}`
+        : 'https://pdie-dashboard.spc.int';
+      const qrCodeSrc = await QRCode.toDataURL(dashboardUrl, {
+        width: 256,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+
+      // Set preview data and open modal
+      setPreviewData({
+        countryHeaderSrc,
+        countryFlagSrc,
+        templatePage1Src,
+        templatePage2Src,
+        reportDate,
+        fullCountryName: cFull,
+        cycloneEventName: eventName,
+        mapImageUrl,
+        keyFigures,
+        impactBySector,
+        nationalSummary,
+        formatNumber: (n: number) => integerFormatter.format(n),
+        formatCurrency: (n: number) => formatCompactUsd(n),
+        personIconSrc,
+        buildingIconSrc,
+        situationNarrative,
+        qrCodeSrc,
+        tableFooterBannerSrc,
+      });
+      setShowPreview(true);
+    } catch (error) {
+      logger.error('PDF preview failed:', error);
+      setExportError('Failed to load PDF preview. Please try again.');
+      setTimeout(() => setExportError(null), 5000);
+    } finally {
+      pdfExportInFlightRef.current = false;
+      setIsExportingPDF(false);
+    }
+  };
+
+  // ─── OCHA SitRep PDF (legacy jsPDF approach - kept for fallback) ───────────
   const downloadPDF = async () => {
     if (disabled) {
       setExportError('No data available to export');
@@ -284,6 +550,12 @@ export default function ExportButtons({
 
     try {
       setExportError(null);
+
+      const downloadedFromPreview = await downloadPDFFromPreview();
+      if (downloadedFromPreview) {
+        return;
+      }
+
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
@@ -383,7 +655,7 @@ export default function ExportButtons({
         try {
           mapCanvas = await captureMapCanvas(mapInstance);
         } catch (error) {
-          console.warn('Map capture skipped for PDF export:', error);
+          logger.warn('Map capture skipped for PDF export:', error);
         }
       }
 
@@ -432,7 +704,10 @@ export default function ExportButtons({
         }))
         .sort((a, b) => Number(b.Total_Loss || 0) - Number(a.Total_Loss || 0));
 
-      const sectorRows = derivedSectorRows.length > 0 ? derivedSectorRows : (impactBySector ?? []);
+      // Prefer the authoritative impact-by-sector CSV rows when available.
+      // The derived rows are a fallback and do not carry damaged-building counts.
+      const sectorRows =
+        impactBySector && impactBySector.length > 0 ? impactBySector : derivedSectorRows;
 
       const totalAffectedFromEvents = events.reduce(
         (sum, event) => sum + (event.totalAffectedPopulation || 0),
@@ -498,45 +773,6 @@ export default function ExportButtons({
 
       drawTemplateBackground(currentPage);
 
-      if (useTemplateBackground) {
-        doc.setFillColor(236, 248, 252);
-        doc.rect(
-          0,
-          TEMPLATE_PAGE1_HEADER_RULE.maskY,
-          PW,
-          TEMPLATE_PAGE1_MAP_SLOT.y - TEMPLATE_PAGE1_HEADER_RULE.maskY,
-          'F'
-        );
-        doc.setDrawColor(...OCHA_BLUE);
-        doc.setLineWidth(0.9);
-        doc.line(0, TEMPLATE_PAGE1_HEADER_RULE.lineY, PW, TEMPLATE_PAGE1_HEADER_RULE.lineY);
-      }
-
-      if (useTemplateBackground && mapCanvas) {
-        const { x, y, w, h } = TEMPLATE_PAGE1_MAP_SLOT;
-        doc.setFillColor(223, 228, 231);
-        doc.rect(x, y, w, h, 'F');
-        const sourceW = mapCanvas.width;
-        const sourceH = mapCanvas.height;
-        const widthRatio = w / sourceW;
-        const heightRatio = h / sourceH;
-        const scale = Math.min(widthRatio, heightRatio);
-        const drawW = sourceW * scale;
-        const drawH = sourceH * scale;
-        const drawX = x + (w - drawW) / 2;
-        const drawY = y + (h - drawH) / 2;
-        doc.addImage(mapCanvas, 'PNG', drawX, drawY, drawW, drawH, undefined, 'FAST');
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...OCHA_BLUE);
-        doc.text(
-          'Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.',
-          PW / 2,
-          y + h + 3,
-          { align: 'center' }
-        );
-      }
-
       // Only draw header elements if NOT using template background
       if (!useTemplateBackground) {
         // ── Header band ─────────────────────────────────────────────────────
@@ -560,7 +796,9 @@ export default function ExportButtons({
 
         // Report number / date (right)
         doc.setFont('helvetica', 'normal');
-        doc.text(`No. 01  |  ${reportDate}`, PW - MX, 10, { align: 'right' });
+        doc.text(`${PDF_TEMPLATE_CONFIG.labels.reportPrefix} ${reportDate}`, PW - MX, 10, {
+          align: 'right',
+        });
 
         // Country full name
         doc.setFontSize(9.5);
@@ -569,44 +807,137 @@ export default function ExportButtons({
 
         // Branding right
         doc.setFontSize(7.5);
-        doc.text('Pacific Disaster Impact & Exposure  |  PDIE Dashboard', PW - MX, 31, {
+        doc.text(PDF_TEMPLATE_CONFIG.labels.branding.replace(' | ', '  |  '), PW - MX, 31, {
           align: 'right',
         });
+
+        // Add map if available (non-template layout)
+        if (mapCanvas) {
+          // This will be on page 2 if content overflows
+          const mapH = 72;
+          const mapY = 49; // Default starting Y for content
+
+          // A simple check to see if we need a new page. This is not perfect.
+          // A better implementation would track `y` position.
+          // For now, we assume it goes on a new page if there's a lot of sector data.
+          if (sectorRows.length > 10) {
+            addReportPage();
+          }
+
+          doc.setFontSize(9.5);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(...TEXT_DARK);
+          doc.text('HAZARD IMPACT MAP', MX, mapY);
+          doc.setDrawColor(...OCHA_BLUE);
+          doc.setLineWidth(0.5);
+          doc.line(MX, mapY + 3, PW - MX, mapY + 3);
+          doc.addImage(mapCanvas, 'PNG', MX, mapY + 7, CONTENT_W, mapH, undefined, 'FAST');
+          doc.setFontSize(6.5);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(...TEXT_MED);
+          doc.text(PDF_TEMPLATE_CONFIG.map.captionText, MX, mapY + 7 + mapH + 3);
+        }
       } else {
         // When using template, add dynamic text overlays
         doc.setTextColor(...OCHA_DARK);
 
         // Country header at the top of the page (above map slot)
         if (countryHeaderSrc) {
-          const headerWidth = PW; // Full page width (210mm for A4)
-          const headerHeight = 30; // Fits above map slot (map starts at y=36)
-          doc.addImage(countryHeaderSrc, 'PNG', 0, 0, headerWidth, headerHeight, undefined, 'FAST');
+          const headerWidth = PW;
+          const headerHeight = PDF_TEMPLATE_CONFIG.template.headerHeightMm;
+          doc.setFillColor(255, 255, 255);
+          doc.rect(0, 0, headerWidth, headerHeight, 'F');
+
+          try {
+            const { width, height } = await getImageElementDimensions(countryHeaderSrc);
+            const fitted = getContainRect(width, height, headerWidth, headerHeight);
+            doc.addImage(
+              countryHeaderSrc,
+              'PNG',
+              fitted.offsetX,
+              fitted.offsetY,
+              fitted.width,
+              fitted.height,
+              undefined,
+              'FAST'
+            );
+          } catch {
+            doc.addImage(
+              countryHeaderSrc,
+              'PNG',
+              0,
+              0,
+              headerWidth,
+              headerHeight,
+              undefined,
+              'FAST'
+            );
+          }
         }
 
+        // This rectangle provides a background for the text lines below.
         doc.setFillColor(236, 248, 252);
-        doc.rect(0, 26, PW, 10, 'F');
+        doc.rect(
+          0,
+          PDF_TEMPLATE_CONFIG.template.headerBanner.topMm,
+          PW,
+          PDF_TEMPLATE_CONFIG.template.headerBanner.heightMm,
+          'F'
+        );
         doc.setDrawColor(...OCHA_BLUE);
         doc.setLineWidth(0.9);
-        doc.line(0, TEMPLATE_PAGE1_HEADER_RULE.lineY, PW, TEMPLATE_PAGE1_HEADER_RULE.lineY);
+        doc.line(0, PDF_TEMPLATE_CONFIG.map.slot.y, PW, PDF_TEMPLATE_CONFIG.map.slot.y);
 
         if (countryFlagSrc) {
           const flagX = 8;
           const flagY = 32;
           const flagW = 26;
           const flagH = 12;
+          // Draw white background to cover any lines behind the flag
+          doc.setFillColor(255, 255, 255);
+          doc.rect(flagX, flagY, flagW, flagH, 'F');
           doc.addImage(countryFlagSrc, 'PNG', flagX, flagY, flagW, flagH, undefined, 'FAST');
         }
 
         // Report number / date
         doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.text(`No. 01 | ${reportDate}`, PW - MX, 35, { align: 'right' });
+        doc.text(
+          `${PDF_TEMPLATE_CONFIG.labels.reportPrefix} ${reportDate}`,
+          PW - MX,
+          PDF_TEMPLATE_CONFIG.template.reportDateTopMm,
+          { align: 'right' }
+        );
 
         // Branding line
         doc.setFontSize(8.5);
-        doc.text('Pacific Disaster Impact & Exposure | PDIE Dashboard', PW - MX, 40, {
-          align: 'right',
-        });
+        doc.text(
+          PDF_TEMPLATE_CONFIG.labels.branding,
+          PW - MX,
+          PDF_TEMPLATE_CONFIG.template.brandingTopMm,
+          { align: 'right' }
+        );
+
+        // Add map to its designated slot on the template
+        if (mapCanvas) {
+          const { x, y, w, h } = TEMPLATE_PAGE1_MAP_SLOT;
+          doc.setFillColor(223, 228, 231);
+          doc.rect(x, y, w, h, 'F');
+          const sourceW = mapCanvas.width;
+          const sourceH = mapCanvas.height;
+          const widthRatio = w / sourceW;
+          const heightRatio = h / sourceH;
+          const scale = Math.min(widthRatio, heightRatio);
+          const drawW = sourceW * scale;
+          const drawH = sourceH * scale;
+          const drawX = x + (w - drawW) / 2;
+          const drawY = y + (h - drawH) / 2;
+          doc.addImage(mapCanvas, 'PNG', drawX, drawY, drawW, drawH, undefined, 'FAST');
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...OCHA_BLUE);
+          doc.text(PDF_TEMPLATE_CONFIG.map.captionText, PW / 2, y + h + 3, { align: 'center' });
+        }
       }
 
       // Page 1 template needs a lower content anchor than continuation pages.
@@ -620,7 +951,7 @@ export default function ExportButtons({
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...OCHA_BLUE);
-      doc.text('KEY FIGURES', PW / 2, y, { align: 'center' });
+      doc.text(PDF_TEMPLATE_CONFIG.labels.keyFiguresTitle, PW / 2, y, { align: 'center' });
       y += useTemplateBackground ? 10 : 8;
 
       const figures: Array<{ label: string; value: string }> = [
@@ -667,13 +998,17 @@ export default function ExportButtons({
             undefined,
           ];
           const iconSrc = iconMap[i];
-          const iconSize = 14;
-          const iconY = box.y - 19;
-          const valueY = box.y + 4.6; // Position value slightly higher for better centering
+          const iconLayout = getPdfKeyFigureIconLayout(i);
+          const iconSize = iconLayout.iconSizeMm;
+          const iconY = box.y + iconLayout.exportIconOffsetYmm;
+          const valueY = box.y + iconLayout.exportValueOffsetYmm;
           const labelLines = doc.splitTextToSize(fig.label.toUpperCase(), box.w - 3);
           const labelLineHeight = 2.3;
           const labelStartY =
-            box.y + box.h - 3.8 - labelLineHeight * Math.max(0, labelLines.length - 1);
+            box.y +
+            box.h -
+            iconLayout.exportLabelBottomInsetMm -
+            labelLineHeight * Math.max(0, labelLines.length - 1);
 
           if (iconSrc) {
             doc.addImage(
@@ -743,7 +1078,7 @@ export default function ExportButtons({
       doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...OCHA_BLUE);
-      doc.text('SITUATION OVERVIEW', MX, y);
+      doc.text(PDF_TEMPLATE_CONFIG.labels.situationOverviewTitle, MX, y);
       y += 9;
 
       const narrative =
@@ -776,13 +1111,13 @@ export default function ExportButtons({
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...OCHA_BLUE);
-        doc.text('SECTOR ANALYSIS', MX, y);
+        doc.text(PDF_TEMPLATE_CONFIG.labels.sectorAnalysisTitle, MX, y);
         y += 5;
       }
 
-      const ROW_H = 8.5;
-      const THEAD_H = 16;
-      const TABLE_TITLE_SPACE = 18;
+      const ROW_H = 7;
+      const THEAD_H = 13;
+      const TABLE_TITLE_SPACE = 15;
       const CELL_PAD_X = 2;
       const TABLE_X = MX;
       const TABLE_W = TCOL_X[5] - TCOL_X[0];
@@ -822,18 +1157,20 @@ export default function ExportButtons({
         });
       };
       const drawSectorTableTitle = () => {
-        doc.setFontSize(16);
+        doc.setFontSize(15);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...TABLE_BLUE);
-        doc.text('SECTOR ANALYSIS', PW / 2, y - 14, { align: 'center' });
+        doc.text(PDF_TEMPLATE_CONFIG.labels.sectorAnalysisTitle, PW / 2, y - 11, {
+          align: 'center',
+        });
       };
       const drawSectorTableHeader = () => {
         const headerTop = y - THEAD_H + 3;
         const headerCenterY = headerTop + THEAD_H / 2;
-        const headerLineHeight = 3.4;
+        const headerLineHeight = 2.9;
         doc.setFillColor(...TABLE_BLUE);
         doc.rect(TABLE_X, headerTop, TABLE_W, THEAD_H, 'F');
-        doc.setFontSize(12);
+        doc.setFontSize(10.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
 
@@ -854,7 +1191,7 @@ export default function ExportButtons({
             });
           });
         });
-        y = headerTop + THEAD_H + 3;
+        y = headerTop + THEAD_H + 2;
       };
 
       drawTableBackdrop(sectorRows.length);
@@ -881,7 +1218,7 @@ export default function ExportButtons({
         drawRowRule(rowBottom);
         drawColumnRules(rowTop, rowBottom);
 
-        doc.setFontSize(7.5);
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...TABLE_TEXT);
 
@@ -916,7 +1253,7 @@ export default function ExportButtons({
         doc.rect(TABLE_X, totalTop, TABLE_W, ROW_H, 'F');
         drawRowRule(totalBottom);
         drawColumnRules(totalTop, totalBottom);
-        doc.setFontSize(7.5);
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...TABLE_BLUE);
         doc.text('TOTAL', TCOL_X[0] + CELL_PAD_X, y);
@@ -929,42 +1266,10 @@ export default function ExportButtons({
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...TABLE_TEXT);
-      doc.text(
-        'Source: PDIE Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
-        PW / 2,
-        y + 0.6,
-        { align: 'center' }
-      );
+      doc.text(PDF_TEMPLATE_CONFIG.labels.dataSourceNote, PW / 2, y + 0.6, {
+        align: 'center',
+      });
       y += 10;
-
-      if (tableFooterBannerSrc) {
-        const bannerW = CONTENT_W;
-        const bannerH = (bannerW * 1153) / 2480;
-        ensureSpace(bannerH + 4);
-        doc.addImage(tableFooterBannerSrc, 'PNG', MX, y, bannerW, bannerH, undefined, 'FAST');
-        y += bannerH + 4;
-      }
-
-      // ── MAP IMAGE ─────────────────────────────────────────────────────────
-      if (mapCanvas && !useTemplateBackground) {
-        y = addReportPage();
-        const mapH = 72;
-        doc.setFontSize(9.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...TEXT_DARK);
-        doc.text('HAZARD IMPACT MAP', MX, y);
-        y += 3;
-        doc.setDrawColor(...OCHA_BLUE);
-        doc.setLineWidth(0.5);
-        doc.line(MX, y, PW - MX, y);
-        y += 4;
-        doc.addImage(mapCanvas, 'PNG', MX, y, CONTENT_W, mapH, undefined, 'FAST');
-        y += mapH + 3;
-        doc.setFontSize(6.5);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(...TEXT_MED);
-        doc.text('Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.', MX, y);
-      }
 
       // ── QR CODE ───────────────────────────────────────────────────────────
       try {
@@ -988,19 +1293,16 @@ export default function ExportButtons({
         const renderQrSize = useTemplateBackground ? TEMPLATE_PAGE1_QR_SLOT.size : qrSize;
         doc.addImage(qrDataUrl, 'PNG', qrX, qrY, renderQrSize, renderQrSize, undefined, 'FAST');
       } catch (error) {
-        console.warn('QR code generation skipped:', error);
+        logger.warn('QR code generation skipped:', error);
       }
 
       // ── Footer on all pages ───────────────────────────────────────────────
       const pageCount = doc.getNumberOfPages();
       for (let p = 1; p <= pageCount; p++) drawFooter(p, pageCount);
 
-      const safeCountryName = sanitizeFilenamePart(countryName || 'country');
-      const isoDate = new Date().toISOString().split('T')[0];
-      const filename = `PDIE-SitRep-${safeCountryName}-${isoDate}.pdf`;
-      doc.save(filename);
+      doc.save(buildPdfFilename());
     } catch (error) {
-      console.error('PDF export failed:', error);
+      logger.error('PDF export failed:', error);
       setExportError('Failed to export PDF. Please try again.');
       setTimeout(() => setExportError(null), 5000);
     } finally {
@@ -1127,7 +1429,7 @@ export default function ExportButtons({
       });
       saveAs(blob, 'climate-risk-data.csv');
     } catch (error) {
-      console.error('CSV export failed:', error);
+      logger.error('CSV export failed:', error);
       setExportError('Failed to export CSV. Please try again.');
       setTimeout(() => setExportError(null), 5000);
     } finally {
@@ -1137,44 +1439,84 @@ export default function ExportButtons({
   };
 
   return (
-    <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">
-      {exportError && (
-        <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 hidden lg:block">
-          {exportError}
-        </span>
+    <>
+      <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">
+        {exportError && (
+          <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 hidden lg:block">
+            {exportError}
+          </span>
+        )}
+        <button
+          onClick={openPDFPreview}
+          disabled={disabled || isExportingPDF}
+          aria-label="Export data as PDF report"
+          className={`group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
+            disabled
+              ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
+              : 'bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-red-300/70'
+          }`}
+          style={!disabled ? { boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)' } : undefined}
+          title={disabled ? 'No data available to export' : 'Preview & Export PDF'}
+        >
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
+            <FileDown className="w-3.5 h-3.5" />
+          </span>
+          <span className="hidden xl:inline">{isExportingPDF ? 'Loading' : 'Preview'}</span> PDF
+        </button>
+        <button
+          onClick={downloadCSV}
+          disabled={disabled || isExportingCSV}
+          aria-label="Export data as CSV file"
+          className={`group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
+            disabled
+              ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
+              : 'bg-gradient-to-br from-emerald-500/90 to-teal-600/90 border-emerald-300/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-emerald-300/70'
+          }`}
+          style={!disabled ? { boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)' } : undefined}
+          title={disabled ? 'No data available to export' : 'Export as CSV'}
+        >
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+          </span>
+          <span className="hidden xl:inline">{isExportingCSV ? 'Exporting' : 'Export'}</span> CSV
+        </button>
+      </div>
+
+      {/* PDF Preview Modal */}
+      {showPreview && previewData && (
+        <PDFPreviewModal
+          isOpen={showPreview}
+          onClose={() => {
+            setShowPreview(false);
+            setPreviewData(null);
+          }}
+          onDownload={downloadPDF}
+          title="PDF Report Preview"
+          isGenerating={isExportingPDF}
+        >
+          <PDFTemplate
+            ref={previewTemplateRef}
+            countryHeaderSrc={previewData.countryHeaderSrc}
+            countryFlagSrc={previewData.countryFlagSrc}
+            templatePage1Src={previewData.templatePage1Src}
+            templatePage2Src={previewData.templatePage2Src}
+            tableFooterBannerSrc={previewData.tableFooterBannerSrc}
+            reportDate={previewData.reportDate}
+            fullCountryName={previewData.fullCountryName}
+            cycloneEventName={previewData.cycloneEventName}
+            mapImageUrl={previewData.mapImageUrl}
+            keyFigures={previewData.keyFigures}
+            impactBySector={previewData.impactBySector}
+            nationalSummary={previewData.nationalSummary}
+            formatNumber={previewData.formatNumber}
+            formatCurrency={previewData.formatCurrency}
+            personIconSrc={previewData.personIconSrc}
+            buildingIconSrc={previewData.buildingIconSrc}
+            situationNarrative={previewData.situationNarrative}
+            qrCodeSrc={previewData.qrCodeSrc}
+          />
+        </PDFPreviewModal>
       )}
-      <button
-        onClick={downloadPDF}
-        disabled={disabled || isExportingPDF}
-        aria-label="Export data as PDF report"
-        className={`group inline-flex items-center gap-2 px-3.5 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-white rounded-xl border transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-          disabled
-            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
-            : 'bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 shadow-[0_12px_28px_-14px_rgba(239,68,68,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-16px_rgba(239,68,68,1)] hover:border-red-300/60 focus-visible:ring-red-300/70'
-        }`}
-        title={disabled ? 'No data available to export' : 'Export as PDF'}
-      >
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
-          <FileDown className="w-3.5 h-3.5" />
-        </span>
-        <span className="hidden sm:inline">{isExportingPDF ? 'Exporting' : 'Export'}</span> PDF
-      </button>
-      <button
-        onClick={downloadCSV}
-        disabled={disabled || isExportingCSV}
-        aria-label="Export data as CSV file"
-        className={`group inline-flex items-center gap-2 px-3.5 sm:px-5 py-2.5 text-xs sm:text-sm font-semibold text-white rounded-xl border transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-          disabled
-            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
-            : 'bg-gradient-to-br from-emerald-500/90 to-teal-600/90 border-emerald-300/30 shadow-[0_12px_28px_-14px_rgba(16,185,129,0.9)] hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-16px_rgba(16,185,129,1)] hover:border-emerald-200/60 focus-visible:ring-emerald-300/70'
-        }`}
-        title={disabled ? 'No data available to export' : 'Export as CSV'}
-      >
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
-          <FileSpreadsheet className="w-3.5 h-3.5" />
-        </span>
-        <span className="hidden sm:inline">{isExportingCSV ? 'Exporting' : 'Export'}</span> CSV
-      </button>
-    </div>
+    </>
   );
 }

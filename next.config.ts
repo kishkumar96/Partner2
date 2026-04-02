@@ -90,16 +90,18 @@ const nextConfig: NextConfig = {
   // Production build settings
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn'],
+      exclude: ['error'],  // Remove all console statements except errors in production
     } : false,
     reactRemoveProperties: process.env.NODE_ENV === 'production',
   },
 
   // Performance budgets
   experimental: {
-    optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2'],
+    optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2', 'maplibre-gl'],
     // Disable aggressive preloading for better performance
     optimisticClientCache: false,
+    // Enable faster builds with Webpack 5 module federation
+    esmExternals: true,
   },
 
   // Output standalone for better production optimization

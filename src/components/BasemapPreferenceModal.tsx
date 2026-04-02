@@ -8,8 +8,9 @@
  */
 
 import { useState } from 'react';
-import { Globe2, Map as MapIcon, Satellite, Check } from 'lucide-react';
+import { Globe2, Satellite, Check } from 'lucide-react';
 import { saveBasemapPreference } from '@/utils/userPreferences';
+import { BASEMAP_STYLES } from '@/utils/basemaps';
 
 const BASEMAP_OPTIONS = [
   {
@@ -17,7 +18,7 @@ const BASEMAP_OPTIONS = [
     name: 'Light',
     description: 'Clean & bright - ideal for printing',
     icon: Globe2,
-    style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+    style: BASEMAP_STYLES.positron,
     preview: 'bg-gradient-to-br from-slate-100 to-slate-200',
   },
   {
@@ -25,24 +26,8 @@ const BASEMAP_OPTIONS = [
     name: 'Dark',
     description: 'Low-light mode - easier on eyes',
     icon: Satellite,
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    style: BASEMAP_STYLES.dark,
     preview: 'bg-gradient-to-br from-slate-800 to-slate-900',
-  },
-  {
-    id: 'voyager',
-    name: 'Detailed',
-    description: 'Rich labels - perfect for urban analysis',
-    icon: MapIcon,
-    style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-    preview: 'bg-gradient-to-br from-blue-100 to-amber-100',
-  },
-  {
-    id: 'osm',
-    name: 'OpenStreetMap',
-    description: 'Familiar OSM styling',
-    icon: Globe2,
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    preview: 'bg-gradient-to-br from-green-100 to-yellow-100',
   },
 ] as const;
 

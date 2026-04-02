@@ -621,7 +621,7 @@ export default function SummaryPanel({
 
   if (events.length === 0 && !hasCSVData) {
     return (
-      <aside className="w-80 max-w-[min(320px,calc(100vw-40px))] flex flex-col flex-shrink-0 glass-panel border-l border-white/10 h-full min-h-0 overflow-hidden">
+      <aside className="w-full max-w-full flex flex-col flex-shrink-0 glass-panel border-l border-white/10 h-full min-h-0 overflow-hidden md:w-80 md:max-w-[min(320px,calc(100vw-40px))]">
         <div className="flex-1 overflow-y-auto p-6">
           <div className="glass-panel rounded-xl p-8 text-center space-y-4">
             <BarChart3 className="w-14 h-14 mx-auto text-slate-300" />
@@ -658,7 +658,7 @@ export default function SummaryPanel({
 
   return (
     <div
-      className="w-80 max-w-[min(320px,calc(100vw-40px))] h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50"
+      className="w-full max-w-full h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50 md:w-80 md:max-w-[min(320px,calc(100vw-40px))]"
       data-testid="summary-panel"
     >
       {/* Header */}

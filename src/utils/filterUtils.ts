@@ -20,6 +20,71 @@ export interface AggregatedEventData {
   totalEconomicDamage: number;
 }
 
+function getEventAggregationKey(
+  event: Event,
+  aggregationLevel: Exclude<AggregationLevel, 'national'>
+): string | null {
+  if (aggregationLevel === 'province') {
+    return event.provinceId || event.regionalImpacts?.[0]?.regionId || null;
+  }
+  return event.districtId || event.regionalImpacts?.[0]?.regionId || null;
+}
+
+function getFallbackAggregationName(
+  event: Event,
+  aggregationLevel: Exclude<AggregationLevel, 'national'>,
+  fallbackId: string
+): string {
+  const regionalName = event.regionalImpacts?.[0]?.regionName?.trim();
+  if (regionalName) return regionalName;
+
+  const eventName = event.name?.trim();
+  if (!eventName) return fallbackId;
+
+  const withoutSectorSuffix = eventName.replace(/\s*\([^)]+\)\s*$/, '');
+  const nameParts = withoutSectorSuffix.split(' - ');
+
+  if (nameParts.length > 1) {
+    return nameParts.slice(1).join(' - ') || fallbackId;
+  }
+
+  if (aggregationLevel === 'district') {
+    return withoutSectorSuffix || fallbackId;
+  }
+
+  return eventName;
+}
+
+function aggregateEventsFromEventData(
+  events: Event[],
+  aggregationLevel: Exclude<AggregationLevel, 'national'>
+): AggregatedEventData[] {
+  const grouped = new Map<string, AggregatedEventData>();
+
+  events.forEach(event => {
+    const key = getEventAggregationKey(event, aggregationLevel);
+    if (!key) return;
+
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.totalEvents += 1;
+      existing.totalAffectedPopulation += event.totalAffectedPopulation || 0;
+      existing.totalEconomicDamage += event.totalEconomicDamage || 0;
+      return;
+    }
+
+    grouped.set(key, {
+      id: key,
+      name: getFallbackAggregationName(event, aggregationLevel, key),
+      totalEvents: 1,
+      totalAffectedPopulation: event.totalAffectedPopulation || 0,
+      totalEconomicDamage: event.totalEconomicDamage || 0,
+    });
+  });
+
+  return Array.from(grouped.values());
+}
+
 /**
  * Checks if an item matches the selected hazards filter.
  * Returns true if no hazards are selected (show all) or if the item's hazardId is in the selection.
@@ -243,6 +308,10 @@ export function aggregateEventsByLevel(
       },
     ];
   } else if (aggregationLevel === 'province') {
+    if (provinces.length === 0) {
+      return aggregateEventsFromEventData(events, 'province');
+    }
+
     const result = provinces.map(province => {
       const provinceEvents = events.filter(e => e.provinceId === province.id);
       const metrics = computeAggregatedMetrics(provinceEvents);
@@ -252,8 +321,13 @@ export function aggregateEventsByLevel(
         ...metrics,
       };
     });
-    return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+    const populated = includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+    return populated.length > 0 ? populated : aggregateEventsFromEventData(events, 'province');
   } else {
+    if (districts.length === 0) {
+      return aggregateEventsFromEventData(events, 'district');
+    }
+
     const result = districts.map(district => {
       const districtEvents = events.filter(e => e.districtId === district.id);
       const metrics = computeAggregatedMetrics(districtEvents);
@@ -263,6 +337,7 @@ export function aggregateEventsByLevel(
         ...metrics,
       };
     });
-    return includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+    const populated = includeEmpty ? result : result.filter(d => d.totalEvents > 0);
+    return populated.length > 0 ? populated : aggregateEventsFromEventData(events, 'district');
   }
 }

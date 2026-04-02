@@ -107,7 +107,7 @@ export default function MethodologyDrawer({ isOpen, onClose }: MethodologyDrawer
                     ≥120 km/h
                   </li>
                   <li>
-                    <strong>Economic Damage:</strong> Modelled losses &gt;$5M USD
+                    <strong>Economic Damage:</strong> Modelled damages &gt;$5M USD
                   </li>
                   <li>
                     <strong>Building Damage:</strong> &gt;500 structures with damage state D3+

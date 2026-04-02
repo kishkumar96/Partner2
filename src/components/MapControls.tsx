@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Globe2,
-  Map,
   Satellite,
   Settings2,
+  ChevronDown,
   Wind,
   Waves,
   Loader2,
@@ -14,7 +14,9 @@ import {
   Building2,
   Construction,
   Database,
+  CloudRain,
 } from 'lucide-react';
+import { BASEMAP_STYLES } from '@/utils/basemaps';
 
 interface MapControlsProps {
   layout?: 'overlay' | 'panel';
@@ -34,6 +36,8 @@ interface MapControlsProps {
   showRoadsLayer?: boolean;
   onBuildingsLayerToggle?: (visible: boolean) => void;
   onRoadsLayerToggle?: (visible: boolean) => void;
+  showCycloneLayer?: boolean;
+  onCycloneLayerToggle?: (visible: boolean) => void;
   isMapDataLoading?: boolean;
   mapDataLoadingLabel?: string;
   isHazardsLoading?: boolean;
@@ -56,25 +60,13 @@ const BASEMAPS = [
     id: 'positron',
     name: 'Light',
     icon: Globe2,
-    style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-  },
-  {
-    id: 'voyager',
-    name: 'Detailed',
-    icon: Map,
-    style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+    style: BASEMAP_STYLES.positron,
   },
   {
     id: 'dark',
     name: 'Dark',
     icon: Satellite,
-    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  },
-  {
-    id: 'osm',
-    name: 'OpenStreetMap',
-    icon: Globe2,
-    style: 'https://tiles.openfreemap.org/styles/liberty',
+    style: BASEMAP_STYLES.dark,
   },
 ];
 
@@ -102,6 +94,8 @@ export function MapControls({
   showRoadsLayer = false,
   onBuildingsLayerToggle,
   onRoadsLayerToggle,
+  showCycloneLayer = false,
+  onCycloneLayerToggle,
   isMapDataLoading = false,
   mapDataLoadingLabel = 'Loading map/data...',
   isHazardsLoading = false,
@@ -119,15 +113,107 @@ export function MapControls({
   const [isBasemapOpen, setIsBasemapOpen] = useState(false);
   const [isControlsOpen, setIsControlsOpen] = useState(false);
   const [showBasemapSelector, setShowBasemapSelector] = useState(true);
+  const [expandedOverlayId, setExpandedOverlayId] = useState<string | null>(null);
   const basemapTriggerRef = useRef<HTMLButtonElement | null>(null);
   const basemapOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const hasMapStyleControls = !!mapStyle && !!onMapStyleChange;
   const has3DControls = !!on3DViewToggle;
-  const hasLayerToggles = !!onWindLayerToggle || !!onInundationLayerToggle;
+  const hasLayerToggles =
+    !!onWindLayerToggle || !!onInundationLayerToggle || !!onCycloneLayerToggle;
   const hasDamageLayerToggles = !!onBuildingsLayerToggle || !!onRoadsLayerToggle;
   const controlsBusy = isMapDataLoading || isHazardsLoading || isLoadingLayers;
   const extrusionControlsDisabled = controlsBusy || !is3DView;
+
+  const overlaySections = [
+    onCycloneLayerToggle
+      ? {
+          id: 'cyclone',
+          title: 'Tropical Cyclone',
+          description: 'Forecast track and cone visibility.',
+          icon: CloudRain,
+          checked: showCycloneLayer,
+          onToggle: onCycloneLayerToggle,
+          inputId: 'cyclone-layer-toggle',
+          inputName: 'cycloneLayerToggle',
+          colorClass: 'text-violet-300',
+          ringClass: 'focus:ring-violet-500/50',
+          checkboxClass: 'text-violet-500',
+        }
+      : null,
+    onWindLayerToggle
+      ? {
+          id: 'wind',
+          title: 'Maximum Wind',
+          description: 'Maximum wind hazard intensity overlay.',
+          icon: Wind,
+          checked: showWindLayer,
+          onToggle: onWindLayerToggle,
+          inputId: 'wind-layer-toggle',
+          inputName: 'windLayerToggle',
+          colorClass: 'text-cyan-300',
+          ringClass: 'focus:ring-cyan-500/50',
+          checkboxClass: 'text-cyan-500',
+        }
+      : null,
+    onInundationLayerToggle
+      ? {
+          id: 'flood',
+          title: 'Maximum Inundation',
+          description: 'Maximum flood and inundation coverage.',
+          icon: Waves,
+          checked: showInundationLayer,
+          onToggle: onInundationLayerToggle,
+          inputId: 'inundation-layer-toggle',
+          inputName: 'inundationLayerToggle',
+          colorClass: 'text-blue-300',
+          ringClass: 'focus:ring-blue-500/50',
+          checkboxClass: 'text-blue-500',
+        }
+      : null,
+    onBuildingsLayerToggle
+      ? {
+          id: 'buildings',
+          title: 'Damaged Buildings',
+          description: 'Building damage footprints.',
+          icon: Building2,
+          checked: showBuildingsLayer,
+          onToggle: onBuildingsLayerToggle,
+          inputId: 'buildings-layer-toggle',
+          inputName: 'buildingsLayerToggle',
+          colorClass: 'text-amber-300',
+          ringClass: 'focus:ring-amber-500/50',
+          checkboxClass: 'text-amber-500',
+        }
+      : null,
+    onRoadsLayerToggle
+      ? {
+          id: 'roads',
+          title: 'Damaged Roads',
+          description: 'Road disruption and damage traces.',
+          icon: Construction,
+          checked: showRoadsLayer,
+          onToggle: onRoadsLayerToggle,
+          inputId: 'roads-layer-toggle',
+          inputName: 'roadsLayerToggle',
+          colorClass: 'text-orange-300',
+          ringClass: 'focus:ring-orange-500/50',
+          checkboxClass: 'text-orange-500',
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    id: string;
+    title: string;
+    description: string;
+    icon: typeof CloudRain;
+    checked: boolean;
+    onToggle: (visible: boolean) => void;
+    inputId: string;
+    inputName: string;
+    colorClass: string;
+    ringClass: string;
+    checkboxClass: string;
+  }>;
 
   const closeBasemapMenu = (restoreFocus = false) => {
     setIsBasemapOpen(false);
@@ -227,7 +313,7 @@ export function MapControls({
                 type="button"
                 disabled={controlsBusy}
                 aria-pressed={mapStyle === 'loss'}
-                aria-label="Economic loss coloring"
+                aria-label="Shade map by estimated damage"
                 onClick={() => onMapStyleChange?.('loss')}
                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                   mapStyle === 'loss'
@@ -235,13 +321,13 @@ export function MapControls({
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                Damage shading
+                Estimated damage
               </button>
               <button
                 type="button"
                 disabled={controlsBusy}
                 aria-pressed={mapStyle === 'wind'}
-                aria-label="Wind exposure coloring"
+                aria-label="Shade map by wind intensity"
                 onClick={() => onMapStyleChange?.('wind')}
                 className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                   mapStyle === 'wind'
@@ -249,7 +335,7 @@ export function MapControls({
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
               >
-                Wind shading
+                Wind intensity
               </button>
             </div>
           )}
@@ -385,90 +471,72 @@ export function MapControls({
                       Map Overlays
                     </div>
                     <p className="text-[11px] text-slate-500 mb-2">
-                      Overlay visibility only. Separate from regional shading and data filters.
+                      Overlay visibility only. Open a layer when you need its details.
                     </p>
                     <div className="space-y-2">
-                      {onWindLayerToggle && (
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input
-                            id="wind-layer-toggle"
-                            name="windLayerToggle"
-                            type="checkbox"
-                            checked={showWindLayer}
-                            disabled={controlsBusy}
-                            onChange={e => onWindLayerToggle(e.target.checked)}
-                            aria-label="Wind layer"
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-2 focus:ring-cyan-500/50 cursor-pointer"
-                          />
-                          <Wind className="w-4 h-4 text-cyan-400" />
-                          <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Wind overlay
-                          </span>
-                          <span className="ml-auto text-[10px] font-semibold text-slate-300">
-                            {showWindLayer ? 'Visible' : 'Hidden'}
-                          </span>
-                        </label>
-                      )}
-                      {onInundationLayerToggle && (
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input
-                            id="inundation-layer-toggle"
-                            name="inundationLayerToggle"
-                            type="checkbox"
-                            checked={showInundationLayer}
-                            disabled={controlsBusy}
-                            onChange={e => onInundationLayerToggle(e.target.checked)}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
-                          />
-                          <Waves className="w-4 h-4 text-blue-400" />
-                          <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Flood overlay
-                          </span>
-                          <span className="ml-auto text-[10px] font-semibold text-slate-300">
-                            {showInundationLayer ? 'Visible' : 'Hidden'}
-                          </span>
-                        </label>
-                      )}
-                      {onBuildingsLayerToggle && (
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input
-                            id="buildings-layer-toggle"
-                            name="buildingsLayerToggle"
-                            type="checkbox"
-                            checked={showBuildingsLayer}
-                            disabled={controlsBusy}
-                            onChange={e => onBuildingsLayerToggle(e.target.checked)}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-2 focus:ring-amber-500/50 cursor-pointer"
-                          />
-                          <Building2 className="w-4 h-4 text-amber-400" />
-                          <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Damaged Buildings
-                          </span>
-                          <span className="ml-auto text-[10px] font-semibold text-slate-300">
-                            {showBuildingsLayer ? 'Visible' : 'Hidden'}
-                          </span>
-                        </label>
-                      )}
-                      {onRoadsLayerToggle && (
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <input
-                            id="roads-layer-toggle"
-                            name="roadsLayerToggle"
-                            type="checkbox"
-                            checked={showRoadsLayer}
-                            disabled={controlsBusy}
-                            onChange={e => onRoadsLayerToggle(e.target.checked)}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-orange-500 focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
-                          />
-                          <Construction className="w-4 h-4 text-orange-400" />
-                          <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                            Damaged Roads
-                          </span>
-                          <span className="ml-auto text-[10px] font-semibold text-slate-300">
-                            {showRoadsLayer ? 'Visible' : 'Hidden'}
-                          </span>
-                        </label>
-                      )}
+                      {overlaySections.map(section => {
+                        const Icon = section.icon;
+                        const isExpanded = expandedOverlayId === section.id;
+
+                        return (
+                          <div
+                            key={section.id}
+                            className="rounded-lg border border-slate-700/80 bg-slate-900/35 overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedOverlayId(current =>
+                                  current === section.id ? null : section.id
+                                )
+                              }
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/60 transition-colors"
+                              aria-expanded={isExpanded}
+                              aria-controls={`${section.id}-overlay-panel`}
+                            >
+                              <Icon className={`w-4 h-4 ${section.colorClass}`} />
+                              <span className="text-sm text-slate-200 flex-1">{section.title}</span>
+                              <span className="text-[10px] font-semibold text-slate-400">
+                                {section.checked ? 'Visible' : 'Hidden'}
+                              </span>
+                              <ChevronDown
+                                className={`w-4 h-4 text-slate-500 transition-transform ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {isExpanded && (
+                              <div
+                                id={`${section.id}-overlay-panel`}
+                                className="border-t border-slate-700/70 px-3 py-3 space-y-2"
+                              >
+                                <p className="text-[11px] text-slate-500">{section.description}</p>
+                                <label className="flex items-center justify-between gap-3 cursor-pointer group">
+                                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
+                                    Show layer
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-semibold text-slate-400">
+                                      {section.checked ? 'On' : 'Off'}
+                                    </span>
+                                    <input
+                                      id={section.inputId}
+                                      name={section.inputName}
+                                      type="checkbox"
+                                      checked={section.checked}
+                                      disabled={controlsBusy}
+                                      onChange={e => section.onToggle(e.target.checked)}
+                                      aria-label={section.title}
+                                      className={`w-4 h-4 rounded border-slate-600 bg-slate-800 ${section.checkboxClass} focus:ring-2 ${section.ringClass} cursor-pointer`}
+                                    />
+                                  </div>
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -30,7 +30,7 @@ interface AdvancedChartsProps {
  * - Radar: Multi-sector regional profile
  * - Scatter: Population vs Economic Loss
  */
-export default function AdvancedCharts({
+const AdvancedCharts = memo(function AdvancedCharts({
   regionalSummary,
   regionalSummaryBySector,
   maxRegions = 10,
@@ -184,8 +184,8 @@ export default function AdvancedCharts({
           <h4 className="text-sm font-semibold text-slate-100">Regional Economic Analysis</h4>
           <p className="text-xs text-slate-400 mt-1">
             {viewMode === 'heatmap'
-              ? 'Sector-region loss distribution (darker = higher loss)'
-              : 'Top regions by aggregate economic damage'}
+              ? 'Sector-region Damage distribution (darker = higher Damage)'
+              : 'Top regions by aggregate economic Damage'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -346,7 +346,7 @@ export default function AdvancedCharts({
       )}
     </div>
   );
-}
+});
 
 function ImpactMatrixOverlay({
   heatmapData,
@@ -370,7 +370,7 @@ function ImpactMatrixOverlay({
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60">
           <div>
             <h3 className="text-sm font-semibold text-slate-100">Impact Matrix</h3>
-            <p className="text-xs text-slate-400">Sector loss by region (Millions USD)</p>
+            <p className="text-xs text-slate-400">Sector Damage by region (Millions USD)</p>
           </div>
           <button
             type="button"
@@ -482,3 +482,5 @@ function ImpactMatrixOverlay({
 
   return createPortal(<div className="fixed inset-0 z-[90]">{content}</div>, document.body);
 }
+
+export default AdvancedCharts;

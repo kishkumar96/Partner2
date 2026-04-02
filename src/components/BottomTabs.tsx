@@ -483,14 +483,14 @@ export default function BottomTabs({
   ];
 
   return (
-    <div className="h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0">
+    <div className="h-[19rem] sm:h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0">
       {/* Tab Headers - Reduced padding */}
-      <div className="flex border-b border-white/10 px-4">
+      <div className="flex overflow-x-auto border-b border-white/10 px-2 sm:px-4">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex-shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors sm:px-4 ${
               activeTab === tab.id
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -502,7 +502,7 @@ export default function BottomTabs({
       </div>
 
       {/* Tab Content - Consistent spacing */}
-      <div className="flex-1 overflow-auto p-4 space-y-4">
+      <div className="flex-1 overflow-auto p-3 space-y-4 sm:p-4">
         {activeTab === 'events' && (
           <div className="space-y-4">
             {/* Header with Export Button */}

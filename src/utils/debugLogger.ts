@@ -141,20 +141,26 @@ function log(level: LogLevel, category: LogCategory, message: string, details?: 
   // Output to console
   const formattedMessage = formatLogEntry(entry);
 
+  // Format details for better console output
+  const formattedDetails =
+    details && typeof details === 'object'
+      ? '\n' + JSON.stringify(details, null, 2)
+      : details || '';
+
   // Use original console methods to prevent infinite recursion
   try {
     switch (level) {
       case 'debug':
-        originalConsole.debug(formattedMessage, details || '');
+        originalConsole.debug(formattedMessage, formattedDetails);
         break;
       case 'info':
-        originalConsole.info(formattedMessage, details || '');
+        originalConsole.info(formattedMessage, formattedDetails);
         break;
       case 'warn':
-        originalConsole.warn(formattedMessage, details || '');
+        originalConsole.warn(formattedMessage, formattedDetails);
         break;
       case 'error':
-        originalConsole.error(formattedMessage, details || '');
+        originalConsole.error(formattedMessage, formattedDetails);
         break;
     }
   } catch (_err) {

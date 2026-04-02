@@ -1173,9 +1173,9 @@ async function loadPartnerApiCountryData(
     }
 
     const [cycloneResponse, eventResponse, riskResponse] = await Promise.all([
-      fetch(mapping.scopedUrls.cyclone_track, { signal }),
-      fetch(mapping.scopedUrls.event, { signal }),
-      fetch(mapping.scopedUrls.risk_information, { signal }),
+      fetch(mapping.scopedUrls.cyclone_track, { signal, cache: 'no-store' }),
+      fetch(mapping.scopedUrls.event, { signal, cache: 'no-store' }),
+      fetch(mapping.scopedUrls.risk_information, { signal, cache: 'no-store' }),
     ]);
 
     const cyclonePayload = cycloneResponse.ok ? await cycloneResponse.json() : null;

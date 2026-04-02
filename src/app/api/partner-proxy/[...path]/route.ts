@@ -26,9 +26,16 @@ function backoffMsForAttempt(attempt: number): number {
   return 250 * attempt;
 }
 
+function ensureTrailingSlash(path: string): string {
+  return path.endsWith('/') ? path : `${path}/`;
+}
+
 async function proxyRequest(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
-  const targetPath = path.join('/');
+  const rawTargetPath = path.join('/');
+  const targetPath = rawTargetPath.startsWith('partner_api/')
+    ? ensureTrailingSlash(rawTargetPath)
+    : rawTargetPath;
 
   // THREDDS WMS lives on a different host from the partner API
   const targetBase = targetPath.startsWith('thredds/') ? THREDDS_BASE : PARTNER_API_BASE;
@@ -122,7 +129,12 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   const responseHeaders = new Headers();
   for (const [key, value] of upstream.headers.entries()) {
     const lower = key.toLowerCase();
-    if (lower === 'transfer-encoding' || lower === 'connection') {
+    if (
+      lower === 'transfer-encoding' ||
+      lower === 'connection' ||
+      lower === 'content-encoding' ||
+      lower === 'content-length'
+    ) {
       continue;
     }
     responseHeaders.set(key, value);
