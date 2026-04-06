@@ -630,7 +630,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                     >
                       Exposed
                       <br />
-                      Bldgs
+                      Buildings
                     </th>
                     <th
                       style={{
@@ -645,7 +645,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                     >
                       Damaged
                       <br />
-                      Bldgs
+                      Buildings
                     </th>
                     <th
                       style={{

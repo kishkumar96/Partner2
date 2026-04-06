@@ -42,7 +42,8 @@ const TEMPLATE_PAGE1_QR_SLOT = PDF_TEMPLATE_CONFIG.template.qrSlot;
 const TEMPLATE_KEY_FIGURE_BOXES = PDF_TEMPLATE_CONFIG.keyFigures.boxes;
 const MAP_MAX_DIMENSION_PX = 2200;
 const MAP_CAPTURE_TIMEOUT_MS = 1500;
-const ASSET_FETCH_TIMEOUT_MS = 3000; // Increased for reliable template loading
+const ASSET_FETCH_TIMEOUT_MS = 10000; // Increased for large SVGs in production
+const LARGE_SVG_TIMEOUT_MS = 15000; // Extra time for template backgrounds
 
 /** Minimal map type — avoids importing all of maplibre-gl into this module */
 type MapLike = {
@@ -240,8 +241,14 @@ export default function ExportButtons({
         }
   ): Promise<string | undefined> => {
     try {
-      const response = await fetch(path);
-      if (!response.ok) return undefined;
+      // URL-encode the path to handle spaces and special characters
+      const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      logger.debug(`Fetching asset: ${path} -> ${encodedPath}`);
+      const response = await fetch(encodedPath);
+      if (!response.ok) {
+        logger.warn(`Failed to fetch asset ${path}: ${response.status} ${response.statusText}`);
+        return undefined;
+      }
 
       const isSvg = path.toLowerCase().endsWith('.svg');
       if (!isSvg) {
@@ -372,10 +379,10 @@ export default function ExportButtons({
 
       // Map country code to assets
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/Country headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/Country headers/DashBoard_Header_Cook Islands.png',
-        TO: '/pdf-assets/Country headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/Country headers/DashBoard_Header_Samoa.png',
+        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
+        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
+        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
+        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
         VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
@@ -525,6 +532,19 @@ export default function ExportButtons({
         qrCodeSrc,
         tableFooterBannerSrc,
       });
+      // Log which assets failed to load
+      const failedAssets = [];
+      if (!templatePage1Src) failedAssets.push('Template Page 1');
+      if (!templatePage2Src) failedAssets.push('Template Page 2');
+      if (!personIconSrc) failedAssets.push('Person Icon');
+      if (!buildingIconSrc) failedAssets.push('Building Icon');
+      if (countryHeaderPath && !countryHeaderSrc) failedAssets.push('Country Header');
+      if (countryFlagPath && !countryFlagSrc) failedAssets.push('Country Flag');
+      
+      if (failedAssets.length > 0) {
+        logger.warn(`PDF assets failed to load: ${failedAssets.join(', ')}`);
+      }
+      
       setShowPreview(true);
     } catch (error) {
       logger.error('PDF preview failed:', error);
@@ -569,10 +589,10 @@ export default function ExportButtons({
 
       // Map country code to header image
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/Country headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/Country headers/DashBoard_Header_Cook Islands.png',
-        TO: '/pdf-assets/Country headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/Country headers/DashBoard_Header_Samoa.png',
+        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
+        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
+        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
+        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
         VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
@@ -611,7 +631,7 @@ export default function ExportButtons({
             fit: 'cover',
             cropAnchorY: 'top',
           }),
-          ASSET_FETCH_TIMEOUT_MS
+          LARGE_SVG_TIMEOUT_MS
         ),
         withTimeout(
           fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
@@ -620,7 +640,7 @@ export default function ExportButtons({
             fit: 'cover',
             cropAnchorY: 'top',
           }),
-          ASSET_FETCH_TIMEOUT_MS
+          LARGE_SVG_TIMEOUT_MS
         ),
         // Load country header if available
         countryHeaderPath
