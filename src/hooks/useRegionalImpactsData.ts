@@ -136,22 +136,16 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
         }
 
         if (!hasLoss || !hasWind) {
-          const validationError = new Error(
-            `Regional impacts data validation failed for ${effectiveCountry}`
+          debugLogger.warn(
+            'Partial data enrichment detected - continuing with available data',
+            'map-source',
+            {
+              countryCode: effectiveCountry,
+              missingLossCount,
+              missingWindCount,
+              availableKeys: Object.keys(props),
+            }
           );
-          debugLogger.warn('Regional impacts data validation failed', 'map-source', {
-            countryCode: effectiveCountry,
-            missingLossCount,
-            missingWindCount,
-            availableKeys: Object.keys(props),
-          });
-          setState({
-            data: null,
-            sectorData: null,
-            loading: false,
-            error: validationError,
-          });
-          return;
         }
       }
 
