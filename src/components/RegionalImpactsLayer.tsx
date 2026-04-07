@@ -93,6 +93,20 @@ interface RegionalImpactsLayerProps {
   countryCode?: CountryCode | null;
   layerOpacityScale?: number;
   legendSettings?: LegendSettings;
+  onDebugStateChange?: (state: RegionalImpactsDebugState) => void;
+}
+
+export interface RegionalImpactsDebugState {
+  countryCode: CountryCode | null;
+  mapStyle: 'loss' | 'wind' | 'satellite' | 'street';
+  visible: boolean;
+  loading: boolean;
+  error: string | null;
+  featureCount: number;
+  sectorFeatureCount: number;
+  hasTotalLoss: boolean;
+  hasMaxWindGusts: boolean;
+  selectedRegion: string | null;
 }
 
 export default function RegionalImpactsLayer({
@@ -105,6 +119,7 @@ export default function RegionalImpactsLayer({
   countryCode = null,
   layerOpacityScale = 70,
   legendSettings,
+  onDebugStateChange,
 }: RegionalImpactsLayerProps) {
   const handlersRef = useRef<{
     handleClick?: (
@@ -117,7 +132,7 @@ export default function RegionalImpactsLayer({
   const selectedRegionRef = useRef<string | null>(selectedRegion);
   const onRegionSelectRef = useRef<typeof onRegionSelect>(onRegionSelect);
   const sectorDataByRegionRef = useRef<Map<string, Record<string, unknown>>>(new Map());
-  const { data, sectorData, error } = useRegionalImpactsData(countryCode);
+  const { data, sectorData, loading, error } = useRegionalImpactsData(countryCode);
 
   const sectorDataByRegion = useMemo(() => {
     const regionMap = new Map<string, Record<string, unknown>>();
@@ -320,8 +335,13 @@ export default function RegionalImpactsLayer({
       if (!map.getSource(REGIONAL_SOURCE_ID)) {
         map.addSource(REGIONAL_SOURCE_ID, {
           type: 'geojson',
-          data: EMPTY_GEOJSON,
+          data: data ?? EMPTY_GEOJSON,
         });
+      }
+
+      const source = map.getSource(REGIONAL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+      if (source?.setData) {
+        source.setData(data ?? EMPTY_GEOJSON);
       }
 
       const fillBeforeId = getBeforeLayerId(map, REGIONAL_FILL_LAYER_ID);
@@ -444,7 +464,7 @@ export default function RegionalImpactsLayer({
         handlersRef.current = {};
       }
     };
-  }, [map, visible, styleChangeCounter]);
+  }, [map, visible, styleChangeCounter, countryCode, data]);
 
   /**
    * Effect 2: Data Updates
@@ -462,14 +482,14 @@ export default function RegionalImpactsLayer({
    * Effect 1 handles layer creation, this only pushes new data.
    */
   useEffect(() => {
-    if (!map || !data) return;
+    if (!map) return;
 
     const applyData = () => {
       if (!safeIsStyleLoaded(map)) return;
 
       const source = map.getSource(REGIONAL_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
       if (source?.setData) {
-        source.setData(data);
+        source.setData(data ?? EMPTY_GEOJSON);
       }
     };
 
@@ -487,7 +507,7 @@ export default function RegionalImpactsLayer({
         map.off('load', loadListener);
       }
     };
-  }, [map, data]);
+  }, [map, data, countryCode, styleChangeCounter]);
 
   /**
    * Effect 3: Paint Property Updates
@@ -582,8 +602,44 @@ export default function RegionalImpactsLayer({
    */
   useEffect(() => {
     if (!error) return;
+    if (error.name === 'AbortError') return;
     debugLogger.warn('Could not load regional impacts data', 'map-source', error);
   }, [error]);
+
+  useEffect(() => {
+    if (!onDebugStateChange) return;
+
+    const features = data?.features ?? [];
+    const hasTotalLoss = features.some(
+      feature => 'Total_Loss' in (((feature.properties || {}) as Record<string, unknown>) || {})
+    );
+    const hasMaxWindGusts = features.some(
+      feature => 'Max_Wind_Gusts' in (((feature.properties || {}) as Record<string, unknown>) || {})
+    );
+
+    onDebugStateChange({
+      countryCode,
+      mapStyle,
+      visible,
+      loading,
+      error: error?.name === 'AbortError' ? null : (error?.message ?? null),
+      featureCount: features.length,
+      sectorFeatureCount: sectorData?.features?.length ?? 0,
+      hasTotalLoss,
+      hasMaxWindGusts,
+      selectedRegion,
+    });
+  }, [
+    countryCode,
+    mapStyle,
+    visible,
+    loading,
+    error,
+    data,
+    sectorData,
+    selectedRegion,
+    onDebugStateChange,
+  ]);
 
   return null;
 }

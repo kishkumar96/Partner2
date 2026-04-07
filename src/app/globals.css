@@ -663,3 +663,22 @@ button:disabled,
 .animate-slow-spin {
   animation: slowSpin 3s linear infinite;
 }
+
+/* ============================================
+   Performance: Prevent CLS from MapLibre controls
+   ============================================ */
+/* Reserve space for MapLibre attribution to prevent layout shift */
+.maplibregl-ctrl-bottom-right {
+  min-height: 20px;
+  contain: layout;
+}
+
+/* Prevent layout shift from map controls loading */
+.maplibregl-ctrl {
+  contain: layout style;
+}
+
+/* Optimize basemap rendering to prevent forced reflows */
+.maplibregl-map {
+  contain: size layout style paint;
+}

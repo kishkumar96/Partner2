@@ -22,7 +22,7 @@ import { logger } from '@/utils/logger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
 import RealDataLayers from './RealDataLayers';
-import RegionalImpactsLayer from './RegionalImpactsLayer';
+import RegionalImpactsLayer, { type RegionalImpactsDebugState } from './RegionalImpactsLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
 import DamagedRoadsLayer from './DamagedRoadsLayer';
 import CycloneAnimationLayer from './CycloneAnimationLayer';
@@ -324,11 +324,16 @@ export default function MapView({
   const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
   const [wmsWarning, setWmsWarning] = useState<string | null>(null);
   const [basemapError, setBasemapError] = useState<string | null>(null);
+  const [regionalImpactsDebug, setRegionalImpactsDebug] =
+    useState<RegionalImpactsDebugState | null>(null);
   const tileErrorCountRef = useRef(0);
   const styleLoadAttemptsRef = useRef(0);
   const mapStyleRef = useRef(mapStyle);
   const appliedBasemapStyleRef = useRef<string | StyleSpecification | null>(null);
   const skipNextCountryFlyToRef = useRef(false);
+  const showRegionalDebugPanel =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -1213,7 +1218,9 @@ export default function MapView({
     };
   }, [mapLoaded, filters.selectedHazards, hazards]);
 
-  // Update district layer visibility/opacity based on selected hazards
+  // District fill should only visualize hazard filtering.
+  // Regional impacts owns the loss/wind choropleth, so keep district fill out of the way
+  // when no hazard filter is active.
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -1221,21 +1228,14 @@ export default function MapView({
 
     if (!m.getLayer(DISTRICTS_FILL_LAYER_ID)) return;
 
-    // Use shared color expression for default styling
-    const defaultColorExpression = createHazardColorExpression();
-
     if (filters.selectedHazards.length === 0) {
-      // Show all districts with default styling
-      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', defaultColorExpression);
-      m.setPaintProperty(
-        DISTRICTS_FILL_LAYER_ID,
-        'fill-opacity',
-        createScaleDependentOpacity(LAYER_OPACITY.district.fill * (layerOpacity / 100))
-      );
+      // No hazard filter selected: let the regional layer remain visually dominant.
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', createHazardColorExpression());
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', 0);
       m.setPaintProperty(
         DISTRICTS_OUTLINE_LAYER_ID,
         'line-opacity',
-        LAYER_OPACITY.district.outline * (layerOpacity / 100)
+        Math.max(0.06, LAYER_OPACITY.district.outline * 0.45)
       );
     } else {
       const opacityScale = layerOpacity / 100;
@@ -1312,6 +1312,32 @@ export default function MapView({
         </div>
       )}
 
+      {showRegionalDebugPanel && regionalImpactsDebug && (
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[26] max-w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-cyan-400/30 bg-slate-950/90 px-3 py-2 text-[11px] text-slate-100 shadow-xl backdrop-blur">
+          <div className="mb-1 font-semibold text-cyan-300">Regional Debug</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
+            <span className="text-slate-400">country</span>
+            <span>{regionalImpactsDebug.countryCode ?? 'null'}</span>
+            <span className="text-slate-400">style</span>
+            <span>{regionalImpactsDebug.mapStyle}</span>
+            <span className="text-slate-400">loading</span>
+            <span>{regionalImpactsDebug.loading ? 'true' : 'false'}</span>
+            <span className="text-slate-400">error</span>
+            <span className="truncate">{regionalImpactsDebug.error ?? 'none'}</span>
+            <span className="text-slate-400">features</span>
+            <span>{regionalImpactsDebug.featureCount}</span>
+            <span className="text-slate-400">sector</span>
+            <span>{regionalImpactsDebug.sectorFeatureCount}</span>
+            <span className="text-slate-400">Total_Loss</span>
+            <span>{regionalImpactsDebug.hasTotalLoss ? 'yes' : 'no'}</span>
+            <span className="text-slate-400">Max_Wind_Gusts</span>
+            <span>{regionalImpactsDebug.hasMaxWindGusts ? 'yes' : 'no'}</span>
+            <span className="text-slate-400">selected</span>
+            <span className="truncate">{regionalImpactsDebug.selectedRegion ?? 'none'}</span>
+          </div>
+        </div>
+      )}
+
       {showOverlays && showCycloneAnimation && storyMode && mapInstance && (
         <CycloneStoryOverlay
           map={mapInstance}
@@ -1329,7 +1355,7 @@ export default function MapView({
       {mapInstance && (
         <>
           <RealDataLayers
-            key={`real-data-${basemapStyle}-${styleChangeCounter}`}
+            key={`real-data-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
             countryCode={selectedCountry}
             visible={true}
@@ -1349,7 +1375,7 @@ export default function MapView({
             legendSettings={legendSettings}
           />
           <RegionalImpactsLayer
-            key={`regional-impacts-${basemapStyle}-${styleChangeCounter}`}
+            key={`regional-impacts-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
             visible={true}
             mapStyle={mapStyle}
@@ -1359,9 +1385,10 @@ export default function MapView({
             countryCode={selectedCountry}
             legendSettings={legendSettings}
             layerOpacityScale={layerOpacity}
+            onDebugStateChange={setRegionalImpactsDebug}
           />
           <DamagedBuildingsLayer
-            key={`damaged-buildings-${basemapStyle}-${styleChangeCounter}`}
+            key={`damaged-buildings-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
             data={damagedBuildings ?? null}
             thresholds={legendSettings?.buildings}
@@ -1369,7 +1396,7 @@ export default function MapView({
             styleChangeCounter={styleChangeCounter}
           />
           <DamagedRoadsLayer
-            key={`damaged-roads-${basemapStyle}-${styleChangeCounter}`}
+            key={`damaged-roads-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
             thresholds={legendSettings?.roads}
             data={damagedRoads ?? null}

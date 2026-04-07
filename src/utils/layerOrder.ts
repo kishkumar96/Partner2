@@ -42,16 +42,17 @@ export const LAYER_ORDER = {
   'wms-storm-surge-layer': 12,
   'wms-wave-height-layer': 13,
 
-  // Regional polygons next (context layer)
-  'regional-impacts-fill': 20,
-  'regional-impacts-line': 21,
-
   // District polygons
-  'districts-fill': 25,
-  'districts-outline': 26,
+  'districts-fill': 20,
+  'districts-outline': 21,
+
+  // Regional polygons should sit above district context fills so the
+  // loss/wind choropleth remains visible during shading mode.
+  'regional-impacts-fill': 30,
+  'regional-impacts-line': 31,
 
   // Intensity heatmap (density visualization)
-  'intensity-heatmap': 30,
+  'intensity-heatmap': 35,
 
   // Cyclone tracks and forecasts
   'cyclone-forecast-track-line': 40,

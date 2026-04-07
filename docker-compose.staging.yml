@@ -73,6 +73,13 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD_STAGING:-staging_redis_secure_2026}@redis-staging:6379
       - TILESERVER_URL=http://tileserver-staging:7800
       - NEXT_PUBLIC_TILESERVER_URL=http://localhost:7801
+    # Mount code for hot-reload without rebuilds
+    volumes:
+      - .:/app
+      - partner2_staging_node_modules:/app/node_modules
+      - partner2_staging_next_cache:/app/.next
+    # Override CMD to support mounted code
+    entrypoint: ["/bin/sh", "/app/scripts/docker-entrypoint.sh"]
     depends_on:
       postgres-staging:
         condition: service_healthy
@@ -87,6 +94,8 @@ volumes:
     driver: local
   redisdata-staging:
     driver: local
+  partner2_staging_node_modules:
+  partner2_staging_next_cache:
 
 networks:
   staging-network:

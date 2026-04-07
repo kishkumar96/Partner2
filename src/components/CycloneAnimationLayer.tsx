@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { createPortal } from 'react-dom';
 import maplibregl from 'maplibre-gl';
 import {
@@ -51,9 +52,17 @@ import {
   updateWindParticles,
   type WindParticle,
 } from '@/utils/windGlowParticles';
-import CycloneIntensityChart from './CycloneIntensityChart';
 import CycloneShareCard from './CycloneShareCard';
 import StoryBeatAnnotation from './StoryBeatAnnotation';
+
+const CycloneIntensityChart = dynamic(() => import('./CycloneIntensityChart'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-xs text-slate-400">
+      Loading timeline...
+    </div>
+  ),
+});
 
 interface CycloneAnimationLayerProps {
   map: maplibregl.Map | null | undefined;

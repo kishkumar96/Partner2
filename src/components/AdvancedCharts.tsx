@@ -273,7 +273,7 @@ const AdvancedCharts = memo(function AdvancedCharts({
                               }}
                               title={`${sector} in ${heatmapData.regions[regionIdx]}: $${value.toFixed(2)}M`}
                             >
-                              <div className="font-mono font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                              <div className="font-mono font-semibold text-slate-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.35)]">
                                 {value > 0 ? `$${value.toFixed(1)}M` : '—'}
                               </div>
                             </td>
@@ -415,7 +415,7 @@ function ImpactMatrixOverlay({
                         }}
                         title={`${sector} in ${heatmapData.regions[regionIdx]}: $${value.toFixed(2)}M`}
                       >
-                        <div className="font-mono font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="font-mono font-semibold text-slate-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.35)]">
                           {value > 0 ? `$${value.toFixed(1)}M` : '—'}
                         </div>
                       </td>

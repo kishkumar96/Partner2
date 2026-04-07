@@ -17,6 +17,7 @@ COPY tsconfig.* ./
 COPY postcss.config.* ./
 COPY tailwind.config.* ./
 COPY eslint.config.* ./
+COPY scripts ./scripts
 COPY public ./public
 COPY src ./src
 
@@ -40,6 +41,10 @@ ENV HOSTNAME="0.0.0.0"
 # Least-privilege user
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
+
+# Copy entrypoint script for flexible deployment
+COPY --from=builder /app/scripts ./scripts
+RUN chmod +x ./scripts/docker-entrypoint.sh
 
 # Static public assets
 COPY --from=builder /app/public ./public

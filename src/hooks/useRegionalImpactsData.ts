@@ -9,6 +9,9 @@ import {
 } from '@/utils/realDataLoader';
 import { debugLogger } from '@/utils/debugLogger';
 
+const REGIONAL_IMPACTS_TIMEOUT_MS = 60000;
+const REGIONAL_SUMMARY_TIMEOUT_MS = 20000;
+
 type RegionalFeatureProperties = Record<string, unknown>;
 type RegionalImpactsGeoJSON = GeoJSON.FeatureCollection<
   GeoJSON.Geometry,
@@ -91,7 +94,7 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
             cache: true,
             retries: 3,
             retryDelay: 1000,
-            timeout: 15000,
+            timeout: REGIONAL_IMPACTS_TIMEOUT_MS,
             signal: controller.signal,
           }
         ),
@@ -100,12 +103,16 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
           countryCode: effectiveCountry,
           retries: 3,
           retryDelay: 1000,
-          timeout: 15000,
+          timeout: REGIONAL_SUMMARY_TIMEOUT_MS,
           signal: controller.signal,
         }),
       ]);
 
       if (!isMounted || requestId !== requestIdRef.current) return;
+
+      if (regionalResult.error?.name === 'AbortError') {
+        return;
+      }
 
       if (!regionalResult.data) {
         setState({
@@ -177,7 +184,7 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
           cache: true,
           retries: 3,
           retryDelay: 1000,
-          timeout: 15000,
+          timeout: REGIONAL_IMPACTS_TIMEOUT_MS,
           signal: controller.signal,
         }
       )
@@ -199,7 +206,11 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
           }));
         })
         .catch(error => {
-          if (controller.signal.aborted || requestId !== requestIdRef.current) {
+          if (
+            controller.signal.aborted ||
+            requestId !== requestIdRef.current ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
             return;
           }
           debugLogger.warn('Could not load regional impacts by sector data', 'map-source', error);

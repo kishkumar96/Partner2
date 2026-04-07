@@ -239,6 +239,7 @@ const MapPanel = memo(function MapPanel({
                   <button
                     type="button"
                     aria-pressed={mapStyle === 'loss'}
+                    disabled={controlsBusy}
                     onClick={() => onMapStyleChange('loss')}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       mapStyle === 'loss'
@@ -251,6 +252,7 @@ const MapPanel = memo(function MapPanel({
                   <button
                     type="button"
                     aria-pressed={mapStyle === 'wind'}
+                    disabled={controlsBusy}
                     onClick={() => onMapStyleChange('wind')}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       mapStyle === 'wind'
@@ -590,6 +592,8 @@ const MapPanel = memo(function MapPanel({
                           3D Buildings
                         </span>
                         <input
+                          id="map-panel-3d-buildings-toggle"
+                          name="mapPanel3dBuildingsToggle"
                           type="checkbox"
                           checked={is3DView}
                           disabled={controlsBusy}
@@ -653,6 +657,8 @@ const MapPanel = memo(function MapPanel({
                           </span>
                         </div>
                         <input
+                          id="extrusion-exaggeration-range"
+                          name="extrusionExaggeration"
                           type="range"
                           min={0.5}
                           max={3}
