@@ -173,6 +173,7 @@ export default function DashboardView({
   const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
   const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
   const [showBasemapPreferenceModal, setShowBasemapPreferenceModal] = useState(false);
+  const [isBasemapPreferenceResolved, setIsBasemapPreferenceResolved] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
     initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
@@ -245,9 +246,9 @@ export default function DashboardView({
 
   // Show basemap preference modal on first visit (if no preference saved and no URL state)
   useEffect(() => {
-    if (!hasBasemapPreference() && !urlState.basemap) {
-      setShowBasemapPreferenceModal(true);
-    }
+    const shouldShowBasemapPreferenceModal = !hasBasemapPreference() && !urlState.basemap;
+    setShowBasemapPreferenceModal(shouldShowBasemapPreferenceModal);
+    setIsBasemapPreferenceResolved(!shouldShowBasemapPreferenceModal);
   }, [urlState.basemap]);
 
   // Sync legend settings when country changes
@@ -1005,12 +1006,14 @@ export default function DashboardView({
     setBasemapStyle(style);
     saveBasemapPreference(style);
     setShowBasemapPreferenceModal(false);
+    setIsBasemapPreferenceResolved(true);
   }, []);
 
   const handleBasemapSkip = useCallback(() => {
     // Save that preference has been set (even if skipped) to avoid showing modal again
     saveBasemapPreference(basemapStyle);
     setShowBasemapPreferenceModal(false);
+    setIsBasemapPreferenceResolved(true);
   }, [basemapStyle]);
 
   const handleResetUserPreferences = useCallback(() => {
@@ -2511,46 +2514,55 @@ export default function DashboardView({
               );
             })()}
 
-            <MapView
-              events={countryEvents}
-              hazards={hazards}
-              filters={filters}
-              onEventSelect={setSelectedEvent}
-              selectedRegion={selectedRegion}
-              onRegionSelect={setSelectedRegion}
-              selectedCountry={selectedCountry}
-              mapStyle={mapStyle}
-              basemapStyle={basemapStyle}
-              is3DView={is3DView}
-              extrusionMode={extrusionMode}
-              extrusionExaggeration={extrusionExaggeration}
-              showWindLayer={showWindLayer}
-              showInundationLayer={showInundationLayer}
-              onLayersLoadingChange={setIsLoadingLayers}
-              onActiveWmsLayersChange={setActiveWmsLayers}
-              layerOpacity={layerOpacity}
-              legendSettings={legendSettings}
-              damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
-              damagedRoads={showRoadsLayer ? damagedRoads : null}
-              cycloneForecast={cycloneForecast}
-              aggregationLevel={filters.aggregationLevel}
-              showOverlays={showMapOverlays}
-              onCycloneTimestepChange={handleCycloneTimestepChange}
-              showCycloneAnimation={showCycloneControls}
-              onCycloneAnimationChange={handleCycloneVisibilityChange}
-              isCyclonePlaying={isCyclonePlaying}
-              onCyclonePlayingChange={setIsCyclonePlaying}
-              showCycloneToggle={false}
-              cycloneControlsHost={cycloneControlsHost}
-              isLeftPanelOpen={showFilters}
-              isRightPanelOpen={showSummary}
-              storyMode={storyMode}
-              storyBeats={stableStoryBeats}
-              currentCycloneIndex={currentCycloneIndex}
-              onStoryModeChange={setStoryMode}
-              onStoryIndexChange={setCurrentCycloneIndex}
-              onMapReady={setMapInstance}
-            />
+            {isBasemapPreferenceResolved && !showBasemapPreferenceModal ? (
+              <MapView
+                events={countryEvents}
+                hazards={hazards}
+                filters={filters}
+                onEventSelect={setSelectedEvent}
+                selectedRegion={selectedRegion}
+                onRegionSelect={setSelectedRegion}
+                selectedCountry={selectedCountry}
+                mapStyle={mapStyle}
+                basemapStyle={basemapStyle}
+                is3DView={is3DView}
+                extrusionMode={extrusionMode}
+                extrusionExaggeration={extrusionExaggeration}
+                showWindLayer={showWindLayer}
+                showInundationLayer={showInundationLayer}
+                onLayersLoadingChange={setIsLoadingLayers}
+                onActiveWmsLayersChange={setActiveWmsLayers}
+                layerOpacity={layerOpacity}
+                legendSettings={legendSettings}
+                damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
+                damagedRoads={showRoadsLayer ? damagedRoads : null}
+                cycloneForecast={cycloneForecast}
+                aggregationLevel={filters.aggregationLevel}
+                showOverlays={showMapOverlays}
+                onCycloneTimestepChange={handleCycloneTimestepChange}
+                showCycloneAnimation={showCycloneControls}
+                onCycloneAnimationChange={handleCycloneVisibilityChange}
+                isCyclonePlaying={isCyclonePlaying}
+                onCyclonePlayingChange={setIsCyclonePlaying}
+                showCycloneToggle={false}
+                cycloneControlsHost={cycloneControlsHost}
+                isLeftPanelOpen={showFilters}
+                isRightPanelOpen={showSummary}
+                storyMode={storyMode}
+                storyBeats={stableStoryBeats}
+                currentCycloneIndex={currentCycloneIndex}
+                onStoryModeChange={setStoryMode}
+                onStoryIndexChange={setCurrentCycloneIndex}
+                onMapReady={setMapInstance}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="text-sm text-slate-400">Preparing map...</p>
+                </div>
+              </div>
+            )}
 
             {/* Loading Overlay */}
             {isLoadingData && (
