@@ -41,10 +41,12 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
     sectorData?: RegionalImpactsGeoJSON | null;
     cachedCountry?: CountryCode | null;
   }>({});
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
     const controller = new AbortController();
+    const requestId = ++requestIdRef.current;
     const effectiveCountry = countryCode ?? 'VU';
     const basePath = DATA_PATH[effectiveCountry];
     const regionalImpactsPath = getCountryDataFilePath(
@@ -75,27 +77,35 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
         return;
       }
 
-      setState(prev => ({ ...prev, loading: true, error: null }));
+      setState({
+        data: null,
+        sectorData: null,
+        loading: true,
+        error: null,
+      });
 
-      const [regionalResult, sectorResult, regionalSummary] = await Promise.all([
+      const [regionalResult, regionalSummary] = await Promise.all([
         loadGeoJSON<RegionalImpactsGeoJSON>(
           regionalImpactsPath || `${basePath}/regional-impacts.geojson`,
           {
             cache: true,
+            retries: 3,
+            retryDelay: 1000,
+            timeout: 15000,
             signal: controller.signal,
           }
         ),
-        loadGeoJSON<RegionalImpactsGeoJSON>(
-          regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
-          {
-            cache: true,
-            signal: controller.signal,
-          }
-        ),
-        loadRegionalSummary({ basePath, countryCode: effectiveCountry, signal: controller.signal }),
+        loadRegionalSummary({
+          basePath,
+          countryCode: effectiveCountry,
+          retries: 3,
+          retryDelay: 1000,
+          timeout: 15000,
+          signal: controller.signal,
+        }),
       ]);
 
-      if (!isMounted) return;
+      if (!isMounted || requestId !== requestIdRef.current) return;
 
       if (!regionalResult.data) {
         setState({
@@ -111,7 +121,6 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
         regionalResult.data,
         regionalSummary as Array<Record<string, unknown>> | null | undefined
       ) as RegionalImpactsGeoJSON;
-      const sectorData = sectorResult.data || null;
 
       // Validate that enriched data has both Total_Loss and Max_Wind_Gusts across all features.
       if (enrichedData.features.length > 0) {
@@ -151,16 +160,50 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
 
       cacheRef.current = {
         data: enrichedData,
-        sectorData,
+        sectorData: null,
         cachedCountry: effectiveCountry,
       };
 
       setState({
         data: enrichedData,
-        sectorData,
+        sectorData: null,
         loading: false,
         error: null,
       });
+
+      void loadGeoJSON<RegionalImpactsGeoJSON>(
+        regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
+        {
+          cache: true,
+          retries: 3,
+          retryDelay: 1000,
+          timeout: 15000,
+          signal: controller.signal,
+        }
+      )
+        .then(sectorResult => {
+          if (!isMounted || requestId !== requestIdRef.current || controller.signal.aborted) {
+            return;
+          }
+
+          const sectorData = sectorResult.data || null;
+          cacheRef.current = {
+            data: enrichedData,
+            sectorData,
+            cachedCountry: effectiveCountry,
+          };
+
+          setState(prev => ({
+            ...prev,
+            sectorData,
+          }));
+        })
+        .catch(error => {
+          if (controller.signal.aborted || requestId !== requestIdRef.current) {
+            return;
+          }
+          debugLogger.warn('Could not load regional impacts by sector data', 'map-source', error);
+        });
     };
 
     void loadData();
