@@ -20,7 +20,7 @@ export interface PartnerCountryIdentity {
   names: string[];
 }
 
-const DEFAULT_PARTNER_API_BASE = 'http://opmthredds.gem.spc.int';
+const DEFAULT_PARTNER_API_BASE = 'https://opmthredds.gem.spc.int';
 const NEXT_PUBLIC_BASE_PATH =
   process.env.NODE_ENV === 'production'
     ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
@@ -120,7 +120,7 @@ export function resolveCountryId(
  */
 export function buildCountryScopedResourceUrls(
   countryId: number,
-  baseUrl: string = DEFAULT_PARTNER_API_BASE
+  baseUrl: string = getDefaultPartnerApiBase()
 ): Record<Exclude<PartnerApiResource, 'country'>, string> {
   const endpoints = buildPartnerApiEndpoints(baseUrl);
 
