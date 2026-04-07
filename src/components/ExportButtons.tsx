@@ -324,40 +324,56 @@ export default function ExportButtons({
 
   const downloadPDFFromPreview = async () => {
     const templateRoot = previewTemplateRef.current;
-    if (!templateRoot) return false;
+    if (!templateRoot) {
+      logger.warn('downloadPDFFromPreview: previewTemplateRef.current is null');
+      return false;
+    }
 
     const pageNodes = Array.from(templateRoot.children).filter(
       (node): node is HTMLDivElement => node instanceof HTMLDivElement
     );
-    if (pageNodes.length === 0) return false;
-
-    const [{ jsPDF }, html2canvasModule] = await Promise.all([
-      import('jspdf'),
-      import('html2canvas'),
-    ]);
-    const html2canvas = html2canvasModule.default;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    for (let index = 0; index < pageNodes.length; index += 1) {
-      const pageNode = pageNodes[index];
-      const canvas = await html2canvas(pageNode, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: pageNode.scrollWidth,
-        windowHeight: pageNode.scrollHeight,
-      });
-
-      const imageData = canvas.toDataURL('image/png');
-      if (index > 0) {
-        doc.addPage();
-      }
-      doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+    if (pageNodes.length === 0) {
+      logger.warn('downloadPDFFromPreview: no page nodes found in template');
+      return false;
     }
 
-    doc.save(buildPdfFilename());
-    return true;
+    try {
+      logger.info(`downloadPDFFromPreview: capturing ${pageNodes.length} pages from preview`);
+      
+      const [{ jsPDF }, html2canvasModule] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
+      const html2canvas = html2canvasModule.default;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      for (let index = 0; index < pageNodes.length; index += 1) {
+        const pageNode = pageNodes[index];
+        logger.info(`downloadPDFFromPreview: capturing page ${index + 1}/${pageNodes.length}`);
+        
+        const canvas = await html2canvas(pageNode, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: pageNode.scrollWidth,
+          windowHeight: pageNode.scrollHeight,
+        });
+
+        const imageData = canvas.toDataURL('image/png');
+        if (index > 0) {
+          doc.addPage();
+        }
+        doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+      }
+
+      logger.info('downloadPDFFromPreview: saving PDF from preview (high-quality)');
+      doc.save(buildPdfFilename());
+      return true;
+    } catch (error) {
+      logger.error('downloadPDFFromPreview failed, will fall back to legacy rendering:', error);
+      return false;
+    }
   };
 
   // ─── Open PDF Preview Modal ────────────────────────────────────────────────
@@ -579,9 +595,11 @@ export default function ExportButtons({
 
       const downloadedFromPreview = await downloadPDFFromPreview();
       if (downloadedFromPreview) {
+        logger.info('PDF download completed using high-quality preview capture');
         return;
       }
 
+      logger.warn('Preview-based download not available, using legacy jsPDF rendering');
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
