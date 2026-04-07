@@ -106,6 +106,17 @@ interface RegionalImpactsLayerProps {
   legendSettings?: LegendSettings;
 }
 
+function getMissingPropertyCount(
+  geojson: { features?: Array<{ properties?: Record<string, unknown> }> } | null | undefined,
+  propertyName: string
+): number {
+  if (!geojson?.features?.length) return 0;
+
+  return geojson.features.reduce((missingCount, feature) => {
+    return propertyName in (feature.properties || {}) ? missingCount : missingCount + 1;
+  }, 0);
+}
+
 export default function RegionalImpactsLayer({
   map,
   visible,
@@ -138,6 +149,8 @@ export default function RegionalImpactsLayer({
   const layersAddedRef = useRef(false);
   const selectedRegionRef = useRef<string | null>(selectedRegion);
   const onRegionSelectRef = useRef<typeof onRegionSelect>(onRegionSelect);
+  const loadRequestIdRef = useRef(0);
+  const sourceDataRef = useRef<any>(null);
 
   useEffect(() => {
     selectedRegionRef.current = selectedRegion;
@@ -159,15 +172,11 @@ export default function RegionalImpactsLayer({
       console.log(`❌ RegionalImpactsLayer: Skipping load (map: ${!!map}, visible: ${visible})`);
       return;
     }
-
-    // Prevent concurrent loading
-    if (isLoadingRef.current) {
-      console.log('⏳ RegionalImpactsLayer: Already loading, skipping...');
-      return;
-    }
+    const loadRequestId = ++loadRequestIdRef.current;
+    const isStaleLoad = () => !mountedRef.current || loadRequestId !== loadRequestIdRef.current;
 
     const loadRegionalImpacts = async () => {
-      if (!mountedRef.current) {
+      if (isStaleLoad()) {
         console.log('🚫 Component unmounted, aborting load');
         return;
       }
@@ -198,6 +207,14 @@ export default function RegionalImpactsLayer({
           'regional-impacts-by-sector.geojson'
         );
 
+        // Clean up stale cache if country changed
+        if (dataCache.current.cachedCountry && dataCache.current.cachedCountry !== effectiveCountry) {
+          console.log(
+            `🗑️ Country changed from ${dataCache.current.cachedCountry} to ${effectiveCountry}, clearing stale cache`
+          );
+          dataCache.current = {};
+        }
+
         if (
           dataCache.current.geojson &&
           dataCache.current.sectorGeojson &&
@@ -207,7 +224,7 @@ export default function RegionalImpactsLayer({
           geojson = dataCache.current.geojson;
           sectorGeojson = dataCache.current.sectorGeojson;
         } else {
-          if (!mountedRef.current) {
+          if (isStaleLoad()) {
             console.log('🚫 Component unmounted during load, aborting');
             isLoadingRef.current = false;
             return;
@@ -225,8 +242,8 @@ export default function RegionalImpactsLayer({
             loadRegionalSummary({ basePath, countryCode: effectiveCountry }),
           ]);
 
-          if (!mountedRef.current) {
-            console.log('🚫 Component unmounted after fetch, aborting');
+          if (isStaleLoad()) {
+            console.log('🚫 Stale regional impacts load after fetch, aborting');
             isLoadingRef.current = false;
             return;
           }
@@ -258,10 +275,41 @@ export default function RegionalImpactsLayer({
           );
           sectorGeojson = sectorResult.data || null;
 
+          // Validate that enriched data has both Total_Loss and Max_Wind_Gusts
+          if (geojson.features.length > 0) {
+            const firstFeature = geojson.features[0];
+            const hasLoss = 'Total_Loss' in (firstFeature.properties || {});
+            const hasWind = 'Max_Wind_Gusts' in (firstFeature.properties || {});
+            console.log('[RegionalImpactsLayer] Data enrichment complete:', {
+              features: geojson.features.length,
+              hasLossField: hasLoss,
+              hasWindField: hasWind,
+              sampleLoss: firstFeature.properties?.Total_Loss,
+              sampleWind: firstFeature.properties?.Max_Wind_Gusts,
+            });
+            if (!hasLoss || !hasWind) {
+              console.warn(
+                '[RegionalImpactsLayer] WARNING: Missing required fields in enriched data!',
+                'Available keys:',
+                Object.keys(firstFeature.properties || {})
+              );
+            }
+          }
+
           // Cache for future use
           dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
-          console.log(`✅ Cached regional impacts data (${geojson.features?.length || 0} regions)`);
+          console.log(
+            `✅ Cached regional impacts data for ${effectiveCountry} (${geojson.features?.length || 0} regions, ${sectorGeojson?.features?.length || 0} sector features)`
+          );
         }
+
+        if (isStaleLoad()) {
+          console.log('🚫 Stale regional impacts load before layer apply, aborting');
+          isLoadingRef.current = false;
+          return;
+        }
+
+        sourceDataRef.current = geojson;
 
         const sourceId = REGIONAL_SOURCE_ID;
         const fillLayerId = REGIONAL_FILL_LAYER_ID;
@@ -286,6 +334,12 @@ export default function RegionalImpactsLayer({
 
         // Function to add layers
         const addLayers = () => {
+          if (isStaleLoad()) {
+            console.log('🚫 Skipping stale regional impacts layer add');
+            isLoadingRef.current = false;
+            return;
+          }
+
           // Prevent multiple simultaneous additions
           if (layersAddedRef.current) {
             console.log('⏭️ Layers already added, skipping duplicate add');
@@ -566,8 +620,8 @@ export default function RegionalImpactsLayer({
 
           // Create and store the listener
           loadEventListenerRef.current = () => {
-            if (!mountedRef.current) {
-              console.log('🚫 Component unmounted before load event, skipping');
+            if (isStaleLoad()) {
+              console.log('🚫 Stale regional impacts load event, skipping');
               isLoadingRef.current = false;
               return;
             }
@@ -611,6 +665,8 @@ export default function RegionalImpactsLayer({
     return () => {
       if (!map) return;
 
+      loadRequestIdRef.current += 1;
+
       console.log('🧹 Cleaning up RegionalImpactsLayer');
 
       // Remove styledata listener if it was registered
@@ -648,6 +704,7 @@ export default function RegionalImpactsLayer({
         // Reset flags regardless
         layersAddedRef.current = false;
         isLoadingRef.current = false;
+        sourceDataRef.current = null;
       } catch (e) {
         // Any error here means the map was destroyed or style removed before cleanup ran.
         // MapLibre throws 'There is no style added to the map.' (a plain Error, not TypeError)
@@ -655,6 +712,7 @@ export default function RegionalImpactsLayer({
         // on full page unmount and is not actionable — suppress all cleanup errors silently.
         layersAddedRef.current = false;
         isLoadingRef.current = false;
+        sourceDataRef.current = null;
       }
     };
   }, [map, visible, styleChangeCounter, countryCode]); // styleChangeCounter needed to recreate layers after basemap changes
@@ -671,9 +729,31 @@ export default function RegionalImpactsLayer({
 
     try {
       if (map.getLayer(fillLayerId)) {
+        const propertyName = mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss';
+        const data = sourceDataRef.current;
+
+        if (data?.features?.length > 0) {
+          const firstFeature = data.features[0];
+          const missingPropertyCount = getMissingPropertyCount(data, propertyName);
+          if (missingPropertyCount > 0) {
+            console.error(
+              `[RegionalImpactsLayer] ❌ Cannot update ${mapStyle} style: property '${propertyName}' missing from ${missingPropertyCount} region features.`,
+              'Available properties on first feature:',
+              Object.keys(firstFeature.properties || {}).slice(0, 10),
+              '...'
+            );
+            return;
+          }
+
+          console.log(
+            `[RegionalImpactsLayer] ✅ Updating to ${mapStyle} style using property '${propertyName}'`,
+            `Sample value: ${firstFeature.properties?.[propertyName]}`
+          );
+        }
+
         const colorExpression = legendSettings
           ? createDynamicColorExpression(
-              mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss',
+              propertyName,
               mapStyle === 'wind' ? legendSettings.wind : legendSettings.loss
             )
           : mapStyle === 'wind'
@@ -703,17 +783,24 @@ export default function RegionalImpactsLayer({
           );
         }
 
-        console.log(`Switched to ${mapStyle} color scheme via setPaintProperty`);
+        console.log(`[RegionalImpactsLayer] Successfully switched to ${mapStyle} color scheme`);
+      } else {
+        console.warn(`[RegionalImpactsLayer] Layer '${fillLayerId}' not found - may need to reload data`);
       }
     } catch (e) {
-      console.warn('Error updating map style:', e);
+      console.error('[RegionalImpactsLayer] ❌ Error updating map style:', e);
+      if (e instanceof Error) {
+        console.error('Error details:', e.message, e.stack);
+      }
     }
   }, [
     map,
     visible,
     mapStyle,
     selectedRegion,
-    styleChangeCounter,
+    // Note: styleChangeCounter intentionally removed from dependencies here
+    // It's only needed in the main data loading effect to recreate layers after basemap changes
+    // This effect only updates paint properties reactively without recreating layers
     layerOpacityScale,
     countryCode,
     legendSettings,
