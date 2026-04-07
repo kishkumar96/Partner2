@@ -107,7 +107,9 @@ export default function RegionalImpactsLayer({
   legendSettings,
 }: RegionalImpactsLayerProps) {
   const handlersRef = useRef<{
-    handleClick?: (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => void;
+    handleClick?: (
+      e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }
+    ) => void;
     handleMouseEnter?: () => void;
     handleMouseLeave?: () => void;
   }>({});
@@ -180,17 +182,17 @@ export default function RegionalImpactsLayer({
 
   /**
    * Effect 1: Layer Setup
-   * 
+   *
    * Responsibilities:
    * - Creates map source with empty GeoJSON data
    * - Adds fill and line layers with initial style expressions
    * - Attaches event handlers (click, mouseenter, mouseleave)
-   * 
+   *
    * Dependencies:
    * - map: Required for all MapLibre operations
    * - visible: Controls when layers should be added
    * - styleChangeCounter: Signals basemap change → full layer recreation needed
-   * 
+   *
    * Why it recreates on styleChangeCounter:
    * When basemap changes, the entire style is replaced, so all custom layers/sources
    * must be recreated. This effect handles that by tearing down and rebuilding.
@@ -362,16 +364,36 @@ export default function RegionalImpactsLayer({
             type: 'line',
             source: REGIONAL_SOURCE_ID,
             paint: {
-              'line-color': createRegionalLineColor(selectedRegionRef.current) as maplibregl.ExpressionSpecification,
-              'line-width': createRegionalLineWidth(selectedRegionRef.current) as maplibregl.ExpressionSpecification,
+              'line-color': createRegionalLineColor(
+                selectedRegionRef.current
+              ) as maplibregl.ExpressionSpecification,
+              'line-width': createRegionalLineWidth(
+                selectedRegionRef.current
+              ) as maplibregl.ExpressionSpecification,
               'line-opacity': [
                 'case',
                 [
                   'any',
-                  ['==', ['to-string', ['coalesce', ['get', 'Region.ID'], '']], selectedRegionRef.current || ''],
-                  ['==', ['to-string', ['coalesce', ['get', 'Region_ID'], '']], selectedRegionRef.current || ''],
-                  ['==', ['to-string', ['coalesce', ['get', 'Region.Region'], '']], selectedRegionRef.current || ''],
-                  ['==', ['to-string', ['coalesce', ['get', 'Region'], '']], selectedRegionRef.current || ''],
+                  [
+                    '==',
+                    ['to-string', ['coalesce', ['get', 'Region.ID'], '']],
+                    selectedRegionRef.current || '',
+                  ],
+                  [
+                    '==',
+                    ['to-string', ['coalesce', ['get', 'Region_ID'], '']],
+                    selectedRegionRef.current || '',
+                  ],
+                  [
+                    '==',
+                    ['to-string', ['coalesce', ['get', 'Region.Region'], '']],
+                    selectedRegionRef.current || '',
+                  ],
+                  [
+                    '==',
+                    ['to-string', ['coalesce', ['get', 'Region'], '']],
+                    selectedRegionRef.current || '',
+                  ],
                 ],
                 1.0,
                 LAYER_OPACITY.regional.outline,
@@ -426,15 +448,15 @@ export default function RegionalImpactsLayer({
 
   /**
    * Effect 2: Data Updates
-   * 
+   *
    * Responsibilities:
    * - Updates the GeoJSON source data when new data is loaded
    * - Uses source.setData() to update existing source (no layer recreation)
-   * 
+   *
    * Dependencies:
    * - map: Required for source access
    * - data: New GeoJSON data from hook
-   * 
+   *
    * Why it doesn't depend on styleChangeCounter:
    * Data updates should NOT recreate layers, only update the source.
    * Effect 1 handles layer creation, this only pushes new data.
@@ -469,19 +491,19 @@ export default function RegionalImpactsLayer({
 
   /**
    * Effect 3: Paint Property Updates
-   * 
+   *
    * Responsibilities:
    * - Updates layer colors when switching between loss/wind styles
    * - Updates opacity when layer opacity slider changes
    * - Updates line highlighting when region selection changes
-   * 
+   *
    * Dependencies:
    * - map, visible: Required for layer access
    * - mapStyle: Triggers color change (loss colors vs wind colors)
    * - selectedRegion: Updates line highlighting for selected region
    * - layerOpacityScale: Updates fill opacity
    * - legendSettings, countryCode: Affect color expressions (via memoized values)
-   * 
+   *
    * Why it doesn't depend on styleChangeCounter:
    * Paint property updates should NOT recreate layers, only modify existing ones.
    * Uses setPaintProperty() for smooth visual transitions without layer recreation.
@@ -551,10 +573,10 @@ export default function RegionalImpactsLayer({
 
   /**
    * Effect 4: Error Handling
-   * 
+   *
    * Responsibilities:
    * - Logs data loading errors from the hook
-   * 
+   *
    * Dependencies:
    * - error: Error state from useRegionalImpactsData hook
    */

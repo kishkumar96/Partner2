@@ -10,7 +10,10 @@ import {
 import { debugLogger } from '@/utils/debugLogger';
 
 type RegionalFeatureProperties = Record<string, unknown>;
-type RegionalImpactsGeoJSON = GeoJSON.FeatureCollection<GeoJSON.Geometry, RegionalFeatureProperties>;
+type RegionalImpactsGeoJSON = GeoJSON.FeatureCollection<
+  GeoJSON.Geometry,
+  RegionalFeatureProperties
+>;
 
 interface RegionalImpactsDataState {
   data: RegionalImpactsGeoJSON | null;
@@ -19,10 +22,7 @@ interface RegionalImpactsDataState {
   error: Error | null;
 }
 
-function getMissingPropertyCount(
-  data: RegionalImpactsGeoJSON,
-  propertyName: string
-): number {
+function getMissingPropertyCount(data: RegionalImpactsGeoJSON, propertyName: string): number {
   return data.features.reduce((missingCount, feature) => {
     return propertyName in (feature.properties || {}) ? missingCount : missingCount + 1;
   }, 0);
@@ -47,7 +47,10 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
     const controller = new AbortController();
     const effectiveCountry = countryCode ?? 'VU';
     const basePath = DATA_PATH[effectiveCountry];
-    const regionalImpactsPath = getCountryDataFilePath(effectiveCountry, 'regional-impacts.geojson');
+    const regionalImpactsPath = getCountryDataFilePath(
+      effectiveCountry,
+      'regional-impacts.geojson'
+    );
     const regionalImpactsBySectorPath = getCountryDataFilePath(
       effectiveCountry,
       'regional-impacts-by-sector.geojson'
@@ -75,10 +78,13 @@ export function useRegionalImpactsData(countryCode?: CountryCode | null): Region
       setState(prev => ({ ...prev, loading: true, error: null }));
 
       const [regionalResult, sectorResult, regionalSummary] = await Promise.all([
-        loadGeoJSON<RegionalImpactsGeoJSON>(regionalImpactsPath || `${basePath}/regional-impacts.geojson`, {
-          cache: true,
-          signal: controller.signal,
-        }),
+        loadGeoJSON<RegionalImpactsGeoJSON>(
+          regionalImpactsPath || `${basePath}/regional-impacts.geojson`,
+          {
+            cache: true,
+            signal: controller.signal,
+          }
+        ),
         loadGeoJSON<RegionalImpactsGeoJSON>(
           regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
           {

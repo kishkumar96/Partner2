@@ -458,12 +458,12 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
 function wmsBaseUrl(): string {
   const defaultPath = '/api/partner-proxy/thredds/wms';
   const url = process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? defaultPath;
-  
+
   // Prepend BASE_PATH if URL is relative and doesn't already have it
   if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
     return `${BASE_PATH}${url}`;
   }
-  
+
   return url;
 }
 

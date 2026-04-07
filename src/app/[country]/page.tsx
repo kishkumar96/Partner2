@@ -55,6 +55,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
 
   return (
     <DashboardView
+      key={countryCode}
       countryCode={countryCode}
       allowCountrySwitch={false}
       showLogout={isCountryProtected(countryCode)}

@@ -2630,6 +2630,7 @@ export default function DashboardView({
                     selectedCountry={selectedCountry}
                     onCountryChange={newCountry => {
                       const params = new URLSearchParams(searchParams.toString());
+                      params.delete('country');
                       const query = params.toString();
                       router.push(`/${CODE_TO_SLUG[newCountry]}${query ? `?${query}` : ''}`);
                       setShowCountrySelector(false);

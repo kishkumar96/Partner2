@@ -248,7 +248,10 @@ export default function ExportButtons({
   ): Promise<string | undefined> => {
     try {
       // URL-encode the path to handle spaces and special characters
-      const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      const encodedPath = path
+        .split('/')
+        .map(segment => encodeURIComponent(segment))
+        .join('/');
       logger.debug(`Fetching asset: ${path} -> ${encodedPath}`);
       const response = await fetch(encodedPath);
       if (!response.ok) {
@@ -339,7 +342,7 @@ export default function ExportButtons({
 
     try {
       logger.info(`downloadPDFFromPreview: capturing ${pageNodes.length} pages from preview`);
-      
+
       const [{ jsPDF }, html2canvasModule] = await Promise.all([
         import('jspdf'),
         import('html2canvas'),
@@ -350,7 +353,7 @@ export default function ExportButtons({
       for (let index = 0; index < pageNodes.length; index += 1) {
         const pageNode = pageNodes[index];
         logger.info(`downloadPDFFromPreview: capturing page ${index + 1}/${pageNodes.length}`);
-        
+
         const canvas = await html2canvas(pageNode, {
           backgroundColor: '#ffffff',
           scale: 2,
@@ -450,7 +453,10 @@ export default function ExportButtons({
           }),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')), ASSET_FETCH_TIMEOUT_MS),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
         withTimeout(
           fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
           ASSET_FETCH_TIMEOUT_MS
@@ -562,11 +568,11 @@ export default function ExportButtons({
       if (!buildingIconSrc) failedAssets.push('Building Icon');
       if (countryHeaderPath && !countryHeaderSrc) failedAssets.push('Country Header');
       if (countryFlagPath && !countryFlagSrc) failedAssets.push('Country Flag');
-      
+
       if (failedAssets.length > 0) {
         logger.warn(`PDF assets failed to load: ${failedAssets.join(', ')}`);
       }
-      
+
       setShowPreview(true);
     } catch (error) {
       logger.error('PDF preview failed:', error);
@@ -677,7 +683,10 @@ export default function ExportButtons({
           fetchAssetDataUrl(pdfAsset('/pdf-assets/DashBoard_Header_Country3.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')), ASSET_FETCH_TIMEOUT_MS),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
         withTimeout(
           fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
           ASSET_FETCH_TIMEOUT_MS
