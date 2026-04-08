@@ -1,13 +1,13 @@
 /**
  * Multi-Country Impact Data Demo Component
  *
- * This component demonstrates the new multi-country impact data loading capability.
- * Drop this into any page to test that all countries display economic damage and wind intensity.
+ * This component demonstrates regional impact data loading for Pacific countries.
+ * When countryCode is null, it defaults to Vanuatu for testing purposes.
  *
  * USAGE:
  * 1. Create a new route: /src/app/demo/page.tsx
  * 2. Import and render this component
- * 3. Navigate to /demo to see all 4 countries with impact data
+ * 3. Navigate to /demo to test country-specific impact data display
  */
 
 'use client';
