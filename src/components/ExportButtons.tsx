@@ -14,6 +14,11 @@ import {
   getPdfKeyFigureIconLayout,
 } from './pdfTemplateConfig';
 
+const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
+
+// Helper to create asset URLs with correct base path
+const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
 const OCHA_DARK: [number, number, number] = [2, 64, 116];
@@ -385,11 +390,11 @@ export default function ExportButtons({
         WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
-        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
-        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
-        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
-        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
-        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
+        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
+        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
+        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
+        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
@@ -595,11 +600,11 @@ export default function ExportButtons({
         WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
-        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
-        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
-        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
-        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
-        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
+        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
+        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
+        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
+        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
