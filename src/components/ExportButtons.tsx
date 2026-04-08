@@ -14,10 +14,27 @@ import {
   getPdfKeyFigureIconLayout,
 } from './pdfTemplateConfig';
 
-const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
+const normalizeBasePath = (basePath?: string) => {
+  if (!basePath || basePath === '/') {
+    return '';
+  }
+  const withLeadingSlash = basePath.startsWith('/') ? basePath : `/${basePath}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+};
+
+const DEFAULT_PRODUCTION_BASE_PATH = '/partner2';
+const resolvedBasePath =
+  process.env.NEXT_PUBLIC_BASE_PATH ??
+  (process.env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_BASE_PATH : undefined);
+const BASE_PATH = normalizeBasePath(resolvedBasePath);
 
 // Helper to create asset URLs with correct base path
-const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+const pdfAsset = (path: string) => {
+  if (!path) return path;
+  if (/^(?:[a-z]+:)?\/\//i.test(path)) return path;
+  if (!path.startsWith('/')) return path;
+  return `${BASE_PATH}${path}`;
+};
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -246,8 +263,9 @@ export default function ExportButtons({
         }
   ): Promise<string | undefined> => {
     try {
+      const normalizedPath = pdfAsset(path);
       // URL-encode the path to handle spaces and special characters
-      const encodedPath = path
+      const encodedPath = normalizedPath
         .split('/')
         .map(segment => encodeURIComponent(segment))
         .join('/');
@@ -393,11 +411,11 @@ export default function ExportButtons({
         WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
-        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
-        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
-        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
-        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
-        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
+        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
+        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
+        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
+        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
+        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
@@ -603,11 +621,11 @@ export default function ExportButtons({
         WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
       };
       const countryFlagMap: Record<string, string> = {
-        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
-        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
-        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
-        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
-        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
+        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
+        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
+        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
+        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
+        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;

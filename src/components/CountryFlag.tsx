@@ -33,8 +33,10 @@ export default function CountryFlag({
   'aria-label': ariaLabel,
 }: CountryFlagProps) {
   const countryName = COUNTRIES[countryCode].name;
-  const [hasLoadError, setHasLoadError] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const flagSrc = useMemo(() => `${BASE_PATH}${FLAG_IMAGE_PATHS[countryCode]}`, [countryCode]);
+  const hasLoadError = failedSrc === flagSrc;
+
   const fallbackLabel = countryName
     .split(/\s+/)
     .map(part => part[0] ?? '')
@@ -85,7 +87,7 @@ export default function CountryFlag({
       className={className}
       width={24}
       height={18}
-      onError={() => setHasLoadError(true)}
+      onError={() => setFailedSrc(flagSrc)}
       style={{
         ...sharedStyle,
         objectFit: 'cover',
