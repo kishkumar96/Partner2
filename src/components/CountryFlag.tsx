@@ -10,10 +10,7 @@ const FLAG_IMAGE_PATHS: Record<CountryCode, string> = {
   CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
 };
 
-const BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 interface CountryFlagProps {
   countryCode: CountryCode;
