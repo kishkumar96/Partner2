@@ -1,0 +1,20 @@
+services:
+  partner2:
+    build: .
+    container_name: partner2-dashboard
+    ports:
+      - "3112:3112"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3112
+      HOSTNAME: 0.0.0.0
+      AUTH_REQUIRE_REDIS: "false"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
