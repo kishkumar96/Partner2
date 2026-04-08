@@ -1,9 +1,18 @@
 # ── Stage 1: install dependencies ────────────────────────────────────────────
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+# Temporarily use HTTP to avoid certificate issues, then switch back to HTTPS
+RUN sed -i 's/https/http/g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache ca-certificates libc6-compat \
+    && sed -i 's/http:/https:/g' /etc/apk/repositories
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# Install with increased timeout and retry logic
+RUN npm config set fetch-timeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --prefer-offline --no-audit
 
 # ── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
