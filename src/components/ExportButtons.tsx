@@ -247,7 +247,10 @@ export default function ExportButtons({
   ): Promise<string | undefined> => {
     try {
       // URL-encode the path to handle spaces and special characters
-      const encodedPath = path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      const encodedPath = path
+        .split('/')
+        .map(segment => encodeURIComponent(segment))
+        .join('/');
       logger.debug(`Fetching asset: ${path} -> ${encodedPath}`);
       const response = await fetch(encodedPath);
       if (!response.ok) {
@@ -545,11 +548,11 @@ export default function ExportButtons({
       if (!buildingIconSrc) failedAssets.push('Building Icon');
       if (countryHeaderPath && !countryHeaderSrc) failedAssets.push('Country Header');
       if (countryFlagPath && !countryFlagSrc) failedAssets.push('Country Flag');
-      
+
       if (failedAssets.length > 0) {
         logger.warn(`PDF assets failed to load: ${failedAssets.join(', ')}`);
       }
-      
+
       setShowPreview(true);
     } catch (error) {
       logger.error('PDF preview failed:', error);
