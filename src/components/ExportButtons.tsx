@@ -14,10 +14,23 @@ import {
   getPdfKeyFigureIconLayout,
 } from './pdfTemplateConfig';
 
-const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
+const normalizeBasePath = (basePath?: string) => {
+  if (!basePath || basePath === '/') {
+    return '';
+  }
+  const withLeadingSlash = basePath.startsWith('/') ? basePath : `/${basePath}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+};
+
+const BASE_PATH = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
 
 // Helper to create asset URLs with correct base path
-const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+const pdfAsset = (path: string) => {
+  if (!path) return path;
+  if (/^(?:[a-z]+:)?\/\//i.test(path)) return path;
+  if (!path.startsWith('/')) return path;
+  return `${BASE_PATH}${path}`;
+};
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -246,8 +259,9 @@ export default function ExportButtons({
         }
   ): Promise<string | undefined> => {
     try {
+      const normalizedPath = pdfAsset(path);
       // URL-encode the path to handle spaces and special characters
-      const encodedPath = path
+      const encodedPath = normalizedPath
         .split('/')
         .map(segment => encodeURIComponent(segment))
         .join('/');

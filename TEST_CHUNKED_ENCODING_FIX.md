@@ -14,7 +14,7 @@
 
 ### 1. **Start Dev Server**
 ```bash
-cd /home/kishank/Partner2
+cd <repo-root>
 npm run dev
 ```
 
