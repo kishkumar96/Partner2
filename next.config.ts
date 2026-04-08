@@ -7,7 +7,8 @@ const dataVersion =
 
 const nextConfig: NextConfig = {
   // Base path for subdirectory deployment (disabled in dev for convenience)
-  basePath: process.env.NODE_ENV === 'production' ? '/partner2' : '',
+  // Use NEXT_PUBLIC_BASE_PATH env var to override, or default to '/partner2' in production
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? (process.env.NODE_ENV === 'production' ? '/partner2' : ''),
 
   env: {
     NEXT_PUBLIC_DATA_VERSION: dataVersion,
