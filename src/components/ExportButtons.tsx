@@ -67,12 +67,6 @@ const MAP_CAPTURE_TIMEOUT_MS = 1500;
 const ASSET_FETCH_TIMEOUT_MS = 10000; // Increased for large SVGs in production
 const LARGE_SVG_TIMEOUT_MS = 15000; // Extra time for template backgrounds
 
-// Base path for production deployment
-const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
-
-// Helper to create asset URLs with correct base path
-const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
-
 /** Minimal map type — avoids importing all of maplibre-gl into this module */
 type MapLike = {
   getCanvas: () => HTMLCanvasElement;
