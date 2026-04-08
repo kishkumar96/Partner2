@@ -257,9 +257,13 @@ describe('ExportButtons Component', () => {
   });
 
   it('shows an error when PDF generation fails', async () => {
-    jsPDFMock.mockImplementationOnce(() => {
-      throw new Error('pdf failed');
-    });
+    jsPDFMock
+      .mockImplementationOnce(() => {
+        throw new Error('pdf failed');
+      })
+      .mockImplementationOnce(() => {
+        throw new Error('pdf failed');
+      });
 
     render(<ExportButtons {...baseProps} />);
     await openPreviewAndDownload();

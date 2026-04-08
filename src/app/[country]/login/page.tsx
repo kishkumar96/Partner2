@@ -79,10 +79,10 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
               <div className="mt-3 flex items-center justify-center gap-2 text-slate-300">
                 <ReactCountryFlag
                   countryCode={countryCode}
-                  svg
+                  svg={false}
                   aria-label={COUNTRIES[countryCode].name}
                   title={COUNTRIES[countryCode].name}
-                  className="w-5 h-5"
+                  style={{ fontSize: '1.25rem', lineHeight: 1 }}
                 />
                 <span className="text-sm font-medium">{COUNTRIES[countryCode].name}</span>
               </div>

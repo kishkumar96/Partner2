@@ -6,6 +6,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Resilience Atlas';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2';
 
 // Enhanced metadata for SEO
 export const metadata: Metadata = {
@@ -82,9 +83,9 @@ export const metadata: Metadata = {
 
   // Icons and manifest
   icons: {
-    icon: [{ url: '/favicon.ico', sizes: 'any' }],
+    icon: [{ url: `${BASE_PATH}/favicon.ico`, sizes: 'any' }],
   },
-  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'}/manifest.json`,
+  manifest: `${BASE_PATH}/manifest.json`,
 
   // Additional metadata
   category: 'technology',
@@ -121,8 +122,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Preconnect to external domains for performance */}
-        <link rel="preconnect" href="https://basemaps.cartocdn.com" />
+        <link rel="preconnect" href="https://basemaps.cartocdn.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://tiles.basemaps.cartocdn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://tiles.basemaps.cartocdn.com" />
 
         {/* Structured data for search engines */}
         <script

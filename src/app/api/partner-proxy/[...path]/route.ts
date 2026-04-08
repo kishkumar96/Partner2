@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://opmthredds.gem.spc.int';
+const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'https://opmthredds.gem.spc.int';
 const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
 
 // WMS responses are immutable for a given request — cache 5 minutes in the browser / CDN.

@@ -67,6 +67,12 @@ const MAP_CAPTURE_TIMEOUT_MS = 1500;
 const ASSET_FETCH_TIMEOUT_MS = 10000; // Increased for large SVGs in production
 const LARGE_SVG_TIMEOUT_MS = 15000; // Extra time for template backgrounds
 
+// Base path for production deployment
+const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
+
+// Helper to create asset URLs with correct base path
+const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+
 /** Minimal map type — avoids importing all of maplibre-gl into this module */
 type MapLike = {
   getCanvas: () => HTMLCanvasElement;
@@ -265,7 +271,7 @@ export default function ExportButtons({
     try {
       const normalizedPath = pdfAsset(path);
       // URL-encode the path to handle spaces and special characters
-      const encodedPath = normalizedPath
+      const encodedPath = path
         .split('/')
         .map(segment => encodeURIComponent(segment))
         .join('/');
@@ -344,40 +350,56 @@ export default function ExportButtons({
 
   const downloadPDFFromPreview = async () => {
     const templateRoot = previewTemplateRef.current;
-    if (!templateRoot) return false;
+    if (!templateRoot) {
+      logger.warn('downloadPDFFromPreview: previewTemplateRef.current is null');
+      return false;
+    }
 
     const pageNodes = Array.from(templateRoot.children).filter(
       (node): node is HTMLDivElement => node instanceof HTMLDivElement
     );
-    if (pageNodes.length === 0) return false;
-
-    const [{ jsPDF }, html2canvasModule] = await Promise.all([
-      import('jspdf'),
-      import('html2canvas'),
-    ]);
-    const html2canvas = html2canvasModule.default;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    for (let index = 0; index < pageNodes.length; index += 1) {
-      const pageNode = pageNodes[index];
-      const canvas = await html2canvas(pageNode, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: pageNode.scrollWidth,
-        windowHeight: pageNode.scrollHeight,
-      });
-
-      const imageData = canvas.toDataURL('image/png');
-      if (index > 0) {
-        doc.addPage();
-      }
-      doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+    if (pageNodes.length === 0) {
+      logger.warn('downloadPDFFromPreview: no page nodes found in template');
+      return false;
     }
 
-    doc.save(buildPdfFilename());
-    return true;
+    try {
+      logger.info(`downloadPDFFromPreview: capturing ${pageNodes.length} pages from preview`);
+
+      const [{ jsPDF }, html2canvasModule] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
+      const html2canvas = html2canvasModule.default;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      for (let index = 0; index < pageNodes.length; index += 1) {
+        const pageNode = pageNodes[index];
+        logger.info(`downloadPDFFromPreview: capturing page ${index + 1}/${pageNodes.length}`);
+
+        const canvas = await html2canvas(pageNode, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: pageNode.scrollWidth,
+          windowHeight: pageNode.scrollHeight,
+        });
+
+        const imageData = canvas.toDataURL('image/png');
+        if (index > 0) {
+          doc.addPage();
+        }
+        doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+      }
+
+      logger.info('downloadPDFFromPreview: saving PDF from preview (high-quality)');
+      doc.save(buildPdfFilename());
+      return true;
+    } catch (error) {
+      logger.error('downloadPDFFromPreview failed, will fall back to legacy rendering:', error);
+      return false;
+    }
   };
 
   // ─── Open PDF Preview Modal ────────────────────────────────────────────────
@@ -405,17 +427,17 @@ export default function ExportButtons({
 
       // Map country code to assets
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
-        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
+        VU: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png'),
+        CK: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png'),
+        TO: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Tonga.png'),
+        WS: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Samoa.png'),
       };
       const countryFlagMap: Record<string, string> = {
-        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
-        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
-        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
-        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
-        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
+        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
+        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
+        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
+        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
@@ -437,7 +459,7 @@ export default function ExportButtons({
           ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
           : Promise.resolve(undefined),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG1.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -446,7 +468,7 @@ export default function ExportButtons({
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG2.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -454,13 +476,16 @@ export default function ExportButtons({
           }),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/DashBoard_Header_Country3.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
       ]);
@@ -599,9 +624,11 @@ export default function ExportButtons({
 
       const downloadedFromPreview = await downloadPDFFromPreview();
       if (downloadedFromPreview) {
+        logger.info('PDF download completed using high-quality preview capture');
         return;
       }
 
+      logger.warn('Preview-based download not available, using legacy jsPDF rendering');
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
@@ -615,17 +642,17 @@ export default function ExportButtons({
 
       // Map country code to header image
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
-        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
+        VU: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png'),
+        CK: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png'),
+        TO: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Tonga.png'),
+        WS: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Samoa.png'),
       };
       const countryFlagMap: Record<string, string> = {
-        VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
-        CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
-        TO: '/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png',
-        WS: '/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png',
-        FJ: '/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png',
+        VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
+        CK: pdfAsset('/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png'),
+        TO: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Tonga.svg.png'),
+        WS: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Samoa.svg.png'),
+        FJ: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Fiji.svg.png'),
       };
       const countryHeaderPath = countryCode ? countryHeaderMap[countryCode] : undefined;
       const countryFlagPath = countryCode ? countryFlagMap[countryCode] : undefined;
@@ -642,7 +669,7 @@ export default function ExportButtons({
         buildingIconSrc,
       ] = await Promise.all([
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/Topbackdrop.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/Topbackdrop.svg'), {
             rasterizeWidthPx: 2400,
             targetHeightPx: 460,
             fit: 'cover',
@@ -651,7 +678,7 @@ export default function ExportButtons({
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG1.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -660,7 +687,7 @@ export default function ExportButtons({
           LARGE_SVG_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG2.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -676,12 +703,15 @@ export default function ExportButtons({
           ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
           : Promise.resolve(undefined),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/DashBoard_Header_Country3.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
           ASSET_FETCH_TIMEOUT_MS
         ),
       ]);

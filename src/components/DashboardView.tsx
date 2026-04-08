@@ -140,6 +140,7 @@ export default function DashboardView({
   allowCountrySwitch = true,
   showLogout = true,
 }: DashboardViewProps) {
+  const [deferHeavyUiReady, setDeferHeavyUiReady] = useState(false);
   // Next.js router for URL state management
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -173,6 +174,7 @@ export default function DashboardView({
   const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
   const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
   const [showBasemapPreferenceModal, setShowBasemapPreferenceModal] = useState(false);
+  const [isBasemapPreferenceResolved, setIsBasemapPreferenceResolved] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
     initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
@@ -193,7 +195,7 @@ export default function DashboardView({
   );
   const [showMapControls, setShowMapControls] = useState(initialShowMapControls);
   const [showSummary, setShowSummary] = useState(urlState.showSummary ?? false);
-  const [showAnalytics, setShowAnalytics] = useState(true);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [legendSettings, setLegendSettings] = useState<LegendSettings>(() =>
     createDefaultLegendSettings(countryCode)
   );
@@ -228,6 +230,34 @@ export default function DashboardView({
     setCycloneControlsHost(node);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+    let idleHandle: number | null = null;
+
+    const complete = () => {
+      if (!cancelled) {
+        setDeferHeavyUiReady(true);
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleHandle = window.requestIdleCallback(complete);
+    } else if (typeof window !== 'undefined') {
+      timeoutHandle = globalThis.setTimeout(complete, 600);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeoutHandle !== null) {
+        globalThis.clearTimeout(timeoutHandle);
+      }
+      if (idleHandle !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleHandle);
+      }
+    };
+  }, []);
+
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
 
@@ -245,9 +275,9 @@ export default function DashboardView({
 
   // Show basemap preference modal on first visit (if no preference saved and no URL state)
   useEffect(() => {
-    if (!hasBasemapPreference() && !urlState.basemap) {
-      setShowBasemapPreferenceModal(true);
-    }
+    const shouldShowBasemapPreferenceModal = !hasBasemapPreference() && !urlState.basemap;
+    setShowBasemapPreferenceModal(shouldShowBasemapPreferenceModal);
+    setIsBasemapPreferenceResolved(!shouldShowBasemapPreferenceModal);
   }, [urlState.basemap]);
 
   // Sync legend settings when country changes
@@ -1005,12 +1035,14 @@ export default function DashboardView({
     setBasemapStyle(style);
     saveBasemapPreference(style);
     setShowBasemapPreferenceModal(false);
+    setIsBasemapPreferenceResolved(true);
   }, []);
 
   const handleBasemapSkip = useCallback(() => {
     // Save that preference has been set (even if skipped) to avoid showing modal again
     saveBasemapPreference(basemapStyle);
     setShowBasemapPreferenceModal(false);
+    setIsBasemapPreferenceResolved(true);
   }, [basemapStyle]);
 
   const handleResetUserPreferences = useCallback(() => {
@@ -1221,6 +1253,11 @@ export default function DashboardView({
   const loadRequestVersion = useRef(0);
   const dataLoadAbortRef = useRef<AbortController | null>(null);
   const supplementaryLoadAbortRef = useRef<AbortController | null>(null);
+  const supplementaryLoadKeyRef = useRef<string | null>(null);
+  const supplementarySeedRef = useRef<{
+    countryCode: CountryCode;
+    regionalSummary: Array<Record<string, unknown>>;
+  } | null>(null);
   const damageLoadAbortRef = useRef<{
     buildings: AbortController | null;
     roads: AbortController | null;
@@ -1545,12 +1582,110 @@ export default function DashboardView({
     }
   }, []);
 
+  const loadSupplementaryData = useCallback(() => {
+    const seed = supplementarySeedRef.current;
+    if (!seed) {
+      return;
+    }
+
+    const currentVersion = loadRequestVersion.current;
+    const loadKey = `${currentVersion}:${seed.countryCode}`;
+    if (supplementaryLoadKeyRef.current === loadKey || supplementaryLoadAbortRef.current) {
+      return;
+    }
+
+    const supplementaryController = new AbortController();
+    supplementaryLoadAbortRef.current = supplementaryController;
+    supplementaryLoadKeyRef.current = loadKey;
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DashboardView] Starting supplementary load for ${seed.countryCode}`);
+    }
+
+    void loadSupplementaryRealData({
+      signal: supplementaryController.signal,
+      countryCode: seed.countryCode,
+      regionalSummary: seed.regionalSummary,
+    })
+      .then(supplementary => {
+        if (
+          supplementaryController.signal.aborted ||
+          currentVersion !== loadRequestVersion.current
+        ) {
+          return;
+        }
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DashboardView] Supplementary load complete for ${seed.countryCode}`, {
+            sectorEconomicData: supplementary.sectorEconomicData?.length || 0,
+            assetEconomicData: supplementary.assetEconomicData?.length || 0,
+          });
+        }
+
+        if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
+        if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
+        if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
+        if (supplementary.regionalSummaryBySector) {
+          setRegionalSummaryBySector(supplementary.regionalSummaryBySector);
+        }
+        if (supplementary.exposureData) setExposureData(supplementary.exposureData);
+        if (supplementary.economicDamageData) {
+          setEconomicDamageData(supplementary.economicDamageData);
+        }
+        if (supplementary.sectorEconomicData) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(
+              `[DashboardView] Setting sectorEconomicData: ${supplementary.sectorEconomicData.length} rows`
+            );
+          }
+          setSectorEconomicData(supplementary.sectorEconomicData);
+        }
+        if (supplementary.assetEconomicData) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(
+              `[DashboardView] Setting assetEconomicData: ${supplementary.assetEconomicData.length} rows`
+            );
+          }
+          setAssetEconomicData(supplementary.assetEconomicData);
+        }
+        if (supplementary.assetExposureData) {
+          setAssetExposureData(supplementary.assetExposureData);
+        }
+        if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
+          setExpandedEvents(supplementary.sectorSpecificEvents);
+        }
+      })
+      .catch(error => {
+        if (supplementaryController.signal.aborted) {
+          return;
+        }
+
+        supplementaryLoadKeyRef.current = null;
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[DashboardView] Supplementary data loading failed:', error);
+        }
+      })
+      .finally(() => {
+        if (supplementaryLoadAbortRef.current === supplementaryController) {
+          supplementaryLoadAbortRef.current = null;
+        }
+      });
+  }, []);
+
   // Story mode side effects: pause playback and show controls on entry
   useEffect(() => {
     if (storyMode && isCyclonePlaying) {
       setIsCyclonePlaying(false);
     }
   }, [storyMode, isCyclonePlaying]);
+
+  useEffect(() => {
+    if (!showAnalytics && !showSummary) {
+      return;
+    }
+
+    loadSupplementaryData();
+  }, [showAnalytics, showSummary, loadSupplementaryData]);
 
   // Stabilized loadData with useCallback to prevent stale closures
   const loadData = useCallback(async () => {
@@ -1584,11 +1719,13 @@ export default function DashboardView({
     setExpandedEvents([]);
     setEvents([]);
     damageAutoLoadRequestedRef.current = { buildings: false, roads: false };
+    supplementarySeedRef.current = null;
+    supplementaryLoadKeyRef.current = null;
     try {
       const realData = await loadAllRealData({
         signal: controller.signal,
         includeDamagedAssets: false,
-        includeSupplementaryData: true,
+        includeSupplementaryData: false,
         countryCode: selectedCountry,
       });
 
@@ -1663,6 +1800,10 @@ export default function DashboardView({
 
       if (realData.regionalSummary) {
         setRegionalSummary(realData.regionalSummary);
+        supplementarySeedRef.current = {
+          countryCode: selectedCountry,
+          regionalSummary: realData.regionalSummary as Array<Record<string, unknown>>,
+        };
         if (process.env.NODE_ENV !== 'production') {
           console.log(`Loaded ${realData.regionalSummary.length} regional summaries`);
         }
@@ -1703,78 +1844,6 @@ export default function DashboardView({
           console.log(`Loaded ${realData.cycloneForecast.length} cyclone forecast timesteps`);
         }
       }
-
-      // Load supplementary analytics data in the background.
-      const supplementaryController = new AbortController();
-      supplementaryLoadAbortRef.current = supplementaryController;
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DashboardView] Starting supplementary load for ${selectedCountry}`);
-      }
-      void loadSupplementaryRealData({
-        signal: supplementaryController.signal,
-        countryCode: selectedCountry,
-        regionalSummary: (realData.regionalSummary || []) as Array<Record<string, unknown>>,
-      })
-        .then(supplementary => {
-          if (
-            supplementaryController.signal.aborted ||
-            currentVersion !== loadRequestVersion.current
-          ) {
-            return;
-          }
-
-          if (process.env.NODE_ENV !== 'production') {
-            console.log(`[DashboardView] Supplementary load complete for ${selectedCountry}`, {
-              sectorEconomicData: supplementary.sectorEconomicData?.length || 0,
-              assetEconomicData: supplementary.assetEconomicData?.length || 0,
-            });
-          }
-
-          if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
-          if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
-          if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
-          if (supplementary.regionalSummaryBySector) {
-            setRegionalSummaryBySector(supplementary.regionalSummaryBySector);
-          }
-          if (supplementary.exposureData) setExposureData(supplementary.exposureData);
-          if (supplementary.economicDamageData) {
-            setEconomicDamageData(supplementary.economicDamageData);
-          }
-          if (supplementary.sectorEconomicData) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log(
-                `[DashboardView] Setting sectorEconomicData: ${supplementary.sectorEconomicData.length} rows`
-              );
-            }
-            setSectorEconomicData(supplementary.sectorEconomicData);
-          }
-          if (supplementary.assetEconomicData) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log(
-                `[DashboardView] Setting assetEconomicData: ${supplementary.assetEconomicData.length} rows`
-              );
-            }
-            setAssetEconomicData(supplementary.assetEconomicData);
-          }
-          if (supplementary.assetExposureData)
-            setAssetExposureData(supplementary.assetExposureData);
-          if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
-            setExpandedEvents(supplementary.sectorSpecificEvents);
-          }
-        })
-        .catch(error => {
-          if (supplementaryController.signal.aborted) {
-            return;
-          }
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn('[DashboardView] Supplementary data loading failed:', error);
-          }
-        })
-        .finally(() => {
-          if (supplementaryLoadAbortRef.current === supplementaryController) {
-            supplementaryLoadAbortRef.current = null;
-          }
-        });
     } catch (error) {
       if (controller.signal.aborted) {
         return;
@@ -2012,10 +2081,10 @@ export default function DashboardView({
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
                 <ReactCountryFlag
                   countryCode={selectedCountry}
-                  svg
+                  svg={false}
                   aria-label={COUNTRIES[selectedCountry].name}
                   title={COUNTRIES[selectedCountry].name}
-                  className="h-7 w-10 rounded-[4px] shadow-sm"
+                  style={{ fontSize: '1.9rem', lineHeight: 1 }}
                 />
               </div>
               <div className="min-w-0">
@@ -2134,10 +2203,10 @@ export default function DashboardView({
                       <>
                         <ReactCountryFlag
                           countryCode={selectedCountry}
-                          svg
+                          svg={false}
                           aria-label={COUNTRIES[selectedCountry].name}
                           title={COUNTRIES[selectedCountry].name}
-                          className="h-4 w-4"
+                          style={{ fontSize: '1rem', lineHeight: 1 }}
                         />
                         <span className="font-medium max-[420px]:hidden">
                           {COUNTRIES[selectedCountry].name}
@@ -2157,10 +2226,10 @@ export default function DashboardView({
                   >
                     <ReactCountryFlag
                       countryCode={selectedCountry}
-                      svg
+                      svg={false}
                       aria-label={COUNTRIES[selectedCountry].name}
                       title={COUNTRIES[selectedCountry].name}
-                      className="h-4 w-4"
+                      style={{ fontSize: '1rem', lineHeight: 1 }}
                     />
                     <span className="font-medium max-[420px]:hidden">
                       {COUNTRIES[selectedCountry].name}
@@ -2241,21 +2310,28 @@ export default function DashboardView({
                   )}
                 </button>
 
-                <ExportButtons
-                  events={exportEvents}
-                  exposureData={exportExposureData}
-                  economicDamageData={exportEconomicDamageData}
-                  hazards={hazards}
-                  sectors={sectors}
-                  disabled={isExportDisabled}
-                  countryName={COUNTRIES[selectedCountry].name}
-                  fullCountryName={COUNTRIES[selectedCountry].fullName}
-                  countryCode={selectedCountry}
-                  cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
-                  impactBySector={impactBySector}
-                  nationalSummary={nationalSummary}
-                  mapInstance={mapInstance}
-                />
+                {deferHeavyUiReady ? (
+                  <ExportButtons
+                    events={exportEvents}
+                    exposureData={exportExposureData}
+                    economicDamageData={exportEconomicDamageData}
+                    hazards={hazards}
+                    sectors={sectors}
+                    disabled={isExportDisabled}
+                    countryName={COUNTRIES[selectedCountry].name}
+                    fullCountryName={COUNTRIES[selectedCountry].fullName}
+                    countryCode={selectedCountry}
+                    cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
+                    impactBySector={impactBySector}
+                    nationalSummary={nationalSummary}
+                    mapInstance={mapInstance}
+                  />
+                ) : (
+                  <div
+                    className="h-11 w-28 rounded-xl bg-slate-700/30 sm:h-12"
+                    aria-hidden="true"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -2436,40 +2512,42 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <MapPanel
-            mapStyle={mapStyle}
-            onMapStyleChange={setMapStyle}
-            is3DView={is3DView}
-            on3DViewToggle={setIs3DView}
-            extrusionMode={extrusionMode}
-            onExtrusionModeChange={setExtrusionMode}
-            extrusionExaggeration={extrusionExaggeration}
-            onExtrusionExaggerationChange={setExtrusionExaggeration}
-            showWindLayer={showWindLayer}
-            showInundationLayer={showInundationLayer}
-            onWindLayerToggle={setShowWindLayer}
-            onInundationLayerToggle={setShowInundationLayer}
-            showBuildingsLayer={showBuildingsLayer}
-            showRoadsLayer={showRoadsLayer}
-            onBuildingsLayerToggle={handleBuildingsLayerToggle}
-            onRoadsLayerToggle={handleRoadsLayerToggle}
-            showCycloneLayer={showCycloneControls}
-            onCycloneLayerToggle={handleCycloneVisibilityChange}
-            hasCycloneData={!!cycloneForecast}
-            isCyclonePlaying={isCyclonePlaying}
-            onToggleCyclonePlaying={setIsCyclonePlaying}
-            cycloneControlsHostRef={cycloneControlsHostRef}
-            storyMode={storyMode}
-            layerOpacity={layerOpacity}
-            onLayerOpacityChange={setLayerOpacity}
-            legendSettings={legendSettings}
-            onLegendSettingsChange={setLegendSettings}
-            countryCode={selectedCountry}
-            isMapDataLoading={isMapDataLoading}
-            isHazardsLoading={isHazardsLoading}
-            hazardZoomBlocked={hazardZoomBlocked}
-            onResetUserPreferences={handleResetUserPreferences}
-          />
+          {showMapControls && (
+            <MapPanel
+              mapStyle={mapStyle}
+              onMapStyleChange={setMapStyle}
+              is3DView={is3DView}
+              on3DViewToggle={setIs3DView}
+              extrusionMode={extrusionMode}
+              onExtrusionModeChange={setExtrusionMode}
+              extrusionExaggeration={extrusionExaggeration}
+              onExtrusionExaggerationChange={setExtrusionExaggeration}
+              showWindLayer={showWindLayer}
+              showInundationLayer={showInundationLayer}
+              onWindLayerToggle={setShowWindLayer}
+              onInundationLayerToggle={setShowInundationLayer}
+              showBuildingsLayer={showBuildingsLayer}
+              showRoadsLayer={showRoadsLayer}
+              onBuildingsLayerToggle={handleBuildingsLayerToggle}
+              onRoadsLayerToggle={handleRoadsLayerToggle}
+              showCycloneLayer={showCycloneControls}
+              onCycloneLayerToggle={handleCycloneVisibilityChange}
+              hasCycloneData={!!cycloneForecast}
+              isCyclonePlaying={isCyclonePlaying}
+              onToggleCyclonePlaying={setIsCyclonePlaying}
+              cycloneControlsHostRef={cycloneControlsHostRef}
+              storyMode={storyMode}
+              layerOpacity={layerOpacity}
+              onLayerOpacityChange={setLayerOpacity}
+              legendSettings={legendSettings}
+              onLegendSettingsChange={setLegendSettings}
+              countryCode={selectedCountry}
+              isMapDataLoading={isMapDataLoading}
+              isHazardsLoading={isHazardsLoading}
+              hazardZoomBlocked={hazardZoomBlocked}
+              onResetUserPreferences={handleResetUserPreferences}
+            />
+          )}
         </div>
 
         {/* Center Map + Bottom Tabs */}
@@ -2511,46 +2589,55 @@ export default function DashboardView({
               );
             })()}
 
-            <MapView
-              events={countryEvents}
-              hazards={hazards}
-              filters={filters}
-              onEventSelect={setSelectedEvent}
-              selectedRegion={selectedRegion}
-              onRegionSelect={setSelectedRegion}
-              selectedCountry={selectedCountry}
-              mapStyle={mapStyle}
-              basemapStyle={basemapStyle}
-              is3DView={is3DView}
-              extrusionMode={extrusionMode}
-              extrusionExaggeration={extrusionExaggeration}
-              showWindLayer={showWindLayer}
-              showInundationLayer={showInundationLayer}
-              onLayersLoadingChange={setIsLoadingLayers}
-              onActiveWmsLayersChange={setActiveWmsLayers}
-              layerOpacity={layerOpacity}
-              legendSettings={legendSettings}
-              damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
-              damagedRoads={showRoadsLayer ? damagedRoads : null}
-              cycloneForecast={cycloneForecast}
-              aggregationLevel={filters.aggregationLevel}
-              showOverlays={showMapOverlays}
-              onCycloneTimestepChange={handleCycloneTimestepChange}
-              showCycloneAnimation={showCycloneControls}
-              onCycloneAnimationChange={handleCycloneVisibilityChange}
-              isCyclonePlaying={isCyclonePlaying}
-              onCyclonePlayingChange={setIsCyclonePlaying}
-              showCycloneToggle={false}
-              cycloneControlsHost={cycloneControlsHost}
-              isLeftPanelOpen={showFilters}
-              isRightPanelOpen={showSummary}
-              storyMode={storyMode}
-              storyBeats={stableStoryBeats}
-              currentCycloneIndex={currentCycloneIndex}
-              onStoryModeChange={setStoryMode}
-              onStoryIndexChange={setCurrentCycloneIndex}
-              onMapReady={setMapInstance}
-            />
+            {isBasemapPreferenceResolved && !showBasemapPreferenceModal ? (
+              <MapView
+                events={countryEvents}
+                hazards={hazards}
+                filters={filters}
+                onEventSelect={setSelectedEvent}
+                selectedRegion={selectedRegion}
+                onRegionSelect={setSelectedRegion}
+                selectedCountry={selectedCountry}
+                mapStyle={mapStyle}
+                basemapStyle={basemapStyle}
+                is3DView={is3DView}
+                extrusionMode={extrusionMode}
+                extrusionExaggeration={extrusionExaggeration}
+                showWindLayer={showWindLayer}
+                showInundationLayer={showInundationLayer}
+                onLayersLoadingChange={setIsLoadingLayers}
+                onActiveWmsLayersChange={setActiveWmsLayers}
+                layerOpacity={layerOpacity}
+                legendSettings={legendSettings}
+                damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
+                damagedRoads={showRoadsLayer ? damagedRoads : null}
+                cycloneForecast={cycloneForecast}
+                aggregationLevel={filters.aggregationLevel}
+                showOverlays={showMapOverlays}
+                onCycloneTimestepChange={handleCycloneTimestepChange}
+                showCycloneAnimation={showCycloneControls}
+                onCycloneAnimationChange={handleCycloneVisibilityChange}
+                isCyclonePlaying={isCyclonePlaying}
+                onCyclonePlayingChange={setIsCyclonePlaying}
+                showCycloneToggle={false}
+                cycloneControlsHost={cycloneControlsHost}
+                isLeftPanelOpen={showFilters}
+                isRightPanelOpen={showSummary}
+                storyMode={storyMode}
+                storyBeats={stableStoryBeats}
+                currentCycloneIndex={currentCycloneIndex}
+                onStoryModeChange={setStoryMode}
+                onStoryIndexChange={setCurrentCycloneIndex}
+                onMapReady={setMapInstance}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="text-sm text-slate-400">Preparing map...</p>
+                </div>
+              </div>
+            )}
 
             {/* Loading Overlay */}
             {isLoadingData && (
@@ -2618,6 +2705,7 @@ export default function DashboardView({
                     selectedCountry={selectedCountry}
                     onCountryChange={newCountry => {
                       const params = new URLSearchParams(searchParams.toString());
+                      params.delete('country');
                       const query = params.toString();
                       router.push(`/${CODE_TO_SLUG[newCountry]}${query ? `?${query}` : ''}`);
                       setShowCountrySelector(false);
@@ -2648,7 +2736,7 @@ export default function DashboardView({
             )}
           </div>
 
-          {showAnalytics && (
+          {showAnalytics && deferHeavyUiReady && (
             <BottomTabs
               events={countryEvents}
               hazards={hazards}
@@ -2696,22 +2784,24 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <SummaryPanel
-            events={countryEvents}
-            filters={filters}
-            districts={resolvedDistricts}
-            provinces={resolvedProvinces}
-            sectors={sectors}
-            hazards={hazards}
-            selectedCountry={selectedCountry}
-            selectedRegion={selectedRegion}
-            onRegionClear={() => setSelectedRegion(null)}
-            assetExposureData={assetExposureData}
-            nationalSummary={nationalSummary || []}
-            regionalSummary={regionalSummary}
-            regionalSummaryBySector={regionalSummaryBySector}
-            impactBySector={impactBySector || []}
-          />
+          {showSummary && (
+            <SummaryPanel
+              events={countryEvents}
+              filters={filters}
+              districts={resolvedDistricts}
+              provinces={resolvedProvinces}
+              sectors={sectors}
+              hazards={hazards}
+              selectedCountry={selectedCountry}
+              selectedRegion={selectedRegion}
+              onRegionClear={() => setSelectedRegion(null)}
+              assetExposureData={assetExposureData}
+              nationalSummary={nationalSummary || []}
+              regionalSummary={regionalSummary}
+              regionalSummaryBySector={regionalSummaryBySector}
+              impactBySector={impactBySector || []}
+            />
+          )}
         </div>
       </div>
 

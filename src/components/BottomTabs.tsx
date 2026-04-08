@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import EnhancedRegionalTable from './EnhancedRegionalTable';
-import ComparativeAnalytics from './ComparativeAnalytics';
-import BuildingsTable from './BuildingsTable';
-import RoadsTable from './RoadsTable';
+import dynamic from 'next/dynamic';
 import {
   Event,
   Hazard,
@@ -33,6 +30,22 @@ import {
   MapPin,
   Construction,
 } from 'lucide-react';
+
+const EnhancedRegionalTable = dynamic(() => import('./EnhancedRegionalTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading regional table...</div>,
+});
+
+const ComparativeAnalytics = dynamic(() => import('./ComparativeAnalytics'), {
+  loading: () => <div className="text-xs text-slate-400">Loading analytics...</div>,
+});
+
+const BuildingsTable = dynamic(() => import('./BuildingsTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading buildings...</div>,
+});
+
+const RoadsTable = dynamic(() => import('./RoadsTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading roads...</div>,
+});
 
 interface BottomTabsProps {
   events: Event[];
@@ -484,13 +497,13 @@ export default function BottomTabs({
 
   return (
     <div className="h-[19rem] sm:h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0">
-      {/* Tab Headers - Reduced padding */}
+      {/* Tab Headers - Reduced padding with explicit min-width to prevent CLS */}
       <div className="flex overflow-x-auto border-b border-white/10 px-2 sm:px-4">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors sm:px-4 ${
+            className={`flex-shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors sm:px-4 min-w-[120px] ${
               activeTab === tab.id
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'

@@ -2,6 +2,12 @@ import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import { getLossSequentialColors, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSystem';
 import { CountryCode } from '@/types/thredds';
 
+// Get basePath from env — empty in dev, '/partner2' in production
+const BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
+    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+
 export interface LegendThreshold {
   value: number;
   label: string;
@@ -450,7 +456,15 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
 ];
 
 function wmsBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? '/api/partner-proxy/thredds/wms';
+  const defaultPath = '/api/partner-proxy/thredds/wms';
+  const url = process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? defaultPath;
+
+  // Prepend BASE_PATH if URL is relative and doesn't already have it
+  if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
+    return `${BASE_PATH}${url}`;
+  }
+
+  return url;
 }
 
 export function buildRealWMSUrl(

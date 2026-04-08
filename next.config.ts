@@ -98,10 +98,12 @@ const nextConfig: NextConfig = {
   // Performance budgets
   experimental: {
     optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2', 'maplibre-gl'],
-    // Disable aggressive preloading for better performance
-    optimisticClientCache: false,
     // Enable faster builds with Webpack 5 module federation
     esmExternals: true,
+    // CSS chunking for better caching
+    optimizeCss: true,
+    // Optimize server component tree
+    serverComponentsHmrCache: true,
   },
 
   // Output standalone for better production optimization
@@ -126,15 +128,29 @@ const nextConfig: NextConfig = {
 
     // Production optimizations
     if (!dev && !isServer) {
+      // Enable tree-shaking for better bundle optimization
       config.optimization = {
         ...config.optimization,
         moduleIds: 'deterministic',
         runtimeChunk: 'single',
+        usedExports: true,
+        sideEffects: false,
+        minimize: true,
         splitChunks: {
           chunks: 'all',
+          maxInitialRequests: 25,
+          minSize: 20000,
           cacheGroups: {
             default: false,
             vendors: false,
+            // Framework chunk for React ecosystem
+            framework: {
+              name: 'framework',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next)[\\/]/,
+              chunks: 'all',
+              priority: 40,
+              enforce: true,
+            },
             // Vendor chunk for large libraries
             vendor: {
               name: 'vendor',
@@ -154,16 +170,18 @@ const nextConfig: NextConfig = {
             // Separate chunks for map libraries (they're large)
             maps: {
               name: 'maps',
-              test: /[\\/]node_modules[\\/](maplibre-gl|georaster|geotiff)[\\/]/,
-              chunks: 'all',
+              test: /[\\/]node_modules[\\/](maplibre-gl|georaster|geotiff|@deck\.gl)[\\/]/,
+              chunks: 'async',
               priority: 30,
+              enforce: true,
             },
             // Separate chunks for chart libraries
             charts: {
               name: 'charts',
               test: /[\\/]node_modules[\\/](chart\.js|react-chartjs-2)[\\/]/,
-              chunks: 'all',
+              chunks: 'async',
               priority: 30,
+              enforce: true,
             },
             // Export libraries - lazy load only when needed (no preload)
             exports: {

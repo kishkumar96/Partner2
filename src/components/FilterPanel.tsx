@@ -512,7 +512,7 @@ export default function FilterPanel({
                                 {hazard.name}
                               </span>
                               {!hazard.isAvailable && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-semibold">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-600/85 text-slate-100 border border-slate-500/80 font-semibold">
                                   No data
                                 </span>
                               )}
@@ -674,7 +674,7 @@ export default function FilterPanel({
                             {sector.name}
                           </span>
                           {!sector.isAvailable && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-semibold">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-600/85 text-slate-100 border border-slate-500/80 font-semibold">
                               No data
                             </span>
                           )}

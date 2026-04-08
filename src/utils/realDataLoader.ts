@@ -420,7 +420,7 @@ export async function loadRegionalSummary(
     : `${basePath}/regional-summary.csv`;
   const { data: csvText } = await loadTextData(path, {
     cache: true,
-    signal: loaderOptions.signal,
+    ...loaderOptions,
   });
   return csvText ? parseCSV(csvText) : null;
 }
