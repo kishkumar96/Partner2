@@ -1,0 +1,559 @@
+input(bookmark('FMS-Track', { location: '../../hazard/vu_hazard/TC/Lola/20231023T030000Z_Official_Forecast_Track_2324_01F_Lola.csv'})) as input_TC_track
+ ->
+group({
+         to_list({ geom: centroid(geom), line: "__linenum" }) as points,
+         mode(geom) as a_point
+      })
+ ->
+select({ combine_points(points, a_point) as geom }) as tc_track
+ ->
+save('cyclone-track', format: 'geojson')
+
+#
+# Input exposure data
+#
+input(bookmark('VU_Household_Population'), name: 'exposure') as input_population
+->
+select({ *, 'Population' as InputType })
+->
+union() as all_exposures
+
+input(bookmark('VU_PCRAFI_Buildings'), name: 'exposure') as input_buildings
+->
+select({
+         *,
+         'Building' as InputType,
+         # TODO add in Health once it becomes available
+         switch(exposure.UseType, cases: [
+             { in: ['Commercial', 'Industrial'], return: 'Productive' },
+             { in: ['Educational'], return: 'Education' },
+             { in: ['Infrastructure'], return: 'Infrastructure' },
+             { in: ['Instituional', 'Public'], return: 'Public' },
+             { in: ['Other', 'Out building'], return: 'Other' },
+             { in: ['Residential'], return: 'Residential' },
+           ],
+           default: 'Unknown'
+         ) as Sector
+       })
+->
+all_exposures
+
+input(bookmark('VU_Evacuation_Centres'), name: 'exposure') as input_evac_centres
+->
+select({ *, 'Evacuation Centre' as InputType })
+->
+all_exposures
+
+input(bookmark('VU_Health_Facilities'), name: 'exposure') as input_health_facilities
+->
+select({ *, 'Health Facility' as InputType })
+->
+all_exposures
+
+input(bookmark('VU_Schools'), name: 'exposure') as input_schools
+->
+select({ *, 'School' as InputType })
+->
+all_exposures
+
+input(bookmark('VU_Roads'), name: 'exposure') as input_roads
+ ->
+select({ *,  'Road' as InputType, 'Infrastructure' as Sector })
+ ->
+all_exposures
+
+input(bookmark('VU_Crops'), name: 'exposure') as input_crops
+ ->
+select({ *,  'Crop' as InputType, 'Productive' as Sector })
+ ->
+all_exposures
+
+input(bookmark('VU_Airports'), name: 'exposure') as input_airports
+ ->
+select({ *,  'Airport' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+input(bookmark('VU_Ports'), name: 'exposure') as input_ports
+ ->
+select({ *,  'Port' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+input(bookmark('VU_Power'), name: 'exposure') as input_power
+ ->
+select({ *,  'Power' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+input(bookmark('VU_Telecom_Towers'), name: 'exposure') as input_telecom
+ ->
+select({ *,  'Telecommunication' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+input(bookmark('VU_Water'), name: 'exposure') as input_water
+ ->
+select({ *,  'Water' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+input(bookmark('VU_Bridges'), name: 'exposure') as input_bridges
+ ->
+select({ *,  'Bridge' as InputType, 'Infrastructure' as Sector, true as infrastructure })
+ ->
+all_exposures
+
+#
+# Geoprocessing & Sampling
+#
+all_exposures
+ ->
+select({ *, switch(InputType, default: false, cases: [{ in: ['Road', 'Port', 'Airport'], return: true }]) as can_segment })
+ ->
+# segment any lines/polygons by a fixed distance (not by a grid).
+# If any part of segment is exposed, then the whole segment is exposed.
+select({ *, measure(exposure.geom) as orig_size, segment(exposure.geom, 10) as geom }) as segment
+ ->
+# NB: don't segment buildings or other discrete assets
+select({ *, if_then_else(can_segment, geom, [ exposure.geom ]) as geom })
+ ->
+unnest(geom)
+ ->
+select({ *, measure(geom) as size }) as measure
+ ->
+# NB: use scale_factor=1.0 for points, so we don't end up with NaN
+select({ *, if_then_else(can_segment and size > 0, size / orig_size, 1.0) as scale_factor })
+ ->
+select({
+         *,
+         merge(exposure, {
+                           geom,
+                           exposure.Value * scale_factor as Value,
+                           InputType as Asset,
+                         }) as exposure
+       })
+->
+select({
+          *,
+          sample_one(exposure, to_coverage(bookmark(bookmark('VU_Area_Councils'))), 10000) as map_region,
+          sample_one(exposure, to_coverage(bookmark(bookmark('VU_Provinces'))), 10000) as table_region,
+       }) as exposures_and_regions
+ ->
+select({
+         *,
+         # wind data is typically fairly widespread and uniform, so just take one sample because it's quicker
+         sample_one(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/local_wind.tif')) as windspeed_ms,
+         sample(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/_merged.tif')) as coastal_inundation,
+         sample(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM_nan.tif')) as fluvial_inundation,
+       })
+ ->
+ select({
+      *,
+      windspeed_ms * 3.6 as windspeed_kmph,
+      map(coastal_inundation, h -> h.sampled) as coastal_inundation,
+      map(fluvial_inundation, h -> h.sampled) as fluvial_inundation,
+    })
+ ->
+# NB: RiskScape typically converts NaN values to null when sampling a GeoTIFF,
+# but not in this case because the storm surge GeoTIFFs have 'no data' already set
+select({
+         *,
+         map(coastal_inundation, x -> if_then_else(str(x) = 'NaN', null_of('floating'), x)) as coastal_inundation,
+         map(fluvial_inundation, x -> if_then_else(str(x) = 'NaN', null_of('floating'), x)) as fluvial_inundation
+       })
+ ->
+# for simplicity (and conservativeness), just use the max flood depth that the element-at-risk was exposed to
+select({
+         *,
+         max(coastal_inundation) as coastal_inundation,
+         max(fluvial_inundation) as fluvial_inundation
+       })
+ ->
+select({
+         *,
+         if_then_else(fluvial_inundation > 0.15, fluvial_inundation, null_of('floating')) as fluvial_inundation,
+         if_then_else(coastal_inundation > 0.05, coastal_inundation, null_of('floating')) as coastal_inundation,
+       })
+ ->
+select({
+         *,
+         Flood_Loss(exposure, fluvial_inundation).Direct_Loss as fluvial_loss,
+         Flood_Loss(exposure, coastal_inundation).Direct_Loss as coastal_loss,
+         # NB: windspeed here is 3 second wind gust
+         wind_damage(exposure, windspeed_kmph).Loss_p50 as wind_loss
+       })
+ ->
+select({
+         *,
+         if_null(fluvial_loss, 0.0) as fluvial_loss,
+         if_null(coastal_loss, 0.0) as coastal_loss,
+         if_null(wind_loss, 0.0) as wind_loss,
+         # strip off nullability to make sure it doesn't mess with the results
+         if_null(windspeed_kmph, 0.0) as windspeed_kmph,
+         if_null(fluvial_inundation, 0.0) as fluvial_inundation,
+         if_null(coastal_inundation, 0.0) as coastal_inundation,
+         if_null(infrastructure, false) as infrastructure
+       }) as raw_results
+ ->
+# Bridges are always exposed to fluvial hazards so we can't accurately calculate the loss 
+select({
+          *,
+          if_then_else(exposure.Asset = 'Bridge', 0.0, fluvial_loss) as fluvial_loss
+      })
+ ->
+# if an asset is impacted by both coastal and fluvial flooding, take the greater of the 2 losses
+select({
+          *,
+          if_then_else(fluvial_loss > coastal_loss, fluvial_loss, 0.0) as fluvial_loss,
+          if_then_else(coastal_loss >= fluvial_loss, coastal_loss, 0.0) as coastal_loss
+      })
+ ->
+# don't double-count losses by hazard type. So wind damage shouldn't exceed the asset value
+# minus any flood damage
+select({
+          *,
+          min(exposure.Value - (fluvial_loss + coastal_loss), wind_loss) as wind_loss
+      })
+
+ ->
+# pick out the exposed values by exposure type now to simplify the aggregate steps a little
+select({
+         *,
+         windspeed_kmph > 105 as Exposed_Wind,
+         fluvial_inundation > 0.15 as Exposed_Fluvial,
+         coastal_inundation > 0.05 as Exposed_Coastal,
+
+         if_then_else(exposure.Asset = 'Population', exposure.Value, 0.0) as Population,
+         if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0) as Building_Value,
+         if_then_else(infrastructure, exposure.Value, 0.0) as Infrastructure_Value,
+         if_then_else(exposure.Asset = 'Road', exposure.Value, 0.0) as Road_Value,
+         if_then_else(exposure.Asset = 'Crop', exposure.Value, 0.0) as Crop_Value,
+         if_then_else(exposure.Asset = 'Road', size / 1000.0, 0.0) as Road_km,
+         if_then_else(exposure.Asset != 'Population', exposure.Value, 0.0) as Total_Value,
+
+         min(fluvial_loss + coastal_loss + wind_loss, exposure.Value) as Loss,
+       })
+ ->
+select({
+         *,
+         Exposed_Wind or Exposed_Fluvial or Exposed_Coastal as Exposed,
+         Exposed_Fluvial or Exposed_Coastal as Exposed_Flood,
+
+         if_then_else(exposure.Asset = 'Building', Loss, 0.0) as building_loss,
+         if_then_else(exposure.Asset = 'Road', Loss, 0.0) as road_loss,
+         if_then_else(infrastructure, Loss, 0.0) as infrastructure_loss,
+         if_then_else(exposure.Asset = 'Crop', Loss, 0.0) as crop_loss,
+
+         round(windspeed_kmph) as WindGust_kmph,
+         round(fluvial_inundation, 2) as Fluvial_Inundation_m,
+         round(coastal_inundation, 2) as Coastal_Inundation_m,
+
+       }) as event_impact_table
+
+#
+# Reporting
+#
+event_impact_table
+ ->
+select({
+      *,
+      [ null_of('geometry'), table_region.geom, map_region.geom ] as geom,
+      [{ null_of('text') as ID, null_of('text') as Region, 'National' as Level },
+       { table_region.ID, table_region.Region, 'Admin1' as Level },
+       { map_region.ID, map_region.Region, 'Admin2' as Level }] as Region
+    })
+ ->
+unnest([Region, geom]) as unnest_regions
+ ->
+group(by: { Region, geom },
+      select: {
+        { Region.*, geom } as Region,
+        round(mean(windspeed_kmph)) as Average_Wind_Gusts,
+        round(max(windspeed_kmph)) as Max_Wind_Gusts,
+
+        count(exposure.Asset = 'Building' and Exposed_Wind) as Buildings_Exposed_To_Wind,
+        count(exposure.Asset = 'Building' and Exposed_Fluvial) as Buildings_Exposed_To_Fluvial_Flooding,
+        count(exposure.Asset = 'Building' and Exposed_Coastal) as Buildings_Exposed_To_Coastal_Flooding,
+        count(exposure.Asset = 'Building' and Exposed) as Buildings_Exposed_To_Any_Hazard,
+        count(exposure.Asset = 'Building' and Loss > 0) as Damaged_Buildings,
+        count(exposure.Asset = 'Building' and Exposed and exposure.UseType = 'Residential') as Exposed_Residential_Buildings,
+        count(exposure.Asset = 'Building' and Exposed and exposure.UseType != 'Residential') as Exposed_Nonresidential_Buildings,
+        count(exposure.Asset = 'Building') as Total_Buildings,
+
+        round(sum(building_loss)) as Building_Loss,
+        round(sum(if_then_else(exposure.UseType = 'Residential', building_loss, 0.0))) as Residential_Building_Loss,
+        round(sum(if_then_else(exposure.UseType != 'Residential', building_loss, 0.0))) as Nonresidential_Building_Loss,
+
+        round(sum(if_then_else(Exposed, Building_Value, 0.0))) as Exposed_Building_Value,
+        round(sum(Building_Value)) as Total_Building_Value,
+
+        # Population
+        round(sum(if_then_else(Exposed_Wind, Population, 0.0))) as Population_Exposed_To_Wind,
+        round(sum(if_then_else(Exposed_Fluvial, Population, 0.0))) as Population_Exposed_To_Fluvial_Flooding,
+        round(sum(if_then_else(Exposed_Coastal, Population, 0.0))) as Population_Exposed_To_Coastal_Flooding,
+        round(sum(if_then_else(Exposed, Population, 0.0))) as Population_Exposed_To_Any_Hazard,
+        round(sum(Population)) as Total_Population,
+        count(exposure.Asset = 'Population' and Exposed) as Exposed_Households,
+        count(exposure.Asset = 'Population') as Total_Households,
+
+        # Roads
+        round(sum(if_then_else(Exposed_Flood, Road_km, 0.0)), 2) as Road_km_Exposed_To_Flooding,
+        round(sum(if_then_else(Loss > 0, Road_km, 0.0)), 2) as Damaged_Road_km,
+        round(sum(Road_km), 2) as Total_Road_km,
+        round(sum(if_then_else(Exposed_Flood, Road_Value, 0.0))) as Road_Value_Exposed_To_Flooding,
+        round(sum(road_loss)) as Road_Loss,
+        round(sum(Road_Value)) as Total_Road_Value,
+
+        # infrastructure
+        round(sum(if_then_else(Exposed, Infrastructure_Value, 0.0))) as Exposed_Infrastructure_Value,
+        round(sum(infrastructure_loss)) as Infrastructure_Loss,
+        round(sum(Infrastructure_Value)) as Total_Infrastructure_Value,
+        
+        count(infrastructure and Exposed) as Exposed_Infrastructure,
+        count(infrastructure and Loss > 0) as Damaged_Infrastructure,
+        count(infrastructure) as Total_Infrastructure,
+
+        # crops
+        round(sum(if_then_else(Exposed, Crop_Value, 0.0))) as Exposed_Crop_Value,
+        round(sum(crop_loss)) as Crop_Loss,
+        round(sum(Crop_Value)) as Total_Crop_Value,
+
+        # exposed schools, health, etc
+        count(Exposed and exposure.Asset = 'Evacuation Centre') as Exposed_Evacuation_Centres,
+        count(exposure.Asset = 'Evacuation Centre') as Total_Evacuation_Centres,
+
+        count(Exposed and exposure.Asset = 'Health Facility') as Exposed_Health_Facilties,
+        count(exposure.Asset = 'Health Facility') as Total_Health_Facilties,
+
+        count(Exposed and exposure.Asset = 'School') as Exposed_Schools,
+        count(exposure.Asset = 'School') as Total_Schools,
+
+        round(sum(if_then_else(Exposed_Wind, Total_Value, 0.0))) as Total_Exposed_Value_To_Wind,
+        round(sum(if_then_else(Exposed_Fluvial, Total_Value, 0.0))) as Total_Exposed_Value_To_Fluvial_Flooding,
+        round(sum(if_then_else(Exposed_Coastal, Total_Value, 0.0))) as Total_Exposed_Value_To_Coastal_Flooding,
+        round(sum(if_then_else(Exposed, Total_Value, 0.0))) as Total_Exposed_Value_To_Any_Hazard,
+        round(sum(Total_Value)) as Total_Value,
+
+        round(sum(wind_loss)) as Total_Wind_Loss,
+        round(sum(fluvial_loss)) as Total_Fluvial_Loss,
+        round(sum(coastal_loss)) as Total_Coastal_Loss,
+        round(sum(Loss)) as Total_Loss,
+
+        # exposure by hazard
+        bucket_range(pick: windspeed_kmph, range: [ 83, 125, 164, 224, 280 ], select: {
+              count(exposure.Asset = 'Building') as Buildings,
+              round(if_null(
+                    sum(Population),
+                    0.0)) as Population,
+              round(if_null(sum(Loss), 0.0)) as Total_Loss,
+        }) as Wind_Gusts_kmph,
+
+        bucket_range(pick: max(coastal_inundation, fluvial_inundation),
+              range: [ 0.01, 0.5, 1.0, 1.5, 2.0 ],
+              select: {
+              count(exposure.Asset = 'Building') as Buildings,
+              round(if_null(
+                    sum(Population),
+                    0.0)) as Population,
+              round(if_null(sum(Loss), 0.0)) as Total_Loss,
+        }) as Inundation_Depth,
+      }) as aggregate_impact
+ ->
+filter(Region.Level = 'Admin2') as filter_admin2_regions
+ ->
+save('regional-impacts', format: 'geojson')
+
+aggregate_impact
+ ->
+filter(Region.Level = 'Admin1') as filter_admin1_regions
+ ->
+select({ Region.ID as Region_ID, *, Region.Region as Region }) as regional_event_impact
+ ->
+sort(Region)
+ ->
+save('regional-summary', format: 'csv')
+
+aggregate_impact
+ ->
+filter(Region.Level = 'National') as national_event_impact
+ ->
+select({ *, 'National' as Region })
+ ->
+save('national-summary', format: 'csv')
+
+event_impact_table
+ ->
+filter(Exposed and (exposure.Asset = 'Health Facility' or exposure.Asset = 'School' or exposure.Asset = 'Evacuation Centre'))
+ ->
+select({
+         exposure.*,
+         table_region.Region as Admin1_Region,
+         map_region.Region as Admin2_Region,
+         WindGust_kmph,
+         Fluvial_Inundation_m,
+         Coastal_Inundation_m
+      })
+ ->
+save('exposure-by-cluster', format: 'geojson')
+
+event_impact_table
+ ->
+filter(Loss > 0 and exposure.Asset = 'Building')
+ ->
+select({
+         exposure.*,
+         round(exposure.Value) as Value,
+         table_region.Region as Admin1_Region,
+         map_region.Region as Admin2_Region,
+         WindGust_kmph,
+         Fluvial_Inundation_m,
+         Coastal_Inundation_m,
+         round(wind_loss) as Wind_Loss,
+         round(fluvial_loss) as Fluvial_Flood_Loss,
+         round(coastal_loss) as Coastal_Flood_Loss,
+         round(Loss) as Loss
+      })
+ ->
+select({ *, reproject(geom, 'EPSG:4326') as geom })
+ ->
+save('damaged-buildings', format: 'geopackage')
+
+event_impact_table
+ ->
+filter(Loss > 0 and exposure.Asset = 'Road')
+ ->
+select({
+         exposure.*,
+         round(exposure.Value) as Value,
+         table_region.Region as Admin1_Region,
+         map_region.Region as Admin2_Region,
+         WindGust_kmph,
+         Fluvial_Inundation_m,
+         Coastal_Inundation_m,
+         Road_km,
+         round(fluvial_loss) as Fluvial_Flood_Loss,
+         round(coastal_loss) as Coastal_Flood_Loss,
+         round(Loss) as Loss
+      })
+ ->
+select({ *, reproject(geom, 'EPSG:4326') as geom })
+ ->
+save('damaged-roads', format: 'geopackage')
+
+event_impact_table
+ ->
+filter(exposure.Asset != 'Population')
+ ->
+group(by: exposure.Asset,
+      select: {
+         *,
+         round(sum(Loss)) as Total_Loss,
+         round(sum(wind_loss)) as Total_Wind_Loss,
+         round(sum(fluvial_loss)) as Total_Fluvial_Loss,
+         round(sum(coastal_loss)) as Total_Coastal_Loss,
+         round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value,
+         round(sum(exposure.Value)) as Total_Value,
+
+         count(Exposed) as Number_Exposed,
+         count(Loss > 0) as Number_Damaged,
+         count(*) as Total_Number,
+
+         bucket_range(pick: Loss, range: [ 1, 100, 1000, 10000, 100000 ], select: {
+            count(*) as Number,
+            round(if_null(sum(Loss), 0.0)) as Total_Loss,
+         }) as By_Loss,
+      })
+ ->
+save('impact-by-asset-type', format: 'csv')
+
+event_impact_table
+ ->
+filter(exposure.Asset != 'Population' and exposure.Value > 0) as asset_event_impact_table
+ ->
+group(by: Sector,
+      select: {
+         *,
+         round(sum(Loss)) as Total_Loss,
+         round(sum(wind_loss)) as Total_Wind_Loss,
+         round(sum(fluvial_loss)) as Total_Fluvial_Loss,
+         round(sum(coastal_loss)) as Total_Coastal_Loss,
+         round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value,
+         round(sum(exposure.Value)) as Total_Value,
+
+         count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings,
+         count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings,
+         count(exposure.Asset = 'Building') as Total_Number_Buildings,
+         round(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0))) as Building_Loss,
+         round(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Exposed_Building_Value,
+         round(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Building_Value,
+
+         bucket_range(pick: Loss, range: [ 1, 100, 1000, 10000, 100000 ], select: {
+            count(*) as Number,
+            round(if_null(sum(Loss), 0.0)) as Total_Loss,
+         }) as By_Loss,
+      })
+ ->
+sort(Sector)
+ ->
+save('impact-by-sector', format: 'csv')
+
+asset_event_impact_table
+ ->
+group(by: { Sector, table_region.Region },
+      select: {
+         *,
+         round(sum(Loss)) as Total_Loss,
+         round(sum(wind_loss)) as Total_Wind_Loss,
+         round(sum(fluvial_loss)) as Total_Fluvial_Loss,
+         round(sum(coastal_loss)) as Total_Coastal_Loss,
+         round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value,
+         round(sum(exposure.Value)) as Total_Value,
+
+         count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings,
+         count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings,
+         count(exposure.Asset = 'Building') as Total_Number_Buildings,
+         round(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0))) as Building_Loss,
+         round(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Exposed_Building_Value,
+         round(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Building_Value,
+
+         bucket_range(pick: Loss, range: [ 1, 100, 1000, 10000, 100000 ], select: {
+            count(*) as Number,
+            round(if_null(sum(Loss), 0.0)) as Total_Loss,
+         }) as By_Loss,
+      })
+ ->
+sort([Region, Sector])
+ ->
+save('regional-summary-by-sector', format: 'csv')
+
+asset_event_impact_table
+ ->
+group(by: { map_region },
+      select: {
+         map_region.*,
+         bucket(by: Asset_Type,
+                pick: b -> b = Sector,
+                select: {
+                     round(if_null(sum(Loss), 0.0)) as Loss,
+                     round(if_null(sum(wind_loss), 0.0)) as Wind_Loss,
+                     round(if_null(sum(fluvial_loss), 0.0)) as Fluvial_Loss,
+                     round(if_null(sum(coastal_loss), 0.0)) as Coastal_Loss,
+                     round(if_null(sum(if_then_else(Exposed, exposure.Value, 0.0)), 0.0)) as Exposed_Value,
+                     round(if_null(sum(exposure.Value), 0.0)) as Total_Value,
+
+                     count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings,
+                     count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings,
+                     count(exposure.Asset = 'Building') as Total_Number_Buildings,
+                     round(if_null(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0)), 0.0)) as Building_Loss,
+                     round(if_null(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0)), 0.0)) as Exposed_Building_Value,
+                     round(if_null(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0)), 0.0)) as Total_Building_Value,
+                },
+                buckets: {
+                     # TODO add in Health once it becomes available
+                     Education: 'Education', Infrastructure: 'Infrastructure',
+                     Productive: 'Productive', Public: 'Public', Other: 'Other', Residential: 'Residential'
+                }) as Sector
+      })
+ ->
+save('regional-impacts-by-sector', format: 'geojson')

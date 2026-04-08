@@ -1,38 +1,69 @@
-"use client";
+'use client';
 
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import { Event, Hazard, FilterState, DistrictGeoProperties } from "@/types";
-import { formatCurrency, formatNumber, getHazardColor } from "@/utils/formatters";
-import { filterEvents } from "@/utils/filterUtils";
-import { hazardLayers, hazards as allHazards } from "@/data/mockData";
-import { districtsGeoJSON } from "@/data/districtsGeo";
-
-// Free OpenStreetMap-based tile style (no API key required)
-const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import maplibregl, { type StyleSpecification } from 'maplibre-gl';
+import { LegendSettings } from '@/data/realThreddsLayers';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
+import type { BuildingProperties, RoadProperties } from '@/types/realData';
+import { CountryCode, COUNTRIES } from '@/types/thredds';
+import { RealWMSLayer } from '@/data/realThreddsLayers';
+import { formatCurrency, formatNumber, getHazardColor } from '@/utils/formatters';
+import { filterEvents } from '@/utils/filterUtils';
+import { districtsGeoJSON } from '@/data/districtsGeo';
+import {
+  LAYER_OPACITY,
+  createScaleDependentOpacity,
+  createLossColorExpression,
+  createWindColorExpression,
+} from '@/utils/colorSystem';
+import { debugLogger } from '@/utils/debugLogger';
+import { logger } from '@/utils/logger';
+import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
+import type { StoryBeat } from '@/utils/cycloneStory';
+import RealDataLayers from './RealDataLayers';
+import RegionalImpactsLayer, { type RegionalImpactsDebugState } from './RegionalImpactsLayer';
+import DamagedBuildingsLayer from './DamagedBuildingsLayer';
+import DamagedRoadsLayer from './DamagedRoadsLayer';
+import CycloneAnimationLayer from './CycloneAnimationLayer';
+import CycloneAnimationToggle from './CycloneAnimationToggle';
+import CycloneStoryOverlay from './CycloneStoryOverlay';
 
 // Layer IDs for district polygons
-const DISTRICTS_SOURCE_ID = "districts-source";
-const DISTRICTS_FILL_LAYER_ID = "districts-fill";
-const DISTRICTS_OUTLINE_LAYER_ID = "districts-outline";
-const DISTRICTS_HOVER_LAYER_ID = "districts-hover";
+const DISTRICTS_SOURCE_ID = 'districts-source';
+const DISTRICTS_FILL_LAYER_ID = 'districts-fill';
+const DISTRICTS_OUTLINE_LAYER_ID = 'districts-outline';
+const DISTRICTS_HOVER_LAYER_ID = 'districts-hover';
+const REGIONAL_IMPACTS_SOURCE_ID = 'regional-impacts';
+const REGIONAL_EXTRUSION_LAYER_ID = 'regional-impacts-extrusion';
+const REALISTIC_BUILDING_FALLBACK_HEIGHT = 8;
+const REALISTIC_BUILDING_MAX_HEIGHT = 70;
+const BUILDING_EXTRUSION_MIN_ZOOM = 12;
+const STRONG_BUILDING_EXTRUSION_MIN_ZOOM = 2;
 
-// Hazard zone layer configuration
-const HAZARD_ZONE_OPACITY_VISIBLE = 0.25;
-const HAZARD_ZONE_OPACITY_HIDDEN = 0;
-const HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE = 0.8;
-const HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN = 0;
-const HAZARD_ZONE_TRANSITION_DURATION = 300; // ms
+// Hazard zone layer configuration (unused - removed to avoid linter/TS warnings)
 
 /**
  * Shared mapping between hazard IDs and their exposure property names.
  * Used in both popup HTML generation and filter sync logic.
  */
 const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
-  wind: "windExposure",
-  cyclone_track: "cycloneTrackExposure",
-  inundation: "inundationExposure",
+  wind: 'windExposure',
+  cyclone_track: 'cycloneTrackExposure',
+  inundation: 'inundationExposure',
+};
+
+/**
+ * Maps UI hazard IDs to internal map exposure field keys.
+ * This bridges the gap between user-facing hazard names (e.g., "tropical-cyclone")
+ * and the technical exposure property names used in district data.
+ */
+const UI_HAZARD_TO_EXPOSURE_MAP: Record<string, string[]> = {
+  'tropical-cyclone': ['wind', 'cyclone_track'], // Tropical cyclones generate both wind and track exposure
+  flood: ['inundation'], // Flooding maps to inundation
+  wind: ['wind'], // Direct mapping for legacy compatibility
+  cyclone_track: ['cyclone_track'],
+  inundation: ['inundation'],
 };
 
 /**
@@ -41,182 +72,807 @@ const HAZARD_EXPOSURE_FIELDS: Record<string, keyof DistrictGeoProperties> = {
  */
 function createHazardColorExpression(): maplibregl.ExpressionSpecification {
   return [
-    "match",
-    ["get", "primaryHazard"],
-    "wind", getHazardColor("wind"),
-    "cyclone_track", getHazardColor("cyclone_track"),
-    "inundation", getHazardColor("inundation"),
-    "#6B7280", // default gray
+    'match',
+    ['get', 'primaryHazard'],
+    'wind',
+    getHazardColor('wind'),
+    'cyclone_track',
+    getHazardColor('cyclone_track'),
+    'inundation',
+    getHazardColor('inundation'),
+    '#6B7280', // default gray
+  ];
+}
+
+function createDistrictOutlineColorExpression(): maplibregl.ExpressionSpecification {
+  return [
+    'case',
+    ['boolean', ['feature-state', 'hover'], false],
+    'rgba(248, 250, 252, 0.9)',
+    'rgba(148, 163, 184, 0.12)',
+  ];
+}
+
+function createDistrictOutlineWidthExpression(): maplibregl.ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    5,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 0.9, 0.12],
+    8,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 1.2, 0.2],
+    12,
+    ['case', ['boolean', ['feature-state', 'hover'], false], 1.6, 0.3],
   ];
 }
 
 /**
  * Creates styled HTML for the district popup.
  */
-function createDistrictPopupHTML(
+function createDistrictPopupNode(
   props: DistrictGeoProperties,
-  selectedHazards: string[]
-): string {
-  const hazard = allHazards.find((h) => h.id === props.primaryHazard);
-  const hazardIcon = hazard?.icon || "";
-  const hazardName = hazard?.name || props.primaryHazard;
+  selectedHazards: string[],
+  hazards: Hazard[]
+): HTMLElement {
+  const hazard = hazards.find(h => h.id === props.primaryHazard);
+  const normalizeHazardLabel = (value: string) =>
+    value.replace(/_/g, ' ').replace(/\b\w/g, match => match.toUpperCase());
+  const hazardName =
+    hazard?.name || (props.primaryHazard ? normalizeHazardLabel(props.primaryHazard) : 'Unknown');
+  const districtName = props.name || 'Unknown';
+  const toNumber = (value: unknown, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
 
   // Build exposure info using shared HAZARD_EXPOSURE_FIELDS mapping
   const exposureMap: Record<string, { label: string; value: number }> = {};
   for (const [hazardId, fieldName] of Object.entries(HAZARD_EXPOSURE_FIELDS)) {
+    const rawValue = props[fieldName];
+    const numericValue = Number(rawValue ?? 0);
+    const clampedValue = Math.max(0, Math.min(1, numericValue));
+
     exposureMap[hazardId] = {
-      label: hazardId.charAt(0).toUpperCase() + hazardId.slice(1),
-      value: props[fieldName] as number,
+      label: normalizeHazardLabel(hazardId),
+      value: clampedValue,
     };
   }
 
   // Determine which hazards to show (filtered or all)
+  // Map UI hazard IDs to exposure field keys
+  const mappedHazards = selectedHazards.flatMap(
+    uiHazardId => UI_HAZARD_TO_EXPOSURE_MAP[uiHazardId] || []
+  );
+  const uniqueMappedHazards = Array.from(new Set(mappedHazards));
   const hazardsToShow =
-    selectedHazards.length > 0 ? selectedHazards : Object.keys(exposureMap);
+    uniqueMappedHazards.length > 0 ? uniqueMappedHazards : Object.keys(exposureMap);
 
-  const exposureBars = hazardsToShow
-    .map((hazardId) => {
-      const exp = exposureMap[hazardId];
-      if (!exp) return "";
-      const color = getHazardColor(hazardId);
-      const pct = Math.round(exp.value * 100);
-      return `
-        <div style="margin-bottom: 4px;">
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6b7280;">
-            <span>${exp.label}</span>
-            <span>${pct}%</span>
-          </div>
-          <div style="height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;">
-            <div style="height: 100%; width: ${pct}%; background: ${color}; transition: width 0.3s;"></div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  const createEl = (tag: string, className?: string) => {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    return el;
+  };
 
-  return `
-    <div style="
-      padding: 12px;
-      min-width: 220px;
-      font-family: system-ui, -apple-system, sans-serif;
-    ">
-      <h3 style="
-        font-weight: 600;
-        font-size: 15px;
-        margin: 0 0 8px 0;
-        color: #1f2937;
-        border-bottom: 1px solid #e5e7eb;
-        padding-bottom: 8px;
-      ">
-        ${props.name}
-      </h3>
-      <div style="font-size: 12px; color: #374151; margin-bottom: 8px;">
-        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-          <span style="font-weight: 500;">Primary Hazard:</span>
-          <span style="
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            background: ${getHazardColor(props.primaryHazard)}20;
-            color: ${getHazardColor(props.primaryHazard)};
-            border-radius: 12px;
-            font-weight: 500;
-          ">
-            ${hazardIcon} ${hazardName}
-          </span>
-        </div>
-      </div>
-      <div style="
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-bottom: 10px;
-        font-size: 12px;
-      ">
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Population</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.population)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Economic Damage</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatCurrency(props.economicDamageUSD)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Buildings</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.buildingCount)}</div>
-        </div>
-        <div style="background: #f9fafb; padding: 6px 8px; border-radius: 6px;">
-          <div style="color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Infrastructure</div>
-          <div style="font-weight: 600; color: #1f2937;">${formatNumber(props.infrastructureCount)}</div>
-        </div>
-      </div>
-      <div>
-        <div style="font-size: 11px; font-weight: 500; color: #374151; margin-bottom: 6px;">Hazard Exposure</div>
-        ${exposureBars}
-      </div>
-    </div>
-  `;
+  const root = createEl('div', 'popup-content');
+  const title = createEl('h3', 'popup-title');
+  title.textContent = districtName;
+  root.appendChild(title);
+
+  const body = createEl('div', 'popup-body');
+  const field = createEl('div', 'popup-field');
+  const label = createEl('span', 'popup-label');
+  label.textContent = 'Primary Hazard:';
+  field.appendChild(label);
+
+  const badge = createEl('span', 'popup-badge');
+  const hazardColor = getHazardColor(props.primaryHazard);
+  badge.style.background = `${hazardColor}33`;
+  badge.style.color = hazardColor;
+
+  const badgeDot = createEl('span', 'popup-badge-dot');
+  badgeDot.style.background = hazardColor;
+  badge.appendChild(badgeDot);
+  badge.appendChild(document.createTextNode(hazardName));
+  field.appendChild(badge);
+  body.appendChild(field);
+  root.appendChild(body);
+
+  const statsGrid = createEl('div', 'popup-stats-grid');
+  const addStat = (labelText: string, valueText: string) => {
+    const stat = createEl('div', 'popup-stat-card');
+    const statLabel = createEl('div', 'popup-stat-label');
+    statLabel.textContent = labelText;
+    const statValue = createEl('div', 'popup-stat-value');
+    statValue.textContent = valueText;
+    stat.appendChild(statLabel);
+    stat.appendChild(statValue);
+    statsGrid.appendChild(stat);
+  };
+
+  addStat('Population', formatNumber(toNumber(props.population)));
+  addStat('Economic Damage', formatCurrency(toNumber(props.economicDamageUSD)));
+  addStat('Buildings', formatNumber(toNumber(props.buildingCount)));
+  addStat('Infrastructure', formatNumber(toNumber(props.infrastructureCount)));
+  root.appendChild(statsGrid);
+
+  const exposureSection = createEl('div', 'popup-section');
+  const exposureTitle = createEl('div', 'popup-section-title');
+  exposureTitle.textContent = 'Hazard Exposure';
+  exposureSection.appendChild(exposureTitle);
+
+  hazardsToShow.forEach(hazardId => {
+    const exp = exposureMap[hazardId];
+    if (!exp) return;
+    const color = getHazardColor(hazardId);
+    const pct = Math.round(exp.value * 100);
+    const container = createEl('div', 'popup-progress-container');
+    const header = createEl('div', 'popup-progress-header');
+    const headerLabel = createEl('span');
+    headerLabel.textContent = exp.label;
+    const headerValue = createEl('span');
+    headerValue.textContent = `${pct}%`;
+    header.appendChild(headerLabel);
+    header.appendChild(headerValue);
+    const bar = createEl('div', 'popup-progress-bar');
+    const fill = createEl('div', 'popup-progress-fill');
+    fill.style.width = `${pct}%`;
+    fill.style.background = color;
+    bar.appendChild(fill);
+    container.appendChild(header);
+    container.appendChild(bar);
+    exposureSection.appendChild(container);
+  });
+
+  root.appendChild(exposureSection);
+  return root;
 }
 
 interface MapViewProps {
   events: Event[];
   hazards: Hazard[];
   filters: FilterState;
-  onEventSelect: (event: Event | null) => void;
+  onEventSelect?: (event: Event | null) => void;
+  selectedRegion?: string | null;
+  onRegionSelect?: (regionId: string | null) => void;
+
+  selectedCountry?: CountryCode | null;
+  mapStyle?: 'loss' | 'wind';
+  basemapStyle?: string | StyleSpecification;
+  is3DView?: boolean;
+  extrusionMode?: 'none' | 'loss' | 'wind';
+  extrusionExaggeration?: number;
+  showWindLayer?: boolean;
+  showInundationLayer?: boolean;
+  onLayersLoadingChange?: (isLoading: boolean) => void;
+  onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
+  damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
+  damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
+  cycloneTrackData?: GeoJSON.FeatureCollection | null;
+  cycloneForecast?: CycloneForecastPoint[] | null;
+  aggregationLevel?: string;
+  showOverlays?: boolean;
+  onCycloneTimestepChange?: (
+    timestep: CycloneForecastPoint | null,
+    index: number,
+    totalSteps: number
+  ) => void;
+  showCycloneAnimation?: boolean;
+  onCycloneAnimationChange?: (visible: boolean) => void;
+  isCyclonePlaying?: boolean;
+  onCyclonePlayingChange?: (isPlaying: boolean) => void;
+  showCycloneToggle?: boolean;
+  cycloneControlsHost?: HTMLElement | null;
+  isLeftPanelOpen?: boolean;
+  isRightPanelOpen?: boolean;
+  storyMode?: boolean;
+  storyBeats?: StoryBeat[];
+  currentCycloneIndex?: number;
+  onStoryModeChange?: (enabled: boolean) => void;
+  onMapReady?: (map: maplibregl.Map) => void;
+  onStoryIndexChange?: (index: number) => void;
+  legendSettings?: LegendSettings;
+  /** 0–100 opacity scale applied to all hazard/data layers */
+  layerOpacity?: number;
 }
 
 export default function MapView({
   events,
   hazards,
   filters,
-  onEventSelect,
+  selectedRegion = null,
+  onRegionSelect,
+  selectedCountry = null,
+  mapStyle = 'loss',
+  basemapStyle = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+  is3DView = false,
+  extrusionMode = 'none',
+  extrusionExaggeration = 1,
+  showWindLayer = true,
+  showInundationLayer = true,
+  onLayersLoadingChange,
+  onActiveWmsLayersChange,
+  damagedBuildings,
+  damagedRoads,
+  cycloneTrackData = null,
+  cycloneForecast,
+  showOverlays = true,
+  onCycloneTimestepChange,
+  showCycloneAnimation = true,
+  onCycloneAnimationChange,
+  isCyclonePlaying,
+  onCyclonePlayingChange,
+  showCycloneToggle = true,
+  cycloneControlsHost = null,
+  isLeftPanelOpen = false,
+  isRightPanelOpen = false,
+  storyMode = false,
+  storyBeats = [],
+  currentCycloneIndex = 0,
+  onStoryModeChange,
+  onMapReady,
+  onStoryIndexChange,
+  layerOpacity = 70,
+  legendSettings,
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [styleChangeCounter, setStyleChangeCounter] = useState(0); // Track style changes to trigger layer reload
+  const [isAnimationPlaying, setIsAnimationPlaying] = useState(false);
+  const [wmsWarning, setWmsWarning] = useState<string | null>(null);
+  const [basemapError, setBasemapError] = useState<string | null>(null);
+  const [regionalImpactsDebug, setRegionalImpactsDebug] =
+    useState<RegionalImpactsDebugState | null>(null);
+  const tileErrorCountRef = useRef(0);
+  const styleLoadAttemptsRef = useRef(0);
+  const mapStyleRef = useRef(mapStyle);
+  const appliedBasemapStyleRef = useRef<string | StyleSpecification | null>(null);
+  const skipNextCountryFlyToRef = useRef(false);
+  const showRegionalDebugPanel =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const handleStorySelect = useCallback(
+    (index: number) => {
+      if (index === currentCycloneIndex) return;
+      onStoryIndexChange?.(index);
+    },
+    [currentCycloneIndex, onStoryIndexChange]
+  );
+  const handleCyclonePlayingChange = useCallback(
+    (isPlaying: boolean) => {
+      setIsAnimationPlaying(prev => (prev === isPlaying ? prev : isPlaying));
+      onCyclonePlayingChange?.(isPlaying);
+    },
+    [onCyclonePlayingChange]
+  );
+  const hasAnimatedCycloneForecast = !!cycloneForecast && cycloneForecast.length > 0;
+  const hasStaticCycloneTrack =
+    !!cycloneTrackData &&
+    Array.isArray((cycloneTrackData as GeoJSON.FeatureCollection).features) &&
+    (cycloneTrackData as GeoJSON.FeatureCollection).features.length > 0;
+  const basemapRequestIdRef = useRef(0);
+  const pendingStyleLoadHandlerRef = useRef<(() => void) | null>(null);
 
   // Filter events based on current filters using shared utility
-  const filteredEvents = useMemo(
-    () => filterEvents(events, filters),
-    [events, filters]
+  const filteredEvents = useMemo(() => filterEvents(events, filters), [events, filters]);
+
+  const attachMapEventHandlers = useCallback(
+    (
+      instance: maplibregl.Map,
+      styleUrl: string | StyleSpecification,
+      center: [number, number],
+      zoom: number
+    ) => {
+      debugLogger.info('Map initialized', 'map-initialization', {
+        center,
+        zoom,
+        style: typeof styleUrl === 'string' ? styleUrl : styleUrl.name || 'custom',
+      });
+
+      onMapReady?.(instance);
+      appliedBasemapStyleRef.current = styleUrl;
+
+      instance.addControl(new maplibregl.NavigationControl(), 'top-right');
+      instance.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+      instance.on('load', () => {
+        setMapLoaded(true);
+      });
+
+      instance.on('error', (e: any) => {
+        // Suppress expected WMS/THREDDS network errors (external server issues are common)
+        const errorMessage = e?.error?.message || String(e?.error || e);
+
+        // Capture additional error context for debugging
+        const errorContext = {
+          message: errorMessage,
+          sourceId: e?.sourceId,
+          sourceType: e?.source?.type,
+          type: e?.type,
+          target: e?.target?.id || 'unknown',
+        };
+
+        const isWMSError =
+          errorMessage.includes('thredds') ||
+          errorMessage.includes('WMS') ||
+          errorMessage.includes('Failed to fetch');
+
+        // Suppress style diff and filesystem warnings (non-critical MapLibre internal warnings)
+        const isStyleDiffWarning =
+          errorMessage.includes('style diff') || errorMessage.includes('setState');
+        const isFileSystemWarning =
+          errorMessage.includes('filesystem') || errorMessage.includes('illegal path');
+
+        // Detect basemap tile/resource loading errors
+        const isTileError =
+          errorMessage.includes('tile') ||
+          errorMessage.includes('sprite') ||
+          errorMessage.includes('glyph') ||
+          errorMessage.includes('style');
+        const isNetworkError =
+          errorMessage.includes('network') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('fetch');
+        const isCORSError = errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin');
+
+        if (isWMSError && !isTileError) {
+          setWmsWarning(prev => prev ?? 'Hazard layer unavailable. Check THREDDS connectivity.');
+          return;
+        }
+
+        if (isStyleDiffWarning || isFileSystemWarning) {
+          // Silently ignore - these are expected warnings that don't affect functionality
+          return;
+        }
+
+        // NEW: Specifically handle JSON parsing errors which often indicate a 404 HTML page was returned
+        const isJsonParseError = errorMessage.includes('not valid JSON');
+        if (isJsonParseError) {
+          debugLogger.error('Basemap JSON parse error', 'map-initialization', errorContext);
+          setBasemapError(
+            'A map resource (e.g., style, fonts) failed to load. The server may have returned an error page. Please check the basemap URL or your network connection.'
+          );
+          // Don't show the generic console.error for this case
+          return;
+        }
+
+        // Critical basemap errors - notify user
+        if (isTileError || isNetworkError || isCORSError) {
+          tileErrorCountRef.current += 1;
+          const basemapErrorDetails = {
+            ...errorContext,
+            errorCount: tileErrorCountRef.current,
+          };
+
+          // A single missing external tile is usually transient and self-recovers.
+          // Keep it visible in dev tools without surfacing it as a hard runtime error.
+          if (tileErrorCountRef.current < 3) {
+            debugLogger.warn(
+              'Transient basemap fetch failure',
+              'map-initialization',
+              basemapErrorDetails
+            );
+            return;
+          }
+
+          debugLogger.error(
+            'Basemap error threshold exceeded',
+            'map-initialization',
+            basemapErrorDetails
+          );
+
+          // Show error to user after multiple failures
+          if (tileErrorCountRef.current >= 3) {
+            let errorMsg = 'Basemap tiles failed to load. ';
+            if (isCORSError) {
+              errorMsg += 'CORS configuration issue detected.';
+            } else if (isNetworkError) {
+              errorMsg += 'Check your internet connection.';
+            } else {
+              errorMsg += 'Please try switching to a different basemap.';
+            }
+            setBasemapError(errorMsg);
+          }
+          return;
+        }
+
+        // Log other critical errors
+        if (e?.error) {
+          logger.error('Map error:', e.error.message || e.error);
+        } else if (e && typeof e === 'object' && 'sourceId' in e) {
+          logger.error(`Map source error (${(e as any).sourceId}):`, e);
+        } else {
+          logger.warn('Map warning:', e);
+        }
+      });
+
+      instance.on('sourcedataloading', e => {
+        if (e.sourceId && e.sourceId.includes('riskscape')) {
+          logger.log(`Loading RiskScape layer: ${e.sourceId}`);
+        }
+      });
+    },
+    [onMapReady]
   );
 
-  const getHazardInfo = useCallback((hazardId: string) => {
-    return hazards.find((h) => h.id === hazardId);
-  }, [hazards]);
+  const createMapInstance = useCallback(
+    ({
+      styleUrl,
+      center,
+      zoom,
+      bearing,
+      pitch,
+    }: {
+      styleUrl: string | StyleSpecification;
+      center: [number, number];
+      zoom: number;
+      bearing?: number;
+      pitch?: number;
+    }) => {
+      if (!mapContainer.current) return;
+
+      // Defensive check to prevent maplibre from crashing on invalid center coordinates.
+      const safeCenter: [number, number] =
+        Array.isArray(center) &&
+        center.length === 2 &&
+        Number.isFinite(center[0]) &&
+        Number.isFinite(center[1])
+          ? center
+          : [175.0, -18.0]; // A safe fallback.
+
+      if (safeCenter !== center) {
+        logger.error('MapView: Invalid center provided, falling back to default.', { center });
+      }
+
+      // Validate zoom parameter
+      const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 5;
+      if (safeZoom !== zoom) {
+        logger.error('MapView: Invalid zoom provided, falling back to 5.', { zoom });
+      }
+
+      // Validate bearing and pitch
+      const safeBearing = Number.isFinite(bearing) ? bearing : 0;
+      const safePitch = Number.isFinite(pitch) ? pitch : 0;
+
+      const instance = new maplibregl.Map({
+        container: mapContainer.current,
+        style: styleUrl,
+        center: safeCenter,
+        zoom: safeZoom,
+        bearing: safeBearing,
+        pitch: safePitch,
+        canvasContextAttributes: { preserveDrawingBuffer: true },
+        maxTileCacheSize: 100,
+        transformRequest: (url, resourceType) => {
+          if (resourceType === 'Tile' || resourceType === 'Source') {
+            debugLogger.debug(`Loading ${resourceType}: ${url}`);
+            return {
+              url,
+              credentials: 'same-origin',
+            };
+          }
+          return { url };
+        },
+      });
+
+      map.current = instance;
+      setMapInstance(instance);
+      attachMapEventHandlers(instance, styleUrl, safeCenter, safeZoom);
+    },
+    [attachMapEventHandlers]
+  );
+
+  const getFallbackCenter = useCallback((): [number, number] => {
+    // Guard against undefined COUNTRIES object or invalid country code
+    if (!selectedCountry || !COUNTRIES || !COUNTRIES[selectedCountry]) {
+      if (selectedCountry && !COUNTRIES[selectedCountry]) {
+        logger.warn('MapView: Invalid selectedCountry value:', selectedCountry);
+      }
+      return [175.0, -18.0];
+    }
+
+    const countryData = COUNTRIES[selectedCountry];
+    const center = countryData?.center;
+
+    if (
+      Array.isArray(center) &&
+      center.length === 2 &&
+      Number.isFinite(center[0]) &&
+      Number.isFinite(center[1])
+    ) {
+      return [center[0], center[1]];
+    }
+
+    logger.warn('MapView: Country data has invalid center:', {
+      selectedCountry,
+      center,
+    });
+    return [175.0, -18.0];
+  }, [selectedCountry]);
 
   // Initialize map
   useEffect(() => {
     if (map.current) return;
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current!,
-      style: MAP_STYLE,
-      center: [55.2, 25.0],
-      zoom: 8,
-    });
+    // Safely get country center, with fallback if country is invalid
+    const countryData = selectedCountry && COUNTRIES ? COUNTRIES[selectedCountry] : null;
+    let initialCenter = getFallbackCenter();
+    let initialZoom = countryData?.zoom ?? 5;
 
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
-    map.current.addControl(new maplibregl.ScaleControl(), "bottom-left");
+    // Final safety check: ensure we have valid finite numbers
+    if (
+      !Array.isArray(initialCenter) ||
+      initialCenter.length !== 2 ||
+      !Number.isFinite(initialCenter[0]) ||
+      !Number.isFinite(initialCenter[1])
+    ) {
+      logger.error('MapView: Invalid initialCenter detected, using hardcoded fallback', {
+        initialCenter,
+        selectedCountry,
+      });
+      initialCenter = [175.0, -18.0];
+    }
 
-    map.current.on("load", () => {
-      setMapLoaded(true);
-    });
-    
-    map.current.on("error", (e) => {
-      console.error("Map error:", e);
+    if (!Number.isFinite(initialZoom) || initialZoom <= 0) {
+      logger.error('MapView: Invalid initialZoom detected, using fallback', {
+        initialZoom,
+        selectedCountry,
+      });
+      initialZoom = 5;
+    }
+
+    createMapInstance({
+      styleUrl: basemapStyle,
+      center: initialCenter as [number, number],
+      zoom: initialZoom,
     });
 
     return () => {
       if (map.current) {
         map.current.remove();
         map.current = null;
+        setMapInstance(null);
       }
     };
-  }, []);
+  }, [basemapStyle, createMapInstance, getFallbackCenter, selectedCountry]);
+
+  // Handle country-based map positioning when real data is enabled
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !selectedCountry) return;
+    if (skipNextCountryFlyToRef.current) {
+      skipNextCountryFlyToRef.current = false;
+      return;
+    }
+
+    const country = COUNTRIES[selectedCountry];
+    if (country) {
+      map.current.flyTo({
+        center: country.center,
+        zoom: country.zoom,
+        duration: 2000,
+      });
+    }
+  }, [selectedCountry, mapLoaded]);
+
+  useEffect(() => {
+    if (typeof isCyclonePlaying !== 'boolean') return;
+    setIsAnimationPlaying(prev => (prev === isCyclonePlaying ? prev : isCyclonePlaying));
+  }, [isCyclonePlaying]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+  }, [mapStyle]);
+
+  useEffect(() => {
+    if (!wmsWarning) return;
+    const id = window.setTimeout(() => setWmsWarning(null), 7000);
+    return () => window.clearTimeout(id);
+  }, [wmsWarning]);
+
+  // Recreate the map on basemap change to avoid flaky style swap behavior.
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Compare basemap styles - handle both string URLs and style objects
+    const isSameBasemap =
+      appliedBasemapStyleRef.current === basemapStyle ||
+      (typeof appliedBasemapStyleRef.current === 'object' &&
+        typeof basemapStyle === 'object' &&
+        JSON.stringify(appliedBasemapStyleRef.current) === JSON.stringify(basemapStyle));
+
+    if (isSameBasemap) return;
+
+    logger.log('[Basemap] Recreating map for basemap change', {
+      from:
+        typeof appliedBasemapStyleRef.current === 'string'
+          ? appliedBasemapStyleRef.current
+          : (appliedBasemapStyleRef.current as any)?.name || 'custom',
+      to: typeof basemapStyle === 'string' ? basemapStyle : (basemapStyle as any)?.name || 'custom',
+    });
+
+    tileErrorCountRef.current = 0;
+    setBasemapError(null);
+    styleLoadAttemptsRef.current = 0;
+
+    const currentCenter = map.current.getCenter();
+    const safeCenter: [number, number] =
+      Number.isFinite(currentCenter.lng) && Number.isFinite(currentCenter.lat)
+        ? [currentCenter.lng, currentCenter.lat]
+        : getFallbackCenter();
+    const currentZoom = map.current.getZoom();
+    const countryData = selectedCountry ? COUNTRIES[selectedCountry] : null;
+    const safeZoom = Number.isFinite(currentZoom) ? currentZoom : (countryData?.zoom ?? 5);
+    const currentBearing = map.current.getBearing();
+    const safeBearing = Number.isFinite(currentBearing) ? currentBearing : 0;
+    const currentPitch = map.current.getPitch();
+    const safePitch = Number.isFinite(currentPitch) ? currentPitch : 0;
+
+    if (safeCenter[0] !== currentCenter.lng || safeCenter[1] !== currentCenter.lat) {
+      logger.error('MapView: Invalid current center during basemap recreation, using fallback.', {
+        currentCenter,
+        safeCenter,
+      });
+    }
+
+    skipNextCountryFlyToRef.current = true;
+    setMapLoaded(false);
+    map.current.remove();
+    map.current = null;
+    setMapInstance(null);
+
+    createMapInstance({
+      styleUrl: basemapStyle,
+      center: safeCenter,
+      zoom: safeZoom,
+      bearing: safeBearing,
+      pitch: safePitch,
+    });
+    setStyleChangeCounter(prev => prev + 1);
+  }, [basemapStyle, mapLoaded, createMapInstance, getFallbackCenter, selectedCountry]);
+
+  // Apply 2D/3D camera and best-effort basemap building extrusions.
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+
+    const apply3DMode = () => {
+      if (!m || !m.isStyleLoaded()) return;
+
+      const layers = m.getStyle()?.layers || [];
+      const customExtrusionLayerId = 'copilot-3d-buildings';
+      const nativeExtrusionLayerIds = layers
+        .filter(
+          layer =>
+            layer.type === 'fill-extrusion' &&
+            layer.id !== customExtrusionLayerId &&
+            layer.id !== REGIONAL_EXTRUSION_LAYER_ID
+        )
+        .map(layer => layer.id);
+      const setLayerVisibilityIfNeeded = (layerId: string, visibility: 'visible' | 'none') => {
+        if (!m.getLayer(layerId)) return;
+        const currentVisibility = m.getLayoutProperty(layerId, 'visibility');
+        const normalizedCurrent = currentVisibility === 'none' ? 'none' : 'visible';
+        if (normalizedCurrent !== visibility) {
+          m.setLayoutProperty(layerId, 'visibility', visibility);
+        }
+      };
+      const targetPitch = is3DView ? 52 : 0;
+      const targetBearing = is3DView ? -15 : 0;
+      const pitchDelta = Math.abs(m.getPitch() - targetPitch);
+      const bearingDelta = Math.abs(((((m.getBearing() - targetBearing) % 360) + 540) % 360) - 180);
+
+      if (pitchDelta > 0.2 || bearingDelta > 0.2) {
+        // Cancel queued camera transitions to keep 2D/3D switching responsive.
+        m.stop();
+        m.easeTo({ pitch: targetPitch, bearing: targetBearing, duration: 350, essential: true });
+      }
+
+      if (is3DView) {
+        // Hide native extrusion layers and render a stronger custom layer for
+        // consistent 3D readability across different basemap styles.
+        nativeExtrusionLayerIds.forEach(layerId => {
+          setLayerVisibilityIfNeeded(layerId, 'none');
+        });
+
+        // Create/update custom extrusion from a building source-layer when available.
+        const candidateLayer = layers.find(layer => {
+          const sourceLayer = (layer as any)['source-layer'];
+          return (
+            typeof sourceLayer === 'string' &&
+            /building/i.test(sourceLayer) &&
+            typeof (layer as any).source === 'string'
+          );
+        }) as
+          | (maplibregl.LayerSpecification & {
+              source?: string;
+              'source-layer'?: string;
+            })
+          | undefined;
+
+        if (candidateLayer?.source && candidateLayer['source-layer']) {
+          const beforeId = layers.find(layer => layer.type === 'symbol')?.id;
+          const baseHeightExpr: maplibregl.ExpressionSpecification = [
+            'min',
+            [
+              'coalesce',
+              ['to-number', ['get', 'height']],
+              ['to-number', ['get', 'render_height']],
+              ['*', ['to-number', ['get', 'building:levels']], 3.2],
+              REALISTIC_BUILDING_FALLBACK_HEIGHT,
+            ],
+            REALISTIC_BUILDING_MAX_HEIGHT,
+          ];
+
+          const extrusionHeightExpr: maplibregl.ExpressionSpecification = [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            STRONG_BUILDING_EXTRUSION_MIN_ZOOM,
+            ['max', ['*', baseHeightExpr, ['*', 1.35, extrusionExaggeration]], 8],
+            14,
+            ['max', ['*', baseHeightExpr, ['*', 1.65, extrusionExaggeration]], 14],
+            16,
+            ['max', ['*', baseHeightExpr, ['*', 1.9, extrusionExaggeration]], 20],
+          ];
+
+          const extrusionLayer: maplibregl.AddLayerObject = {
+            id: customExtrusionLayerId,
+            type: 'fill-extrusion',
+            source: candidateLayer.source,
+            'source-layer': candidateLayer['source-layer'],
+            minzoom: STRONG_BUILDING_EXTRUSION_MIN_ZOOM,
+            paint: {
+              'fill-extrusion-color': '#8fa5bf',
+              'fill-extrusion-height': extrusionHeightExpr,
+              'fill-extrusion-base': [
+                'coalesce',
+                ['to-number', ['get', 'min_height']],
+                ['*', ['to-number', ['get', 'building:min_level']], 3.2],
+                0,
+              ],
+              'fill-extrusion-opacity': 0.86,
+            },
+          };
+
+          if (!m.getLayer(customExtrusionLayerId)) {
+            if (beforeId) {
+              m.addLayer(extrusionLayer, beforeId);
+            } else {
+              m.addLayer(extrusionLayer);
+            }
+          } else {
+            m.setPaintProperty(
+              customExtrusionLayerId,
+              'fill-extrusion-height',
+              extrusionHeightExpr
+            );
+            m.setPaintProperty(customExtrusionLayerId, 'fill-extrusion-opacity', 0.86);
+          }
+        }
+
+        setLayerVisibilityIfNeeded(customExtrusionLayerId, 'visible');
+      } else {
+        nativeExtrusionLayerIds.forEach(layerId => {
+          setLayerVisibilityIfNeeded(layerId, 'none');
+        });
+        setLayerVisibilityIfNeeded(customExtrusionLayerId, 'none');
+      }
+    };
+
+    if (m.isStyleLoaded()) {
+      apply3DMode();
+    } else {
+      m.once('style.load', apply3DMode);
+      return () => {
+        m.off('style.load', apply3DMode);
+      };
+    }
+  }, [is3DView, mapLoaded, styleChangeCounter]);
 
   // Add district polygon layers after map loads
   useEffect(() => {
@@ -224,76 +880,280 @@ export default function MapView({
 
     const m = map.current;
     const hazardColorExpression = createHazardColorExpression();
+    const districtOutlineColorExpression = createDistrictOutlineColorExpression();
+    const districtOutlineWidthExpression = createDistrictOutlineWidthExpression();
 
-    // Add source for district polygons if not exists
-    if (!m.getSource(DISTRICTS_SOURCE_ID)) {
+    const addDistrictLayers = () => {
+      logger.log(
+        '[Districts] Adding district layers (styleChangeCounter:',
+        styleChangeCounter,
+        ')'
+      );
+
+      // Remove existing layers and source if they exist (handles both initial load and basemap changes)
+      try {
+        if (m.getLayer(DISTRICTS_HOVER_LAYER_ID)) m.removeLayer(DISTRICTS_HOVER_LAYER_ID);
+        if (m.getLayer(DISTRICTS_OUTLINE_LAYER_ID)) m.removeLayer(DISTRICTS_OUTLINE_LAYER_ID);
+        if (m.getLayer(DISTRICTS_FILL_LAYER_ID)) m.removeLayer(DISTRICTS_FILL_LAYER_ID);
+        if (m.getSource(DISTRICTS_SOURCE_ID)) m.removeSource(DISTRICTS_SOURCE_ID);
+      } catch (e) {
+        logger.warn('[Districts] Cleanup error (expected on first load):', e);
+      }
+
+      // Add source for district polygons
       m.addSource(DISTRICTS_SOURCE_ID, {
-        type: "geojson",
+        type: 'geojson',
         data: districtsGeoJSON as GeoJSON.FeatureCollection,
-        promoteId: "id", // Required for feature state
+        promoteId: 'id', // Required for feature state
       });
 
-      // Add fill layer for districts with semi-transparent colors
-      m.addLayer({
-        id: DISTRICTS_FILL_LAYER_ID,
-        type: "fill",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "fill-color": hazardColorExpression,
-          "fill-opacity": 0.4,
-          "fill-opacity-transition": { duration: 300 },
+      // Find first symbol layer for proper z-ordering
+      // District polygons should render BELOW roads, buildings, and cyclone layers
+      // but ABOVE the basemap
+      const layers = m.getStyle()?.layers || [];
+      const firstSymbolLayer = layers.find(layer => layer.type === 'symbol');
+      const beforeId = firstSymbolLayer?.id;
+
+      // Add fill layer for districts with scale-dependent opacity
+      m.addLayer(
+        {
+          id: DISTRICTS_FILL_LAYER_ID,
+          type: 'fill',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'fill-color': hazardColorExpression,
+            'fill-opacity': createScaleDependentOpacity(LAYER_OPACITY.district.fill),
+            'fill-opacity-transition': { duration: 300 },
+          },
         },
-      });
+        beforeId
+      );
 
       // Add outline layer for clean borders
-      m.addLayer({
-        id: DISTRICTS_OUTLINE_LAYER_ID,
-        type: "line",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "line-color": hazardColorExpression,
-          "line-width": 2,
-          "line-opacity": 0.8,
+      m.addLayer(
+        {
+          id: DISTRICTS_OUTLINE_LAYER_ID,
+          type: 'line',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'line-color': districtOutlineColorExpression,
+            'line-width': districtOutlineWidthExpression,
+            'line-opacity': LAYER_OPACITY.district.outline,
+          },
         },
-      });
+        beforeId
+      );
 
       // Add hover highlight layer (initially invisible)
-      m.addLayer({
-        id: DISTRICTS_HOVER_LAYER_ID,
-        type: "fill",
-        source: DISTRICTS_SOURCE_ID,
-        paint: {
-          "fill-color": "#ffffff",
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "hover"], false],
-            0.3,
-            0,
-          ],
+      m.addLayer(
+        {
+          id: DISTRICTS_HOVER_LAYER_ID,
+          type: 'fill',
+          source: DISTRICTS_SOURCE_ID,
+          paint: {
+            'fill-color': '#ffffff',
+            'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.3, 0],
+          },
         },
-      });
+        beforeId
+      );
+
+      logger.log('[Districts] District layers added successfully');
+    };
+
+    // If style already loaded, add layers immediately, otherwise wait for style.load
+    if (m.isStyleLoaded && m.isStyleLoaded()) {
+      addDistrictLayers();
+    } else {
+      logger.log('[Districts] Waiting for style.load event');
+      m.once('style.load', addDistrictLayers);
     }
-  }, [mapLoaded]);
+  }, [mapLoaded, styleChangeCounter]); // Re-run when style changes
+
+  // Update regional impacts 3D extrusion based on selected metric.
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const m = map.current;
+    let rafId = 0;
+
+    const ensureRegionalExtrusionLayer = () => {
+      // Guard against stale map references after map recreation
+      if (!m || !m.getStyle() || !m.isStyleLoaded()) return;
+      if (!m.getSource(REGIONAL_IMPACTS_SOURCE_ID)) return;
+
+      const beforeId = m.getStyle()?.layers?.find(layer => layer.type === 'symbol')?.id;
+
+      if (!m.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) {
+        const layer: maplibregl.AddLayerObject = {
+          id: REGIONAL_EXTRUSION_LAYER_ID,
+          type: 'fill-extrusion',
+          source: REGIONAL_IMPACTS_SOURCE_ID,
+          layout: {
+            visibility: 'none',
+          },
+          paint: {
+            'fill-extrusion-color': '#f43f5e',
+            'fill-extrusion-opacity': 0.82,
+            'fill-extrusion-base': 0,
+            'fill-extrusion-height': 0,
+          },
+        };
+
+        if (beforeId) {
+          m.addLayer(layer, beforeId);
+        } else {
+          m.addLayer(layer);
+        }
+      } else if (beforeId) {
+        m.moveLayer(REGIONAL_EXTRUSION_LAYER_ID, beforeId);
+      }
+    };
+
+    const applyRegionalExtrusion = () => {
+      // Guard against stale map references after map recreation
+      if (!m || !m.getStyle() || !m.isStyleLoaded()) return;
+
+      ensureRegionalExtrusionLayer();
+      if (!m.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) return;
+
+      if (!is3DView || extrusionMode === 'none') {
+        const currentVisibility = m.getLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility');
+        if (currentVisibility !== 'none') {
+          m.setLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility', 'none');
+        }
+        return;
+      }
+
+      let rawExtrusionHeight: maplibregl.ExpressionSpecification;
+      if (extrusionMode === 'loss') {
+        const lossStops =
+          selectedCountry === 'WS'
+            ? [0, 0, 50000, 50, 250000, 150, 750000, 360, 3000000, 900]
+            : [0, 0, 100000, 40, 1000000, 120, 10000000, 380, 100000000, 900];
+        rawExtrusionHeight = [
+          'interpolate',
+          ['linear'],
+          ['to-number', ['get', 'Total_Loss']],
+          ...lossStops,
+        ];
+      } else {
+        rawExtrusionHeight = [
+          'interpolate',
+          ['linear'],
+          ['to-number', ['get', 'Max_Wind_Gusts']],
+          0,
+          0,
+          60,
+          120,
+          120,
+          360,
+          180,
+          780,
+          240,
+          1300,
+        ];
+      }
+
+      // Keep bars readable when zoomed in, but avoid unrealistic spikes at country-scale zoom.
+      // MapLibre requires ["zoom"] to be the input of a top-level step/interpolate expression.
+      const extrusionHeight: maplibregl.ExpressionSpecification = [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        5,
+        ['*', rawExtrusionHeight, ['*', 0.2, extrusionExaggeration]],
+        7,
+        ['*', rawExtrusionHeight, ['*', 0.35, extrusionExaggeration]],
+        9,
+        ['*', rawExtrusionHeight, ['*', 0.55, extrusionExaggeration]],
+        11,
+        ['*', rawExtrusionHeight, ['*', 0.8, extrusionExaggeration]],
+        13,
+        ['*', rawExtrusionHeight, extrusionExaggeration],
+      ];
+
+      const extrusionColorExpression =
+        mapStyleRef.current === 'wind'
+          ? createWindColorExpression()
+          : createLossColorExpression(selectedCountry);
+
+      m.setLayoutProperty(REGIONAL_EXTRUSION_LAYER_ID, 'visibility', 'visible');
+      m.setPaintProperty(REGIONAL_EXTRUSION_LAYER_ID, 'fill-extrusion-height', extrusionHeight);
+      m.setPaintProperty(
+        REGIONAL_EXTRUSION_LAYER_ID,
+        'fill-extrusion-color',
+        extrusionColorExpression
+      );
+      m.setPaintProperty(REGIONAL_EXTRUSION_LAYER_ID, 'fill-extrusion-opacity', 0.72);
+    };
+
+    const scheduleRegionalExtrusionUpdate = () => {
+      // Guard against scheduling updates after map has been destroyed
+      if (!m || !m.getStyle()) return;
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        applyRegionalExtrusion();
+      });
+    };
+
+    // Only schedule initial update if style is loaded
+    if (m.isStyleLoaded()) {
+      scheduleRegionalExtrusionUpdate();
+    }
+
+    m.on('styledata', scheduleRegionalExtrusionUpdate);
+    m.on('sourcedata', scheduleRegionalExtrusionUpdate);
+
+    return () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+      m.off('styledata', scheduleRegionalExtrusionUpdate);
+      m.off('sourcedata', scheduleRegionalExtrusionUpdate);
+    };
+  }, [
+    mapLoaded,
+    is3DView,
+    extrusionMode,
+    extrusionExaggeration,
+    styleChangeCounter,
+    selectedCountry,
+  ]);
+
+  // Keep extrusion colors aligned with map mode changes without altering the main effect signature.
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !is3DView || extrusionMode === 'none') return;
+    if (!map.current.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) return;
+
+    const colorExpression =
+      mapStyle === 'wind'
+        ? createWindColorExpression()
+        : createLossColorExpression(selectedCountry);
+    map.current.setPaintProperty(
+      REGIONAL_EXTRUSION_LAYER_ID,
+      'fill-extrusion-color',
+      colorExpression
+    );
+  }, [mapLoaded, is3DView, extrusionMode, mapStyle, selectedCountry]);
 
   // Handle district hover and click interactions
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     const m = map.current;
-    let hoveredDistrictId: string | null = null;
+    let hoveredDistrictId: string | number | null = null;
 
     // Change cursor on hover
     const handleMouseEnter = () => {
-      m.getCanvas().style.cursor = "pointer";
+      m.getCanvas().style.cursor = 'pointer';
     };
 
     const handleMouseLeave = () => {
-      m.getCanvas().style.cursor = "";
+      m.getCanvas().style.cursor = '';
       if (hoveredDistrictId !== null) {
-        m.setFeatureState(
-          { source: DISTRICTS_SOURCE_ID, id: hoveredDistrictId },
-          { hover: false }
-        );
+        m.setFeatureState({ source: DISTRICTS_SOURCE_ID, id: hoveredDistrictId }, { hover: false });
         hoveredDistrictId = null;
       }
     };
@@ -301,7 +1161,7 @@ export default function MapView({
     const handleMouseMove = (e: maplibregl.MapLayerMouseEvent) => {
       if (e.features && e.features.length > 0) {
         const feature = e.features[0];
-        const featureId = feature.properties?.id;
+        const featureId = feature.id;
 
         if (hoveredDistrictId !== null && hoveredDistrictId !== featureId) {
           m.setFeatureState(
@@ -310,12 +1170,9 @@ export default function MapView({
           );
         }
 
-        if (featureId) {
+        if (featureId !== undefined && featureId !== null) {
           hoveredDistrictId = featureId;
-          m.setFeatureState(
-            { source: DISTRICTS_SOURCE_ID, id: featureId },
-            { hover: true }
-          );
+          m.setFeatureState({ source: DISTRICTS_SOURCE_ID, id: featureId }, { hover: true });
         }
       }
     };
@@ -334,34 +1191,36 @@ export default function MapView({
         popupRef.current = new maplibregl.Popup({
           closeButton: true,
           closeOnClick: true,
-          maxWidth: "280px",
-          className: "district-popup",
+          maxWidth: '280px',
+          className: 'district-popup',
         })
           .setLngLat(e.lngLat)
-          .setHTML(createDistrictPopupHTML(props, filters.selectedHazards))
+          .setDOMContent(createDistrictPopupNode(props, filters.selectedHazards, hazards))
           .addTo(m);
       }
     };
 
     // Register event handlers
-    m.on("mouseenter", DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
-    m.on("mouseleave", DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
-    m.on("mousemove", DISTRICTS_FILL_LAYER_ID, handleMouseMove);
-    m.on("click", DISTRICTS_FILL_LAYER_ID, handleClick);
+    m.on('mouseenter', DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
+    m.on('mouseleave', DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
+    m.on('mousemove', DISTRICTS_FILL_LAYER_ID, handleMouseMove);
+    m.on('click', DISTRICTS_FILL_LAYER_ID, handleClick);
 
     return () => {
-      m.off("mouseenter", DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
-      m.off("mouseleave", DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
-      m.off("mousemove", DISTRICTS_FILL_LAYER_ID, handleMouseMove);
-      m.off("click", DISTRICTS_FILL_LAYER_ID, handleClick);
+      m.off('mouseenter', DISTRICTS_FILL_LAYER_ID, handleMouseEnter);
+      m.off('mouseleave', DISTRICTS_FILL_LAYER_ID, handleMouseLeave);
+      m.off('mousemove', DISTRICTS_FILL_LAYER_ID, handleMouseMove);
+      m.off('click', DISTRICTS_FILL_LAYER_ID, handleClick);
       if (popupRef.current) {
         popupRef.current.remove();
         popupRef.current = null;
       }
     };
-  }, [mapLoaded, filters.selectedHazards]);
+  }, [mapLoaded, filters.selectedHazards, hazards]);
 
-  // Update district layer visibility/opacity based on selected hazards
+  // District fill should only visualize hazard filtering.
+  // Regional impacts owns the loss/wind choropleth, so keep district fill out of the way
+  // when no hazard filter is active.
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
@@ -369,297 +1228,256 @@ export default function MapView({
 
     if (!m.getLayer(DISTRICTS_FILL_LAYER_ID)) return;
 
-    // Use shared color expression for default styling
-    const defaultColorExpression = createHazardColorExpression();
-
     if (filters.selectedHazards.length === 0) {
-      // Show all districts with default styling
-      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", defaultColorExpression);
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", defaultColorExpression);
-      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.4);
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-opacity", 0.8);
+      // No hazard filter selected: let the regional layer remain visually dominant.
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', createHazardColorExpression());
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', 0);
+      m.setPaintProperty(
+        DISTRICTS_OUTLINE_LAYER_ID,
+        'line-opacity',
+        Math.max(0.06, LAYER_OPACITY.district.outline * 0.45)
+      );
     } else {
+      const opacityScale = layerOpacity / 100;
+
       // Build case expression for selected hazards
+      // Map UI hazard IDs to exposure field keys first
+      const selectedMappedHazards = Array.from(
+        new Set(
+          filters.selectedHazards.flatMap(uiHazardId => UI_HAZARD_TO_EXPOSURE_MAP[uiHazardId] || [])
+        )
+      );
+
       // TypeScript assertions needed due to MapLibre's complex expression types
       const caseArgs: (maplibregl.ExpressionSpecification | string)[] = [];
-      for (const hazard of filters.selectedHazards) {
-        caseArgs.push(["==", ["get", "primaryHazard"], hazard] as maplibregl.ExpressionSpecification);
+      for (const hazard of selectedMappedHazards) {
+        caseArgs.push([
+          '==',
+          ['get', 'primaryHazard'],
+          hazard,
+        ] as maplibregl.ExpressionSpecification);
         caseArgs.push(getHazardColor(hazard));
       }
-      caseArgs.push("#9CA3AF"); // fallback for non-matching
+      caseArgs.push('#9CA3AF'); // fallback for non-matching
 
       // Type assertion required for dynamic case expression construction
-      const colorExpression = ["case", ...caseArgs] as maplibregl.ExpressionSpecification;
+      const colorExpression = ['case', ...caseArgs] as maplibregl.ExpressionSpecification;
 
-      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-color", colorExpression);
-      m.setPaintProperty(DISTRICTS_OUTLINE_LAYER_ID, "line-color", colorExpression);
+      m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-color', colorExpression);
 
       // Build max exposure expression for selected hazards using shared mapping
-      const exposureExpressions = filters.selectedHazards
-        .filter((h) => HAZARD_EXPOSURE_FIELDS[h])
-        .map((h) => ["get", HAZARD_EXPOSURE_FIELDS[h]] as maplibregl.ExpressionSpecification);
+      // Reuse selectedMappedHazards already defined above
+      const exposureExpressions = selectedMappedHazards
+        .filter(h => HAZARD_EXPOSURE_FIELDS[h])
+        .map(h => ['get', HAZARD_EXPOSURE_FIELDS[h]] as maplibregl.ExpressionSpecification);
 
       if (exposureExpressions.length > 0) {
         // Type assertion required for dynamic max expression construction
         const maxExposure: maplibregl.ExpressionSpecification =
           exposureExpressions.length === 1
             ? exposureExpressions[0]
-            : (["max", ...exposureExpressions] as maplibregl.ExpressionSpecification);
+            : (['max', ...exposureExpressions] as maplibregl.ExpressionSpecification);
 
         // Opacity based on exposure level
         const opacityExpression: maplibregl.ExpressionSpecification = [
-          "interpolate",
-          ["linear"],
+          'interpolate',
+          ['linear'],
           maxExposure,
-          0, 0.15,
-          0.5, 0.4,
-          1, 0.6,
+          0,
+          0.15 * opacityScale,
+          0.5,
+          0.4 * opacityScale,
+          1,
+          0.6 * opacityScale,
         ];
 
-        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", opacityExpression);
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', opacityExpression);
       } else {
         // No valid exposure fields for selected hazards, use low opacity
-        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, "fill-opacity", 0.15);
+        m.setPaintProperty(DISTRICTS_FILL_LAYER_ID, 'fill-opacity', 0.15 * (layerOpacity / 100));
       }
     }
-  }, [filters.selectedHazards, mapLoaded]);
+  }, [filters.selectedHazards, mapLoaded, layerOpacity]);
 
-  // Update markers when filtered events change - optimized to only add/remove changed markers
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    const currentEventIds = new Set(filteredEvents.map(e => e.id));
-    const existingEventIds = new Set(markersRef.current.keys());
-
-    // Remove markers that are no longer in filtered events
-    for (const eventId of existingEventIds) {
-      if (!currentEventIds.has(eventId)) {
-        const marker = markersRef.current.get(eventId);
-        if (marker) {
-          marker.remove();
-          markersRef.current.delete(eventId);
-        }
-      }
-    }
-
-    // Add new markers for events that don't have markers yet
-    filteredEvents.forEach((event) => {
-      if (markersRef.current.has(event.id)) return; // Skip if marker already exists
-      
-      const hazard = getHazardInfo(event.hazardId);
-      const color = hazard?.color || "#6B7280";
-
-      // Create custom marker element
-      const el = document.createElement("div");
-      el.className = "event-marker";
-      el.style.cssText = `
-        width: 24px;
-        height: 24px;
-        background-color: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        transition: transform 0.2s ease;
-      `;
-
-      // Accessibility attributes for custom marker
-      el.setAttribute("role", "button");
-      el.setAttribute("aria-label", event.name);
-      el.setAttribute("tabindex", "0");
-      el.addEventListener("mouseenter", () => {
-        el.style.transform = "scale(1.2)";
-      });
-      el.addEventListener("mouseleave", () => {
-        el.style.transform = "scale(1)";
-      });
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onEventSelect(event);
-        }
-      });
-
-      // Create popup
-      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
-        <div style="padding: 8px; min-width: 200px;">
-          <h3 style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #1f2937;">
-            ${hazard?.icon || ""} ${event.name}
-          </h3>
-          <div style="font-size: 12px; color: #6b7280; space-y: 4px;">
-            <p><strong>Date:</strong> ${event.date}</p>
-            <p><strong>Severity:</strong> <span style="text-transform: capitalize;">${event.severity}</span></p>
-            <p><strong>Affected Population:</strong> ${formatNumber(event.affectedPopulation)}</p>
-            <p><strong>Economic Damage:</strong> ${formatCurrency(event.economicDamage)}</p>
-          </div>
-        </div>
-      `);
-
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([event.location.lng, event.location.lat])
-        .setPopup(popup)
-        .addTo(map.current!);
-
-      el.addEventListener("click", () => {
-        onEventSelect(event);
-      });
-
-      markersRef.current.set(event.id, marker);
-    });
-
-    // Fit bounds to show all markers
-    if (filteredEvents.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      filteredEvents.forEach((event) => {
-        bounds.extend([event.location.lng, event.location.lat]);
-      });
-      map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
-    }
-  }, [filteredEvents, mapLoaded, getHazardInfo, onEventSelect]);
-
-  // Create hazard zone layers and toggle visibility based on filters
-  // Combined into single effect to guarantee layer creation before visibility toggling
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-
-    const m = map.current;
-
-    // Transform hazardLayers from mockData to map zones with closed polygons
-    const hazardZones = hazardLayers.map((layer) => ({
-      id: `${layer.hazardId}-zone`,
-      hazardId: layer.hazardId,
-      coordinates: [...layer.coordinates, layer.coordinates[0]], // Close the polygon
-    }));
-
-    // Add all hazard zone layers once with smooth transition support
-    hazardZones.forEach((zone) => {
-      // Skip if source already exists (layers already created)
-      if (m.getSource(zone.id)) return;
-
-      const color = getHazardColor(zone.hazardId);
-
-      m.addSource(zone.id, {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: { hazardId: zone.hazardId },
-          geometry: {
-            type: "Polygon",
-            coordinates: [zone.coordinates],
-          },
-        },
-      });
-
-      // Add fill layer with opacity transition
-      m.addLayer({
-        id: zone.id,
-        type: "fill",
-        source: zone.id,
-        paint: {
-          "fill-color": color,
-          "fill-opacity": HAZARD_ZONE_OPACITY_HIDDEN, // Start hidden
-          "fill-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
-        },
-      });
-
-      // Add outline layer with opacity transition
-      m.addLayer({
-        id: `${zone.id}-outline`,
-        type: "line",
-        source: zone.id,
-        paint: {
-          "line-color": color,
-          "line-width": 2,
-          "line-opacity": HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN, // Start hidden
-          "line-opacity-transition": { duration: HAZARD_ZONE_TRANSITION_DURATION },
-        },
-      });
-    });
-
-    // Toggle hazard zone visibility with smooth opacity transitions based on filters
-    const hazardZoneIds = hazardLayers.map((layer) => `${layer.hazardId}-zone`);
-
-    hazardZoneIds.forEach((zoneId) => {
-      // Extract hazardId from zoneId (e.g., "flood-zone" -> "flood")
-      const hazardId = zoneId.replace("-zone", "");
-      
-      // Determine if this layer should be visible
-      const shouldShow =
-        filters.selectedHazards.length === 0 ||
-        filters.selectedHazards.includes(hazardId);
-
-      // Set fill opacity (animated via fill-opacity-transition)
-      if (m.getLayer(zoneId)) {
-        m.setPaintProperty(
-          zoneId,
-          "fill-opacity",
-          shouldShow ? HAZARD_ZONE_OPACITY_VISIBLE : HAZARD_ZONE_OPACITY_HIDDEN
-        );
-      }
-
-      // Set outline opacity (animated via line-opacity-transition)
-      const outlineId = `${zoneId}-outline`;
-      if (m.getLayer(outlineId)) {
-        m.setPaintProperty(
-          outlineId,
-          "line-opacity",
-          shouldShow ? HAZARD_ZONE_OUTLINE_OPACITY_VISIBLE : HAZARD_ZONE_OUTLINE_OPACITY_HIDDEN
-        );
-      }
-    });
-  }, [filters.selectedHazards, mapLoaded]);
-
-  // Compute which hazards to show in legend based on filter state
-  const visibleHazards = useMemo(() => {
-    // When no hazards are selected, show all hazards in the legend
-    if (filters.selectedHazards.length === 0) {
-      return hazards;
-    }
-    // Otherwise, show only selected hazards
-    return hazards.filter((h) => filters.selectedHazards.includes(h.id));
-  }, [hazards, filters.selectedHazards]);
+  // Note: Mock hazard zones and event markers removed - now using real data from THREDDS server via RealData Layers
 
   return (
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
-      
-      {/* Map Legend - styled to match SummaryPanel cards */}
-      <div 
-        className="absolute bottom-8 right-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-900/80 rounded-xl shadow-lg p-4 min-w-[160px] backdrop-blur-sm"
-        role="region"
-        aria-label="Map legend showing hazard types"
-      >
-        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-3 uppercase tracking-wide">
-          Hazard Legend
-        </h4>
-        <div className="space-y-2">
-          {visibleHazards.map((hazard) => (
-            <div 
-              key={hazard.id} 
-              className="flex items-center gap-2.5 transition-opacity duration-300"
-            >
-              <span
-                className="w-3.5 h-3.5 rounded-full ring-2 ring-white dark:ring-slate-700 shadow-sm flex-shrink-0"
-                style={{ backgroundColor: hazard.color }}
-                aria-hidden="true"
-              />
-              <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-                {hazard.icon} {hazard.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 
-      {/* Event count indicator */}
-      <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          Showing{" "}
-          <span className="font-semibold text-gray-900 dark:text-white">
-            {filteredEvents.length}
-          </span>{" "}
-          of {events.length} events
-        </span>
-      </div>
+      {showOverlays && wmsWarning && (
+        <div className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)] rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
+          {wmsWarning}
+        </div>
+      )}
+
+      {showRegionalDebugPanel && regionalImpactsDebug && (
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[26] max-w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-cyan-400/30 bg-slate-950/90 px-3 py-2 text-[11px] text-slate-100 shadow-xl backdrop-blur">
+          <div className="mb-1 font-semibold text-cyan-300">Regional Debug</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
+            <span className="text-slate-400">country</span>
+            <span>{regionalImpactsDebug.countryCode ?? 'null'}</span>
+            <span className="text-slate-400">style</span>
+            <span>{regionalImpactsDebug.mapStyle}</span>
+            <span className="text-slate-400">loading</span>
+            <span>{regionalImpactsDebug.loading ? 'true' : 'false'}</span>
+            <span className="text-slate-400">error</span>
+            <span className="truncate">{regionalImpactsDebug.error ?? 'none'}</span>
+            <span className="text-slate-400">features</span>
+            <span>{regionalImpactsDebug.featureCount}</span>
+            <span className="text-slate-400">sector</span>
+            <span>{regionalImpactsDebug.sectorFeatureCount}</span>
+            <span className="text-slate-400">Total_Loss</span>
+            <span>{regionalImpactsDebug.hasTotalLoss ? 'yes' : 'no'}</span>
+            <span className="text-slate-400">Max_Wind_Gusts</span>
+            <span>{regionalImpactsDebug.hasMaxWindGusts ? 'yes' : 'no'}</span>
+            <span className="text-slate-400">selected</span>
+            <span className="truncate">{regionalImpactsDebug.selectedRegion ?? 'none'}</span>
+          </div>
+        </div>
+      )}
+
+      {showOverlays && showCycloneAnimation && storyMode && mapInstance && (
+        <CycloneStoryOverlay
+          map={mapInstance}
+          forecastTrack={cycloneForecast ?? null}
+          storyBeats={storyBeats}
+          currentIndex={currentCycloneIndex}
+          onSelect={handleStorySelect}
+          onExit={() => onStoryModeChange?.(false)}
+        />
+      )}
+
+      {/* Map Title Overlay */}
+      {/* MapTitleOverlay removed - info now in UnifiedMapLegend and top controls */}
+      {/* Real Data Layers */}
+      {mapInstance && (
+        <>
+          <RealDataLayers
+            key={`real-data-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
+            map={mapInstance}
+            countryCode={selectedCountry}
+            visible={true}
+            cycloneTrackData={cycloneTrackData}
+            // Render static track whenever it exists and animated forecast is unavailable.
+            // When animated forecast is present, CycloneAnimationLayer owns track rendering.
+            showCycloneTrack={hasStaticCycloneTrack && !hasAnimatedCycloneForecast}
+            mapStyle={mapStyle}
+            basemapStyle={basemapStyle}
+            styleChangeCounter={styleChangeCounter}
+            filters={filters}
+            showWindLayer={showWindLayer}
+            showInundationLayer={showInundationLayer}
+            onLoadingChange={onLayersLoadingChange}
+            onActiveLayersChange={onActiveWmsLayersChange}
+            layerOpacityScale={layerOpacity}
+            legendSettings={legendSettings}
+          />
+          <RegionalImpactsLayer
+            key={`regional-impacts-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
+            map={mapInstance}
+            visible={true}
+            mapStyle={mapStyle}
+            styleChangeCounter={styleChangeCounter}
+            selectedRegion={selectedRegion}
+            onRegionSelect={onRegionSelect}
+            countryCode={selectedCountry}
+            legendSettings={legendSettings}
+            layerOpacityScale={layerOpacity}
+            onDebugStateChange={setRegionalImpactsDebug}
+          />
+          <DamagedBuildingsLayer
+            key={`damaged-buildings-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
+            map={mapInstance}
+            data={damagedBuildings ?? null}
+            thresholds={legendSettings?.buildings}
+            visible={!!damagedBuildings}
+            styleChangeCounter={styleChangeCounter}
+          />
+          <DamagedRoadsLayer
+            key={`damaged-roads-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
+            map={mapInstance}
+            thresholds={legendSettings?.roads}
+            data={damagedRoads ?? null}
+            visible={!!damagedRoads}
+            styleChangeCounter={styleChangeCounter}
+          />
+          {hasAnimatedCycloneForecast && (
+            <CycloneAnimationLayer
+              map={mapInstance}
+              forecastTrack={cycloneForecast}
+              isVisible={showCycloneAnimation}
+              uiVisible={showOverlays && showCycloneAnimation}
+              onClose={() => onCycloneAnimationChange?.(false)}
+              onPlayingChange={handleCyclonePlayingChange}
+              onTimestepChange={onCycloneTimestepChange}
+              isLeftPanelOpen={isLeftPanelOpen}
+              isRightPanelOpen={isRightPanelOpen}
+              controlsContainer={cycloneControlsHost}
+              isPlayingExternal={isCyclonePlaying}
+              alwaysDocked={true}
+              storyMode={storyMode}
+              storyBeats={storyBeats}
+              onStoryModeChange={onStoryModeChange}
+              currentIndexExternal={currentCycloneIndex}
+              onCurrentIndexChange={handleStorySelect}
+              showStoryBeatCard={false}
+            />
+          )}
+        </>
+      )}
+      {/* PDIEDataLayers disabled - using local data files instead of THREDDS PDIE output */}
+      {/* <PDIEDataLayers
+        map={map.current}
+        countryCode="VU"
+        visible={true}
+      /> */}
+
+      {/* Cyclone Animation Toggle Button */}
+      {hasAnimatedCycloneForecast && showOverlays && showCycloneToggle && (
+        <CycloneAnimationToggle
+          isVisible={showCycloneAnimation}
+          isPlaying={isAnimationPlaying}
+          onToggleVisibility={() => onCycloneAnimationChange?.(!showCycloneAnimation)}
+        />
+      )}
+
+      {/* Basemap Error Notification */}
+      {basemapError && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto">
+          <div className="glass-panel px-6 py-4 rounded-lg border-2 border-amber-500/50 bg-amber-900/30 backdrop-blur-sm max-w-md animate-fadeSlide">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <span className="text-amber-400 text-lg">⚠️</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-300 mb-1">Basemap Loading Issue</h4>
+                <p className="text-xs text-amber-200/90 mb-3">{basemapError}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setBasemapError(null);
+                      tileErrorCountRef.current = 0;
+                      // Force reload by incrementing counter
+                      setStyleChangeCounter(prev => prev + 1);
+                    }}
+                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium rounded transition-colors"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={() => setBasemapError(null)}
+                    className="px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

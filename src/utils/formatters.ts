@@ -1,4 +1,9 @@
-export function formatCurrency(value: number): string {
+import { getHazardColor as getThemeHazardColor } from '@/theme/colors';
+
+export function formatCurrency(value: number | undefined | null): string {
+  if (value == null || isNaN(value)) {
+    return '$0';
+  }
   if (value >= 1000000000) {
     return `$${(value / 1000000000).toFixed(1)}B`;
   }
@@ -11,7 +16,10 @@ export function formatCurrency(value: number): string {
   return `$${value}`;
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number | undefined | null): string {
+  if (value == null || isNaN(value)) {
+    return '0';
+  }
   if (value >= 1000000) {
     return `${(value / 1000000).toFixed(1)}M`;
   }
@@ -23,19 +31,14 @@ export function formatNumber(value: number): string {
 
 export function getSeverityColor(severity: string): string {
   const colors: Record<string, string> = {
-    low: "bg-green-100 text-green-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    high: "bg-orange-100 text-orange-800",
-    critical: "bg-red-100 text-red-800",
+    low: 'bg-green-500/20 text-green-300',
+    medium: 'bg-yellow-500/20 text-yellow-300',
+    high: 'bg-orange-500/20 text-orange-300',
+    critical: 'bg-red-500/20 text-red-300',
   };
-  return colors[severity] || "bg-gray-100 text-gray-800";
+  return colors[severity] || 'bg-slate-800/70 text-slate-200';
 }
 
 export function getHazardColor(hazardId: string): string {
-  const colors: Record<string, string> = {
-    wind: "#3B82F6",
-    cyclone_track: "#8B5CF6",
-    inundation: "#06B6D4",
-  };
-  return colors[hazardId] || "#6B7280";
+  return getThemeHazardColor(hazardId);
 }
