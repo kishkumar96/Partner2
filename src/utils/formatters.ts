@@ -2,31 +2,43 @@ import { getHazardColor as getThemeHazardColor } from '@/theme/colors';
 
 export function formatCurrency(value: number | undefined | null): string {
   if (value == null || isNaN(value)) {
-    return '$0.00';
+    return '$0';
   }
   if (value >= 1000000000) {
-    return `$${(value / 1000000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}B`;
+    return `$${(value / 1000000000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}B`;
   }
   if (value >= 1000000) {
-    return `$${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}M`;
+    return `$${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}M`;
   }
   if (value >= 1000) {
-    return `$${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}K`;
+    return `$${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}K`;
   }
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // For whole numbers, don't show decimal places
+  // For decimals, show up to 2 decimal places
+  const isWholeNumber = Number.isInteger(value);
+  return `$${value.toLocaleString('en-US', {
+    minimumFractionDigits: isWholeNumber ? 0 : 0,
+    maximumFractionDigits: isWholeNumber ? 0 : 2,
+  })}`;
 }
 
 export function formatNumber(value: number | undefined | null): string {
   if (value == null || isNaN(value)) {
-    return '0.00';
+    return '0';
   }
   if (value >= 1000000) {
-    return `${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}M`;
+    return `${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}M`;
   }
   if (value >= 1000) {
-    return `${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}K`;
+    return `${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}K`;
   }
-  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+  // For whole numbers, don't show decimal places
+  // For decimals, show up to 2 decimal places
+  const isWholeNumber = Number.isInteger(value);
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: isWholeNumber ? 0 : 0,
+    maximumFractionDigits: isWholeNumber ? 0 : 2,
+  });
 }
 
 export function getSeverityColor(severity: string): string {

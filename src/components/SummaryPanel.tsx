@@ -91,8 +91,13 @@ function formatSummaryNumber(value: number | string | undefined | null): string 
     return '0';
   }
 
+  // For whole numbers (counts, integers), don't show decimal places
+  // For decimals, show up to 2 decimal places
+  const isWholeNumber = Number.isInteger(numericValue);
+
   return numericValue.toLocaleString('en-US', {
-    maximumFractionDigits: 20,
+    minimumFractionDigits: isWholeNumber ? 0 : 0,
+    maximumFractionDigits: isWholeNumber ? 0 : 2,
   });
 }
 
