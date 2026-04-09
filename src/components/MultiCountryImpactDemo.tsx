@@ -1,9 +1,9 @@
 /**
  * Multi-Country Impact Data Demo Component
- * 
+ *
  * This component demonstrates the new multi-country impact data loading capability.
  * Drop this into any page to test that all countries display economic damage and wind intensity.
- * 
+ *
  * USAGE:
  * 1. Create a new route: /src/app/demo/page.tsx
  * 2. Import and render this component
@@ -39,21 +39,19 @@ export default function MultiCountryImpactDemo() {
       {/* Control Panel */}
       <div className="bg-slate-900 border-b border-slate-700 p-4">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl font-bold text-white mb-4">
-            Multi-Country Impact Data Demo
-          </h1>
-          
+          <h1 className="text-2xl font-bold text-white mb-4">Multi-Country Impact Data Demo</h1>
+
           <div className="flex flex-wrap gap-4 items-center">
             {/* Country Selector */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                View Mode
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">View Mode</label>
               <select
                 value={selectedCountry ?? 'ALL'}
-                onChange={(e) => setSelectedCountry(
-                  e.target.value === 'ALL' ? null : e.target.value as CountryCode
-                )}
+                onChange={e =>
+                  setSelectedCountry(
+                    e.target.value === 'ALL' ? null : (e.target.value as CountryCode)
+                  )
+                }
                 className="bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-600 hover:border-blue-500 transition-colors"
               >
                 <option value="ALL">🌍 All Countries (Multi-Country Mode)</option>
@@ -66,12 +64,10 @@ export default function MultiCountryImpactDemo() {
 
             {/* Map Style Selector */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Display Mode
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Display Mode</label>
               <select
                 value={mapStyle}
-                onChange={(e) => setMapStyle(e.target.value as 'loss' | 'wind')}
+                onChange={e => setMapStyle(e.target.value as 'loss' | 'wind')}
                 className="bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-600 hover:border-blue-500 transition-colors"
               >
                 <option value="loss">💰 Economic Damage</option>
@@ -89,10 +85,9 @@ export default function MultiCountryImpactDemo() {
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  {selectedCountry === null 
+                  {selectedCountry === null
                     ? 'Loading impact data for Vanuatu, Samoa, Tonga, and Cook Islands'
-                    : `Loading impact data for ${selectedCountry} only`
-                  }
+                    : `Loading impact data for ${selectedCountry} only`}
                 </div>
               </div>
             </div>
@@ -101,9 +96,9 @@ export default function MultiCountryImpactDemo() {
           {/* Instructions */}
           <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
             <p className="text-sm text-blue-300">
-              <strong>💡 Tip:</strong> Select "All Countries" to see the multi-country mode in action. 
-              All 4 countries should display colored regional overlays showing economic damage or wind intensity.
-              Check your browser console for detailed loading logs.
+              <strong>💡 Tip:</strong> Select "All Countries" to see the multi-country mode in
+              action. All 4 countries should display colored regional overlays showing economic
+              damage or wind intensity. Check your browser console for detailed loading logs.
             </p>
           </div>
         </div>
@@ -161,17 +156,17 @@ export default function MultiCountryImpactDemo() {
 
 /**
  * HOW TO USE THIS DEMO:
- * 
+ *
  * 1. Create /src/app/demo/page.tsx with:
- * 
+ *
  *    import MultiCountryImpactDemo from '@/components/MultiCountryImpactDemo';
- *    
+ *
  *    export default function DemoPage() {
  *      return <MultiCountryImpactDemo />;
  *    }
- * 
+ *
  * 2. Navigate to http://localhost:3000/demo
- * 
+ *
  * 3. Check console for these messages:
  *    🌐 [useRegionalImpactsData] Loading data for ALL countries...
  *    ✅ Loaded 107 regions for VU
@@ -179,25 +174,25 @@ export default function MultiCountryImpactDemo() {
  *    ✅ Loaded 23 regions for TO
  *    ✅ Loaded 15 regions for CK
  *    🎉 Combined 190 total regions from 4 countries
- * 
+ *
  * 4. Verify all 4 countries show colored overlays
- * 
+ *
  * 5. Click regions to see popups with:
  *    - Economic damage (Total_Loss)
  *    - Wind intensity (Max_Wind_Gusts)
  *    - Buildings damaged
  *    - Population affected
- * 
+ *
  * TROUBLESHOOTING:
- * 
+ *
  * - If only Vanuatu shows data:
  *   → Check that selectedCountry is actually null in console
  *   → Verify data files exist in public/samoa, public/tonga, public/cook-islands
- * 
+ *
  * - If console shows errors:
  *   → Check network tab for failed requests
  *   → Verify file paths match COUNTRY_DATA_FILE_OVERRIDES
- * 
+ *
  * - If performance is slow:
  *   → Check that loading is parallel (all 4 at once, not sequential)
  *   → Enable caching in next.config.ts

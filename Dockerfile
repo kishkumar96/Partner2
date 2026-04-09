@@ -42,6 +42,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV AUTH_REQUIRE_REDIS=false
 # Port the server will listen on inside the container
 ENV PORT=3112
 ENV HOSTNAME="0.0.0.0"
@@ -61,6 +62,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3112
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -q --spider "http://127.0.0.1:${PORT}/partner2" || exit 1
 
 # NOTE: The app is served under the /partner2 base-path in production.
 # Access it at http://localhost:3112/partner2
