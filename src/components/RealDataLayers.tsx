@@ -940,7 +940,9 @@ export default function RealDataLayers({
                       }
                     };
 
-                    const initialImageSize = layer.hazardType === 'wind' ? 1024 : 1024;
+                    // Start with lower resolution for faster initial load
+                    // Wind: 256, Others: 1024 (will be progressively upgraded if eligible)
+                    const initialImageSize = layer.hazardType === 'wind' ? 256 : 1024;
                     updateImageSource(layer.bbox, initialImageSize, initialImageSize);
                   }
 
@@ -1039,11 +1041,10 @@ export default function RealDataLayers({
                     startWindAnimation(map);
                   }
 
-                  // Keep progressive upgrades for low-res static image layers.
-                  // Wind and inundation now start at high resolution to avoid the blurred first paint.
+                  // Enable progressive resolution upgrades for static image layers
+                  // to improve initial load performance while maintaining final quality.
                   if (
                     !useTiledWms &&
-                    layer.hazardType !== 'wind' &&
                     layer.hazardType !== 'flood' &&
                     layer.hazardType !== 'inundation' &&
                     layer.hazardType !== 'fluvial-depth'
