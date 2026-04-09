@@ -139,6 +139,10 @@ export interface RealWMSLayer {
 const DEFAULT_STYLE = 'default-scalar/default';
 const DEFAULT_WMS_VERSION: NonNullable<WMSStyleConfig['wmsVersion']> = '1.3.0';
 const DEFAULT_CRS: NonNullable<WMSStyleConfig['crs']> = 'EPSG:3857';
+const NEXT_PUBLIC_BASE_PATH =
+  process.env.NODE_ENV === 'production'
+    ? process.env.NEXT_PUBLIC_BASE_PATH || '/partner2'
+    : process.env.NEXT_PUBLIC_BASE_PATH || '';
 
 const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
   VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
@@ -449,8 +453,18 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
 ];
 
+function withBasePath(path: string): string {
+  if (!NEXT_PUBLIC_BASE_PATH) return path;
+  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+}
+
 function wmsBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? '/api/partner-proxy/thredds/wms';
+  const configuredUrl = process.env.NEXT_PUBLIC_THREDDS_WMS_URL;
+  if (configuredUrl) {
+    return configuredUrl.startsWith('/') ? withBasePath(configuredUrl) : configuredUrl;
+  }
+
+  return withBasePath('/api/partner-proxy/thredds/wms');
 }
 
 export function buildRealWMSUrl(
