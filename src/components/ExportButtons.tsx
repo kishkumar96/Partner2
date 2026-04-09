@@ -387,10 +387,10 @@ export default function ExportButtons({
 
       // Map country code to assets
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
-        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
+        VU: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png'),
+        CK: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png'),
+        TO: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Tonga.png'),
+        WS: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Samoa.png'),
       };
       const countryFlagMap: Record<string, string> = {
         VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
@@ -419,7 +419,7 @@ export default function ExportButtons({
           ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
           : Promise.resolve(undefined),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG1.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -428,7 +428,7 @@ export default function ExportButtons({
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG2.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -436,13 +436,16 @@ export default function ExportButtons({
           }),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/DashBoard_Header_Country3.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
       ]);
@@ -597,10 +600,10 @@ export default function ExportButtons({
 
       // Map country code to header image
       const countryHeaderMap: Record<string, string> = {
-        VU: '/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png',
-        CK: '/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png',
-        TO: '/pdf-assets/country-headers/DashBoard_Header_Tonga.png',
-        WS: '/pdf-assets/country-headers/DashBoard_Header_Samoa.png',
+        VU: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Vanuatu.png'),
+        CK: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Cook_Islands.png'),
+        TO: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Tonga.png'),
+        WS: pdfAsset('/pdf-assets/country-headers/DashBoard_Header_Samoa.png'),
       };
       const countryFlagMap: Record<string, string> = {
         VU: pdfAsset('/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png'),
@@ -624,7 +627,7 @@ export default function ExportButtons({
         buildingIconSrc,
       ] = await Promise.all([
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/Topbackdrop.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/Topbackdrop.svg'), {
             rasterizeWidthPx: 2400,
             targetHeightPx: 460,
             fit: 'cover',
@@ -633,7 +636,7 @@ export default function ExportButtons({
           ASSET_FETCH_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG1.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG1.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -642,7 +645,7 @@ export default function ExportButtons({
           LARGE_SVG_TIMEOUT_MS
         ),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/PDF1_SVG2.svg', {
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/PDF1_SVG2.svg'), {
             rasterizeWidthPx: 2480,
             targetHeightPx: 3508,
             fit: 'cover',
@@ -658,12 +661,15 @@ export default function ExportButtons({
           ? withTimeout(fetchAssetDataUrl(countryFlagPath), ASSET_FETCH_TIMEOUT_MS)
           : Promise.resolve(undefined),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/DashBoard_Header_Country3.png'),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/DashBoard_Header_Country3.png')),
           ASSET_FETCH_TIMEOUT_MS
         ),
-        withTimeout(fetchAssetDataUrl('/pdf-assets/icons/person.png'), ASSET_FETCH_TIMEOUT_MS),
         withTimeout(
-          fetchAssetDataUrl('/pdf-assets/icons/house.svg', { rasterizeWidthPx: 128 }),
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/person.png')),
+          ASSET_FETCH_TIMEOUT_MS
+        ),
+        withTimeout(
+          fetchAssetDataUrl(pdfAsset('/pdf-assets/icons/house.svg'), { rasterizeWidthPx: 128 }),
           ASSET_FETCH_TIMEOUT_MS
         ),
       ]);
