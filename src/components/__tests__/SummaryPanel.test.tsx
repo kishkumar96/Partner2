@@ -57,9 +57,8 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    // Current UI uses compact formatting helpers.
-    expect(screen.getByText(/\$1\.0M/)).toBeInTheDocument();
-    expect(screen.getByText(/50\.0K/)).toBeInTheDocument();
+    expect(screen.getByText('$1,000,000')).toBeInTheDocument();
+    expect(screen.getByText('50,000')).toBeInTheDocument();
   });
 
   it('handles missing data gracefully', () => {
@@ -103,7 +102,7 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    expect(screen.getByText(/\$1\.2B/)).toBeInTheDocument();
+    expect(screen.getByText('$1,234,567,890')).toBeInTheDocument();
   });
 
   it('updates when data prop changes', () => {
@@ -143,7 +142,6 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    // Should display updated compact value
-    expect(screen.getByText(/\$2\.0M/)).toBeInTheDocument();
+    expect(screen.getByText('$2,000,000')).toBeInTheDocument();
   });
 });

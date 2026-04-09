@@ -187,12 +187,12 @@ export default function DashboardView({
   const [showRoadsLayer, setShowRoadsLayer] = useState(false);
   const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
-  const initialShowMapControls = urlState.showMapControls ?? false;
+  const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
-    initialShowMapControls ? false : (urlState.showFilters ?? true)
+    initialShowMapControls ? false : (urlState.showFilters ?? false)
   );
   const [showMapControls, setShowMapControls] = useState(initialShowMapControls);
-  const [showSummary, setShowSummary] = useState(urlState.showSummary ?? false);
+  const [showSummary, setShowSummary] = useState(urlState.showSummary ?? true);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [legendSettings, setLegendSettings] = useState<LegendSettings>(() =>
     createDefaultLegendSettings(countryCode)
@@ -1943,22 +1943,6 @@ export default function DashboardView({
             <div className="flex flex-wrap items-center gap-2 md:hidden">
               <button
                 onClick={() => {
-                  openFilterPanel('filters');
-                  setShowSummary(false);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
-                  showFilters
-                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
-                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
-                }`}
-                aria-label="Open filters panel"
-                aria-pressed={showFilters}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Filters
-              </button>
-              <button
-                onClick={() => {
                   openMapPanel();
                   setShowSummary(false);
                 }}
@@ -1972,6 +1956,22 @@ export default function DashboardView({
               >
                 <MapIcon className="w-3.5 h-3.5" />
                 Map
+              </button>
+              <button
+                onClick={() => {
+                  openFilterPanel('filters');
+                  setShowSummary(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showFilters
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
+                aria-label="Open filters panel"
+                aria-pressed={showFilters}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Filters
               </button>
               <button
                 onClick={openSummaryPanel}
@@ -2037,20 +2037,6 @@ export default function DashboardView({
           <div className="hidden min-w-0 md:flex xl:justify-center">
             <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]">
               <button
-                onClick={() => openFilterPanel('filters')}
-                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                  showFilters && filterPanelTab === 'filters'
-                    ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
-                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
-                }`}
-                aria-pressed={showFilters && filterPanelTab === 'filters'}
-                aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
-                data-tour="filter-panel-toggle"
-              >
-                <Layers className="h-4 w-4" />
-                <span>Filters</span>
-              </button>
-              <button
                 onClick={openMapPanel}
                 className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
                   showMapControls
@@ -2063,6 +2049,20 @@ export default function DashboardView({
               >
                 <MapIcon className="h-4 w-4" />
                 <span>Map</span>
+              </button>
+              <button
+                onClick={() => openFilterPanel('filters')}
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  showFilters && filterPanelTab === 'filters'
+                    ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
+                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
+                }`}
+                aria-pressed={showFilters && filterPanelTab === 'filters'}
+                aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
+                data-tour="filter-panel-toggle"
+              >
+                <Layers className="h-4 w-4" />
+                <span>Filters</span>
               </button>
               <button
                 onClick={() => setShowAnalytics(current => !current)}

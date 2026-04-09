@@ -1334,9 +1334,9 @@ export default function MapView({
             countryCode={selectedCountry}
             visible={true}
             cycloneTrackData={cycloneTrackData}
-            // Render static track whenever it exists and animated forecast is unavailable.
-            // When animated forecast is present, CycloneAnimationLayer owns track rendering.
-            showCycloneTrack={hasStaticCycloneTrack && !hasAnimatedCycloneForecast}
+            // Always render static track when it exists (historical cyclone track)
+            // The animated forecast and historical track are independent features
+            showCycloneTrack={hasStaticCycloneTrack}
             mapStyle={mapStyle}
             basemapStyle={basemapStyle}
             styleChangeCounter={styleChangeCounter}

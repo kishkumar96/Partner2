@@ -1037,12 +1037,7 @@ export default function ExportButtons({
           const iconY = box.y + iconLayout.exportIconOffsetYmm;
           const valueY = box.y + iconLayout.exportValueOffsetYmm;
           const labelLines = doc.splitTextToSize(fig.label.toUpperCase(), box.w - 3);
-          const labelLineHeight = 2.3;
-          const labelStartY =
-            box.y +
-            box.h -
-            iconLayout.exportLabelBottomInsetMm -
-            labelLineHeight * Math.max(0, labelLines.length - 1);
+          const labelStartY = box.y + iconLayout.exportLabelTopOffsetMm;
 
           if (iconSrc) {
             doc.addImage(

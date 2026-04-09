@@ -2,31 +2,31 @@ import { getHazardColor as getThemeHazardColor } from '@/theme/colors';
 
 export function formatCurrency(value: number | undefined | null): string {
   if (value == null || isNaN(value)) {
-    return '$0';
+    return '$0.00';
   }
   if (value >= 1000000000) {
-    return `$${(value / 1000000000).toFixed(1)}B`;
+    return `$${(value / 1000000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}B`;
   }
   if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`;
+    return `$${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}M`;
   }
   if (value >= 1000) {
-    return `$${(value / 1000).toFixed(1)}K`;
+    return `$${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}K`;
   }
-  return `$${value}`;
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatNumber(value: number | undefined | null): string {
   if (value == null || isNaN(value)) {
-    return '0';
+    return '0.00';
   }
   if (value >= 1000000) {
-    return `${(value / 1000000).toFixed(1)}M`;
+    return `${(value / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}M`;
   }
   if (value >= 1000) {
-    return `${(value / 1000).toFixed(1)}K`;
+    return `${(value / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}K`;
   }
-  return value.toString();
+  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
 export function getSeverityColor(severity: string): string {

@@ -280,17 +280,19 @@ export default function RealDataLayers({
           dateRangeEnd
         );
 
-        // If we are not in a country route, prefer the first country that matches
-        // temporal filters instead of hardcoding a VU fallback.
-        const effectiveCountry = countriesToLoad.find(
-          country =>
-            !countryIsExcludedByTemporalFilters(
-              country,
-              selectedEventIds,
-              effectiveStartDate,
-              effectiveEndDate
-            )
-        );
+        // When viewing a specific country, always show that country's track.
+        // Only apply temporal filters when showing tracks for all countries (no country specified).
+        const effectiveCountry = countryCode
+          ? countryCode
+          : countriesToLoad.find(
+              country =>
+                !countryIsExcludedByTemporalFilters(
+                  country,
+                  selectedEventIds,
+                  effectiveStartDate,
+                  effectiveEndDate
+                )
+            );
 
         if (!effectiveCountry) {
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
@@ -938,7 +940,7 @@ export default function RealDataLayers({
                       }
                     };
 
-                    const initialImageSize = layer.hazardType === 'wind' ? 1024 : 256;
+                    const initialImageSize = layer.hazardType === 'wind' ? 1024 : 1024;
                     updateImageSource(layer.bbox, initialImageSize, initialImageSize);
                   }
 
@@ -1038,8 +1040,14 @@ export default function RealDataLayers({
                   }
 
                   // Keep progressive upgrades for low-res static image layers.
-                  // Wind now starts at high resolution to avoid the blurred first paint.
-                  if (!useTiledWms && layer.hazardType !== 'wind') {
+                  // Wind and inundation now start at high resolution to avoid the blurred first paint.
+                  if (
+                    !useTiledWms &&
+                    layer.hazardType !== 'wind' &&
+                    layer.hazardType !== 'flood' &&
+                    layer.hazardType !== 'inundation' &&
+                    layer.hazardType !== 'fluvial-depth'
+                  ) {
                     // Stage 1: Upgrade to 512×512 after 1 second
                     const mediumResTimeout = window.setTimeout(() => {
                       try {

@@ -366,10 +366,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                       top: `${box.y}mm`,
                       width: `${box.w}mm`,
                       height: `${box.h}mm`,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      position: 'absolute',
                     }}
                   >
                     {iconSrc && (
@@ -386,23 +383,33 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                     )}
                     <div
                       style={{
+                        position: 'absolute',
+                        top: `${iconLayout.previewValueTopMm}mm`,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
                         color: 'white',
                         fontSize: '15pt',
                         fontWeight: 'bold',
                         textAlign: 'center',
-                        marginTop: iconSrc ? `${iconLayout.previewValueMarginTopMm}mm` : '0',
+                        width: '100%',
+                        padding: '0 1.5mm',
+                        lineHeight: '1',
                       }}
                     >
                       {fig.value}
                     </div>
                     <div
                       style={{
+                        position: 'absolute',
+                        top: `${iconLayout.previewLabelTopMm}mm`,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
                         color: 'white',
                         fontSize: '8pt',
                         textAlign: 'center',
-                        marginTop: '1mm',
                         textTransform: 'uppercase',
                         lineHeight: '1.15',
+                        width: '100%',
                         padding: '0 2mm',
                       }}
                     >

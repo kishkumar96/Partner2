@@ -1203,7 +1203,10 @@ export default function BottomTabs({
                         (
                           ((Number(r.Damaged_Buildings) || 0) / (Number(r.Total_Buildings) || 1)) *
                           100
-                        ).toFixed(1) + '%',
+                        ).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 6,
+                        }) + '%',
                     }));
                   exportToCSV(dataToExport, 'regional-damage', Object.keys(dataToExport[0] || {}));
                 }}
@@ -1292,6 +1295,10 @@ export default function BottomTabs({
                           const damagedBuildings = Number(region.Damaged_Buildings) || 0;
                           const lossPerCapita = totalLoss / totalPop;
                           const damagePercent = (damagedBuildings / totalBuildings) * 100;
+                          const damagePercentDisplay = damagePercent.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6,
+                          });
 
                           return (
                             <tr
@@ -1313,7 +1320,7 @@ export default function BottomTabs({
                                 </span>
                               </td>
                               <td className="px-3 py-2 text-sm text-slate-200 text-right tabular-nums">
-                                {Number(region.Damaged_Road_km || 0).toFixed(1)}
+                                {Number(region.Damaged_Road_km || 0)}
                               </td>
                               <td className="px-3 py-2 text-sm text-right tabular-nums">
                                 <span className="font-semibold text-red-600 dark:text-red-400">
@@ -1321,7 +1328,7 @@ export default function BottomTabs({
                                 </span>
                               </td>
                               <td className="px-3 py-2 text-sm text-slate-200 text-right tabular-nums bg-blue-500/10">
-                                ${lossPerCapita.toFixed(0)}
+                                ${lossPerCapita}
                               </td>
                               <td className="px-3 py-2 text-sm text-right tabular-nums bg-blue-500/10">
                                 <span
@@ -1335,7 +1342,7 @@ export default function BottomTabs({
                                           : 'text-green-600 dark:text-green-400'
                                   }`}
                                 >
-                                  {damagePercent.toFixed(1)}%
+                                  {damagePercentDisplay}%
                                 </span>
                               </td>
                             </tr>

@@ -69,9 +69,10 @@ export function getPdfKeyFigureIconLayout(index: number) {
     iconSizeMm: usesTightLayout ? 11 : 14,
     previewMarginTopMm: usesTightLayout ? -20 : -5,
     previewMarginBottomMm: usesTightLayout ? -7 : 1,
-    previewValueMarginTopMm: usesTightLayout ? 12 : 1,
+    previewValueTopMm: 2.4,
+    previewLabelTopMm: 8.6,
     exportIconOffsetYmm: usesTightLayout ? -20 : -19,
-    exportValueOffsetYmm: usesTightLayout ? 11.8 : 4.6,
-    exportLabelBottomInsetMm: usesTightLayout ? 2.2 : 3.8,
+    exportValueOffsetYmm: 6.6,
+    exportLabelTopOffsetMm: 8.8,
   };
 }

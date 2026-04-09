@@ -22,10 +22,13 @@ function getSeverityColor(severity: Severity) {
 
 function formatCompactCurrency(value: number) {
   const abs = Math.abs(value);
-  if (abs >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
+  if (abs >= 1e9)
+    return `$${(value / 1e9).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}B`;
+  if (abs >= 1e6)
+    return `$${(value / 1e6).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}M`;
+  if (abs >= 1e3)
+    return `$${(value / 1e3).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}K`;
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function GlassStatCard(props: {
