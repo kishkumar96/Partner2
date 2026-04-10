@@ -235,7 +235,7 @@ const MapPanel = memo(function MapPanel({
             </button>
             {expandedSections.shading && (
               <div className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35">
-                <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="grid grid-cols-2 gap-2 mt-3" data-tour="map-style-selector">
                   <button
                     type="button"
                     aria-pressed={mapStyle === 'loss'}
@@ -440,7 +440,7 @@ const MapPanel = memo(function MapPanel({
 
             {onLayerOpacityChange && (
               <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-                <div className="px-4 py-3">
+                <div className="px-4 py-3" data-tour="opacity-control">
                   <div className="flex items-center justify-between mb-1">
                     <span className="block text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
                       Opacity
@@ -490,7 +490,10 @@ const MapPanel = memo(function MapPanel({
                       <span className="text-[10px] font-bold">Story mode</span>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-700/50 bg-slate-950/35 px-2.5 py-2">
+                    <div
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-700/50 bg-slate-950/35 px-2.5 py-2"
+                      data-tour="story-mode-button"
+                    >
                       <div
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                           isCyclonePlaying

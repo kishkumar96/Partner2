@@ -3,7 +3,8 @@ import './globals.css';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 // Environment variables
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Resilience Atlas';
+const APP_NAME =
+  process.env.NEXT_PUBLIC_APP_NAME || 'Tropical Cyclone Rapid Impact Assessment Tool';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 

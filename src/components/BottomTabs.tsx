@@ -483,9 +483,15 @@ export default function BottomTabs({
   ];
 
   return (
-    <div className="h-[19rem] sm:h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0">
+    <div
+      className="h-[19rem] sm:h-72 lg:h-80 glass-panel border-t border-white/10 flex flex-col overflow-hidden min-h-0"
+      data-tour="data-workspace-panel"
+    >
       {/* Tab Headers - Reduced padding */}
-      <div className="flex overflow-x-auto border-b border-white/10 px-2 sm:px-4">
+      <div
+        className="flex overflow-x-auto border-b border-white/10 px-2 sm:px-4"
+        data-tour="asset-tabs"
+      >
         {tabs.map(tab => (
           <button
             key={tab.id}

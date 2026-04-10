@@ -26,6 +26,17 @@ const NEXT_PUBLIC_BASE_PATH =
     ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
     : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
+export function isPartnerApiEnabled(): boolean {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_ENABLE_PARTNER_API === 'true';
+  }
+
+  return (
+    process.env.PARTNER_API_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_ENABLE_PARTNER_API === 'true'
+  );
+}
+
 // Human-readable country aliases used to resolve Samoa/Tonga country records.
 const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
   VU: { code: 'VU', names: ['vanuatu', 'republic of vanuatu'] },

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Globe2, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import ReactCountryFlag from 'react-country-flag';
+import CountryFlag from '@/components/CountryFlag';
 import { SLUG_TO_CODE } from '@/utils/countrySlug';
 import { COUNTRIES } from '@/types/thredds';
 
@@ -77,9 +77,8 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
             </h1>
             {countryCode && (
               <div className="mt-3 flex items-center justify-center gap-2 text-slate-300">
-                <ReactCountryFlag
+                <CountryFlag
                   countryCode={countryCode}
-                  svg
                   aria-label={COUNTRIES[countryCode].name}
                   title={COUNTRIES[countryCode].name}
                   className="w-5 h-5"

@@ -10,6 +10,16 @@ import {
 } from '@/theme/cycloneScale';
 import { validateForecastTrack, type CycloneForecastRow } from '@/schemas/cycloneForecastSchema';
 
+function appendDataVersion(path: string): string {
+  const version = process.env.NEXT_PUBLIC_DATA_VERSION ?? process.env.NEXT_PUBLIC_APP_VERSION;
+  if (!version) {
+    return path;
+  }
+
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}v=${encodeURIComponent(version)}`;
+}
+
 export interface CycloneForecastPoint {
   time: Date;
   timeString: string;
@@ -107,7 +117,7 @@ export async function loadCycloneForecastTrack(
 ): Promise<CycloneForecastPoint[] | null> {
   const { forecastFile = '/vanuatu/cyclone-lola-forecast.csv', ...loaderOptions } = options;
   try {
-    const { data: csvText, error } = await loadTextData(forecastFile, {
+    const { data: csvText, error } = await loadTextData(appendDataVersion(forecastFile), {
       cache: true,
       signal: loaderOptions.signal,
     });

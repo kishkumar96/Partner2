@@ -18,7 +18,9 @@ export default function Loading() {
           </div>
         </div>
 
-        <p className="mt-6 text-slate-400 font-medium">Loading Resilience Atlas...</p>
+        <p className="mt-6 text-slate-400 font-medium">
+          Loading Tropical Cyclone Rapid Impact Assessment Tool...
+        </p>
         <p className="mt-2 text-sm text-slate-500">
           Please wait while we prepare the operational workspace
         </p>

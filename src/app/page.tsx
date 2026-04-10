@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import ReactCountryFlag from 'react-country-flag';
+import CountryFlag from '@/components/CountryFlag';
 import { COUNTRIES } from '@/types/thredds';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { getTenantCountryCodeFromEnv } from '@/utils/tenantCountry';
@@ -30,9 +30,8 @@ export default function RootPage() {
                 className="rounded-xl border border-slate-700 bg-slate-900/70 p-5 transition hover:border-blue-500 hover:bg-slate-900"
               >
                 <div className="text-2xl">
-                  <ReactCountryFlag
+                  <CountryFlag
                     countryCode={country.code}
-                    svg
                     aria-label={country.name}
                     title={country.name}
                     className="w-7 h-7"

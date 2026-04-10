@@ -8,7 +8,7 @@ import { loadCycloneForecastTrack, type CycloneForecastPoint } from './cycloneAn
 import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
 import { CountryCode } from '@/types/thredds';
-import { mapCountryPartnerApis } from '@/services/partnerApiService';
+import { isPartnerApiEnabled, mapCountryPartnerApis } from '@/services/partnerApiService';
 import { getAreaId, getAreaName } from '@/utils/adminNormalization';
 
 // ---------------------------------------------------------------------------
@@ -1150,6 +1150,16 @@ async function loadPartnerApiCountryData(
 }> {
   // Partner API mapping requested for Samoa and Tonga only.
   if (countryCode !== 'WS' && countryCode !== 'TO') {
+    return {
+      countryId: null,
+      cycloneTrack: null,
+      eventMeta: null,
+      riskRegionalSummary: [],
+      riskImpactByAsset: [],
+    };
+  }
+
+  if (!isPartnerApiEnabled()) {
     return {
       countryId: null,
       cycloneTrack: null,

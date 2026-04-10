@@ -26,7 +26,7 @@ export interface CountryConfig {
 }
 
 export function getCountryAppName(countryCode: CountryCode): string {
-  return `${COUNTRIES[countryCode].name} Resilience Atlas`;
+  return `${COUNTRIES[countryCode].name} Tropical Cyclone Rapid Impact Assessment Tool`;
 }
 
 const emptyConfig = (country: CountryCode): CountryConfig => ({

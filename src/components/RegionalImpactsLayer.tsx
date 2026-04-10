@@ -138,10 +138,19 @@ export default function RegionalImpactsLayer({
   const layersAddedRef = useRef(false);
   const selectedRegionRef = useRef<string | null>(selectedRegion);
   const onRegionSelectRef = useRef<typeof onRegionSelect>(onRegionSelect);
+  const mapStyleRef = useRef(mapStyle);
+  const layerOpacityScaleRef = useRef(layerOpacityScale);
+  const legendSettingsRef = useRef(legendSettings);
 
   useEffect(() => {
     selectedRegionRef.current = selectedRegion;
   }, [selectedRegion]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+    layerOpacityScaleRef.current = layerOpacityScale;
+    legendSettingsRef.current = legendSettings;
+  }, [mapStyle, layerOpacityScale, legendSettings]);
 
   useEffect(() => {
     onRegionSelectRef.current = onRegionSelect;
@@ -322,12 +331,17 @@ export default function RegionalImpactsLayer({
           console.log('✅ Source added successfully');
 
           // Define color expressions using unified color system
-          const lossColorExpression = legendSettings
-            ? createDynamicColorExpression('Total_Loss', legendSettings.loss)
+          const currentMapStyle = mapStyleRef.current;
+          const currentLegendSettings = legendSettingsRef.current;
+          const currentSelectedRegion = selectedRegionRef.current;
+          const currentOpacityScale = layerOpacityScaleRef.current;
+
+          const lossColorExpression = currentLegendSettings
+            ? createDynamicColorExpression('Total_Loss', currentLegendSettings.loss)
             : createLossColorExpression(countryCode);
 
-          const windColorExpression = legendSettings
-            ? createDynamicColorExpression('Max_Wind_Gusts', legendSettings.wind)
+          const windColorExpression = currentLegendSettings
+            ? createDynamicColorExpression('Max_Wind_Gusts', currentLegendSettings.wind)
             : createWindColorExpression();
 
           // Use deterministic z-order system for consistent layer placement
@@ -337,7 +351,7 @@ export default function RegionalImpactsLayer({
           // World-class design: Extremely subtle choropleth with clear boundaries
           // Focus on boundary definition rather than fill - industry best practice
           console.log(
-            `🗺️ Adding regional-impacts-fill layer (mapStyle: ${mapStyle}, beforeId: ${fillBeforeId})`
+            `🗺️ Adding regional-impacts-fill layer (mapStyle: ${currentMapStyle}, beforeId: ${fillBeforeId})`
           );
           try {
             map.addLayer(
@@ -346,12 +360,13 @@ export default function RegionalImpactsLayer({
                 type: 'fill',
                 source: sourceId,
                 paint: {
-                  'fill-color': mapStyle === 'wind' ? windColorExpression : lossColorExpression,
+                  'fill-color':
+                    currentMapStyle === 'wind' ? windColorExpression : lossColorExpression,
                   // Use unified opacity system from colorSystem.ts
                   'fill-opacity': createRegionalFillOpacity(
-                    mapStyle as 'wind' | 'loss',
-                    selectedRegion,
-                    layerOpacityScale / 100
+                    currentMapStyle as 'wind' | 'loss',
+                    currentSelectedRegion,
+                    currentOpacityScale / 100
                   ) as any,
                 },
               },
@@ -386,8 +401,8 @@ export default function RegionalImpactsLayer({
                 type: 'line',
                 source: sourceId,
                 paint: {
-                  'line-color': createRegionalLineColor(selectedRegion) as any,
-                  'line-width': createRegionalLineWidth(selectedRegion) as any,
+                  'line-color': createRegionalLineColor(currentSelectedRegion) as any,
+                  'line-width': createRegionalLineWidth(currentSelectedRegion) as any,
                   'line-opacity': [
                     'case',
                     [
@@ -395,22 +410,22 @@ export default function RegionalImpactsLayer({
                       [
                         '==',
                         ['to-string', ['coalesce', ['get', 'Region.ID'], '']],
-                        selectedRegion || '',
+                        currentSelectedRegion || '',
                       ],
                       [
                         '==',
                         ['to-string', ['coalesce', ['get', 'Region_ID'], '']],
-                        selectedRegion || '',
+                        currentSelectedRegion || '',
                       ],
                       [
                         '==',
                         ['to-string', ['coalesce', ['get', 'Region.Region'], '']],
-                        selectedRegion || '',
+                        currentSelectedRegion || '',
                       ],
                       [
                         '==',
                         ['to-string', ['coalesce', ['get', 'Region'], '']],
-                        selectedRegion || '',
+                        currentSelectedRegion || '',
                       ],
                     ],
                     1.0, // Fully visible selected

@@ -301,7 +301,7 @@ export default function FilterPanel({
           </p>
         </div>
 
-        <div>
+        <div data-tour="filter-primary-controls">
           {/* Data Filters Group */}
           <div className="mx-3 mt-3">
             <div className="flex items-center gap-2 mb-2">

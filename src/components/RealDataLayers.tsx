@@ -179,6 +179,9 @@ export default function RealDataLayers({
   const layerBaseOpacityRef = useRef<Record<string, number>>({});
   const layerHazardTypeRef = useRef<Record<string, string>>({});
   const layerOpacityScaleRef = useRef(layerOpacityScale);
+  const mapStyleRef = useRef(mapStyle);
+  const showWindLayerRef = useRef(showWindLayer);
+  const showInundationLayerRef = useRef(showInundationLayer);
 
   // Track progressive resolution upgrade timeouts for cleanup
   const resolutionUpgradeTimeouts = useRef<number[]>([]);
@@ -203,6 +206,12 @@ export default function RealDataLayers({
   useEffect(() => {
     layerOpacityScaleRef.current = layerOpacityScale;
   }, [layerOpacityScale]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+    showWindLayerRef.current = showWindLayer;
+    showInundationLayerRef.current = showInundationLayer;
+  }, [mapStyle, showWindLayer, showInundationLayer]);
 
   // Animate wind layer opacity with smooth pulsing effect
   const startWindAnimation = (map: MapLibreMap) => {
@@ -582,7 +591,17 @@ export default function RealDataLayers({
         // Silently ignore cleanup errors
       }
     };
-  }, [map, countryCode, visible, styleChangeCounter, showCycloneTrack, cycloneTrackData]); // Re-load cyclone tracks when basemap changes
+  }, [
+    map,
+    countryCode,
+    visible,
+    styleChangeCounter,
+    showCycloneTrack,
+    cycloneTrackData,
+    selectedEventsKey,
+    dateRangeStart,
+    dateRangeEnd,
+  ]); // Re-load cyclone tracks when basemap or cyclone filters change
 
   // Load real WMS hazard layers from THREDDS (with lazy loading based on zoom)
   useEffect(() => {
@@ -655,38 +674,42 @@ export default function RealDataLayers({
         };
 
         const getBaseLayerOpacity = (hazardType: string, layerId?: string): number => {
+          const currentMapStyle = mapStyleRef.current;
+          const currentShowWindLayer = showWindLayerRef.current;
+          const currentShowInundationLayer = showInundationLayerRef.current;
+
           if (layerId && RAW_WMS_PARITY_LAYER_IDS.has(layerId)) {
             // Keep parity layers visually aligned with direct WMS previews.
             return 1;
           }
           const basemapCategory = getBasemapCategory();
 
-          if (hazardType === 'wind' && showWindLayer) {
-            return mapStyle === 'wind' ? 0.85 : 0.5;
+          if (hazardType === 'wind' && currentShowWindLayer) {
+            return currentMapStyle === 'wind' ? 0.85 : 0.5;
           }
           if (
             (hazardType === 'flood' ||
               hazardType === 'inundation' ||
               hazardType === 'fluvial-depth') &&
-            showInundationLayer
+            currentShowInundationLayer
           ) {
-            const base = mapStyle === 'loss' ? 0.82 : 0.76;
+            const base = currentMapStyle === 'loss' ? 0.82 : 0.76;
             if (basemapCategory === 'dark') return base + 0.06;
             if (basemapCategory === 'imagery') return base + 0.1;
             return base;
           }
           if (hazardType === 'cyclone') {
-            return mapStyle === 'loss' ? 0.65 : 0;
+            return currentMapStyle === 'loss' ? 0.65 : 0;
           }
           if (hazardType === 'wind') {
-            return mapStyle === 'wind' ? 0.85 : 0.15;
+            return currentMapStyle === 'wind' ? 0.85 : 0.15;
           }
           if (
             hazardType === 'flood' ||
             hazardType === 'inundation' ||
             hazardType === 'fluvial-depth'
           ) {
-            const base = mapStyle === 'loss' ? 0.66 : 0;
+            const base = currentMapStyle === 'loss' ? 0.66 : 0;
             if (base === 0) return 0;
             if (basemapCategory === 'dark') return base + 0.06;
             if (basemapCategory === 'imagery') return base + 0.1;
@@ -969,7 +992,7 @@ export default function RealDataLayers({
                   const rasterResampling = getRasterResampling(layer.hazardType, layer.id);
 
                   console.log(
-                    `  → Layer opacity for ${layer.name} (${layer.hazardType}): ${layerOpacity} (mapStyle: ${mapStyle}, windToggle: ${showWindLayer}, floodToggle: ${showInundationLayer})`
+                    `  → Layer opacity for ${layer.name} (${layer.hazardType}): ${layerOpacity} (mapStyle: ${mapStyleRef.current}, windToggle: ${showWindLayerRef.current}, floodToggle: ${showInundationLayerRef.current})`
                   );
 
                   if (map.getLayer(layerId)) {
@@ -1036,7 +1059,9 @@ export default function RealDataLayers({
                     windLayerIds.current.push(layerId);
                   }
                   const shouldAnimateWind =
-                    mapStyle === 'wind' && layer.hazardType === 'wind' && !isRawParityLayer;
+                    mapStyleRef.current === 'wind' &&
+                    layer.hazardType === 'wind' &&
+                    !isRawParityLayer;
                   if (shouldAnimateWind) {
                     startWindAnimation(map);
                   }

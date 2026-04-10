@@ -20,8 +20,8 @@ import {
   Compass,
 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
-import ReactCountryFlag from 'react-country-flag';
 import ActiveFilters from '@/components/ActiveFilters';
+import CountryFlag from '@/components/CountryFlag';
 import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
 import ShareLinkButton from '@/components/ShareLinkButton';
@@ -332,6 +332,7 @@ export default function DashboardView({
   });
   const [regionalSummary, setRegionalSummary] = useState<any[]>([]);
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
+  const [cycloneTrackData, setCycloneTrackData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
   const derivedRegions = useMemo(() => {
     if (regionalSummary.length === 0) {
@@ -855,8 +856,8 @@ export default function DashboardView({
     []
   );
 
-  const tourSteps = useMemo<GuidedTourStep[]>(
-    () => [
+  const tourSteps = useMemo<GuidedTourStep[]>(() => {
+    const baseSteps: GuidedTourStep[] = [
       {
         title: 'Welcome to the Risk Intelligence Dashboard',
         body: 'This overview bar gives you the current country context, the active dashboard lens, and the fastest path into the rest of the workflow.',
@@ -864,14 +865,23 @@ export default function DashboardView({
         category: 'Overview',
         targetLabel: 'Dashboard header',
         placement: 'bottom',
+        tips: [
+          'Click the country name to switch between Pacific Island nations',
+          'The event timestamp shows when disaster data was captured',
+        ],
       },
       {
         title: 'Filter Your Data',
         body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
-        selector: '[data-tour="filter-panel-toggle"]',
+        selector: '[data-tour="filter-primary-controls"]',
         category: 'Inputs',
-        targetLabel: 'Filter panel',
-        placement: 'bottom',
+        targetLabel: 'Filter controls',
+        placement: 'right',
+        tips: [
+          'Start by selecting an event to see available disasters',
+          'Combine hazard and sector filters for targeted analysis',
+          'The map updates automatically as you apply filters',
+        ],
       },
       {
         title: 'Control the Map View',
@@ -880,34 +890,123 @@ export default function DashboardView({
         category: 'Map',
         targetLabel: 'Map controls',
         placement: 'bottom',
+        tips: [
+          'Switch between Loss (damage) and Wind (intensity) visualization modes',
+          'Adjust layer opacity to see through overlays to the basemap',
+          'Toggle individual layers on/off to focus on specific data',
+        ],
+        keyboardShortcut: 'M',
       },
-      {
-        title: 'Dive into the Data',
-        body: 'The workspace holds the detailed tables and charts. This is where you move from visual scanning into actual evidence and ranked impacts.',
-        selector: '[data-tour="data-workspace-toggle"]',
+    ];
+
+    // Add map visualization mode step (if map controls available)
+    baseSteps.push({
+      title: 'Map Visualization Modes',
+      body: 'Switch between Loss mode (showing damage patterns) and Wind mode (showing wind speed intensity). Each mode reveals different aspects of disaster impacts.',
+      selector: '[data-tour="map-style-selector"]',
+      category: 'Map',
+      targetLabel: 'Visualization mode',
+      placement: 'right',
+      tips: [
+        'Loss mode: Best for seeing damaged buildings and infrastructure',
+        'Wind mode: Displays wind speed shading from THREDDS server data',
+      ],
+    });
+
+    // Add layer opacity step
+    baseSteps.push({
+      title: 'Adjust Layer Transparency',
+      body: 'Control the opacity of overlay layers to balance visibility between disaster data and the underlying basemap.',
+      selector: '[data-tour="opacity-control"]',
+      category: 'Map',
+      targetLabel: 'Layer opacity',
+      placement: 'right',
+      tips: [
+        'Lower opacity helps see street names and basemap features',
+        'Higher opacity emphasizes the disaster impact visualization',
+      ],
+    });
+
+    baseSteps.push({
+      title: 'Dive into the Data',
+      body: 'The workspace holds detailed tables and charts where you move from visual scanning into actual evidence.',
+      selector: '[data-tour="data-workspace-panel"]',
+      category: 'Analysis',
+      targetLabel: 'Data workspace',
+      placement: 'top',
+      tips: [
+        'Regional Impacts: District-level summaries with sortable columns',
+        'Buildings & Roads: Asset-level damage with coordinates',
+        'Analytics: Comparison charts across regions and sectors',
+      ],
+    });
+
+    // Conditionally add asset damage steps if data is available
+    if (damagedBuildings || damagedRoads) {
+      baseSteps.push({
+        title: 'Inspect Asset-Level Damage',
+        body: 'View individual damaged buildings and road segments with severity ratings, precise coordinates, and damage classifications.',
+        selector: '[data-tour="asset-tabs"]',
         category: 'Analysis',
-        targetLabel: 'Data workspace',
+        targetLabel: 'Asset inspection',
         placement: 'top',
-      },
-      {
-        title: 'Get the Big Picture',
-        body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
-        selector: '[data-tour="summary-panel-toggle"]',
-        category: 'Summary',
-        targetLabel: 'Summary panel',
-        placement: 'bottom',
-      },
-      {
-        title: 'Share & Export Your Findings',
-        body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
-        selector: '[data-tour="export-controls"]',
-        category: 'Output',
-        targetLabel: 'Export controls',
-        placement: 'bottom',
-      },
-    ],
-    [cycloneForecast] // Re-create tour if cyclone data becomes available
-  );
+        tips: [
+          'Click any row to zoom the map to that asset location',
+          'Use search and sort to find specific damage patterns',
+          'Export filtered results for detailed field assessments',
+        ],
+      });
+    }
+
+    baseSteps.push({
+      title: 'Get the Big Picture',
+      body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
+      selector: '[data-tour="summary-panel"]',
+      category: 'Summary',
+      targetLabel: 'Summary panel',
+      placement: 'left',
+      tips: [
+        'Headline numbers update instantly as you filter data',
+        'Charts show impact distribution across regions and sectors',
+        'Perfect for creating executive summaries',
+      ],
+    });
+
+    // Conditionally add cyclone animation step if forecast data exists
+    if (cycloneForecast && cycloneForecast.length > 0) {
+      baseSteps.push({
+        title: 'Cyclone Track Animation',
+        body: 'Watch the cyclone evolution over time with animated wind swaths, intensity changes, and forecast prediction cone.',
+        selector: '[data-tour="story-mode-button"]',
+        category: 'Map',
+        targetLabel: 'Animation controls',
+        placement: 'right',
+        tips: [
+          'Play/pause to control the animation timeline',
+          'Click any timestep to jump to that moment',
+          "Wind glow effects show the storm's intensity visually",
+        ],
+        keyboardShortcut: 'Space',
+      });
+    }
+
+    baseSteps.push({
+      title: 'Share & Export Your Findings',
+      body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
+      selector: '[data-tour="export-controls"]',
+      category: 'Output',
+      targetLabel: 'Export controls',
+      placement: 'bottom',
+      tips: [
+        'Map Export: High-res PNG with current filters applied',
+        'PDF Preview: Full report with maps, charts, and tables',
+        'Data Export: CSV/Excel for further analysis in other tools',
+      ],
+      keyboardShortcut: 'E',
+    });
+
+    return baseSteps;
+  }, [cycloneForecast, damagedBuildings, damagedRoads]);
 
   useEffect(() => {
     if (!isTourOpen) return;
@@ -921,7 +1020,7 @@ export default function DashboardView({
         setShowMapControls(false);
         setShowSummary(false);
         break;
-      case '[data-tour="filter-panel-toggle"]':
+      case '[data-tour="filter-primary-controls"]':
         openFilterPanel('filters');
         setShowSummary(false);
         break;
@@ -929,13 +1028,38 @@ export default function DashboardView({
         openMapPanel();
         setShowSummary(false);
         break;
-      case '[data-tour="summary-panel-toggle"]':
+      case '[data-tour="map-style-selector"]':
+        // Keep map panel open to show the visualization mode selector
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="opacity-control"]':
+        // Keep map panel open to show opacity slider
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="summary-panel"]':
         openSummaryPanel();
         break;
-      case '[data-tour="data-workspace-toggle"]':
+      case '[data-tour="data-workspace-panel"]':
         setShowAnalytics(true);
         setShowFilters(false);
         setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="asset-tabs"]':
+        // Ensure analytics workspace is open and visible
+        setShowAnalytics(true);
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="story-mode-button"]':
+        // Keep cyclone controls visible if available
+        if (cycloneForecast && cycloneForecast.length > 0) {
+          openMapPanel();
+          setShowCycloneControls(true);
+        }
         setShowSummary(false);
         break;
       case '[data-tour="export-controls"]':
@@ -946,7 +1070,15 @@ export default function DashboardView({
       default:
         break;
     }
-  }, [isTourOpen, tourStepIndex, tourSteps, openFilterPanel, openMapPanel, openSummaryPanel]);
+  }, [
+    isTourOpen,
+    tourStepIndex,
+    tourSteps,
+    openFilterPanel,
+    openMapPanel,
+    openSummaryPanel,
+    cycloneForecast,
+  ]);
 
   const encodeCanvasToBlob = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob> => {
     if (typeof canvas.toBlob === 'function') {
@@ -1580,6 +1712,7 @@ export default function DashboardView({
     setNationalSummary(undefined);
     setRegionalSummary([]);
     setRegionalSummaryBySector([]);
+    setCycloneTrackData(null);
     setCycloneForecast(null);
     setExpandedEvents([]);
     setEvents([]);
@@ -1673,6 +1806,10 @@ export default function DashboardView({
         if (process.env.NODE_ENV !== 'production') {
           console.log(`Loaded ${realData.regionalSummaryBySector.length} regional sector records`);
         }
+      }
+
+      if (realData.cycloneTrack) {
+        setCycloneTrackData(realData.cycloneTrack);
       }
 
       if (realData.cycloneForecast) {
@@ -2006,26 +2143,22 @@ export default function DashboardView({
               )}
             </div>
             <div
-              className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-700/40 bg-slate-900/35 px-3 py-3 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)] sm:px-4"
+              className="flex min-w-0 items-start gap-3 px-1 py-1 sm:gap-4"
               data-tour="dashboard-hero"
             >
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
-                <ReactCountryFlag
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/55">
+                <CountryFlag
                   countryCode={selectedCountry}
-                  svg
                   aria-label={COUNTRIES[selectedCountry].name}
                   title={COUNTRIES[selectedCountry].name}
-                  className="h-7 w-10 rounded-[4px] shadow-sm"
+                  className="h-6 w-8 rounded-[4px]"
                 />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/85 sm:text-[11px] sm:tracking-[0.28em]">
-                  National Risk Intelligence
-                </p>
-                <h1 className="truncate text-lg font-bold tracking-tight text-white sm:text-[1.7rem] sm:leading-[1.05]">
+                <h1 className="max-w-[24ch] text-[1.3rem] font-semibold leading-[1.06] tracking-tight text-white sm:max-w-none sm:text-[1.75rem]">
                   {platformName}
                 </h1>
-                <p className="truncate pt-1 text-xs text-slate-400 sm:text-sm">
+                <p className="mt-1 text-xs text-slate-400 sm:text-sm">
                   {isLoadingData
                     ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
                     : `Active event context: ${activeCycloneName}`}
@@ -2132,9 +2265,8 @@ export default function DashboardView({
                   >
                     {selectedCountry ? (
                       <>
-                        <ReactCountryFlag
+                        <CountryFlag
                           countryCode={selectedCountry}
-                          svg
                           aria-label={COUNTRIES[selectedCountry].name}
                           title={COUNTRIES[selectedCountry].name}
                           className="h-4 w-4"
@@ -2155,9 +2287,8 @@ export default function DashboardView({
                     className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/40 px-3 py-2 text-xs text-slate-300 sm:min-h-12 sm:text-sm"
                     aria-label={`Country: ${COUNTRIES[selectedCountry].name}`}
                   >
-                    <ReactCountryFlag
+                    <CountryFlag
                       countryCode={selectedCountry}
-                      svg
                       aria-label={COUNTRIES[selectedCountry].name}
                       title={COUNTRIES[selectedCountry].name}
                       className="h-4 w-4"
@@ -2532,6 +2663,7 @@ export default function DashboardView({
               legendSettings={legendSettings}
               damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
               damagedRoads={showRoadsLayer ? damagedRoads : null}
+              cycloneTrackData={cycloneTrackData}
               cycloneForecast={cycloneForecast}
               aggregationLevel={filters.aggregationLevel}
               showOverlays={showMapOverlays}
