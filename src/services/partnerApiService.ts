@@ -1,4 +1,5 @@
 import type { CountryCode } from '@/types/thredds';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 export type PartnerApiResource =
   | 'country'
@@ -20,11 +21,13 @@ export interface PartnerCountryIdentity {
   names: string[];
 }
 
-const DEFAULT_PARTNER_API_BASE = 'http://opmthredds.gem.spc.int';
-const NEXT_PUBLIC_BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+const DEFAULT_PARTNER_API_BASE = 'http://localhost:8000';
+const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
+  process.env.NODE_ENV === 'production' ? '/partner2' : ''
+);
+const DEFAULT_PARTNER_API_COUNTRIES: CountryCode[] = ['VU', 'WS', 'TO', 'CK'];
+let cachedPartnerCountries: Array<Record<string, unknown>> | null = null;
+let cachedPartnerCountriesPromise: Promise<Array<Record<string, unknown>>> | null = null;
 
 export function isPartnerApiEnabled(): boolean {
   if (typeof window !== 'undefined') {
@@ -35,6 +38,44 @@ export function isPartnerApiEnabled(): boolean {
     process.env.PARTNER_API_ENABLED === 'true' ||
     process.env.NEXT_PUBLIC_ENABLE_PARTNER_API === 'true'
   );
+}
+
+function normalizeCountryCode(value: string): CountryCode | null {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'VU' || normalized === 'WS' || normalized === 'TO' || normalized === 'CK') {
+    return normalized;
+  }
+  return null;
+}
+
+function getPartnerApiEnabledCountries(): CountryCode[] {
+  const configured =
+    process.env.NEXT_PUBLIC_PARTNER_API_COUNTRIES ?? process.env.PARTNER_API_COUNTRIES ?? '';
+  const parsed = configured
+    .split(',')
+    .map(normalizeCountryCode)
+    .filter((value): value is CountryCode => value !== null);
+
+  return parsed.length > 0 ? parsed : DEFAULT_PARTNER_API_COUNTRIES;
+}
+
+export function isPartnerApiCountryEnabled(countryCode: CountryCode): boolean {
+  return getPartnerApiEnabledCountries().includes(countryCode);
+}
+
+function getPartnerApiStrictCountries(): CountryCode[] {
+  const configured =
+    process.env.NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES ??
+    process.env.PARTNER_API_STRICT_COUNTRIES ??
+    '';
+  return configured
+    .split(',')
+    .map(normalizeCountryCode)
+    .filter((value): value is CountryCode => value !== null);
+}
+
+export function isPartnerApiCountryStrict(countryCode: CountryCode): boolean {
+  return getPartnerApiStrictCountries().includes(countryCode);
 }
 
 // Human-readable country aliases used to resolve Samoa/Tonga country records.
@@ -50,8 +91,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 function withBasePath(path: string): string {
-  if (!NEXT_PUBLIC_BASE_PATH) return path;
-  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+  return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);
 }
 
 function getDefaultPartnerApiBase(): string {
@@ -131,7 +171,7 @@ export function resolveCountryId(
  */
 export function buildCountryScopedResourceUrls(
   countryId: number,
-  baseUrl: string = DEFAULT_PARTNER_API_BASE
+  baseUrl: string = getDefaultPartnerApiBase()
 ): Record<Exclude<PartnerApiResource, 'country'>, string> {
   const endpoints = buildPartnerApiEndpoints(baseUrl);
 
@@ -147,26 +187,47 @@ export function buildCountryScopedResourceUrls(
 export async function fetchPartnerCountries(
   baseUrl?: string
 ): Promise<Array<Record<string, unknown>>> {
+  if (cachedPartnerCountries) {
+    return cachedPartnerCountries;
+  }
+
+  if (cachedPartnerCountriesPromise) {
+    return cachedPartnerCountriesPromise;
+  }
+
   const endpoints = buildPartnerApiEndpoints(baseUrl);
-  const response = await fetch(endpoints.resource.country);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch partner countries: ${response.status}`);
-  }
-  const data = await response.json();
+  cachedPartnerCountriesPromise = (async () => {
+    const response = await fetch(endpoints.resource.country);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch partner countries: ${response.status}`);
+    }
+    const data = await response.json();
 
-  if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
-  if (Array.isArray((data as { results?: unknown[] }).results)) {
-    return (data as { results: Array<Record<string, unknown>> }).results;
-  }
+    if (Array.isArray(data)) {
+      cachedPartnerCountries = data as Array<Record<string, unknown>>;
+      return cachedPartnerCountries;
+    }
+    if (Array.isArray((data as { results?: unknown[] }).results)) {
+      cachedPartnerCountries = (data as { results: Array<Record<string, unknown>> }).results;
+      return cachedPartnerCountries;
+    }
 
-  return [];
+    cachedPartnerCountries = [];
+    return cachedPartnerCountries;
+  })();
+
+  try {
+    return await cachedPartnerCountriesPromise;
+  } finally {
+    cachedPartnerCountriesPromise = null;
+  }
 }
 
 export async function mapCountryPartnerApis(
-  countryCode: Extract<CountryCode, 'WS' | 'TO'>,
+  countryCode: CountryCode,
   baseUrl?: string
 ): Promise<{
-  countryCode: 'WS' | 'TO';
+  countryCode: CountryCode;
   countryId: number | null;
   endpoints: PartnerApiEndpoints;
   scopedUrls: Record<Exclude<PartnerApiResource, 'country'>, string> | null;

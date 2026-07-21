@@ -1,3 +1,6 @@
+import type { RealWMSLayer } from '@/data/realThreddsLayers';
+import type { EventRecord } from '@/data/eventRecords';
+
 /**
  * Type definitions for real PDIE data structures
  *
@@ -163,5 +166,10 @@ export interface RealDataLoadResult {
     countryCode: string;
     cycloneTrackSource: 'partner_api' | 'local_files';
     eventMetadataSource: 'partner_api' | 'local_files';
+    riskDataSource?: 'partner_api' | 'local_files';
+    hazardLayerSource?: 'partner_api' | 'static_config';
   };
+  partnerHazardLayers?: RealWMSLayer[];
+  /** Full EventRecord list (including backend-only entries) for use by asset loaders. */
+  fetchedEventRecords?: EventRecord[];
 }

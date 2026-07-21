@@ -246,8 +246,11 @@ interface MapViewProps {
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
+  partnerHazardLayers?: RealWMSLayer[];
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
+  regionalImpactsData?: GeoJSON.FeatureCollection | null;
+  regionalSummaryData?: Array<Record<string, unknown>>;
   cycloneTrackData?: GeoJSON.FeatureCollection | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
   aggregationLevel?: string;
@@ -292,8 +295,11 @@ export default function MapView({
   showInundationLayer = true,
   onLayersLoadingChange,
   onActiveWmsLayersChange,
+  partnerHazardLayers = [],
   damagedBuildings,
   damagedRoads,
+  regionalImpactsData = null,
+  regionalSummaryData = [],
   cycloneTrackData = null,
   cycloneForecast,
   showOverlays = true,
@@ -1345,6 +1351,7 @@ export default function MapView({
             showInundationLayer={showInundationLayer}
             onLoadingChange={onLayersLoadingChange}
             onActiveLayersChange={onActiveWmsLayersChange}
+            partnerHazardLayers={partnerHazardLayers}
             layerOpacityScale={layerOpacity}
             legendSettings={legendSettings}
           />
@@ -1357,6 +1364,8 @@ export default function MapView({
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
             countryCode={selectedCountry}
+            regionalImpactsData={regionalImpactsData}
+            regionalSummaryData={regionalSummaryData}
             legendSettings={legendSettings}
             layerOpacityScale={layerOpacity}
           />

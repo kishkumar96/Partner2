@@ -2,6 +2,7 @@
 
 import { CSSProperties, useMemo, useState } from 'react';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 const FLAG_IMAGE_PATHS: Record<CountryCode, string> = {
   VU: '/pdf-assets/Country_Flags/Flag_of_Vanuatu.svg.png',
@@ -10,10 +11,7 @@ const FLAG_IMAGE_PATHS: Record<CountryCode, string> = {
   CK: '/pdf-assets/Country_Flags/2000px-Flag_of_the_Cook_Islands.svg.png',
 };
 
-const BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+const BASE_PATH = getConfiguredBasePath(process.env.NODE_ENV === 'production' ? '/partner2' : '');
 
 interface CountryFlagProps {
   countryCode: CountryCode;
@@ -34,7 +32,10 @@ export default function CountryFlag({
 }: CountryFlagProps) {
   const countryName = COUNTRIES[countryCode].name;
   const [hasLoadError, setHasLoadError] = useState(false);
-  const flagSrc = useMemo(() => `${BASE_PATH}${FLAG_IMAGE_PATHS[countryCode]}`, [countryCode]);
+  const flagSrc = useMemo(
+    () => prependBasePath(FLAG_IMAGE_PATHS[countryCode], BASE_PATH),
+    [countryCode]
+  );
   const fallbackLabel = countryName
     .split(/\s+/)
     .map(part => part[0] ?? '')

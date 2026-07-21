@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://opmthredds.gem.spc.int';
+const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://localhost:8000';
 const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
 
 // WMS responses are immutable for a given request — cache 5 minutes in the browser / CDN.
 const WMS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=60';
-const DEFAULT_UPSTREAM_TIMEOUT_MS = 9000;
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 20000;
+const DEFAULT_PARTNER_DATA_TIMEOUT_MS = 60000;
 const DEFAULT_THREDDS_WMS_TIMEOUT_MS = 30000;
 const WMS_MAX_ATTEMPTS = 3;
 
@@ -45,6 +46,8 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   const isThreddsRequest = targetPath.startsWith('thredds/');
   const requestType = getQueryParamCaseInsensitive(url.searchParams, 'REQUEST')?.toUpperCase();
   const isGetMapRequest = requestType === 'GETMAP';
+  // Partner API data endpoints (risk_information, event, etc.) can be large/slow on pagination.
+  const isPartnerDataRequest = targetPath.startsWith('partner_api/');
 
   // Forward a safe subset of request headers, omitting host which would confuse the upstream.
   const forwardHeaders = new Headers();
@@ -68,6 +71,10 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
       return base + attempt * 5000;
     }
 
+    if (isPartnerDataRequest) {
+      return Number(process.env.PARTNER_DATA_TIMEOUT_MS) || DEFAULT_PARTNER_DATA_TIMEOUT_MS;
+    }
+
     return Number(process.env.PARTNER_PROXY_TIMEOUT_MS) || DEFAULT_UPSTREAM_TIMEOUT_MS;
   };
 
@@ -80,6 +87,24 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
       // @ts-expect-error Node 18+ fetch supports duplex for streaming
       duplex: body ? 'half' : undefined,
     });
+
+  const logProxyFailure = (message: string, error?: unknown) => {
+    console.error('[partner-proxy]', message, {
+      method: request.method,
+      targetUrl,
+      targetBase,
+      targetPath,
+      search: url.search,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : error,
+    });
+  };
 
   const canRetryWms = isThreddsRequest && isGetMapRequest;
   const maxAttempts = canRetryWms ? WMS_MAX_ATTEMPTS : 1;
@@ -109,6 +134,8 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
         continue;
       }
 
+      logProxyFailure(isTimeout ? 'Upstream request timed out' : 'Upstream request failed', err);
+
       return NextResponse.json(
         { error: isTimeout ? 'Partner API timed out' : 'Partner API unreachable' },
         { status: isTimeout ? 504 : 502 }
@@ -120,6 +147,10 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
     const isTimeout =
       lastError instanceof Error &&
       (lastError.name === 'TimeoutError' || lastError.name === 'AbortError');
+    logProxyFailure(
+      isTimeout ? 'No upstream response after timeout' : 'No upstream response',
+      lastError
+    );
     return NextResponse.json(
       { error: isTimeout ? 'Partner API timed out' : 'Partner API unreachable' },
       { status: isTimeout ? 504 : 502 }

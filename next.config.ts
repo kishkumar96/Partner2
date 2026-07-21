@@ -1,13 +1,29 @@
 import type { NextConfig } from "next";
 
+function normalizeBasePath(basePath: string | undefined): string {
+  const trimmed = (basePath ?? '').trim();
+  if (!trimmed || trimmed === '/' || trimmed.toLowerCase() === 'root') {
+    return '';
+  }
+
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash;
+}
+
 const dataVersion =
   process.env.NEXT_PUBLIC_DATA_VERSION ??
   process.env.NEXT_PUBLIC_APP_VERSION ??
   `${Date.now()}`;
 
+const configuredBasePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
+const basePath =
+  process.env.NODE_ENV === 'production'
+    ? configuredBasePath || '/partner2'
+    : configuredBasePath;
+
 const nextConfig: NextConfig = {
   // Base path for subdirectory deployment (disabled in dev for convenience)
-  basePath: process.env.NODE_ENV === 'production' ? '/partner2' : '',
+  basePath,
 
   env: {
     NEXT_PUBLIC_DATA_VERSION: dataVersion,
@@ -83,6 +99,21 @@ const nextConfig: NextConfig = {
                 : 'no-store, must-revalidate',
           },
         ],
+      },
+    ];
+  },
+
+  async redirects() {
+    if (!basePath) {
+      return [];
+    }
+
+    return [
+      {
+        source: '/favicon.ico',
+        destination: `${basePath}/favicon.ico`,
+        permanent: false,
+        basePath: false,
       },
     ];
   },

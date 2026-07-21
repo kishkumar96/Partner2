@@ -10,6 +10,8 @@ import {
 } from '@/theme/cycloneScale';
 import { validateForecastTrack, type CycloneForecastRow } from '@/schemas/cycloneForecastSchema';
 
+type RawForecastRow = Record<string, string | number | null>;
+
 function appendDataVersion(path: string): string {
   const version = process.env.NEXT_PUBLIC_DATA_VERSION ?? process.env.NEXT_PUBLIC_APP_VERSION;
   if (!version) {
@@ -106,6 +108,264 @@ function resolveQuadrantRadii(
   };
 }
 
+function firstDefined(row: RawForecastRow, keys: string[]): string | number | null | undefined {
+  for (const key of keys) {
+    if (key in row) {
+      const value = row[key];
+      if (value !== undefined) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+function asNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inferCategory(meanWind: number | null): number {
+  if (meanWind === null || meanWind < 0) return 0;
+  if (meanWind >= 137) return 5;
+  if (meanWind >= 113) return 4;
+  if (meanWind >= 96) return 3;
+  if (meanWind >= 83) return 2;
+  if (meanWind >= 64) return 1;
+  if (meanWind >= 34) return 0;
+  return -1;
+}
+
+function inferWindGust(meanWind: number | null, windGust: number | null): number {
+  if (windGust !== null) return windGust;
+  if (meanWind === null) return 0;
+  return Math.round(meanWind * 1.2);
+}
+
+function normalizeForecastRow(row: RawForecastRow): CycloneForecastRow | null {
+  const timeValue = firstDefined(row, ["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']", 'Time', 'TIME']);
+  const latitudeValue = asNumber(firstDefined(row, ['Latitude', 'LATITUDE', 'lat', 'LAT']));
+  const longitudeValue = asNumber(firstDefined(row, ['Longitude', 'LONGITUDE', 'lon', 'LON']));
+
+  if (typeof timeValue !== 'string' || latitudeValue === null || longitudeValue === null) {
+    return null;
+  }
+
+  const meanWind = asNumber(firstDefined(row, ['MeanWind', 'WIND_SPD', 'mean_wind']));
+  const windGust = asNumber(firstDefined(row, ['WindGust', 'WIND_GUST', 'wind_gust']));
+  const pressure = asNumber(
+    firstDefined(row, ['Pressure', 'PRESSURE_CENTRAL', 'central_pressure', 'pressure'])
+  );
+  const category = asNumber(firstDefined(row, ['Category', 'CATEGORY', 'category']));
+  const uncertainty = asNumber(firstDefined(row, ['Uncertainty', 'UNCERTAINTY', 'uncertainty']));
+
+  return {
+    "Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']": timeValue,
+    Latitude: latitudeValue,
+    Longitude: longitudeValue,
+    Symbol: asNumber(firstDefined(row, ['Symbol', 'SYMBOL', 'symbol'])),
+    Category: category ?? inferCategory(meanWind),
+    Pressure: pressure ?? 1007,
+    PressureOCI: asNumber(firstDefined(row, ['PressureOCI', 'PRESSURE_OCI'])),
+    MeanWind: meanWind ?? 0,
+    WindGust: inferWindGust(meanWind, windGust),
+    P5Wind: asNumber(firstDefined(row, ['P5Wind', 'P5_WIND'])),
+    RadiusOCI: asNumber(firstDefined(row, ['RadiusOCI', 'RADIUS_OCI'])),
+    Radius1000hPa: asNumber(firstDefined(row, ['Radius1000hPa', 'RADIUS_1000HPA'])),
+    RadiusMaxWinds: asNumber(firstDefined(row, ['RadiusMaxWinds', 'RADIUS_MAX_WINDS'])),
+    EyeRadius: asNumber(firstDefined(row, ['EyeRadius', 'MIN_EYE_RAD'])),
+    UncEyeRadius: asNumber(firstDefined(row, ['UncEyeRadius', 'MIN_EYE_RAD_UNCERTAINTY'])),
+    VerticalExtent: asNumber(firstDefined(row, ['VerticalExtent', 'VERTICAL_EXTENT'])),
+    Uncertainty: uncertainty ?? 0,
+    FinalT: asNumber(firstDefined(row, ['FinalT', 'FINAL_T'])),
+    CurrentIntensity: asNumber(firstDefined(row, ['CurrentIntensity', 'CURRENT_INTENSITY'])),
+    DataTNoDvorak: asNumber(firstDefined(row, ['DataTNoDvorak', 'DVORAK_DATA_T_NO'])),
+    ModelTNoDvorak: asNumber(firstDefined(row, ['ModelTNoDvorak', 'DVORAK_MODEL_T_NO'])),
+    PatternTNoDvorak: asNumber(firstDefined(row, ['PatternTNoDvorak', 'DVORAK_PATTERN_T_NO'])),
+    GaleRadius: asNumber(firstDefined(row, ['GaleRadius', 'GALE_RADIUS'])),
+    NEGaleRadius: asNumber(firstDefined(row, ['NEGaleRadius', 'NE_GALE_RADIUS'])),
+    SEGaleRadius: asNumber(firstDefined(row, ['SEGaleRadius', 'SE_GALE_RADIUS'])),
+    SWGaleRadius: asNumber(firstDefined(row, ['SWGaleRadius', 'SW_GALE_RADIUS'])),
+    NWGaleRadius: asNumber(firstDefined(row, ['NWGaleRadius', 'NW_GALE_RADIUS'])),
+    StrongGaleRadius: asNumber(firstDefined(row, ['StrongGaleRadius', 'STRONG_GALE_RADIUS'])),
+    NEStrongGaleRadius: asNumber(
+      firstDefined(row, ['NEStrongGaleRadius', 'NE_STRONG_GALE_RADIUS'])
+    ),
+    SEStrongGaleRadius: asNumber(
+      firstDefined(row, ['SEStrongGaleRadius', 'SE_STRONG_GALE_RADIUS'])
+    ),
+    SWStrongGaleRadius: asNumber(
+      firstDefined(row, ['SWStrongGaleRadius', 'SW_STRONG_GALE_RADIUS'])
+    ),
+    NWStrongGaleRadius: asNumber(
+      firstDefined(row, ['NWStrongGaleRadius', 'NW_STRONG_GALE_RADIUS'])
+    ),
+    StormRadius: asNumber(firstDefined(row, ['StormRadius', 'STORM_RADIUS'])),
+    NEStormRadius: asNumber(firstDefined(row, ['NEStormRadius', 'NE_STORM_RADIUS'])),
+    SEStormRadius: asNumber(firstDefined(row, ['SEStormRadius', 'SE_STORM_RADIUS'])),
+    SWStormRadius: asNumber(firstDefined(row, ['SWStormRadius', 'SW_STORM_RADIUS'])),
+    NWStormRadius: asNumber(firstDefined(row, ['NWStormRadius', 'NW_STORM_RADIUS'])),
+    HurricaneRadius: asNumber(firstDefined(row, ['HurricaneRadius', 'HURRICANE_RADIUS'])),
+    NEHurricaneRadius: asNumber(firstDefined(row, ['NEHurricaneRadius', 'NE_HURRICANE_RADIUS'])),
+    SEHurricaneRadius: asNumber(firstDefined(row, ['SEHurricaneRadius', 'SE_HURRICANE_RADIUS'])),
+    SWHurricaneRadius: asNumber(firstDefined(row, ['SWHurricaneRadius', 'SW_HURRICANE_RADIUS'])),
+    NWHurricaneRadius: asNumber(firstDefined(row, ['NWHurricaneRadius', 'NW_HURRICANE_RADIUS'])),
+    DataSource:
+      typeof firstDefined(row, ['DataSource', 'DATA_SRC']) === 'string'
+        ? (firstDefined(row, ['DataSource', 'DATA_SRC']) as string)
+        : null,
+    'Land/Water':
+      typeof firstDefined(row, ['Land/Water', 'SURFACE_CODE']) === 'string'
+        ? (firstDefined(row, ['Land/Water', 'SURFACE_CODE']) as string)
+        : null,
+    CycloneStatus:
+      typeof firstDefined(row, ['CycloneStatus', 'CYC_TYPE']) === 'string'
+        ? (firstDefined(row, ['CycloneStatus', 'CYC_TYPE']) as string)
+        : null,
+    HowLocation:
+      typeof firstDefined(row, ['HowLocation', 'POSITION_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowLocation', 'POSITION_METHOD']) as string)
+        : null,
+    UncPressure: asNumber(firstDefined(row, ['UncPressure', 'CENTRAL_PRES_UNCERTAINTY'])),
+    HowPressure:
+      typeof firstDefined(row, ['HowPressure', 'CENTRAL_PRES_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowPressure', 'CENTRAL_PRES_METHOD']) as string)
+        : null,
+    'P/W_Method':
+      typeof firstDefined(row, ['P/W_Method', 'PRES_WIND_RELATION_USED']) === 'string'
+        ? (firstDefined(row, ['P/W_Method', 'PRES_WIND_RELATION_USED']) as string)
+        : null,
+    HowMaxWindRadius:
+      typeof firstDefined(row, ['HowMaxWindRadius', 'MN_RADIUS_MAX_WIND_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowMaxWindRadius', 'MN_RADIUS_MAX_WIND_METHOD']) as string)
+        : null,
+    HowGaleRadius:
+      typeof firstDefined(row, ['HowGaleRadius', 'MN_RADIUS_GF_WIND_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowGaleRadius', 'MN_RADIUS_GF_WIND_METHOD']) as string)
+        : null,
+    HowStormRadius:
+      typeof firstDefined(row, ['HowStormRadius', 'MN_RADIUS_SF_WIND_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowStormRadius', 'MN_RADIUS_SF_WIND_METHOD']) as string)
+        : null,
+    HowHurricaneRadius:
+      typeof firstDefined(row, ['HowHurricaneRadius', 'MN_RADIUS_HF_WIND_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowHurricaneRadius', 'MN_RADIUS_HF_WIND_METHOD']) as string)
+        : null,
+    UncMaxWindSpeed: asNumber(firstDefined(row, ['UncMaxWindSpeed', 'MAX_WIND_SPD_UNCERTAINTY'])),
+    HowMaxWindSpeed:
+      typeof firstDefined(row, ['HowMaxWindSpeed', 'MAX_WIND_SPD_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowMaxWindSpeed', 'MAX_WIND_SPD_METHOD']) as string)
+        : null,
+    HowGust:
+      typeof firstDefined(row, ['HowGust', 'MAX_WIND_GUST_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowGust', 'MAX_WIND_GUST_METHOD']) as string)
+        : null,
+    HowEyeRadius:
+      typeof firstDefined(row, ['HowEyeRadius', 'MIN_EYE_RAD_METHOD']) === 'string'
+        ? (firstDefined(row, ['HowEyeRadius', 'MIN_EYE_RAD_METHOD']) as string)
+        : null,
+  };
+}
+
+/**
+ * Strip RSMC-format comment/metadata lines from a cyclone forecast CSV so that
+ * parseCSV receives a clean header + data block.
+ *
+ * RSMC Nadi CSVs look like:
+ *   # trackType=Official Forecast Track,...
+ *   # CycloneName=Lola,...
+ *   (Time->(Latitude,...)),   ← schema declaration line, ignored
+ *   # Column Headings,...
+ *   Time[fmt=...],Latitude,Longitude,...   ← real header (after the marker)
+ *   # Start of data,...
+ *   2023-10-23T00:00:00Z,...              ← data rows
+ *
+ * Rules:
+ *   - Lines beginning with `#` are dropped.
+ *   - Lines beginning with `(` (schema declaration) are dropped.
+ *   - The first surviving non-empty line is treated as the CSV header.
+ *   - Subsequent non-empty lines are data rows.
+ */
+function stripRsmcComments(csvText: string): string {
+  const lines = csvText.replace(/\r\n/g, '\n').split('\n');
+  const kept: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#') || trimmed.startsWith('(')) continue;
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
+function buildForecastPointFromRow(row: CycloneForecastRow): CycloneForecastPoint {
+  const longitude = normalizeLongitude(row.Longitude);
+  const category = row.Category ?? inferCategory(row.MeanWind ?? null);
+  const pressure = row.Pressure ?? 1007;
+  const meanWind = row.MeanWind ?? 0;
+  const windGust = row.WindGust ?? inferWindGust(meanWind, null);
+  const uncertainty = row.Uncertainty ?? 0;
+  const fallbackRadii = estimateFallbackRadii(meanWind, category);
+
+  const galeRadii = resolveQuadrantRadii(
+    row.NEGaleRadius,
+    row.SEGaleRadius,
+    row.SWGaleRadius,
+    row.NWGaleRadius,
+    row.GaleRadius ?? fallbackRadii.gale
+  );
+  const stormRadii = resolveQuadrantRadii(
+    row.NEStormRadius,
+    row.SEStormRadius,
+    row.SWStormRadius,
+    row.NWStormRadius,
+    row.StormRadius ?? fallbackRadii.storm
+  );
+  const hurricaneRadii = resolveQuadrantRadii(
+    row.NEHurricaneRadius,
+    row.SEHurricaneRadius,
+    row.SWHurricaneRadius,
+    row.NWHurricaneRadius,
+    row.HurricaneRadius ?? fallbackRadii.hurricane
+  );
+
+  return {
+    time: new Date(row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"].replace(' ', 'T').replace(/Z?$/, 'Z')),
+    timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
+    latitude: row.Latitude,
+    longitude,
+    category,
+    pressure,
+    meanWind,
+    windGust,
+    uncertainty,
+    galeRadiusNE: galeRadii.ne,
+    galeRadiusSE: galeRadii.se,
+    galeRadiusSW: galeRadii.sw,
+    galeRadiusNW: galeRadii.nw,
+    stormRadiusNE: stormRadii.ne,
+    stormRadiusSE: stormRadii.se,
+    stormRadiusSW: stormRadii.sw,
+    stormRadiusNW: stormRadii.nw,
+    hurricaneRadiusNE: hurricaneRadii.ne,
+    hurricaneRadiusSE: hurricaneRadii.se,
+    hurricaneRadiusSW: hurricaneRadii.sw,
+    hurricaneRadiusNW: hurricaneRadii.nw,
+    eyeRadius: row.EyeRadius ?? 0,
+    eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
+    verticalExtent: row.VerticalExtent ?? 0,
+    pressureOCI: row.PressureOCI ?? 0,
+    radiusOCI: row.RadiusOCI ?? 0,
+    dvorakTNumber: row.FinalT ?? 0,
+    currentIntensity: row.CurrentIntensity ?? 0,
+    p5Wind: row.P5Wind ?? 0,
+  };
+}
+
 /**
  * Load cyclone forecast track data with schema validation
  * Returns validated data with detailed error reporting
@@ -129,10 +389,13 @@ export async function loadCycloneForecastTrack(
       return null;
     }
 
-    const rows = parseCSV(csvText, { convertNaN: true });
+    const rows = parseCSV(stripRsmcComments(csvText), { convertNaN: true });
+    const normalizedRows = rows
+      .map(row => normalizeForecastRow(row as RawForecastRow))
+      .filter((row): row is CycloneForecastRow => row !== null);
 
     // Validate all rows with Zod schema
-    const validationResult = validateForecastTrack(rows);
+    const validationResult = validateForecastTrack(normalizedRows);
 
     // Warnings are logged silently - only show in console if there are critical issues
     // Non-critical warnings are expected for forecast data and don't affect functionality
@@ -152,68 +415,7 @@ export async function loadCycloneForecastTrack(
       return null;
     }
 
-    const points: CycloneForecastPoint[] = validationResult.data.map((row: CycloneForecastRow) => {
-      // RSMC feeds may mix 0-360 and signed longitudes. Normalize first so
-      // downstream antimeridian unwrapping works deterministically.
-      const longitude = normalizeLongitude(row.Longitude);
-      const fallbackRadii = estimateFallbackRadii(row.MeanWind, row.Category);
-
-      const galeRadii = resolveQuadrantRadii(
-        row.NEGaleRadius,
-        row.SEGaleRadius,
-        row.SWGaleRadius,
-        row.NWGaleRadius,
-        row.GaleRadius ?? fallbackRadii.gale
-      );
-      const stormRadii = resolveQuadrantRadii(
-        row.NEStormRadius,
-        row.SEStormRadius,
-        row.SWStormRadius,
-        row.NWStormRadius,
-        row.StormRadius ?? fallbackRadii.storm
-      );
-      const hurricaneRadii = resolveQuadrantRadii(
-        row.NEHurricaneRadius,
-        row.SEHurricaneRadius,
-        row.SWHurricaneRadius,
-        row.NWHurricaneRadius,
-        row.HurricaneRadius ?? fallbackRadii.hurricane
-      );
-
-      return {
-        time: new Date(
-          row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"].replace(' ', 'T').replace(/Z?$/, 'Z')
-        ),
-        timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
-        latitude: row.Latitude,
-        longitude,
-        category: row.Category,
-        pressure: row.Pressure,
-        meanWind: row.MeanWind,
-        windGust: row.WindGust,
-        uncertainty: row.Uncertainty,
-        galeRadiusNE: galeRadii.ne,
-        galeRadiusSE: galeRadii.se,
-        galeRadiusSW: galeRadii.sw,
-        galeRadiusNW: galeRadii.nw,
-        stormRadiusNE: stormRadii.ne,
-        stormRadiusSE: stormRadii.se,
-        stormRadiusSW: stormRadii.sw,
-        stormRadiusNW: stormRadii.nw,
-        hurricaneRadiusNE: hurricaneRadii.ne,
-        hurricaneRadiusSE: hurricaneRadii.se,
-        hurricaneRadiusSW: hurricaneRadii.sw,
-        hurricaneRadiusNW: hurricaneRadii.nw,
-        eyeRadius: row.EyeRadius ?? 0,
-        eyeRadiusUncertainty: row.UncEyeRadius ?? 0,
-        verticalExtent: row.VerticalExtent ?? 0,
-        pressureOCI: row.PressureOCI ?? 0,
-        radiusOCI: row.RadiusOCI ?? 0,
-        dvorakTNumber: row.FinalT ?? 0,
-        currentIntensity: row.CurrentIntensity ?? 0,
-        p5Wind: row.P5Wind ?? 0,
-      };
-    });
+    const points: CycloneForecastPoint[] = validationResult.data.map(buildForecastPointFromRow);
 
     console.log(`Loaded ${points.length} cyclone forecast points`);
     if (validationResult.warnings && validationResult.warnings.length > 0) {
@@ -225,6 +427,45 @@ export async function loadCycloneForecastTrack(
     console.error('Error loading cyclone forecast track:', error);
     return null;
   }
+}
+
+/**
+ * Parse CycloneForecastPoint[] directly from a CycloneTrack's pre-computed
+ * geometry field (a FeatureCollection of Point features, one per CSV row, with
+ * every column preserved as a property). This avoids a second HTTP round-trip
+ * to the raw track_file CSV and works for every new event automatically.
+ *
+ * Falls back gracefully to null so callers can chain to the CSV path.
+ */
+export function parseForecastPointsFromGeometry(geometry: unknown): CycloneForecastPoint[] | null {
+  if (!geometry || typeof geometry !== 'object') return null;
+  const fc = geometry as { type?: unknown; features?: unknown[] };
+  if (fc.type !== 'FeatureCollection' || !Array.isArray(fc.features) || fc.features.length === 0) {
+    return null;
+  }
+
+  const rawRows: RawForecastRow[] = fc.features
+    .filter((f): f is { geometry: { type: string }; properties: Record<string, unknown> } => {
+      if (!f || typeof f !== 'object') return false;
+      const feat = f as { geometry?: { type?: unknown }; properties?: unknown };
+      return (
+        feat.geometry?.type === 'Point' && !!feat.properties && typeof feat.properties === 'object'
+      );
+    })
+    .map(f => f.properties as RawForecastRow);
+
+  if (rawRows.length === 0) return null;
+
+  const normalizedRows = rawRows
+    .map(row => normalizeForecastRow(row))
+    .filter((row): row is CycloneForecastRow => row !== null);
+
+  if (normalizedRows.length === 0) return null;
+
+  const validationResult = validateForecastTrack(normalizedRows);
+  if (!validationResult.data || validationResult.data.length === 0) return null;
+
+  return validationResult.data.map(buildForecastPointFromRow);
 }
 
 /**

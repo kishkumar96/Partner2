@@ -22,6 +22,7 @@ import {
   getCountryDataFilePath,
   loadRegionalSummary,
 } from '@/utils/realDataLoader';
+import { isPartnerApiCountryEnabled, isPartnerApiEnabled } from '@/services/partnerApiService';
 import type { LegendSettings } from '@/data/realThreddsLayers';
 
 function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
@@ -100,6 +101,8 @@ interface RegionalImpactsLayerProps {
   onRegionSelect?: (regionId: string | null) => void;
   styleChangeCounter?: number;
   countryCode?: CountryCode | null;
+  regionalImpactsData?: GeoJSON.FeatureCollection | null;
+  regionalSummaryData?: Array<Record<string, unknown>>;
   /** 0–100 opacity scale for regional fill layers */
   layerOpacityScale?: number;
   // Custom legend settings
@@ -114,6 +117,8 @@ export default function RegionalImpactsLayer({
   onRegionSelect,
   styleChangeCounter = 0,
   countryCode = null,
+  regionalImpactsData = null,
+  regionalSummaryData = [],
   layerOpacityScale = 70,
   legendSettings,
 }: RegionalImpactsLayerProps) {
@@ -141,6 +146,7 @@ export default function RegionalImpactsLayer({
   const mapStyleRef = useRef(mapStyle);
   const layerOpacityScaleRef = useRef(layerOpacityScale);
   const legendSettingsRef = useRef(legendSettings);
+  const regionalSummaryDataRef = useRef(regionalSummaryData);
 
   useEffect(() => {
     selectedRegionRef.current = selectedRegion;
@@ -151,6 +157,10 @@ export default function RegionalImpactsLayer({
     layerOpacityScaleRef.current = layerOpacityScale;
     legendSettingsRef.current = legendSettings;
   }, [mapStyle, layerOpacityScale, legendSettings]);
+
+  useEffect(() => {
+    regionalSummaryDataRef.current = regionalSummaryData;
+  }, [regionalSummaryData]);
 
   useEffect(() => {
     onRegionSelectRef.current = onRegionSelect;
@@ -198,6 +208,8 @@ export default function RegionalImpactsLayer({
 
         const effectiveCountry = countryCode ?? 'VU';
         const basePath = DATA_PATH[effectiveCountry];
+        const partnerApiActive =
+          isPartnerApiEnabled() && isPartnerApiCountryEnabled(effectiveCountry);
         const regionalImpactsPath = getCountryDataFilePath(
           effectiveCountry,
           'regional-impacts.geojson'
@@ -207,14 +219,22 @@ export default function RegionalImpactsLayer({
           'regional-impacts-by-sector.geojson'
         );
 
-        if (
-          dataCache.current.geojson &&
-          dataCache.current.sectorGeojson &&
-          dataCache.current.cachedCountry === effectiveCountry
-        ) {
+        if (dataCache.current.geojson && dataCache.current.cachedCountry === effectiveCountry) {
           console.log('✅ Using cached regional impacts data');
           geojson = dataCache.current.geojson;
           sectorGeojson = dataCache.current.sectorGeojson;
+        } else if (regionalImpactsData) {
+          console.log('✅ Using regional impacts data from dashboard state');
+          geojson = enrichRegionalImpactsWithSummary(
+            regionalImpactsData,
+            regionalSummaryDataRef.current as Array<Record<string, unknown>> | null | undefined
+          );
+          sectorGeojson = null;
+          dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
+        } else if (partnerApiActive) {
+          console.warn('⚠️ Partner API is enabled but no regional impacts data was provided');
+          isLoadingRef.current = false;
+          return;
         } else {
           if (!mountedRef.current) {
             console.log('🚫 Component unmounted during load, aborting');
@@ -672,7 +692,7 @@ export default function RegionalImpactsLayer({
         isLoadingRef.current = false;
       }
     };
-  }, [map, visible, styleChangeCounter, countryCode]); // styleChangeCounter needed to recreate layers after basemap changes
+  }, [map, visible, styleChangeCounter, countryCode, regionalImpactsData]); // styleChangeCounter needed to recreate layers after basemap changes
 
   // Separate effect to update colors when style changes (without recreating layers)
   useEffect(() => {

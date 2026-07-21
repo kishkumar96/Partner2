@@ -34,7 +34,6 @@ import {
 } from '@/data/realThreddsLayers';
 import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
 import {
-  COUNTRY_CYCLONE_CONFIG,
   loadAllRealData,
   loadSupplementaryRealData,
   expandEventsToRegionalEntries,
@@ -135,6 +134,8 @@ interface TourUiSnapshot {
   filterPanelTab: 'filters' | 'cyclone';
 }
 
+type DashboardDataSourceMode = 'local' | 'partner' | 'mixed';
+
 export default function DashboardView({
   countryCode,
   allowCountrySwitch = true,
@@ -187,6 +188,7 @@ export default function DashboardView({
   const [showRoadsLayer, setShowRoadsLayer] = useState(false);
   const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
+  const [partnerHazardLayers, setPartnerHazardLayers] = useState<RealWMSLayer[]>([]);
   const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
     initialShowMapControls ? false : (urlState.showFilters ?? false)
@@ -213,6 +215,10 @@ export default function DashboardView({
   const [mapZoom, setMapZoom] = useState<number | null>(null);
   const [isDownloadingMap, setIsDownloadingMap] = useState(false);
   const [devDataSourceLabel, setDevDataSourceLabel] = useState<string>('');
+  const [dataSourceMode, setDataSourceMode] = useState<DashboardDataSourceMode>('local');
+  const [dataSourceSummary, setDataSourceSummary] = useState<string>(
+    'Track: Local | Event: Local | Risk: Local | Hazards: Static'
+  );
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'info' | 'warning'>('info');
@@ -230,6 +236,13 @@ export default function DashboardView({
 
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+  const dataSourceBadgeClassName =
+    dataSourceMode === 'partner'
+      ? 'border-emerald-500/35 bg-emerald-500/12 text-emerald-200'
+      : dataSourceMode === 'mixed'
+        ? 'border-amber-500/35 bg-amber-500/12 text-amber-200'
+        : 'border-sky-500/35 bg-sky-500/12 text-sky-200';
+  const dataSourceBadgeLabel = `Source: ${dataSourceSummary}`;
 
   const openFilterPanel = useCallback((tab: 'filters' | 'cyclone' = 'filters') => {
     setShowFilters(true);
@@ -321,9 +334,12 @@ export default function DashboardView({
   const [nationalSummary, setNationalSummary] = useState<any[] | undefined>();
   const [damagedBuildings, setDamagedBuildings] = useState<any>(null);
   const [damagedRoads, setDamagedRoads] = useState<any>(null);
+  const [regionalImpactsGeoJSON, setRegionalImpactsGeoJSON] =
+    useState<GeoJSON.FeatureCollection | null>(null);
   const [isLoadingDamage, setIsLoadingDamage] = useState({ buildings: false, roads: false });
   const [damageLoadError, setDamageLoadError] = useState<string | null>(null);
   const isLoadingDamageRef = useRef(isLoadingDamage);
+  const filtersRef = useRef(filters);
   const damagedBuildingsRef = useRef<any>(null);
   const damagedRoadsRef = useRef<any>(null);
   const damageAutoLoadRequestedRef = useRef<{ buildings: boolean; roads: boolean }>({
@@ -379,8 +395,7 @@ export default function DashboardView({
           })),
     [derivedRegions, provinces]
   );
-  const activeCycloneName =
-    events[0]?.name || COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventName || 'Tropical Cyclone';
+  const activeCycloneName = events[0]?.name || 'Tropical Cyclone';
   const platformName = getCountryAppName(selectedCountry);
   const storyBeats = useMemo(
     () => (cycloneForecast ? detectStoryBeats(cycloneForecast, selectedCountry) : []),
@@ -632,7 +647,7 @@ export default function DashboardView({
       if (isLoadingDamageRef.current[type]) return null;
       if (type === 'buildings' && damagedBuildingsRef.current) return damagedBuildingsRef.current;
       if (type === 'roads' && damagedRoadsRef.current) return damagedRoadsRef.current;
-      setIsLoadingDamage(prev => ({ ...prev, [type]: true }));
+      setIsLoadingDamage(prev => (prev[type] ? prev : { ...prev, [type]: true }));
       setDamageLoadError(null);
 
       const controller = new AbortController();
@@ -647,8 +662,17 @@ export default function DashboardView({
             ? await loadDamagedBuildings({
                 signal: controller.signal,
                 countryCode: selectedCountry,
+                selectedEventIds: filtersRef.current.selectedEvents,
+                dateRange: filtersRef.current.dateRange,
+                eventRecords: fetchedEventRecordsRef.current,
               })
-            : await loadDamagedRoads({ signal: controller.signal, countryCode: selectedCountry });
+            : await loadDamagedRoads({
+                signal: controller.signal,
+                countryCode: selectedCountry,
+                selectedEventIds: filtersRef.current.selectedEvents,
+                dateRange: filtersRef.current.dateRange,
+                eventRecords: fetchedEventRecordsRef.current,
+              });
 
         if (controller.signal.aborted) return null;
 
@@ -669,15 +693,26 @@ export default function DashboardView({
         if (damageLoadAbortRef.current[type] === controller) {
           damageLoadAbortRef.current[type] = null;
         }
-        setIsLoadingDamage(prev => ({ ...prev, [type]: false }));
+        setIsLoadingDamage(prev => (prev[type] ? { ...prev, [type]: false } : prev));
       }
     },
     [selectedCountry]
   );
 
+  const handleRequestDamageData = useCallback(
+    (type: 'buildings' | 'roads') => {
+      void loadDamageLayer(type);
+    },
+    [loadDamageLayer]
+  );
+
   useEffect(() => {
     isLoadingDamageRef.current = isLoadingDamage;
   }, [isLoadingDamage]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   useEffect(() => {
     damagedBuildingsRef.current = damagedBuildings;
@@ -1353,6 +1388,7 @@ export default function DashboardView({
   const loadRequestVersion = useRef(0);
   const dataLoadAbortRef = useRef<AbortController | null>(null);
   const supplementaryLoadAbortRef = useRef<AbortController | null>(null);
+  const fetchedEventRecordsRef = useRef<import('@/data/eventRecords').EventRecord[]>([]);
   const damageLoadAbortRef = useRef<{
     buildings: AbortController | null;
     roads: AbortController | null;
@@ -1543,8 +1579,7 @@ export default function DashboardView({
   }, [filters.selectedHazards, hazards, activeWmsLayers.length]);
 
   const activeContextDate = useMemo(() => {
-    const configuredDate = COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventDate;
-    const eventDate = events[0]?.date || configuredDate;
+    const eventDate = events[0]?.date;
     if (!eventDate) return 'Not available';
 
     const parsed = new Date(eventDate);
@@ -1716,19 +1751,26 @@ export default function DashboardView({
     setCycloneForecast(null);
     setExpandedEvents([]);
     setEvents([]);
+    setPartnerHazardLayers([]);
     damageAutoLoadRequestedRef.current = { buildings: false, roads: false };
     try {
       const realData = await loadAllRealData({
         signal: controller.signal,
-        includeDamagedAssets: false,
+        includeDamagedAssets: true,
         includeSupplementaryData: true,
         countryCode: selectedCountry,
+        selectedEventIds: filters.selectedEvents,
+        dateRange: filters.dateRange,
       });
 
       // Check if this request is still current (not superseded by a newer request)
       if (currentVersion !== loadRequestVersion.current) {
         console.log('Ignoring stale data load response');
         return;
+      }
+
+      if (realData.fetchedEventRecords && realData.fetchedEventRecords.length > 0) {
+        fetchedEventRecordsRef.current = realData.fetchedEventRecords;
       }
 
       if (realData.events && realData.events.length > 0) {
@@ -1756,10 +1798,38 @@ export default function DashboardView({
           realData.dataSourceInfo.eventMetadataSource === 'partner_api'
             ? 'Partner API'
             : 'Local Files';
-        setDevDataSourceLabel(`Track: ${trackSource} | Event: ${eventSource}`);
+        const riskSource =
+          realData.dataSourceInfo.riskDataSource === 'partner_api' ? 'Partner API' : 'Local Files';
+        const hazardSource =
+          realData.dataSourceInfo.hazardLayerSource === 'partner_api'
+            ? 'Partner API'
+            : 'Static Config';
+        const sourceKinds = new Set([
+          realData.dataSourceInfo.cycloneTrackSource,
+          realData.dataSourceInfo.eventMetadataSource,
+          realData.dataSourceInfo.riskDataSource ?? 'local_files',
+          realData.dataSourceInfo.hazardLayerSource === 'partner_api'
+            ? 'partner_api'
+            : 'local_files',
+        ]);
+        setDataSourceMode(
+          sourceKinds.size === 1 ? (sourceKinds.has('partner_api') ? 'partner' : 'local') : 'mixed'
+        );
+        setDevDataSourceLabel(
+          `Track: ${trackSource} | Event: ${eventSource} | Risk: ${riskSource} | Hazards: ${hazardSource}`
+        );
+        setDataSourceSummary(
+          `Track: ${realData.dataSourceInfo.cycloneTrackSource === 'partner_api' ? 'API' : 'Local'} | Event: ${realData.dataSourceInfo.eventMetadataSource === 'partner_api' ? 'API' : 'Local'} | Risk: ${realData.dataSourceInfo.riskDataSource === 'partner_api' ? 'API' : 'Local'} | Hazards: ${realData.dataSourceInfo.hazardLayerSource === 'partner_api' ? 'API' : 'Static'}`
+        );
       } else {
-        setDevDataSourceLabel('Track: Local Files | Event: Local Files');
+        setDataSourceMode('local');
+        setDevDataSourceLabel(
+          'Track: Local Files | Event: Local Files | Risk: Local Files | Hazards: Static Config'
+        );
+        setDataSourceSummary('Track: Local | Event: Local | Risk: Local | Hazards: Static');
       }
+
+      setPartnerHazardLayers(realData.partnerHazardLayers || []);
 
       if (realData.exposureData && realData.exposureData.length > 0) {
         setExposureData(realData.exposureData);
@@ -1801,6 +1871,8 @@ export default function DashboardView({
         }
       }
 
+      setRegionalImpactsGeoJSON(realData.regionalImpacts ?? null);
+
       if (realData.regionalSummaryBySector) {
         setRegionalSummaryBySector(realData.regionalSummaryBySector);
         if (process.env.NODE_ENV !== 'production') {
@@ -1810,6 +1882,14 @@ export default function DashboardView({
 
       if (realData.cycloneTrack) {
         setCycloneTrackData(realData.cycloneTrack);
+      }
+
+      if (realData.damagedRoads) {
+        setDamagedRoads(realData.damagedRoads);
+      }
+
+      if (realData.damagedBuildings) {
+        setDamagedBuildings(realData.damagedBuildings);
       }
 
       if (realData.cycloneForecast) {
@@ -1956,9 +2036,9 @@ export default function DashboardView({
         dataLoadAbortRef.current = null;
       }
     }
-  }, [selectedCountry]);
+  }, [selectedCountry, filters.selectedEvents, filters.dateRange]);
 
-  // Load real data on mount and when selectedCountry changes
+  // Load real data on mount and when country/event temporal context changes
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -2298,6 +2378,15 @@ export default function DashboardView({
                     </span>
                   </div>
                 ) : null}
+
+                <div
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium sm:min-h-12 sm:text-sm ${dataSourceBadgeClassName}`}
+                  aria-label={dataSourceBadgeLabel}
+                  title={devDataSourceLabel || dataSourceBadgeLabel}
+                >
+                  <Layers className="h-4 w-4" />
+                  <span>{dataSourceBadgeLabel}</span>
+                </div>
 
                 <button
                   onClick={startTour}
@@ -2659,10 +2748,13 @@ export default function DashboardView({
               showInundationLayer={showInundationLayer}
               onLayersLoadingChange={setIsLoadingLayers}
               onActiveWmsLayersChange={setActiveWmsLayers}
+              partnerHazardLayers={partnerHazardLayers}
               layerOpacity={layerOpacity}
               legendSettings={legendSettings}
               damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
               damagedRoads={showRoadsLayer ? damagedRoads : null}
+              regionalImpactsData={regionalImpactsGeoJSON}
+              regionalSummaryData={regionalSummary}
               cycloneTrackData={cycloneTrackData}
               cycloneForecast={cycloneForecast}
               aggregationLevel={filters.aggregationLevel}
@@ -2800,9 +2892,7 @@ export default function DashboardView({
               damagedBuildings={damagedBuildings}
               damagedRoads={damagedRoads}
               onZoomToAsset={handleZoomToAsset}
-              onRequestDamageData={type => {
-                void loadDamageLayer(type);
-              }}
+              onRequestDamageData={handleRequestDamageData}
               countryCode={selectedCountry}
             />
           )}

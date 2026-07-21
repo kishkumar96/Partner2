@@ -14,6 +14,21 @@ RUN npm config set fetch-timeout 600000 && \
     npm config set fetch-retry-maxtimeout 120000 && \
     npm ci --prefer-offline --no-audit
 
+# ── Stage 1b: development runner ────────────────────────────────────────────
+FROM node:20-alpine AS dev
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3002
+ENV HOSTNAME="0.0.0.0"
+
+EXPOSE 3002
+
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3002"]
+
 # ── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
@@ -28,6 +43,19 @@ COPY tailwind.config.* ./
 COPY eslint.config.* ./
 COPY public ./public
 COPY src ./src
+
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time.
+# Pass them as build args so they are available during `npm run build`
+# without needing to copy .env files into the image.
+ARG NEXT_PUBLIC_ENABLE_PARTNER_API=true
+ARG NEXT_PUBLIC_PARTNER_API_COUNTRIES=VU,WS,TO,CK
+ARG NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES=VU
+ARG NEXT_PUBLIC_BASE_PATH=/partner2
+
+ENV NEXT_PUBLIC_ENABLE_PARTNER_API=$NEXT_PUBLIC_ENABLE_PARTNER_API
+ENV NEXT_PUBLIC_PARTNER_API_COUNTRIES=$NEXT_PUBLIC_PARTNER_API_COUNTRIES
+ENV NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES=$NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
 # Produce a standalone Next.js bundle (see next.config.ts output:'standalone')
 ENV NEXT_TELEMETRY_DISABLED=1

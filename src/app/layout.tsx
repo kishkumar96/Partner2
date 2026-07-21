@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 // Environment variables
 const APP_NAME =
   process.env.NEXT_PUBLIC_APP_NAME || 'Tropical Cyclone Rapid Impact Assessment Tool';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+const BASE_PATH = getConfiguredBasePath(process.env.NODE_ENV === 'production' ? '/partner2' : '');
 
 // Enhanced metadata for SEO
 export const metadata: Metadata = {
@@ -83,9 +85,9 @@ export const metadata: Metadata = {
 
   // Icons and manifest
   icons: {
-    icon: [{ url: '/favicon.ico', sizes: 'any' }],
+    icon: [{ url: prependBasePath('/favicon.ico', BASE_PATH), sizes: 'any' }],
   },
-  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2'}/manifest.json`,
+  manifest: prependBasePath('/manifest.json', BASE_PATH),
 
   // Additional metadata
   category: 'technology',

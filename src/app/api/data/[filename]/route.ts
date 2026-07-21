@@ -22,15 +22,23 @@ export async function GET(
 ) {
   const { filename } = await params;
 
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+    return NextResponse.json({ error: 'Invalid filename' }, { status: 400 });
+  }
+
   // Security: Only allow specific file types
   if (!filename.endsWith('.geojson') && !filename.endsWith('.csv')) {
     return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
   }
 
-  const filePath = path.join(process.cwd(), 'public', filename);
+  const candidatePaths = [
+    path.join(process.cwd(), 'public', filename),
+    path.join(process.cwd(), filename),
+  ];
+  const filePath = candidatePaths.find(candidatePath => fs.existsSync(candidatePath));
 
   // Check if file exists
-  if (!fs.existsSync(filePath)) {
+  if (!filePath) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 });
   }
 

@@ -79,7 +79,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid bbox format' }, { status: 400 });
     }
 
-    const [minLng, minLat, maxLng, maxLat] = bbox;
+    const eventId = searchParams.get('event_id');
+    const dateStart = searchParams.get('date_start');
+    const dateEnd = searchParams.get('date_end');
     const limit = Math.min(parseInt(searchParams.get('limit') || '1000'), 5000);
 
     // Parse country code (default to VU for backward compatibility)
@@ -88,6 +90,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid country code' }, { status: 400 });
     }
 
+    const effectiveBbox = bbox;
+    const [minLng, minLat, maxLng, maxLat] = effectiveBbox;
+
     // If DB recently failed, short-circuit to avoid repeated timeouts and log spam.
     if (Date.now() < dbUnavailableUntil) {
       return NextResponse.json(
@@ -95,7 +100,7 @@ export async function GET(request: NextRequest) {
           type: 'FeatureCollection',
           features: [],
           count: 0,
-          bbox,
+          bbox: effectiveBbox,
           country: countryCode,
           degraded: true,
           message: 'Road data temporarily unavailable',
@@ -162,8 +167,11 @@ export async function GET(request: NextRequest) {
         type: 'FeatureCollection',
         features,
         count: features.length,
-        bbox,
+        bbox: effectiveBbox,
         country: countryCode,
+        event_id: eventId ?? undefined,
+        date_start: dateStart ?? undefined,
+        date_end: dateEnd ?? undefined,
       });
     } finally {
       await client.end();

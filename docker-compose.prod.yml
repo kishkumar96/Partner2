@@ -4,6 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
+      args:
+        NEXT_PUBLIC_ENABLE_PARTNER_API: "true"
+        NEXT_PUBLIC_PARTNER_API_COUNTRIES: "VU,WS,TO,CK"
+        NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES: "VU"
+        NEXT_PUBLIC_BASE_PATH: "/partner2"
     container_name: partner2-dashboard
     ports:
       - "3112:3112"

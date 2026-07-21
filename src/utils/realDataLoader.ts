@@ -4,12 +4,31 @@
 
 import { Event, RegionalImpact } from '@/types';
 import type { RealDataLoadResult } from '@/types/realData';
-import { loadCycloneForecastTrack, type CycloneForecastPoint } from './cycloneAnimationLoader';
+import {
+  loadCycloneForecastTrack,
+  parseForecastPointsFromGeometry,
+  type CycloneForecastPoint,
+} from './cycloneAnimationLoader';
 import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
-import { CountryCode } from '@/types/thredds';
-import { isPartnerApiEnabled, mapCountryPartnerApis } from '@/services/partnerApiService';
+import { COUNTRIES, CountryCode } from '@/types/thredds';
+import {
+  createPartnerEventId,
+  type EventRecord,
+  getDefaultEventRecord,
+  getLocalEventRecords,
+  resolveActiveEventRecord,
+  resolveEventRecords,
+} from '@/data/eventRecords';
+import {
+  isPartnerApiEnabled,
+  isPartnerApiCountryEnabled,
+  isPartnerApiCountryStrict,
+  mapCountryPartnerApis,
+} from '@/services/partnerApiService';
 import { getAreaId, getAreaName } from '@/utils/adminNormalization';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import type { RealWMSLayer } from '@/data/realThreddsLayers';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -65,64 +84,56 @@ function appendDataVersion(path: string): string {
   return `${path}${separator}v=${encodeURIComponent(version)}`;
 }
 
-const NEXT_PUBLIC_BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
+  process.env.NODE_ENV === 'production' ? '/partner2' : ''
+);
 
 function withBasePath(path: string): string {
-  if (!NEXT_PUBLIC_BASE_PATH) return path;
-  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+  return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);
 }
 
-interface CountryCycloneConfig {
-  trackFile?: string; // relative to its country DATA_PATH
-  forecastFile?: string; // relative to its country DATA_PATH
-  eventId: string;
-  eventName: string;
-  eventDate: string;
-  bbox: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
-  center: { lat: number; lng: number };
+function normalizeDateValue(dateStr: string): string {
+  if (!dateStr) return '';
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-export const COUNTRY_CYCLONE_CONFIG: Record<CountryCode, CountryCycloneConfig> = {
-  VU: {
-    trackFile: 'cyclone-track.geojson',
-    forecastFile: 'cyclone-lola-forecast.csv',
-    eventId: 'tc-lola-2024',
-    eventName: 'Tropical Cyclone Lola',
-    eventDate: '2024-01-30',
-    bbox: [165, -21, 170, -13],
-    center: { lat: -17.7333, lng: 168.3167 },
-  },
-  WS: {
-    trackFile: 'cyclone-track.geojson',
-    forecastFile: 'Official_Forecast_Track_GITA_SA.csv',
-    eventId: 'tc-gita-samoa-2018',
-    eventName: 'Tropical Cyclone Gita',
-    eventDate: '2018-02-09',
-    bbox: [-173, -15, -171, -13],
-    center: { lat: -13.759, lng: -172.1046 },
-  },
-  TO: {
-    trackFile: 'cyclone-track.geojson',
-    forecastFile: 'cyclone-forecast.csv',
-    eventId: 'tc-harold-tonga-2020',
-    eventName: 'Tropical Cyclone Harold',
-    eventDate: '2020-04-09',
-    bbox: [-177, -23, -173, -18],
-    center: { lat: -21.179, lng: -175.198 },
-  },
-  CK: {
-    trackFile: 'cyclone-track.geojson',
-    forecastFile: 'cyclone-forecast.csv',
-    eventId: 'tc-ck-event',
-    eventName: 'Tropical Cyclone Event',
-    eventDate: '2024-01-01',
-    bbox: [-161, -23, -157, -18],
-    center: { lat: -21.2367, lng: -159.7777 },
-  },
-};
+/**
+ * Deprecated compatibility export.
+ * New event resolution should use event records from `src/data/eventRecords.ts`.
+ */
+export const COUNTRY_CYCLONE_CONFIG = Object.fromEntries(
+  (['VU', 'WS', 'TO', 'CK'] as CountryCode[]).map(countryCode => {
+    const eventRecord = getDefaultEventRecord(countryCode);
+    return [
+      countryCode,
+      {
+        trackFile: eventRecord.trackFile,
+        forecastFile: eventRecord.forecastFile,
+        eventId: eventRecord.id,
+        eventName: eventRecord.name,
+        eventDate: eventRecord.date,
+        bbox: eventRecord.bbox,
+        center: eventRecord.location,
+      },
+    ];
+  })
+) as Record<
+  CountryCode,
+  {
+    trackFile?: string;
+    forecastFile?: string;
+    eventId: string;
+    eventName: string;
+    eventDate: string;
+    bbox: [number, number, number, number];
+    center: { lat: number; lng: number };
+  }
+>;
 
 /**
  * Unwraps a LineString's longitude coordinates across the antimeridian.
@@ -870,6 +881,11 @@ export interface RealDataLoadOptions {
   includeSupplementaryData?: boolean;
   /** Country to load data for. Defaults to 'VU' (Vanuatu). */
   countryCode?: CountryCode;
+  selectedEventIds?: string[];
+  dateRange?: {
+    start?: string;
+    end?: string;
+  };
 }
 
 function toArrayPayload(payload: unknown): Array<Record<string, unknown>> {
@@ -910,6 +926,51 @@ function buildCycloneTrackFromPartnerPayload(payload: unknown): GeoJSON.FeatureC
 
   const rows = toArrayPayload(payload);
   if (rows.length === 0) return null;
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const geometry = row.geometry;
+    if (
+      geometry &&
+      typeof geometry === 'object' &&
+      (geometry as { type?: unknown }).type === 'FeatureCollection' &&
+      Array.isArray((geometry as { features?: unknown[] }).features) &&
+      (geometry as { features: unknown[] }).features.length > 0
+    ) {
+      const fc = geometry as GeoJSON.FeatureCollection;
+      const hasLine = fc.features.some(
+        f => f?.geometry?.type === 'LineString' || f?.geometry?.type === 'MultiLineString'
+      );
+      if (hasLine) return fc;
+
+      // Partner API returns Point-per-timestep — synthesize a LineString for map rendering.
+      const rawCoords = fc.features
+        .filter(f => f?.geometry?.type === 'Point')
+        .map(f => (f.geometry as GeoJSON.Point).coordinates as [number, number]);
+      if (rawCoords.length > 1) {
+        // Unwrap longitudes to handle antimeridian-crossing tracks (e.g. Harold: 157°E→170°W).
+        const unwrappedLons: number[] = [rawCoords[0][0]];
+        let offset = 0;
+        for (let i = 1; i < rawCoords.length; i++) {
+          const prev = unwrappedLons[i - 1];
+          const raw = rawCoords[i][0];
+          const candidate = raw + offset;
+          const diff = candidate - prev;
+          if (diff > 180) offset -= 360;
+          else if (diff < -180) offset += 360;
+          unwrappedLons.push(raw + offset);
+        }
+        const coords = rawCoords.map((c, i) => [unwrappedLons[i], c[1]] as [number, number]);
+        const lineFeature: GeoJSON.Feature = {
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: coords },
+          properties: { source: 'partner_api' },
+        };
+        return { ...fc, features: [lineFeature, ...fc.features] };
+      }
+      return fc;
+    }
+  }
 
   const points: Array<{ lon: number; lat: number; timestamp?: string }> = [];
 
@@ -963,17 +1024,60 @@ function buildCycloneTrackFromPartnerPayload(payload: unknown): GeoJSON.FeatureC
   };
 }
 
-function selectPartnerPrimaryEvent(payload: unknown): { name?: string; date?: string } | null {
-  const events = toArrayPayload(payload);
-  if (events.length === 0) return null;
+function filterPartnerRowsByIds(
+  rows: Array<Record<string, unknown>>,
+  ids: string[],
+  fieldNames: string[]
+): Array<Record<string, unknown>> {
+  if (ids.length === 0) {
+    return rows;
+  }
 
-  const first = events[0];
+  const idSet = new Set(ids);
+  return rows.filter(row =>
+    fieldNames.some(fieldName => {
+      const rawValue = row[fieldName];
+      if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+        return idSet.has(String(rawValue));
+      }
+      if (typeof rawValue === 'string' && rawValue.trim()) {
+        return idSet.has(rawValue.trim());
+      }
+      return false;
+    })
+  );
+}
+
+function buildCycloneTrackFromPartnerPayloadForTrackIds(
+  payload: unknown,
+  trackIds: string[]
+): GeoJSON.FeatureCollection | null {
+  if (trackIds.length === 0) {
+    return buildCycloneTrackFromPartnerPayload(payload);
+  }
+
+  const filteredRows = filterPartnerRowsByIds(toArrayPayload(payload), trackIds, ['id']);
+  return buildCycloneTrackFromPartnerPayload(filteredRows);
+}
+
+function selectPartnerPrimaryEvent(
+  payload: unknown,
+  fallbackRows: Array<Record<string, unknown>> = []
+): { name?: string; date?: string } | null {
+  const events = toArrayPayload(payload);
+  const first = events[0] ?? fallbackRows[0];
+  if (!first) return null;
+
   const name =
+    (typeof first.title === 'string' && first.title) ||
+    (typeof first.cyclone_name === 'string' && first.cyclone_name) ||
     (typeof first.name === 'string' && first.name) ||
     (typeof first.event_name === 'string' && first.event_name) ||
-    (typeof first.title === 'string' && first.title) ||
+    (typeof first.CycloneName === 'string' && first.CycloneName) ||
     undefined;
   const date =
+    (typeof first.event_datetime === 'string' && first.event_datetime) ||
+    (typeof first.issued_time === 'string' && first.issued_time) ||
     (typeof first.date === 'string' && first.date) ||
     (typeof first.event_date === 'string' && first.event_date) ||
     (typeof first.timestamp === 'string' && first.timestamp) ||
@@ -982,11 +1086,380 @@ function selectPartnerPrimaryEvent(payload: unknown): { name?: string; date?: st
   return { name, date };
 }
 
+function normalizePartnerEventRow(
+  countryCode: CountryCode,
+  row: Record<string, unknown>
+): EventRecord | null {
+  const country = COUNTRIES[countryCode];
+  const name =
+    (typeof row.event_name === 'string' && row.event_name.trim()) ||
+    (typeof row.name === 'string' && row.name.trim()) ||
+    (typeof row.title === 'string' && row.title.trim()) ||
+    (typeof row.cyclone_name === 'string' && row.cyclone_name.trim()) ||
+    (typeof row.CycloneName === 'string' && row.CycloneName.trim()) ||
+    '';
+  const date =
+    (typeof row.event_datetime === 'string' && row.event_datetime.trim()) ||
+    (typeof row.event_date === 'string' && row.event_date.trim()) ||
+    (typeof row.date === 'string' && row.date.trim()) ||
+    (typeof row.issued_time === 'string' && row.issued_time.trim()) ||
+    (typeof row.timestamp === 'string' && row.timestamp.trim()) ||
+    '';
+  const explicitId =
+    (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : '') ||
+    (typeof row.id === 'string' && row.id.trim()) ||
+    (typeof row.event_id === 'string' && row.event_id.trim()) ||
+    (typeof row.eventId === 'string' && row.eventId.trim()) ||
+    (typeof row.cyclone_id === 'string' && row.cyclone_id.trim()) ||
+    (typeof row.cycloneId === 'string' && row.cycloneId.trim()) ||
+    '';
+  const cycloneTrackId =
+    (typeof row.cyclone_track === 'number' && Number.isFinite(row.cyclone_track)
+      ? String(row.cyclone_track)
+      : '') ||
+    (typeof row.cyclone_track === 'string' && row.cyclone_track.trim()) ||
+    (typeof row.cycloneTrack === 'number' && Number.isFinite(row.cycloneTrack)
+      ? String(row.cycloneTrack)
+      : '') ||
+    (typeof row.cycloneTrack === 'string' && row.cycloneTrack.trim()) ||
+    '';
+  const backendHazardIds = Array.isArray(row.hazards)
+    ? row.hazards
+        .map(value =>
+          typeof value === 'number' && Number.isFinite(value)
+            ? String(value)
+            : typeof value === 'string' && value.trim()
+              ? value.trim()
+              : null
+        )
+        .filter((value): value is string => value !== null)
+    : [];
+  const backendRiskIds = Array.isArray(row.risks)
+    ? row.risks
+        .map(value =>
+          typeof value === 'number' && Number.isFinite(value)
+            ? String(value)
+            : typeof value === 'string' && value.trim()
+              ? value.trim()
+              : null
+        )
+        .filter((value): value is string => value !== null)
+    : [];
+
+  if (!name && !explicitId) {
+    return null;
+  }
+  const normalizedDate = normalizeDateValue(date);
+  const eventId =
+    explicitId || createPartnerEventId(countryCode, name || country.name, normalizedDate);
+
+  return {
+    id: eventId,
+    countryCode,
+    name: name || country.name,
+    date: normalizedDate,
+    hazardId: 'tropical-cyclone',
+    backendEventId: explicitId || undefined,
+    backendCycloneTrackId: cycloneTrackId || undefined,
+    backendHazardIds,
+    backendRiskIds,
+    location: { lat: country.center[1], lng: country.center[0] },
+    bbox: [
+      country.center[0] - 1,
+      country.center[1] - 1,
+      country.center[0] + 1,
+      country.center[1] + 1,
+    ],
+    aliases: [
+      ...(explicitId ? [explicitId] : []),
+      ...(cycloneTrackId ? [`cyclone-track-${cycloneTrackId}`] : []),
+    ],
+    source: 'partner_api',
+  };
+}
+
+function normalizePartnerEvents(
+  countryCode: CountryCode,
+  payload: unknown,
+  countryId?: number | null
+): EventRecord[] {
+  const rows = toArrayPayload(payload);
+  const filtered =
+    countryId != null ? rows.filter(row => toNumber(row.country) === countryId) : rows;
+  return filtered
+    .map(row => normalizePartnerEventRow(countryCode, row))
+    .filter((record): record is EventRecord => record !== null);
+}
+
+function createCountryScopedEventRecord(
+  countryCode: CountryCode,
+  eventMeta?: { name?: string; date?: string } | null
+): EventRecord {
+  const country = COUNTRIES[countryCode];
+  return {
+    id: createPartnerEventId(countryCode, eventMeta?.name || country.name, eventMeta?.date || ''),
+    countryCode,
+    name: eventMeta?.name || country.name,
+    date: eventMeta?.date || '',
+    hazardId: 'tropical-cyclone',
+    location: { lat: country.center[1], lng: country.center[0] },
+    bbox: [
+      country.center[0] - 1,
+      country.center[1] - 1,
+      country.center[0] + 1,
+      country.center[1] + 1,
+    ],
+    source: 'partner_api',
+  };
+}
+
+type PartnerRiskDataKey =
+  | 'regionalImpacts'
+  | 'regionalImpactsBySector'
+  | 'exposureByCluster'
+  | 'nationalSummary'
+  | 'impactByAsset'
+  | 'impactBySector'
+  | 'regionalSummary'
+  | 'regionalSummaryBySector'
+  | 'damagedBuildings'
+  | 'damagedRoads';
+
+interface PartnerRiskBundle {
+  regionalImpacts: GeoJSON.FeatureCollection | null;
+  regionalImpactsBySector: GeoJSON.FeatureCollection | null;
+  exposureByCluster: GeoJSON.FeatureCollection | null;
+  nationalSummary: Array<Record<string, unknown>>;
+  impactByAsset: Array<Record<string, unknown>>;
+  impactBySector: Array<Record<string, unknown>>;
+  regionalSummary: Array<Record<string, unknown>>;
+  regionalSummaryBySector: Array<Record<string, unknown>>;
+  damagedBuildings: GeoJSON.FeatureCollection | null;
+  damagedRoads: GeoJSON.FeatureCollection | null;
+}
+
+function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
+  return {
+    regionalImpacts: null,
+    regionalImpactsBySector: null,
+    exposureByCluster: null,
+    nationalSummary: [],
+    impactByAsset: [],
+    impactBySector: [],
+    regionalSummary: [],
+    regionalSummaryBySector: [],
+    damagedBuildings: null,
+    damagedRoads: null,
+  };
+}
+
 function toObjectArray(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
   return value.filter(
     (item): item is Record<string, unknown> => !!item && typeof item === 'object'
   );
+}
+
+function filterPartnerRowsByCountryId(
+  rows: Array<Record<string, unknown>>,
+  countryId: number | null
+): Array<Record<string, unknown>> {
+  if (countryId === null) {
+    return rows;
+  }
+
+  const rowsWithCountryField = rows.filter(row => row.country !== undefined);
+  if (rowsWithCountryField.length === 0) {
+    return rows;
+  }
+
+  return rowsWithCountryField.filter(row => toNumber(row.country) === countryId);
+}
+
+function getUploadFilename(row: Record<string, unknown>): string {
+  const uploadValue = typeof row.upload === 'string' ? row.upload : '';
+  if (!uploadValue) return '';
+
+  try {
+    const parsed = new URL(uploadValue, 'http://localhost');
+    const path = parsed.pathname || uploadValue;
+    const filename = path.split('/').filter(Boolean).pop() || '';
+    return filename.toLowerCase();
+  } catch {
+    return uploadValue.split('/').filter(Boolean).pop()?.toLowerCase() || '';
+  }
+}
+
+function inferLogicalDatasetTypeFromFilename(filename: string): PartnerRiskDataKey | null {
+  const lowered = filename.trim().toLowerCase();
+  if (!lowered) return null;
+
+  if (lowered.includes('regional-impacts-by-sector')) return 'regionalImpactsBySector';
+  if (lowered.includes('regional-impacts')) return 'regionalImpacts';
+  if (lowered.includes('regional-summary-by-sector')) return 'regionalSummaryBySector';
+  if (lowered.includes('regional-summary')) return 'regionalSummary';
+  if (lowered.includes('impact-by-asset-type')) return 'impactByAsset';
+  if (lowered.includes('impact-by-sector')) return 'impactBySector';
+  if (lowered.includes('national-summary')) return 'nationalSummary';
+  if (lowered.includes('exposure-by-cluster')) return 'exposureByCluster';
+  if (lowered.includes('damaged-buildings')) return 'damagedBuildings';
+  if (lowered.includes('damaged-roads')) return 'damagedRoads';
+
+  return null;
+}
+
+function parseCreatedAtTimestamp(value: unknown): number {
+  if (typeof value !== 'string' || !value.trim()) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function extractFeatureCollectionFromValue(value: unknown): GeoJSON.FeatureCollection | null {
+  if (
+    value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'FeatureCollection' &&
+    Array.isArray((value as { features?: unknown[] }).features)
+  ) {
+    return value as GeoJSON.FeatureCollection;
+  }
+
+  return null;
+}
+
+function inferPartnerRiskKey(
+  row: Record<string, unknown>,
+  geometryValue: unknown
+): PartnerRiskDataKey | null {
+  const filename = getUploadFilename(row);
+  const inferredFromFilename = inferLogicalDatasetTypeFromFilename(filename);
+  if (inferredFromFilename) return inferredFromFilename;
+
+  // Title field is a secondary signal — useful when the upload path uses a
+  // hashed or non-standard filename (e.g. "regional-impacts_abc123.geojson").
+  const title = typeof row.title === 'string' ? row.title.trim() : '';
+  if (title) {
+    const inferredFromTitle = inferLogicalDatasetTypeFromFilename(title);
+    if (inferredFromTitle) return inferredFromTitle;
+  }
+
+  const featureCollection = extractFeatureCollectionFromValue(geometryValue);
+  if (featureCollection) {
+    const sample = featureCollection.features?.[0]?.properties;
+    if (!sample || typeof sample !== 'object') {
+      return null;
+    }
+
+    const record = sample as Record<string, unknown>;
+    if (record.Asset !== undefined || record.UseType !== undefined) {
+      return 'exposureByCluster';
+    }
+    if (
+      record['Sector.Education.Loss'] !== undefined ||
+      record['Sector.Infrastructure.Loss'] !== undefined
+    ) {
+      return 'regionalImpactsBySector';
+    }
+    if (
+      record.Region !== undefined ||
+      record['Region.Region'] !== undefined ||
+      record.Population_Exposed_To_Any_Hazard !== undefined
+    ) {
+      if (record.Wind_Loss !== undefined || record.Building_Type !== undefined) {
+        return 'damagedBuildings';
+      }
+      if (record.road_type !== undefined || record.Road_Type !== undefined) {
+        return 'damagedRoads';
+      }
+      return 'regionalImpacts';
+    }
+  }
+
+  const rows = toObjectArray(geometryValue);
+  if (rows.length === 0) return null;
+  const sample = rows[0];
+  if (sample.Region !== undefined && sample.Sector !== undefined) return 'regionalSummaryBySector';
+  if (sample.Region !== undefined) return 'regionalSummary';
+  if (sample.Asset !== undefined || sample.Asset_Type !== undefined) return 'impactByAsset';
+  if (sample.Sector !== undefined) return 'impactBySector';
+  if (
+    sample.Country !== undefined ||
+    sample.Total_Population !== undefined ||
+    sample.Damaged_Buildings !== undefined
+  ) {
+    return 'nationalSummary';
+  }
+
+  return null;
+}
+
+function mergePartnerRiskBundle(
+  bundle: PartnerRiskBundle,
+  key: PartnerRiskDataKey,
+  geometryValue: unknown
+): PartnerRiskBundle {
+  const next = { ...bundle };
+
+  if (
+    key === 'regionalImpacts' ||
+    key === 'regionalImpactsBySector' ||
+    key === 'exposureByCluster' ||
+    key === 'damagedBuildings' ||
+    key === 'damagedRoads'
+  ) {
+    const featureCollection = extractFeatureCollectionFromValue(geometryValue);
+    if (featureCollection && !next[key]) {
+      next[key] = featureCollection as never;
+    }
+    return next;
+  }
+
+  const rows = toObjectArray(geometryValue);
+  if (rows.length > 0 && next[key].length === 0) {
+    next[key] = rows as never;
+  }
+  return next;
+}
+
+function extractPartnerRiskBundle(riskRows: Array<Record<string, unknown>>): PartnerRiskBundle {
+  return riskRows.reduce((bundle, row) => {
+    const key = inferPartnerRiskKey(row, row.geometry);
+    if (!key) return bundle;
+    return mergePartnerRiskBundle(bundle, key, row.geometry);
+  }, createEmptyPartnerRiskBundle());
+}
+
+function dedupePartnerRiskRows(
+  rows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  const latestByDataset = new Map<PartnerRiskDataKey, Record<string, unknown>>();
+  const passthroughRows: Array<Record<string, unknown>> = [];
+
+  rows.forEach(row => {
+    const filename = getUploadFilename(row);
+    const datasetType = inferLogicalDatasetTypeFromFilename(filename);
+
+    if (!datasetType) {
+      // If upload is missing or unrecognized, don't let it override known datasets.
+      passthroughRows.push(row);
+      return;
+    }
+
+    const current = latestByDataset.get(datasetType);
+    const rowCreatedAt = parseCreatedAtTimestamp(row.created_at);
+    const currentCreatedAt = current
+      ? parseCreatedAtTimestamp(current.created_at)
+      : Number.NEGATIVE_INFINITY;
+
+    if (!current || rowCreatedAt >= currentCreatedAt) {
+      latestByDataset.set(datasetType, row);
+    }
+  });
+
+  return [...latestByDataset.values(), ...passthroughRows];
 }
 
 function extractPartnerRegionalSummaryRows(
@@ -1138,34 +1611,221 @@ function normalizeRegionalSummaryContract(
     });
 }
 
-async function loadPartnerApiCountryData(
-  countryCode: CountryCode,
-  signal?: AbortSignal
-): Promise<{
-  countryId: number | null;
-  cycloneTrack: GeoJSON.FeatureCollection | null;
-  eventMeta: { name?: string; date?: string } | null;
-  riskRegionalSummary: Array<Record<string, unknown>>;
-  riskImpactByAsset: Array<Record<string, unknown>>;
-}> {
-  // Partner API mapping requested for Samoa and Tonga only.
-  if (countryCode !== 'WS' && countryCode !== 'TO') {
-    return {
-      countryId: null,
-      cycloneTrack: null,
-      eventMeta: null,
-      riskRegionalSummary: [],
-      riskImpactByAsset: [],
+async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promise<unknown> {
+  const normalizePartnerProxyUrl = (nextUrl: string): string => {
+    if (typeof window === 'undefined') {
+      return nextUrl;
+    }
+
+    try {
+      const parsed = new URL(nextUrl, window.location.origin);
+      if (parsed.origin === window.location.origin) {
+        return parsed.toString();
+      }
+
+      if (parsed.pathname.startsWith('/partner_api/') || parsed.pathname.startsWith('/media/')) {
+        const proxiedPath = `/api/partner-proxy${parsed.pathname}${parsed.search}`;
+        return window.location.origin + withBasePath(proxiedPath);
+      }
+
+      return nextUrl;
+    } catch {
+      return nextUrl;
+    }
+  };
+
+  try {
+    const response = await fetch(normalizePartnerProxyUrl(url), { signal, cache: 'no-store' });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      return payload;
+    }
+
+    const record = payload as {
+      results?: unknown[];
+      next?: string | null;
     };
+
+    if (!Array.isArray(record.results)) {
+      return payload;
+    }
+
+    const results = [...record.results];
+    let nextUrl = typeof record.next === 'string' ? record.next : null;
+    let safetyCounter = 0;
+
+    while (nextUrl && safetyCounter < 20) {
+      safetyCounter += 1;
+
+      try {
+        const nextResponse = await fetch(normalizePartnerProxyUrl(nextUrl), {
+          signal,
+          cache: 'no-store',
+        });
+        if (!nextResponse.ok) {
+          break;
+        }
+        const nextPayload = await nextResponse.json();
+        if (!nextPayload || typeof nextPayload !== 'object') {
+          break;
+        }
+        const nextRecord = nextPayload as {
+          results?: unknown[];
+          next?: string | null;
+        };
+        if (Array.isArray(nextRecord.results)) {
+          results.push(...nextRecord.results);
+        }
+        nextUrl = typeof nextRecord.next === 'string' ? nextRecord.next : null;
+      } catch {
+        // Keep the successfully fetched pages instead of failing the entire partner-data load.
+        break;
+      }
+    }
+
+    return results;
+  } catch {
+    return null;
+  }
+}
+
+function parsePartnerDatasetPath(urlValue: unknown): string | null {
+  if (typeof urlValue !== 'string' || !urlValue.trim()) {
+    return null;
   }
 
-  if (!isPartnerApiEnabled()) {
+  try {
+    const parsed = new URL(urlValue);
+    const marker = '/thredds/wms';
+    const index = parsed.pathname.indexOf(marker);
+    if (index >= 0) {
+      return parsed.pathname.slice(index + marker.length);
+    }
+    return parsed.pathname || null;
+  } catch {
+    const marker = '/thredds/wms';
+    const index = urlValue.indexOf(marker);
+    if (index >= 0) {
+      return urlValue.slice(index + marker.length).split('?')[0] || null;
+    }
+    return null;
+  }
+}
+
+function inferPartnerHazardType(row: Record<string, unknown>): RealWMSLayer['hazardType'] | null {
+  const values = [row.protocol, row.layer_name, row.style, row.url, row.hazard_type, row.hazardType]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+  if (values.includes('wind')) return 'wind';
+  if (values.includes('fluvial')) return 'fluvial-depth';
+  if (values.includes('flood') || values.includes('inundation') || values.includes('surge')) {
+    return 'flood';
+  }
+  if (values.includes('cyclone') || values.includes('track')) return 'cyclone';
+  return null;
+}
+
+function defaultHazardBbox(countryCode: CountryCode): [number, number, number, number] {
+  const [lng, lat] = COUNTRIES[countryCode].center;
+  return [lng - 1, lat - 1, lng + 1, lat + 1];
+}
+
+function buildPartnerHazardLayers(
+  countryCode: CountryCode,
+  hazardRows: Array<Record<string, unknown>>,
+  eventRecords: EventRecord[] = []
+): RealWMSLayer[] {
+  const layers: RealWMSLayer[] = [];
+  const hazardIdToEventId = new Map<string, string>();
+
+  eventRecords.forEach(eventRecord => {
+    (eventRecord.backendHazardIds ?? []).forEach(hazardId => {
+      if (!hazardIdToEventId.has(hazardId)) {
+        hazardIdToEventId.set(hazardId, eventRecord.id);
+      }
+    });
+  });
+
+  hazardRows.forEach((row, index) => {
+    const hazardType = inferPartnerHazardType(row);
+    const datasetPath = parsePartnerDatasetPath(row.url);
+    if (!hazardType || !datasetPath) {
+      return;
+    }
+
+    const layerName = (typeof row.layer_name === 'string' && row.layer_name.trim()) || 'Depth';
+    const layerIdBase =
+      (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : `${index}`) ||
+      `${index}`;
+    const min = toNumber(row.min);
+    const max = toNumber(row.max);
+
+    layers.push({
+      id: `partner-${countryCode.toLowerCase()}-${layerIdBase}-${hazardType}`,
+      eventId: hazardIdToEventId.get(String(row.id)) ?? undefined,
+      name:
+        (typeof row.layer_name === 'string' && row.layer_name.trim()) ||
+        (typeof row.protocol === 'string' && row.protocol.trim()) ||
+        `Partner ${hazardType} layer`,
+      countryCode,
+      ncFile: datasetPath.split('/').filter(Boolean).pop() || `${hazardType}.nc`,
+      datasetPath,
+      layerName,
+      description:
+        (typeof row.url === 'string' && row.url) ||
+        `Partner API ${hazardType} layer for ${countryCode}`,
+      hazardType,
+      bbox: defaultHazardBbox(countryCode),
+      styleConfig:
+        min !== null && max !== null
+          ? {
+              colorScaleRange: `${min},${max}`,
+            }
+          : undefined,
+      source: 'partner_api',
+    });
+  });
+
+  return layers;
+}
+
+async function loadPartnerApiCountryData(
+  countryCode: CountryCode,
+  signal?: AbortSignal,
+  selectedEventIds: string[] = [],
+  dateRange?: { start?: string; end?: string }
+): Promise<{
+  countryId: number | null;
+  eventRecords: EventRecord[];
+  cycloneTrack: GeoJSON.FeatureCollection | null;
+  eventMeta: { name?: string; date?: string } | null;
+  riskData: PartnerRiskBundle;
+  hazardLayers: RealWMSLayer[];
+  forecastTrackUrl: string | null;
+  forecastPoints: CycloneForecastPoint[] | null;
+  perEventRiskData: Map<string, PartnerRiskBundle>;
+}> {
+  if (!isPartnerApiEnabled() || !isPartnerApiCountryEnabled(countryCode)) {
     return {
       countryId: null,
+      eventRecords: [],
       cycloneTrack: null,
       eventMeta: null,
-      riskRegionalSummary: [],
-      riskImpactByAsset: [],
+      riskData: createEmptyPartnerRiskBundle(),
+      hazardLayers: [],
+      forecastTrackUrl: null,
+      forecastPoints: null,
+      perEventRiskData: new Map(),
     };
   }
 
@@ -1175,40 +1835,232 @@ async function loadPartnerApiCountryData(
     if (!mapping.scopedUrls) {
       return {
         countryId: mapping.countryId,
+        eventRecords: [],
         cycloneTrack: null,
         eventMeta: null,
-        riskRegionalSummary: [],
-        riskImpactByAsset: [],
+        riskData: createEmptyPartnerRiskBundle(),
+        hazardLayers: [],
+        forecastTrackUrl: null,
+        forecastPoints: null,
+        perEventRiskData: new Map(),
       };
     }
 
-    const [cycloneResponse, eventResponse, riskResponse] = await Promise.all([
-      fetch(mapping.scopedUrls.cyclone_track, { signal, cache: 'no-store' }),
-      fetch(mapping.scopedUrls.event, { signal, cache: 'no-store' }),
-      fetch(mapping.scopedUrls.risk_information, { signal, cache: 'no-store' }),
+    const [eventPayload, cyclonePayload, riskPayload, hazardPayload] = await Promise.all([
+      fetchPartnerCollection(mapping.scopedUrls.event, signal),
+      fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
+      fetchPartnerCollection(mapping.scopedUrls.risk_information, signal),
+      fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
     ]);
+    const normalizedEventRecords = normalizePartnerEvents(
+      countryCode,
+      eventPayload,
+      mapping.countryId
+    );
+    const activeEventRecord =
+      normalizedEventRecords.length > 0
+        ? resolveActiveEventRecord(countryCode, normalizedEventRecords, selectedEventIds, dateRange)
+        : createCountryScopedEventRecord(countryCode);
+    const countryRiskRows = filterPartnerRowsByCountryId(
+      toArrayPayload(riskPayload),
+      mapping.countryId
+    ).filter(row => row.country !== null);
+    const scopedRiskRows = filterPartnerRowsByIds(
+      countryRiskRows,
+      activeEventRecord.backendRiskIds ?? [],
+      ['id']
+    );
+    const riskRows = dedupePartnerRiskRows(scopedRiskRows);
+    const allHazardIds = normalizedEventRecords.flatMap(er => er.backendHazardIds ?? []);
+    const hazardRows = filterPartnerRowsByIds(
+      filterPartnerRowsByCountryId(toArrayPayload(hazardPayload), mapping.countryId),
+      allHazardIds,
+      ['id']
+    );
+    const riskData = extractPartnerRiskBundle(riskRows);
 
-    const cyclonePayload = cycloneResponse.ok ? await cycloneResponse.json() : null;
-    const eventPayload = eventResponse.ok ? await eventResponse.json() : null;
-    const riskPayload = riskResponse.ok ? await riskResponse.json() : null;
-    const riskRows = toArrayPayload(riskPayload);
+    // Build per-event risk bundles for all backend events (enables multi-event metrics).
+    const perEventRiskData = new Map<string, PartnerRiskBundle>();
+    for (const eventRecord of normalizedEventRecords) {
+      if (eventRecord.id === activeEventRecord.id) {
+        perEventRiskData.set(eventRecord.id, {
+          ...riskData,
+          regionalSummary:
+            riskData.regionalSummary.length > 0
+              ? riskData.regionalSummary
+              : extractPartnerRegionalSummaryRows(riskRows),
+          impactByAsset:
+            riskData.impactByAsset.length > 0
+              ? riskData.impactByAsset
+              : extractPartnerImpactByAssetRows(riskRows),
+        });
+        continue;
+      }
+      const eventRiskRows = dedupePartnerRiskRows(
+        filterPartnerRowsByIds(countryRiskRows, eventRecord.backendRiskIds ?? [], ['id'])
+      );
+      const eventRiskData = extractPartnerRiskBundle(eventRiskRows);
+      perEventRiskData.set(eventRecord.id, {
+        ...eventRiskData,
+        regionalSummary:
+          eventRiskData.regionalSummary.length > 0
+            ? eventRiskData.regionalSummary
+            : extractPartnerRegionalSummaryRows(eventRiskRows),
+        impactByAsset:
+          eventRiskData.impactByAsset.length > 0
+            ? eventRiskData.impactByAsset
+            : extractPartnerImpactByAssetRows(eventRiskRows),
+      });
+    }
+
+    const trackIds = activeEventRecord.backendCycloneTrackId
+      ? [activeEventRecord.backendCycloneTrackId]
+      : [];
+    let cycloneTrack = buildCycloneTrackFromPartnerPayloadForTrackIds(cyclonePayload, trackIds);
+
+    // If the embedded geometry is missing, try fetching from the track_file URL.
+    if (!cycloneTrack && trackIds.length > 0) {
+      const trackRows = filterPartnerRowsByIds(toArrayPayload(cyclonePayload), trackIds, ['id']);
+      for (const trackRow of trackRows) {
+        const trackFileUrl =
+          typeof trackRow.track_file === 'string' ? trackRow.track_file.trim() : null;
+        if (!trackFileUrl) continue;
+        try {
+          const normalizedUrl =
+            typeof window === 'undefined'
+              ? trackFileUrl
+              : (() => {
+                  try {
+                    const p = new URL(trackFileUrl, window.location.origin);
+                    if (
+                      p.origin !== window.location.origin &&
+                      (p.pathname.startsWith('/partner_api/') || p.pathname.startsWith('/media/'))
+                    ) {
+                      return (
+                        window.location.origin +
+                        withBasePath(`/api/partner-proxy${p.pathname}${p.search}`)
+                      );
+                    }
+                    return trackFileUrl;
+                  } catch {
+                    return trackFileUrl;
+                  }
+                })();
+          const res = await fetch(normalizedUrl, { signal, cache: 'no-store' });
+          if (res.ok) {
+            const trackData = await res.json();
+            cycloneTrack = buildCycloneTrackFromPartnerPayload(trackData);
+            if (cycloneTrack) break;
+          }
+        } catch {
+          /* continue to next row */
+        }
+      }
+    }
+
+    // Resolve track rows for the active event (used by both URL and geometry extraction).
+    const relevantTrackRows = (() => {
+      const all = toArrayPayload(cyclonePayload);
+      return trackIds.length > 0 ? filterPartnerRowsByIds(all, trackIds, ['id']) : all;
+    })();
+
+    // Resolve the proxied URL of the raw forecast CSV (kept as fallback).
+    const forecastTrackUrl = (() => {
+      for (const row of relevantTrackRows) {
+        const url = typeof row.track_file === 'string' ? row.track_file.trim() : null;
+        if (!url) continue;
+        if (typeof window === 'undefined') return url;
+        try {
+          const p = new URL(url, window.location.origin);
+          if (
+            p.origin !== window.location.origin &&
+            (p.pathname.startsWith('/partner_api/') || p.pathname.startsWith('/media/'))
+          ) {
+            return (
+              window.location.origin + withBasePath(`/api/partner-proxy${p.pathname}${p.search}`)
+            );
+          }
+          return url;
+        } catch {
+          return url;
+        }
+      }
+      return null;
+    })();
+
+    // Parse forecast animation points from the pre-computed geometry — no extra
+    // HTTP request. Falls back to null so the caller can chain to the CSV path.
+    const forecastPoints = (() => {
+      for (const row of relevantTrackRows) {
+        if (!row.geometry_computed) continue;
+        const points = parseForecastPointsFromGeometry(row.geometry);
+        if (points && points.length > 0) return points;
+      }
+      return null;
+    })();
 
     return {
       countryId: mapping.countryId,
-      cycloneTrack: buildCycloneTrackFromPartnerPayload(cyclonePayload),
-      eventMeta: selectPartnerPrimaryEvent(eventPayload),
-      riskRegionalSummary: extractPartnerRegionalSummaryRows(riskRows),
-      riskImpactByAsset: extractPartnerImpactByAssetRows(riskRows),
+      eventRecords: normalizedEventRecords,
+      cycloneTrack,
+      eventMeta: {
+        name: activeEventRecord.name,
+        date: activeEventRecord.date,
+      },
+      riskData: perEventRiskData.get(activeEventRecord.id) ?? {
+        ...riskData,
+        regionalSummary:
+          riskData.regionalSummary.length > 0
+            ? riskData.regionalSummary
+            : extractPartnerRegionalSummaryRows(riskRows),
+        impactByAsset:
+          riskData.impactByAsset.length > 0
+            ? riskData.impactByAsset
+            : extractPartnerImpactByAssetRows(riskRows),
+      },
+      hazardLayers: buildPartnerHazardLayers(countryCode, hazardRows, normalizedEventRecords),
+      forecastTrackUrl,
+      forecastPoints,
+      perEventRiskData,
     };
   } catch (_error) {
-    // Any partner API failure falls through to existing local-file loaders.
+    // Partner API failures should not silently fall back to local event files.
     return {
       countryId: null,
+      eventRecords: [],
       cycloneTrack: null,
       eventMeta: null,
-      riskRegionalSummary: [],
-      riskImpactByAsset: [],
+      riskData: createEmptyPartnerRiskBundle(),
+      hazardLayers: [],
+      forecastTrackUrl: null,
+      forecastPoints: null,
+      perEventRiskData: new Map(),
     };
+  }
+}
+
+export async function fetchEventRecords(
+  countryCode: CountryCode,
+  signal?: AbortSignal
+): Promise<EventRecord[]> {
+  const usePartnerOnly = isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode);
+  try {
+    const response = await fetch(withBasePath(`/api/events?country=${countryCode}`), {
+      signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return usePartnerOnly ? [] : getLocalEventRecords(countryCode);
+    }
+
+    const payload = await response.json();
+    if (!Array.isArray(payload?.events)) {
+      return usePartnerOnly ? [] : getLocalEventRecords(countryCode);
+    }
+
+    return payload.events as EventRecord[];
+  } catch {
+    return usePartnerOnly ? [] : getLocalEventRecords(countryCode);
   }
 }
 
@@ -1220,20 +2072,49 @@ export async function loadAllRealData(
     includeDamagedAssets = true,
     includeSupplementaryData = true,
     countryCode = 'VU',
+    selectedEventIds = [],
+    dateRange,
   } = options;
   const basePath = DATA_PATH[countryCode];
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
-  const trackFile = cycloneConfig.trackFile ? `${basePath}/${cycloneConfig.trackFile}` : null;
-  const forecastFile = cycloneConfig.forecastFile
-    ? `${basePath}/${cycloneConfig.forecastFile}`
+  const partnerData = await loadPartnerApiCountryData(
+    countryCode,
+    signal,
+    selectedEventIds,
+    dateRange
+  );
+  const partnerApiActive = isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode);
+  const fetchedEventRecords = await fetchEventRecords(countryCode, signal);
+  const eventRecords = partnerApiActive
+    ? fetchedEventRecords.filter(record => record.countryCode === countryCode)
+    : resolveEventRecords(countryCode, fetchedEventRecords);
+  const activeEventRecord = partnerApiActive
+    ? eventRecords.length > 0
+      ? resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange)
+      : createCountryScopedEventRecord(countryCode, partnerData.eventMeta)
+    : resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange);
+  const trackFile = activeEventRecord.trackFile
+    ? `${basePath}/${activeEventRecord.trackFile}`
     : null;
-  const partnerData = await loadPartnerApiCountryData(countryCode, signal);
+  const forecastFile = activeEventRecord.forecastFile
+    ? `${basePath}/${activeEventRecord.forecastFile}`
+    : null;
+  const strictPartnerApi = partnerApiActive || isPartnerApiCountryStrict(countryCode);
+
+  const partnerForecastUrl = partnerData.forecastTrackUrl;
   const cycloneTrackSource: 'partner_api' | 'local_files' = partnerData.cycloneTrack
     ? 'partner_api'
     : 'local_files';
   const eventMetadataSource: 'partner_api' | 'local_files' = partnerData.eventMeta
     ? 'partner_api'
     : 'local_files';
+  const riskDataSource: 'partner_api' | 'local_files' =
+    partnerData.riskData.regionalImpacts ||
+    partnerData.riskData.regionalSummary.length > 0 ||
+    partnerData.riskData.impactByAsset.length > 0
+      ? 'partner_api'
+      : 'local_files';
+  const hazardLayerSource: 'partner_api' | 'static_config' =
+    partnerData.hazardLayers.length > 0 ? 'partner_api' : 'static_config';
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Loading real data for ${countryCode} from ${basePath}...`);
   }
@@ -1254,37 +2135,88 @@ export async function loadAllRealData(
   ] = await Promise.all([
     partnerData.cycloneTrack
       ? Promise.resolve(partnerData.cycloneTrack)
-      : trackFile
-        ? loadCycloneTrackData({ signal, trackFile })
-        : Promise.resolve(null),
-    forecastFile ? loadCycloneForecastTrack({ signal, forecastFile }) : Promise.resolve(null),
-    loadRegionalImpacts({ signal, basePath, countryCode }),
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : trackFile
+          ? loadCycloneTrackData({ signal, trackFile })
+          : Promise.resolve(null),
+    partnerData.forecastPoints
+      ? Promise.resolve(partnerData.forecastPoints)
+      : partnerForecastUrl
+        ? loadCycloneForecastTrack({ signal, forecastFile: partnerForecastUrl })
+        : forecastFile
+          ? loadCycloneForecastTrack({ signal, forecastFile })
+          : Promise.resolve(null),
+    partnerData.riskData.regionalImpacts
+      ? Promise.resolve(partnerData.riskData.regionalImpacts)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadRegionalImpacts({ signal, basePath, countryCode }),
     includeSupplementaryData
-      ? loadRegionalImpactsBySector({ signal, basePath, countryCode }) // Load sector-specific regional data
+      ? partnerData.riskData.regionalImpactsBySector
+        ? Promise.resolve(partnerData.riskData.regionalImpactsBySector)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadRegionalImpactsBySector({ signal, basePath, countryCode })
       : Promise.resolve(null),
     includeSupplementaryData
-      ? loadExposureByCluster({ signal, basePath, countryCode })
+      ? partnerData.riskData.exposureByCluster
+        ? Promise.resolve(partnerData.riskData.exposureByCluster)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadExposureByCluster({ signal, basePath, countryCode })
       : Promise.resolve(null),
     includeSupplementaryData
-      ? loadNationalSummary({ signal, basePath, countryCode })
+      ? partnerData.riskData.nationalSummary.length > 0
+        ? Promise.resolve(partnerData.riskData.nationalSummary)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadNationalSummary({ signal, basePath, countryCode })
       : Promise.resolve(null),
     includeSupplementaryData
-      ? loadImpactByAssetType({ signal, basePath, countryCode })
+      ? partnerData.riskData.impactByAsset.length > 0
+        ? Promise.resolve(partnerData.riskData.impactByAsset)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadImpactByAssetType({ signal, basePath, countryCode })
       : Promise.resolve(null),
     includeSupplementaryData
-      ? loadImpactBySector({ signal, basePath, countryCode })
+      ? partnerData.riskData.impactBySector.length > 0
+        ? Promise.resolve(partnerData.riskData.impactBySector)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadImpactBySector({ signal, basePath, countryCode })
       : Promise.resolve(null),
-    loadRegionalSummary({ signal, basePath, countryCode }),
+    partnerData.riskData.regionalSummary.length > 0
+      ? Promise.resolve(partnerData.riskData.regionalSummary)
+      : strictPartnerApi
+        ? Promise.resolve([])
+        : loadRegionalSummary({ signal, basePath, countryCode }),
     includeSupplementaryData
-      ? loadRegionalSummaryBySector({ signal, basePath, countryCode })
+      ? partnerData.riskData.regionalSummaryBySector.length > 0
+        ? Promise.resolve(partnerData.riskData.regionalSummaryBySector)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadRegionalSummaryBySector({ signal, basePath, countryCode })
       : Promise.resolve(null),
-    includeDamagedAssets ? loadDamagedBuildings({ signal, countryCode }) : Promise.resolve(null),
-    includeDamagedAssets ? loadDamagedRoads({ signal, countryCode }) : Promise.resolve(null),
+    includeDamagedAssets
+      ? partnerData.riskData.damagedBuildings
+        ? Promise.resolve(partnerData.riskData.damagedBuildings)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadDamagedBuildings({ signal, countryCode, selectedEventIds, dateRange, eventRecords })
+      : Promise.resolve(null),
+    includeDamagedAssets
+      ? partnerData.riskData.damagedRoads
+        ? Promise.resolve(partnerData.riskData.damagedRoads)
+        : strictPartnerApi
+          ? Promise.resolve(null)
+          : loadDamagedRoads({ signal, countryCode, selectedEventIds, dateRange, eventRecords })
+      : Promise.resolve(null),
   ]);
 
-  // Prefer partner risk_information values when local summary/asset CSVs are empty or zeroed.
-  const regionalSummaryFromPartner = partnerData.riskRegionalSummary;
-  const impactByAssetFromPartner = partnerData.riskImpactByAsset;
+  const regionalSummaryFromPartner = partnerData.riskData.regionalSummary;
+  const impactByAssetFromPartner = partnerData.riskData.impactByAsset;
 
   const effectiveRegionalSummary =
     regionalSummaryFromPartner.length > 0 && !hasNonZeroLoss(regionalSummaryData)
@@ -1317,8 +2249,8 @@ export async function loadAllRealData(
       ? buildCycloneTrackFromForecastPoints(cycloneForecast)
       : null;
 
-  // Create a SINGLE event for the country's primary cyclone event
-  const primaryEventId = cycloneConfig.eventId;
+  // Build metrics for the active event record selected by backend event metadata.
+  const primaryEventId = activeEventRecord.id;
 
   // Convert regional impacts to RegionalImpact objects
   const regionalImpactsData = enrichedRegionalImpacts
@@ -1348,20 +2280,67 @@ export async function loadAllRealData(
   // Create the single primary cyclone event
   const primaryEvent: Event = {
     id: primaryEventId,
-    name: partnerData.eventMeta?.name || cycloneConfig.eventName,
-    date: partnerData.eventMeta?.date || cycloneConfig.eventDate,
-    hazardId: 'tropical-cyclone',
+    name: activeEventRecord.name,
+    date: activeEventRecord.date,
+    hazardId: activeEventRecord.hazardId,
     countryCode,
     totalAffectedPopulation,
     totalEconomicDamage,
     affectedRegions,
     severity: overallSeverity,
-    location: cycloneConfig.center,
+    location: activeEventRecord.location,
     regionalImpacts: regionalImpactsData,
   };
 
-  // Events array now contains only ONE event
-  const events = [primaryEvent];
+  const events = eventRecords.map((eventRecord: EventRecord): Event => {
+    if (eventRecord.id === primaryEvent.id) return primaryEvent;
+
+    const evtRiskData = partnerData.perEventRiskData.get(eventRecord.id);
+    if (evtRiskData?.regionalImpacts) {
+      const evtRegionalImpacts = convertRegionalImpactsToRegionalImpacts(
+        evtRiskData.regionalImpacts,
+        eventRecord.id
+      );
+      const evtTotalPop = evtRegionalImpacts.reduce((sum, ri) => sum + ri.affectedPopulation, 0);
+      const evtTotalEcon = evtRegionalImpacts.reduce((sum, ri) => sum + ri.economicDamage, 0);
+      const evtCritCount = evtRegionalImpacts.filter(ri => ri.severity === 'critical').length;
+      const evtHighCount = evtRegionalImpacts.filter(ri => ri.severity === 'high').length;
+      const evtSeverity: 'low' | 'medium' | 'high' | 'critical' =
+        evtCritCount > 0
+          ? 'critical'
+          : evtHighCount > evtRegionalImpacts.length / 2
+            ? 'high'
+            : evtHighCount > 0
+              ? 'medium'
+              : 'low';
+      return {
+        id: eventRecord.id,
+        name: eventRecord.name,
+        date: eventRecord.date,
+        hazardId: eventRecord.hazardId,
+        countryCode,
+        totalAffectedPopulation: evtTotalPop,
+        totalEconomicDamage: evtTotalEcon,
+        affectedRegions: evtRegionalImpacts.length,
+        severity: evtSeverity,
+        location: eventRecord.location,
+        regionalImpacts: evtRegionalImpacts,
+      };
+    }
+
+    return {
+      id: eventRecord.id,
+      name: eventRecord.name,
+      date: eventRecord.date,
+      hazardId: eventRecord.hazardId,
+      countryCode,
+      totalAffectedPopulation: 0,
+      totalEconomicDamage: 0,
+      affectedRegions: 0,
+      severity: 'low' as const,
+      location: eventRecord.location,
+    };
+  });
 
   // Also create sector-specific events for filtering (backward compatibility)
   // This allows sector filtering to work correctly
@@ -1374,12 +2353,12 @@ export async function loadAllRealData(
   const exposureData = convertToExposureData(
     regionalSummaryBySector,
     normalizedRegionalSummary,
-    countryCode
+    activeEventRecord
   );
 
   // Separate economic data into sector-level and asset-level
-  const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
-  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
+  const sectorEconomicData = convertSectorEconomicData(impactBySector, activeEventRecord);
+  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, activeEventRecord);
 
   // Process asset-level exposure data
   const assetExposureData = processAssetExposureData(exposureByCluster);
@@ -1387,10 +2366,10 @@ export async function loadAllRealData(
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Loaded ${events.length} event(s) from real data`);
     console.log(
-      `   - ${cycloneConfig.eventName} (${countryCode}): ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`
+      `   - ${activeEventRecord.name} (${countryCode}): ${affectedRegions} regions, ${totalAffectedPopulation.toLocaleString()} people affected`
     );
     console.log(
-      `Loaded ${regionalImpactsData.length} regional impacts for ${cycloneConfig.eventName}`
+      `Loaded ${regionalImpactsData.length} regional impacts for ${activeEventRecord.name}`
     );
     console.log(`Loaded ${exposureData.length} exposure records (sector-specific)`);
     console.log(`Loaded ${sectorEconomicData.length} sector economic damage records`);
@@ -1431,7 +2410,11 @@ export async function loadAllRealData(
       countryCode,
       cycloneTrackSource,
       eventMetadataSource,
+      riskDataSource,
+      hazardLayerSource,
     },
+    partnerHazardLayers: partnerData.hazardLayers,
+    fetchedEventRecords: eventRecords,
   };
 }
 
@@ -1463,6 +2446,9 @@ export async function loadSupplementaryRealData(
   }
 
   const partnerData = await loadPartnerApiCountryData(countryCode, signal);
+  const strictPartnerApi =
+    (isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode)) ||
+    isPartnerApiCountryStrict(countryCode);
 
   const [
     regionalImpactsBySectorGeoJSON,
@@ -1472,12 +2458,36 @@ export async function loadSupplementaryRealData(
     impactBySector,
     regionalSummaryBySector,
   ] = await Promise.all([
-    loadRegionalImpactsBySector({ signal, basePath, countryCode }),
-    loadExposureByCluster({ signal, basePath, countryCode }),
-    loadNationalSummary({ signal, basePath, countryCode }),
-    loadImpactByAssetType({ signal, basePath, countryCode }),
-    loadImpactBySector({ signal, basePath, countryCode }),
-    loadRegionalSummaryBySector({ signal, basePath, countryCode }),
+    partnerData.riskData.regionalImpactsBySector
+      ? Promise.resolve(partnerData.riskData.regionalImpactsBySector)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadRegionalImpactsBySector({ signal, basePath, countryCode }),
+    partnerData.riskData.exposureByCluster
+      ? Promise.resolve(partnerData.riskData.exposureByCluster)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadExposureByCluster({ signal, basePath, countryCode }),
+    partnerData.riskData.nationalSummary.length > 0
+      ? Promise.resolve(partnerData.riskData.nationalSummary)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadNationalSummary({ signal, basePath, countryCode }),
+    partnerData.riskData.impactByAsset.length > 0
+      ? Promise.resolve(partnerData.riskData.impactByAsset)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadImpactByAssetType({ signal, basePath, countryCode }),
+    partnerData.riskData.impactBySector.length > 0
+      ? Promise.resolve(partnerData.riskData.impactBySector)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadImpactBySector({ signal, basePath, countryCode }),
+    partnerData.riskData.regionalSummaryBySector.length > 0
+      ? Promise.resolve(partnerData.riskData.regionalSummaryBySector)
+      : strictPartnerApi
+        ? Promise.resolve(null)
+        : loadRegionalSummaryBySector({ signal, basePath, countryCode }),
   ]);
 
   if (process.env.NODE_ENV !== 'production') {
@@ -1487,9 +2497,9 @@ export async function loadSupplementaryRealData(
     });
   }
 
-  const impactByAssetFromPartner = partnerData.riskImpactByAsset;
+  const impactByAssetFromPartner = partnerData.riskData.impactByAsset;
   const nationalSummaryFromPartner = buildNationalSummaryFromRegionalRows(
-    partnerData.riskRegionalSummary
+    partnerData.riskData.regionalSummary
   );
   const effectiveNationalSummary =
     nationalSummaryFromPartner.length > 0 && !hasNonZeroLoss(nationalSummary)
@@ -1499,13 +2509,20 @@ export async function loadSupplementaryRealData(
     impactByAssetFromPartner.length > 0 && !hasNonZeroLoss(impactByAsset)
       ? impactByAssetFromPartner
       : impactByAsset;
+  const activeEventRecord = strictPartnerApi
+    ? createCountryScopedEventRecord(countryCode, partnerData.eventMeta)
+    : getDefaultEventRecord(countryCode);
 
   const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
     ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
     : [];
-  const exposureData = convertToExposureData(regionalSummaryBySector, regionalSummary, countryCode);
-  const sectorEconomicData = convertSectorEconomicData(impactBySector, countryCode);
-  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, countryCode);
+  const exposureData = convertToExposureData(
+    regionalSummaryBySector,
+    regionalSummary,
+    activeEventRecord
+  );
+  const sectorEconomicData = convertSectorEconomicData(impactBySector, activeEventRecord);
+  const assetEconomicData = convertAssetEconomicData(effectiveImpactByAsset, activeEventRecord);
   const assetExposureData = processAssetExposureData(exposureByCluster);
 
   if (process.env.NODE_ENV !== 'production') {
@@ -1566,10 +2583,9 @@ function mapAssetToSector(assetType: string): string {
 function convertToExposureData(
   regionalSummaryBySector: any,
   regionalSummary: any | undefined,
-  countryCode: CountryCode
+  eventRecord: Pick<EventRecord, 'id' | 'date'>
 ): any[] {
   if (!regionalSummaryBySector || !Array.isArray(regionalSummaryBySector)) return [];
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
 
   // Build region -> population lookup from full regional summary
   const regionPopulationMap: Record<
@@ -1606,8 +2622,8 @@ function convertToExposureData(
       id: `exposure-${index}`,
       hazardId: 'tropical-cyclone',
       sectorId: row.Sector || 'Unknown',
-      eventId: cycloneConfig.eventId,
-      eventDate: cycloneConfig.eventDate,
+      eventId: eventRecord.id,
+      eventDate: eventRecord.date,
       region: regionName,
       population: attributedPopulation,
       assets: exposedValue,
@@ -1620,11 +2636,14 @@ function convertToExposureData(
 /**
  * Convert impact by sector CSV to EconomicDamageData format (sector-level)
  */
-function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode): any[] {
+function convertSectorEconomicData(
+  impactBySector: any,
+  eventRecord: Pick<EventRecord, 'id' | 'date'> & { countryCode: CountryCode }
+): any[] {
   if (!impactBySector || !Array.isArray(impactBySector)) {
     if (process.env.NODE_ENV !== 'production') {
       console.log(
-        `[convertSectorEconomicData] Received null/non-array for ${countryCode}:`,
+        `[convertSectorEconomicData] Received null/non-array for ${eventRecord.countryCode}:`,
         impactBySector
       );
     }
@@ -1633,15 +2652,14 @@ function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(
-      `[convertSectorEconomicData] Converting ${impactBySector.length} rows for ${countryCode}`
+      `[convertSectorEconomicData] Converting ${impactBySector.length} rows for ${eventRecord.countryCode}`
     );
     if (impactBySector.length > 0) {
       console.log(`[convertSectorEconomicData] First row:`, impactBySector[0]);
     }
   }
 
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
-  const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
+  const eventYear = Number.parseInt(eventRecord.date.slice(0, 4), 10);
   const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
   const converted = impactBySector.map((row, index) => ({
@@ -1655,8 +2673,8 @@ function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode
     buildingCount:
       Number(row.Number_Damaged_Buildings) || Number(row.Number_Exposed_Buildings) || 0,
     year: normalizedYear,
-    eventId: cycloneConfig.eventId,
-    eventDate: cycloneConfig.eventDate,
+    eventId: eventRecord.id,
+    eventDate: eventRecord.date,
     sector: row.Sector || 'Unknown',
   }));
 
@@ -1670,11 +2688,14 @@ function convertSectorEconomicData(impactBySector: any, countryCode: CountryCode
 /**
  * Convert impact by asset type CSV to AssetDamageData format (asset-level)
  */
-function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode): any[] {
+function convertAssetEconomicData(
+  impactByAsset: any,
+  eventRecord: Pick<EventRecord, 'id' | 'date'> & { countryCode: CountryCode }
+): any[] {
   if (!impactByAsset || !Array.isArray(impactByAsset)) {
     if (process.env.NODE_ENV !== 'production') {
       console.log(
-        `[convertAssetEconomicData] Received null/non-array for ${countryCode}:`,
+        `[convertAssetEconomicData] Received null/non-array for ${eventRecord.countryCode}:`,
         impactByAsset
       );
     }
@@ -1683,15 +2704,14 @@ function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode):
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(
-      `[convertAssetEconomicData] Converting ${impactByAsset.length} rows for ${countryCode}`
+      `[convertAssetEconomicData] Converting ${impactByAsset.length} rows for ${eventRecord.countryCode}`
     );
     if (impactByAsset.length > 0) {
       console.log(`[convertAssetEconomicData] First row:`, impactByAsset[0]);
     }
   }
 
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode] ?? COUNTRY_CYCLONE_CONFIG.VU;
-  const eventYear = Number.parseInt(cycloneConfig.eventDate.slice(0, 4), 10);
+  const eventYear = Number.parseInt(eventRecord.date.slice(0, 4), 10);
   const normalizedYear = Number.isFinite(eventYear) ? eventYear : 2023;
 
   const converted = impactByAsset.map((row, index) => ({
@@ -1704,8 +2724,8 @@ function convertAssetEconomicData(impactByAsset: any, countryCode: CountryCode):
     indirectLoss: Number(row.Total_Fluvial_Loss) + Number(row.Total_Coastal_Loss) || 0,
     totalLoss: Number(row.Total_Loss) || 0,
     year: normalizedYear,
-    eventId: cycloneConfig.eventId,
-    eventDate: cycloneConfig.eventDate,
+    eventId: eventRecord.id,
+    eventDate: eventRecord.date,
   }));
 
   if (process.env.NODE_ENV !== 'production') {
@@ -1772,11 +2792,23 @@ export function processWindIntensityData(nationalSummary: any): any {
  * The database provides better performance for large datasets
  */
 export async function loadDamagedBuildings(
-  options: { signal?: AbortSignal; countryCode?: CountryCode } = {}
+  options: {
+    signal?: AbortSignal;
+    countryCode?: CountryCode;
+    selectedEventIds?: string[];
+    dateRange?: { start?: string; end?: string };
+    eventRecords?: EventRecord[];
+  } = {}
 ) {
-  const { signal, countryCode = 'VU' } = options;
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
-  const basePath = DATA_PATH[countryCode];
+  const { signal, countryCode = 'VU', selectedEventIds = [], dateRange, eventRecords } = options;
+  const recordPool =
+    eventRecords && eventRecords.length > 0 ? eventRecords : getLocalEventRecords(countryCode);
+  const eventRecord = resolveActiveEventRecord(
+    countryCode,
+    recordPool,
+    selectedEventIds,
+    dateRange
+  );
   // Try API first (database)
   try {
     const controller = new AbortController();
@@ -1788,14 +2820,25 @@ export async function loadDamagedBuildings(
         signal.addEventListener('abort', () => controller.abort(), { once: true });
       }
     }
-    const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
+    const [minLng, minLat, maxLng, maxLat] = eventRecord.bbox;
+    const params = new URLSearchParams({
+      bbox: `${minLng},${minLat},${maxLng},${maxLat}`,
+      country: countryCode,
+      limit: '100000',
+      event_id: eventRecord.id,
+    });
+    if (dateRange?.start) {
+      params.set('date_start', dateRange.start);
+    }
+    if (dateRange?.end) {
+      params.set('date_end', dateRange.end);
+    }
     let response: Response;
     try {
       const buildingsApiPath = withBasePath('/api/buildings');
-      response = await fetch(
-        `${buildingsApiPath}?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=100000`,
-        { signal: controller.signal }
-      );
+      response = await fetch(`${buildingsApiPath}?${params.toString()}`, {
+        signal: controller.signal,
+      });
     } finally {
       clearTimeout(timeoutId);
     }
@@ -1812,127 +2855,62 @@ export async function loadDamagedBuildings(
       }
 
       if (!isDegraded && featureCount === 0) {
-        console.warn('⚠️ Buildings API returned 0 features, falling back to file data');
+        console.warn('⚠️ Buildings API returned 0 features');
       }
 
-      // DB unavailable/empty path from API: continue to file fallback.
+      return null;
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       if (signal?.aborted) {
         return null;
       }
-      // Internal timeout abort: continue to local file fallback without warning spam.
     } else {
-      console.warn(
-        '⚠️ Database API unavailable, falling back to file:',
-        error instanceof Error ? error.message : error
-      );
+      console.warn('⚠️ Database API unavailable:', error instanceof Error ? error.message : error);
     }
   }
 
-  // Fallback to file (cached)
-  const filePath = getCountryDataFilePath(countryCode, 'damaged-buildings.geojson');
-  console.log(`[Debug] Falling back to file. Loading GeoJSON from: ${filePath}`);
-  const { data } = await loadGeoJSON(filePath, {
-    cache: true,
-    signal,
-  });
-
-  const toPointCoordinate = (
-    geometry: GeoJSON.Geometry | null | undefined
-  ): [number, number] | null => {
-    if (!geometry) return null;
-
-    if (geometry.type === 'Point') {
-      const coords = geometry.coordinates as number[];
-      if (coords.length >= 2) return [coords[0], coords[1]];
-      return null;
-    }
-
-    const bounds = {
-      minLng: Infinity,
-      minLat: Infinity,
-      maxLng: -Infinity,
-      maxLat: -Infinity,
-    };
-
-    const visit = (coords: unknown) => {
-      if (!Array.isArray(coords)) return;
-      if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
-        const lng = coords[0];
-        const lat = coords[1];
-        if (Number.isFinite(lng) && Number.isFinite(lat)) {
-          bounds.minLng = Math.min(bounds.minLng, lng);
-          bounds.minLat = Math.min(bounds.minLat, lat);
-          bounds.maxLng = Math.max(bounds.maxLng, lng);
-          bounds.maxLat = Math.max(bounds.maxLat, lat);
-        }
-        return;
-      }
-      coords.forEach(visit);
-    };
-
-    if (geometry.type === 'GeometryCollection') {
-      geometry.geometries.forEach(geo =>
-        visit((geo as GeoJSON.Geometry & { coordinates?: unknown }).coordinates)
-      );
-    } else {
-      visit((geometry as GeoJSON.Geometry & { coordinates?: unknown }).coordinates);
-    }
-
-    if (
-      !Number.isFinite(bounds.minLng) ||
-      !Number.isFinite(bounds.minLat) ||
-      !Number.isFinite(bounds.maxLng) ||
-      !Number.isFinite(bounds.maxLat)
-    ) {
-      return null;
-    }
-
-    return [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
-  };
-
-  const pointFeatures =
-    data?.features
-      ?.map(feature => {
-        const point = toPointCoordinate(feature.geometry as GeoJSON.Geometry | null | undefined);
-        if (!point) return null;
-        return {
-          ...feature,
-          geometry: {
-            type: 'Point' as const,
-            coordinates: point,
-          },
-        };
-      })
-      .filter(feature => feature !== null) || [];
-
-  const normalizedData = {
-    type: 'FeatureCollection' as const,
-    features: pointFeatures,
-  };
-
-  console.log(
-    `📁 Loaded buildings from FILE (normalized to ${normalizedData.features.length} points)`
-  );
-  return normalizedData;
+  return null;
 }
 
 /**
- * Load damaged roads from database API (preferred) or geojson file (fallback)
+ * Load damaged roads from database API
  */
 export async function loadDamagedRoads(
-  options: { signal?: AbortSignal; countryCode?: CountryCode } = {}
+  options: {
+    signal?: AbortSignal;
+    countryCode?: CountryCode;
+    selectedEventIds?: string[];
+    dateRange?: { start?: string; end?: string };
+    eventRecords?: EventRecord[];
+  } = {}
 ) {
-  const { signal, countryCode = 'VU' } = options;
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG[countryCode];
-  const basePath = DATA_PATH[countryCode];
+  const { signal, countryCode = 'VU', selectedEventIds = [], dateRange, eventRecords } = options;
+  const recordPool =
+    eventRecords && eventRecords.length > 0 ? eventRecords : getLocalEventRecords(countryCode);
+  const eventRecord = resolveActiveEventRecord(
+    countryCode,
+    recordPool,
+    selectedEventIds,
+    dateRange
+  );
   // Try API first (database)
   try {
-    const [minLng, minLat, maxLng, maxLat] = cycloneConfig.bbox;
+    const [minLng, minLat, maxLng, maxLat] = eventRecord.bbox;
     const roadsApiPath = withBasePath('/api/roads');
-    const url = `${roadsApiPath}?bbox=${minLng},${minLat},${maxLng},${maxLat}&country=${countryCode}&limit=10000`;
+    const params = new URLSearchParams({
+      bbox: `${minLng},${minLat},${maxLng},${maxLat}`,
+      country: countryCode,
+      limit: '10000',
+      event_id: eventRecord.id,
+    });
+    if (dateRange?.start) {
+      params.set('date_start', dateRange.start);
+    }
+    if (dateRange?.end) {
+      params.set('date_end', dateRange.end);
+    }
+    const url = `${roadsApiPath}?${params.toString()}`;
     console.log('🔍 Attempting to load roads from API:', url);
 
     const controller = new AbortController();
@@ -1971,12 +2949,14 @@ export async function loadDamagedRoads(
       }
 
       if (!isDegraded && featureCount === 0) {
-        console.warn('⚠️ Roads API returned 0 features, falling back to file data');
+        console.warn('⚠️ Roads API returned 0 features');
       }
 
       if (isDegraded) {
-        console.warn('⚠️ Roads API is degraded, using local file fallback');
+        console.warn('⚠️ Roads API is degraded');
       }
+
+      return null;
     } else {
       console.warn(`⚠️ API returned ${response.status}: ${response.statusText}`);
     }
@@ -1985,27 +2965,12 @@ export async function loadDamagedRoads(
       if (signal?.aborted) {
         return null;
       }
-      // Internal timeout abort: continue to local file fallback without warning spam.
     } else {
-      console.warn(
-        '⚠️ Roads API unavailable, falling back to file:',
-        error instanceof Error ? error.message : error
-      );
+      console.warn('⚠️ Roads API unavailable:', error instanceof Error ? error.message : error);
     }
   }
 
-  // Fallback to file (cached)
-  if (signal?.aborted) {
-    return null;
-  }
-  console.log('📁 Falling back to damaged-roads.geojson file');
-  const filePath = getCountryDataFilePath(countryCode, 'damaged-roads.geojson');
-  const { data } = await loadGeoJSON(filePath, {
-    cache: true,
-    signal,
-  });
-  console.log(`📁 Loaded ${data?.features?.length || 0} roads from FILE`);
-  return data;
+  return null;
 }
 
 /**

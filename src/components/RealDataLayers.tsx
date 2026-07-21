@@ -14,10 +14,15 @@ import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
 import {
   loadCycloneTrackData,
   DATA_PATH,
-  COUNTRY_CYCLONE_CONFIG,
   buildCycloneTrackFromForecastPoints,
 } from '@/utils/realDataLoader';
 import { generateForecastCone } from '@/utils/forecastCone';
+import {
+  filterEventRecordsBySelection,
+  getLocalEventRecords,
+  resolveActiveEventRecord,
+} from '@/data/eventRecords';
+import { isPartnerApiCountryEnabled, isPartnerApiEnabled } from '@/services/partnerApiService';
 
 const HAZARD_ID_TO_LAYER_TYPE: Record<string, string[]> = {
   'tropical-cyclone': ['cyclone', 'wind'],
@@ -35,6 +40,12 @@ const HAZARD_ID_TO_LAYER_TYPE: Record<string, string[]> = {
 const RAW_WMS_PARITY_LAYER_IDS = new Set(['to-tc-harold-wind', 'vu-tc-lola-wind']);
 const isRawParityMapLayerId = (layerId: string): boolean =>
   RAW_WMS_PARITY_LAYER_IDS.has(layerId.replace('wms-layer-', ''));
+const EVENT_DATA_PATHS = DATA_PATH ?? {
+  VU: '/vanuatu',
+  WS: '/samoa',
+  TO: '/tonga',
+  CK: '/cook-islands',
+};
 
 function normalizeDateValue(dateStr: string): string {
   if (!dateStr) return '';
@@ -74,22 +85,15 @@ function countryIsExcludedByTemporalFilters(
   effectiveStartDate: string,
   effectiveEndDate: string
 ): boolean {
-  const cycloneConfig = COUNTRY_CYCLONE_CONFIG?.[country];
-  if (!cycloneConfig) return false;
+  const eventRecords = getLocalEventRecords(country);
+  if (eventRecords.length === 0) return false;
 
-  if (selectedEventIds.length > 0 && !selectedEventIds.includes(cycloneConfig.eventId)) {
-    return true;
-  }
-
-  const normalizedEventDate = normalizeDateValue(cycloneConfig.eventDate);
-  if (effectiveStartDate && normalizedEventDate && normalizedEventDate < effectiveStartDate) {
-    return true;
-  }
-  if (effectiveEndDate && normalizedEventDate && normalizedEventDate > effectiveEndDate) {
-    return true;
-  }
-
-  return false;
+  return (
+    filterEventRecordsBySelection(eventRecords, selectedEventIds, {
+      start: effectiveStartDate,
+      end: effectiveEndDate,
+    }).length === 0
+  );
 }
 
 function getHazardTypesToShow(
@@ -136,6 +140,7 @@ interface RealDataLayersProps {
   showInundationLayer?: boolean;
   onLoadingChange?: (isLoading: boolean) => void;
   onActiveLayersChange?: (layers: RealWMSLayer[]) => void;
+  partnerHazardLayers?: RealWMSLayer[];
   /** 0–100 scale applied to all raster layer opacities */
   layerOpacityScale?: number;
   showCycloneTrack?: boolean;
@@ -155,6 +160,7 @@ export default function RealDataLayers({
   showInundationLayer = true,
   onLoadingChange,
   onActiveLayersChange,
+  partnerHazardLayers = [],
   layerOpacityScale = 70,
   showCycloneTrack = true,
   cycloneTrackData = null,
@@ -279,10 +285,9 @@ export default function RealDataLayers({
       try {
         console.log(`Loading cyclone tracks from real data...`);
 
-        const cycloneConfigByCountry = COUNTRY_CYCLONE_CONFIG ?? ({} as Record<CountryCode, never>);
         const countriesToLoad: CountryCode[] = countryCode
           ? [countryCode]
-          : (Object.keys(cycloneConfigByCountry) as CountryCode[]);
+          : (Object.keys(EVENT_DATA_PATHS) as CountryCode[]);
         const selectedEventIds = filters?.selectedEvents ?? [];
         const { effectiveStartDate, effectiveEndDate } = getEffectiveDateRange(
           dateRangeStart,
@@ -307,17 +312,27 @@ export default function RealDataLayers({
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
           return;
         }
+        const partnerApiActive =
+          isPartnerApiEnabled() && isPartnerApiCountryEnabled(effectiveCountry);
 
-        const cycloneConfig = COUNTRY_CYCLONE_CONFIG?.[effectiveCountry];
-        if (!cycloneConfig) {
+        const eventRecord = resolveActiveEventRecord(
+          effectiveCountry,
+          getLocalEventRecords(effectiveCountry),
+          selectedEventIds,
+          {
+            start: effectiveStartDate,
+            end: effectiveEndDate,
+          }
+        );
+        if (!eventRecord) {
           loadingStateRef.current = { ...loadingStateRef.current, cycloneTracks: false };
           return;
         }
-        const trackFile = cycloneConfig.trackFile
-          ? `${DATA_PATH[effectiveCountry]}/${cycloneConfig.trackFile}`
+        const trackFile = eventRecord.trackFile
+          ? `${EVENT_DATA_PATHS[effectiveCountry]}/${eventRecord.trackFile}`
           : null;
-        const forecastFile = cycloneConfig.forecastFile
-          ? `${DATA_PATH[effectiveCountry]}/${cycloneConfig.forecastFile}`
+        const forecastFile = eventRecord.forecastFile
+          ? `${EVENT_DATA_PATHS[effectiveCountry]}/${eventRecord.forecastFile}`
           : null;
 
         if (!trackFile) {
@@ -334,7 +349,7 @@ export default function RealDataLayers({
         let forecastData = null;
         let effectiveTrackGeojson = hasExternalTrack ? cycloneTrackData : null;
 
-        if (!effectiveTrackGeojson) {
+        if (!effectiveTrackGeojson && !partnerApiActive) {
           // Load forecast data first so we can synthesize a track if GeoJSON is empty.
           forecastData = forecastFile ? await loadCycloneForecastTrack({ forecastFile }) : null;
           const fallbackTrack =
@@ -815,7 +830,7 @@ export default function RealDataLayers({
               `Skipping WMS layers for ${country} because current temporal filters exclude its historical event.`
             );
             // Hide any already-loaded layers for this country so they don't linger.
-            getLayersForCountry(country).forEach(layer => {
+            getLayersForCountry(country, partnerHazardLayers, selectedEventIds).forEach(layer => {
               const layerId = `wms-layer-${layer.id}`;
               try {
                 if (map.getLayer(layerId)) {
@@ -828,7 +843,7 @@ export default function RealDataLayers({
             continue;
           }
 
-          const countryLayers = getLayersForCountry(country);
+          const countryLayers = getLayersForCountry(country, partnerHazardLayers, selectedEventIds);
           const availableLayers = countryLayers.filter(layer =>
             hazardTypesToShow.includes(layer.hazardType)
           );
@@ -1194,6 +1209,7 @@ export default function RealDataLayers({
     dateRangeEnd,
     showWindLayer,
     showInundationLayer,
+    partnerHazardLayers,
     onActiveLayersChange,
     onLoadingChange,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
@@ -1225,7 +1241,7 @@ export default function RealDataLayers({
         effectiveEndDate
       );
 
-      getLayersForCountry(country).forEach(layer => {
+      getLayersForCountry(country, partnerHazardLayers, selectedEventIds).forEach(layer => {
         const layerId = `wms-layer-${layer.id}`;
 
         try {
@@ -1245,7 +1261,16 @@ export default function RealDataLayers({
         }
       });
     });
-  }, [map, visible, countryCode, showWindLayer, showInundationLayer, styleChangeCounter, filters]);
+  }, [
+    map,
+    visible,
+    countryCode,
+    showWindLayer,
+    showInundationLayer,
+    styleChangeCounter,
+    filters,
+    partnerHazardLayers,
+  ]);
 
   // Update WMS layer opacity dynamically when map mode or global opacity changes.
   useEffect(() => {

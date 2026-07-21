@@ -1,0 +1,46 @@
+services:
+  partner2-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: partner2-dashboard-dev
+    ports:
+      - "3112:3002"
+    env_file:
+      - .env.development
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      HOSTNAME: 0.0.0.0
+      AUTH_REQUIRE_REDIS: "false"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      # Override the local middleware URL so the proxy inside the container
+      # targets the deployed API (localhost:8000 is unreachable from inside Docker)
+      PARTNER_API_BASE_URL: https://pacific-disaster-api.spc.int
+      PARTNER_API_ENABLED: "true"
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3002"]
+    volumes:
+      - .:/app
+      - partner2_node_modules:/app/node_modules
+      - partner2_next_cache:/app/.next
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3002 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  partner2_node_modules:
+    driver: local
+  partner2_next_cache:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

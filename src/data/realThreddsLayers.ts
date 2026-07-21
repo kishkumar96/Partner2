@@ -1,6 +1,7 @@
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import { getLossSequentialColors, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSystem';
 import { CountryCode } from '@/types/thredds';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 export interface LegendThreshold {
   value: number;
@@ -125,6 +126,7 @@ export interface WMSStyleConfig {
 
 export interface RealWMSLayer {
   id: string;
+  eventId?: string;
   name: string;
   countryCode: CountryCode;
   ncFile: string;
@@ -134,15 +136,16 @@ export interface RealWMSLayer {
   bbox: [number, number, number, number];
   maxNativeZoom?: number;
   styleConfig?: WMSStyleConfig;
+  datasetPath?: string;
+  source?: 'static' | 'partner_api';
 }
 
 const DEFAULT_STYLE = 'default-scalar/default';
 const DEFAULT_WMS_VERSION: NonNullable<WMSStyleConfig['wmsVersion']> = '1.3.0';
 const DEFAULT_CRS: NonNullable<WMSStyleConfig['crs']> = 'EPSG:3857';
-const NEXT_PUBLIC_BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? process.env.NEXT_PUBLIC_BASE_PATH || '/partner2'
-    : process.env.NEXT_PUBLIC_BASE_PATH || '';
+const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
+  process.env.NODE_ENV === 'production' ? '/partner2' : ''
+);
 
 const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
   VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
@@ -152,6 +155,9 @@ const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
 };
 
 function buildDatasetPath(layer: RealWMSLayer): string {
+  if (layer.datasetPath) {
+    return layer.datasetPath;
+  }
   return `${COUNTRY_DATASET_BASE_PATH[layer.countryCode]}/${layer.ncFile}`;
 }
 
@@ -232,6 +238,7 @@ function createBaseWmsParams(options: {
 export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   {
     id: 'vu-tc-lola-wind',
+    eventId: 'tc-lola-2024',
     name: 'TC Lola Wind Hazard',
     countryCode: 'VU',
     ncFile: 'local_wind.nc',
@@ -254,6 +261,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'vu-tc-lola-inundation',
+    eventId: 'tc-lola-2024',
     name: 'TC Lola Flood Hazard',
     countryCode: 'VU',
     ncFile: '_merged.nc',
@@ -275,6 +283,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'vu-tc-lola-flood-depth',
+    eventId: 'tc-lola-2024',
     name: 'TC Lola Flood Depth (South Santo)',
     countryCode: 'VU',
     ncFile: 'Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM.nc',
@@ -294,6 +303,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'ws-tc-gita-wind',
+    eventId: 'tc-gita-samoa-2018',
     name: 'TC Gita Wind Hazard',
     countryCode: 'WS',
     ncFile: 'SA_savaii_upolu_local_wind.nc',
@@ -316,6 +326,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'ws-tc-gita-inundation',
+    eventId: 'tc-gita-samoa-2018',
     name: 'TC Gita Flood Hazard',
     countryCode: 'WS',
     ncFile: 'WS_merged.nc',
@@ -339,6 +350,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'to-tc-harold-wind',
+    eventId: 'tc-harold-tonga-2020',
     name: 'TC Harold Wind Hazard',
     countryCode: 'TO',
     ncFile: 'local_wind_merged.nc',
@@ -361,6 +373,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'to-tc-harold-inundation',
+    eventId: 'tc-harold-tonga-2020',
     name: 'TC Harold Flood Hazard',
     countryCode: 'TO',
     ncFile: 'best.nc',
@@ -384,6 +397,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'ck-tc-meena-wind-subdomain-1',
+    eventId: 'tc-ck-event',
     name: 'TC Meena Wind Hazard (Subdomain 1)',
     countryCode: 'CK',
     ncFile: '_CK_subdomain_1_local_wind.nc',
@@ -407,6 +421,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'ck-tc-meena-wind-subdomain-2',
+    eventId: 'tc-ck-event',
     name: 'TC Meena Wind Hazard (Subdomain 2)',
     countryCode: 'CK',
     ncFile: '_CK_subdomain_2_local_wind.nc',
@@ -430,6 +445,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
   },
   {
     id: 'ck-tc-meena-inundation',
+    eventId: 'tc-ck-event',
     name: 'TC Meena Flood Hazard',
     countryCode: 'CK',
     ncFile: 'CK_merged.nc',
@@ -454,8 +470,7 @@ export const REAL_WMS_LAYERS: RealWMSLayer[] = [
 ];
 
 function withBasePath(path: string): string {
-  if (!NEXT_PUBLIC_BASE_PATH) return path;
-  return `${NEXT_PUBLIC_BASE_PATH}${path}`;
+  return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);
 }
 
 function wmsBaseUrl(): string {
@@ -546,8 +561,30 @@ export function buildWMSImageUrl(
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
 
-export function getLayersForCountry(countryCode: CountryCode): RealWMSLayer[] {
-  return REAL_WMS_LAYERS.filter(layer => layer.countryCode === countryCode);
+export function getLayersForCountry(
+  countryCode: CountryCode,
+  dynamicLayers: RealWMSLayer[] = [],
+  selectedEventIds: string[] = []
+): RealWMSLayer[] {
+  const partnerLayers = dynamicLayers.filter(layer => layer.countryCode === countryCode);
+  const filterByEventIds = (layers: RealWMSLayer[]) => {
+    if (selectedEventIds.length === 0) {
+      return layers;
+    }
+
+    const hasEventScopedLayers = layers.some(layer => typeof layer.eventId === 'string');
+    if (!hasEventScopedLayers) {
+      return layers;
+    }
+
+    return layers.filter(layer => !layer.eventId || selectedEventIds.includes(layer.eventId));
+  };
+
+  if (partnerLayers.length > 0) {
+    return filterByEventIds(partnerLayers);
+  }
+
+  return filterByEventIds(REAL_WMS_LAYERS.filter(layer => layer.countryCode === countryCode));
 }
 
 export const WMS_STYLES = {

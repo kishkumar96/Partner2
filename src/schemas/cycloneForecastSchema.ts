@@ -22,13 +22,13 @@ export const CycloneForecastRowSchema = z.object({
   Symbol: z.coerce.number().nullable().optional(),
   // Negative categories represent pre-tropical-storm phases (disturbances/depressions)
   // e.g. Samoa TC Gita CSV uses -3 before the storm develops
-  Category: z.coerce.number().min(-10).max(5),
-  Pressure: z.coerce.number().min(800).max(1020), // hPa
+  Category: z.coerce.number().min(-10).max(5).nullable().optional(),
+  Pressure: z.coerce.number().min(800).max(1020).nullable().optional(), // hPa
   PressureOCI: z.coerce.number().nullable().optional(), // Outermost closed isobar
 
   // Wind data
-  MeanWind: z.coerce.number().min(0).max(200), // knots
-  WindGust: z.coerce.number().min(0).max(250), // knots
+  MeanWind: z.coerce.number().min(0).max(200).nullable().optional(), // knots
+  WindGust: z.coerce.number().min(0).max(250).nullable().optional(), // knots
   P5Wind: z.coerce.number().nullable().optional(), // Alternative wind metric
 
   // Structural metrics
@@ -40,7 +40,7 @@ export const CycloneForecastRowSchema = z.object({
   VerticalExtent: z.coerce.number().nullable().optional(), // scale 1-5
 
   // Forecast uncertainty
-  Uncertainty: z.coerce.number().min(0).max(1000), // km
+  Uncertainty: z.coerce.number().min(0).max(1000).nullable().optional(), // km
 
   // Professional intensity metrics
   FinalT: z.coerce.number().nullable().optional(), // Dvorak T-number
@@ -178,7 +178,7 @@ export function validateCycloneRow(
       });
     }
 
-    if (validated.Uncertainty > 500) {
+    if ((validated.Uncertainty ?? 0) > 500) {
       warnings.push({
         row: rowIndex,
         field: 'Uncertainty',
