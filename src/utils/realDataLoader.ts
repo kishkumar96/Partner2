@@ -92,6 +92,20 @@ function withBasePath(path: string): string {
   return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);
 }
 
+// Rewrites an absolute middleware URL (e.g. from a partner_api response
+// field) into a same-origin partner-proxy path, so the browser never talks
+// to the middleware host directly. Uses string slicing rather than the URL
+// API so any {z}/{x}/{y}-style template placeholders in the path survive
+// unencoded.
+function proxyPartnerApiUrl(url: string): string {
+  const marker = '/partner_api/';
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) {
+    return url;
+  }
+  return withBasePath(`/api/partner-proxy${url.slice(markerIndex)}`);
+}
+
 function normalizeDateValue(dateStr: string): string {
   if (!dateStr) return '';
   const parsed = new Date(dateStr);
@@ -1757,18 +1771,54 @@ function buildPartnerHazardLayers(
   });
 
   hazardRows.forEach((row, index) => {
-    const hazardType = inferPartnerHazardType(row);
-    const datasetPath = parsePartnerDatasetPath(row.url);
-    if (!hazardType || !datasetPath) {
-      return;
-    }
-
     const layerName = (typeof row.layer_name === 'string' && row.layer_name.trim()) || 'Depth';
     const layerIdBase =
       (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : `${index}`) ||
       `${index}`;
     const min = toNumber(row.min);
     const max = toNumber(row.max);
+
+    if (row.protocol === 'xyz' && typeof row.url === 'string' && row.url.includes('{z}')) {
+      // Zarr-backed raster tile layer (hazard_tiles endpoint) — bypasses the
+      // THREDDS/WMS URL parsing entirely, since it's already a ready-to-use
+      // {z}/{x}/{y} tile template. The middleware returns this as an absolute
+      // URL (its own host); the browser can't reach that host directly in
+      // production, so route it through the same partner-proxy every other
+      // partner_api request uses. String-sliced rather than parsed as a URL
+      // so the literal {z}/{x}/{y} placeholders survive untouched.
+      const tileUrlTemplate = proxyPartnerApiUrl(row.url);
+      layers.push({
+        id: `partner-${countryCode.toLowerCase()}-${layerIdBase}-xyz`,
+        eventId: hazardIdToEventId.get(String(row.id)) ?? undefined,
+        name:
+          (typeof row.title === 'string' && row.title.trim()) ||
+          layerName ||
+          'Partner hazard tile layer',
+        countryCode,
+        ncFile: layerName,
+        layerName,
+        description:
+          (typeof row.title === 'string' && row.title) ||
+          `Partner API tile layer for ${countryCode}`,
+        hazardType: 'flood',
+        bbox: defaultHazardBbox(countryCode),
+        styleConfig:
+          min !== null && max !== null
+            ? {
+                colorScaleRange: `${min},${max}`,
+              }
+            : undefined,
+        source: 'partner_api',
+        tileUrlTemplate,
+      });
+      return;
+    }
+
+    const hazardType = inferPartnerHazardType(row);
+    const datasetPath = parsePartnerDatasetPath(row.url);
+    if (!hazardType || !datasetPath) {
+      return;
+    }
 
     layers.push({
       id: `partner-${countryCode.toLowerCase()}-${layerIdBase}-${hazardType}`,
@@ -2039,6 +2089,41 @@ async function loadPartnerApiCountryData(
   }
 }
 
+// loadAllRealData and loadSupplementaryRealData both need the same
+// country-scoped Partner API bundle and commonly run back-to-back for the
+// same (countryCode, selectedEventIds, dateRange) — dedupe so the second
+// caller reuses the first's in-flight/just-settled request instead of
+// re-issuing all four resource fetches. Falls back to a fresh fetch whenever
+// the params actually differ, so this never changes what data a caller sees.
+const inFlightPartnerApiCountryData = new Map<
+  string,
+  ReturnType<typeof loadPartnerApiCountryData>
+>();
+
+function loadPartnerApiCountryDataDeduped(
+  countryCode: CountryCode,
+  signal?: AbortSignal,
+  selectedEventIds: string[] = [],
+  dateRange?: { start?: string; end?: string }
+): ReturnType<typeof loadPartnerApiCountryData> {
+  const cacheKey = `${countryCode}:${JSON.stringify(selectedEventIds)}:${JSON.stringify(dateRange ?? null)}`;
+  const existing = inFlightPartnerApiCountryData.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = loadPartnerApiCountryData(
+    countryCode,
+    signal,
+    selectedEventIds,
+    dateRange
+  ).finally(() => {
+    inFlightPartnerApiCountryData.delete(cacheKey);
+  });
+  inFlightPartnerApiCountryData.set(cacheKey, promise);
+  return promise;
+}
+
 export async function fetchEventRecords(
   countryCode: CountryCode,
   signal?: AbortSignal
@@ -2076,7 +2161,7 @@ export async function loadAllRealData(
     dateRange,
   } = options;
   const basePath = DATA_PATH[countryCode];
-  const partnerData = await loadPartnerApiCountryData(
+  const partnerData = await loadPartnerApiCountryDataDeduped(
     countryCode,
     signal,
     selectedEventIds,
@@ -2445,7 +2530,7 @@ export async function loadSupplementaryRealData(
     console.log(`[loadSupplementaryRealData] Loading for ${countryCode} from ${basePath}`);
   }
 
-  const partnerData = await loadPartnerApiCountryData(countryCode, signal);
+  const partnerData = await loadPartnerApiCountryDataDeduped(countryCode, signal);
   const strictPartnerApi =
     (isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode)) ||
     isPartnerApiCountryStrict(countryCode);

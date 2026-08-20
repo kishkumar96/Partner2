@@ -16,9 +16,12 @@ services:
       AUTH_REQUIRE_REDIS: "false"
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
-      # Override the local middleware URL so the proxy inside the container
-      # targets the deployed API (localhost:8000 is unreachable from inside Docker)
-      PARTNER_API_BASE_URL: https://pacific-disaster-api.spc.int
+      # Talk to the local middleware container directly by Docker service name —
+      # localhost:8000 doesn't work here since this container has its own network
+      # namespace. Requires this service to also be attached to the middleware's
+      # network (see `networks:` below). Falls back to production if that
+      # container/network isn't up.
+      PARTNER_API_BASE_URL: http://middleware-api:8000
       PARTNER_API_ENABLED: "true"
     command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3002"]
     volumes:
@@ -34,6 +37,7 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+      - middleware-network
 
 volumes:
   partner2_node_modules:
@@ -44,3 +48,6 @@ volumes:
 networks:
   app-network:
     driver: bridge
+  middleware-network:
+    external: true
+    name: middleware_partner_api_default

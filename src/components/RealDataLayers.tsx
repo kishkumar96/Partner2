@@ -895,6 +895,47 @@ export default function RealDataLayers({
               // Function to add WMS layer
               const addWMSLayer = () => {
                 try {
+                  // Zarr-backed XYZ raster tiles (hazard_tiles endpoint) bypass all
+                  // WMS URL building entirely — the template is already ready to use.
+                  if (layer.tileUrlTemplate) {
+                    if (!map.getSource(sourceId)) {
+                      map.addSource(sourceId, {
+                        type: 'raster',
+                        tiles: [layer.tileUrlTemplate],
+                        tileSize: 256,
+                        maxzoom: layer.maxNativeZoom ?? 12,
+                      });
+                    }
+                    if (!map.getLayer(layerId)) {
+                      let tileBeforeId: string | undefined;
+                      if (map.getLayer('damaged-buildings-clusters')) {
+                        tileBeforeId = 'damaged-buildings-clusters';
+                      } else if (map.getLayer('cyclone-forecast-track-line')) {
+                        tileBeforeId = 'cyclone-forecast-track-line';
+                      } else {
+                        tileBeforeId = map
+                          .getStyle()
+                          ?.layers?.find(existingLayer => existingLayer.type === 'symbol')?.id;
+                      }
+                      const rasterLayer: maplibregl.AddLayerObject = {
+                        id: layerId,
+                        type: 'raster',
+                        source: sourceId,
+                        paint: { 'raster-opacity': 0.85 },
+                      };
+                      if (tileBeforeId) {
+                        map.addLayer(rasterLayer, tileBeforeId);
+                      } else {
+                        map.addLayer(rasterLayer);
+                      }
+                    }
+                    loadingStateRef.current = {
+                      ...loadingStateRef.current,
+                      layers: { ...loadingStateRef.current.layers, [layer.id]: false },
+                    };
+                    return;
+                  }
+
                   // Use tiled WMS whenever layer CRS matches map CRS (EPSG:3857).
                   // This is faster, crisper, and avoids static-image georeferencing drift.
                   const useTiledWms = (layer.styleConfig?.crs || 'EPSG:3857') === 'EPSG:3857';

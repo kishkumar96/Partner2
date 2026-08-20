@@ -138,6 +138,10 @@ export interface RealWMSLayer {
   styleConfig?: WMSStyleConfig;
   datasetPath?: string;
   source?: 'static' | 'partner_api';
+  /** Raster XYZ tile URL template (e.g. Zarr-backed hazard tiles), containing
+   * literal {z}/{x}/{y} placeholders. When set, this layer is rendered as a
+   * plain raster tile source instead of going through the WMS URL builders. */
+  tileUrlTemplate?: string;
 }
 
 const DEFAULT_STYLE = 'default-scalar/default';

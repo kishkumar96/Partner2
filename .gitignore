@@ -52,6 +52,7 @@ next-env.d.ts
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+*.code-workspace
 .idea
 *.swp
 *.swo
@@ -146,6 +147,10 @@ lighthouse-report.json
 .lighthouseci
 reports/lighthouse/
 reports/perf/
+
+# Test/debug artifacts — regenerated locally, may contain request headers/cookies
+reports/
+*.har
 
 # Playwright
 playwright-report/
