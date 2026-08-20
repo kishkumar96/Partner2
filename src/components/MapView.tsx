@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
-import { LegendSettings } from '@/data/realThreddsLayers';
+import { HazardScenarioSelection, LegendSettings } from '@/data/realThreddsLayers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
 import type { BuildingProperties, RoadProperties } from '@/types/realData';
@@ -247,6 +247,7 @@ interface MapViewProps {
   onLayersLoadingChange?: (isLoading: boolean) => void;
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
+  hazardScenarioSelection?: HazardScenarioSelection | null;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   regionalImpactsData?: GeoJSON.FeatureCollection | null;
@@ -296,6 +297,7 @@ export default function MapView({
   onLayersLoadingChange,
   onActiveWmsLayersChange,
   partnerHazardLayers = [],
+  hazardScenarioSelection,
   damagedBuildings,
   damagedRoads,
   regionalImpactsData = null,
@@ -1352,6 +1354,7 @@ export default function MapView({
             onLoadingChange={onLayersLoadingChange}
             onActiveLayersChange={onActiveWmsLayersChange}
             partnerHazardLayers={partnerHazardLayers}
+            hazardScenarioSelection={hazardScenarioSelection}
             layerOpacityScale={layerOpacity}
             legendSettings={legendSettings}
           />

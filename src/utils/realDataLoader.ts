@@ -1787,6 +1787,22 @@ function buildPartnerHazardLayers(
       // partner_api request uses. String-sliced rather than parsed as a URL
       // so the literal {z}/{x}/{y} placeholders survive untouched.
       const tileUrlTemplate = proxyPartnerApiUrl(row.url);
+      // layer_name is generated server-side as `{product}_slr{slr}_rp{rp}` or
+      // `{product}_slr{slr}_event{event}` (populate_hazard_catalog.py) — the
+      // product key itself (tc/combined/historical_tcs/...) isn't otherwise
+      // exposed by the API, so it's recovered here rather than duplicating
+      // the six-product enum on the frontend.
+      const scenarioMatch = layerName.match(/^(.+)_slr([\d.]+)_(?:rp(\d+)|event(.+))$/);
+      const slrScenarioM = toNumber(row.slr_scenario_m);
+      const hazardScenario =
+        scenarioMatch && slrScenarioM !== null
+          ? {
+              product: scenarioMatch[1],
+              slrScenarioM,
+              returnPeriodYears: toNumber(row.return_period_years),
+              eventLabel: typeof row.event_label === 'string' ? row.event_label : null,
+            }
+          : undefined;
       layers.push({
         id: `partner-${countryCode.toLowerCase()}-${layerIdBase}-xyz`,
         eventId: hazardIdToEventId.get(String(row.id)) ?? undefined,
@@ -1810,6 +1826,7 @@ function buildPartnerHazardLayers(
             : undefined,
         source: 'partner_api',
         tileUrlTemplate,
+        hazardScenario,
       });
       return;
     }

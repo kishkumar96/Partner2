@@ -30,6 +30,8 @@ import { CountryCode, COUNTRIES } from '@/types/thredds';
 import {
   RealWMSLayer,
   createDefaultLegendSettings,
+  getDefaultHazardScenario,
+  HazardScenarioSelection,
   LegendSettings,
 } from '@/data/realThreddsLayers';
 import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
@@ -189,6 +191,12 @@ export default function DashboardView({
   const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
   const [partnerHazardLayers, setPartnerHazardLayers] = useState<RealWMSLayer[]>([]);
+  // Explicit user pick of one scenario out of a multi-scenario hazard catalog
+  // (SLR x return-period/event, currently only Cook Islands). null = no
+  // override yet, so getLayersForCountry falls back to a deterministic
+  // default rather than rendering every scenario combination at once.
+  const [hazardScenarioSelection, setHazardScenarioSelection] =
+    useState<HazardScenarioSelection | null>(null);
   const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
     initialShowMapControls ? false : (urlState.showFilters ?? false)
@@ -1429,6 +1437,22 @@ export default function DashboardView({
     [expandedEvents, selectedCountry]
   );
 
+  const countryHazardScenarioLayers = useMemo(
+    () =>
+      partnerHazardLayers.filter(
+        layer => layer.countryCode === selectedCountry && layer.hazardScenario
+      ),
+    [partnerHazardLayers, selectedCountry]
+  );
+
+  // The scenario actually rendered on the map: the user's explicit pick, or
+  // a deterministic default so the map always shows exactly one scenario
+  // instead of every SLR x return-period/event combination at once.
+  const effectiveHazardScenario = useMemo(
+    () => hazardScenarioSelection ?? getDefaultHazardScenario(countryHazardScenarioLayers),
+    [hazardScenarioSelection, countryHazardScenarioLayers]
+  );
+
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
     // allHazards from COUNTRY_CONFIGS already contains only the hazards with WMS data
@@ -1830,6 +1854,23 @@ export default function DashboardView({
       }
 
       setPartnerHazardLayers(realData.partnerHazardLayers || []);
+      // Drop the user's scenario pick if it no longer exists in the freshly
+      // loaded layer set (e.g. switching away from a multi-scenario country)
+      // so the selector falls back to a valid default instead of pointing at
+      // a scenario that will never render.
+      setHazardScenarioSelection(prev => {
+        if (!prev) return prev;
+        const layers = realData.partnerHazardLayers || [];
+        const stillValid = layers.some(
+          layer =>
+            layer.hazardScenario &&
+            layer.hazardScenario.product === prev.product &&
+            layer.hazardScenario.slrScenarioM === prev.slrScenarioM &&
+            layer.hazardScenario.returnPeriodYears === prev.returnPeriodYears &&
+            layer.hazardScenario.eventLabel === prev.eventLabel
+        );
+        return stillValid ? prev : null;
+      });
 
       if (realData.exposureData && realData.exposureData.length > 0) {
         setExposureData(realData.exposureData);
@@ -2689,6 +2730,9 @@ export default function DashboardView({
             isHazardsLoading={isHazardsLoading}
             hazardZoomBlocked={hazardZoomBlocked}
             onResetUserPreferences={handleResetUserPreferences}
+            hazardScenarioLayers={countryHazardScenarioLayers}
+            hazardScenarioSelection={effectiveHazardScenario}
+            onHazardScenarioChange={setHazardScenarioSelection}
           />
         </div>
 
@@ -2749,6 +2793,7 @@ export default function DashboardView({
               onLayersLoadingChange={setIsLoadingLayers}
               onActiveWmsLayersChange={setActiveWmsLayers}
               partnerHazardLayers={partnerHazardLayers}
+              hazardScenarioSelection={effectiveHazardScenario}
               layerOpacity={layerOpacity}
               legendSettings={legendSettings}
               damagedBuildings={showBuildingsLayer ? damagedBuildings : null}

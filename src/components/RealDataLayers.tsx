@@ -8,6 +8,7 @@ import {
   buildWMSImageUrl,
   buildWMSTileUrl,
   getLayersForCountry,
+  HazardScenarioSelection,
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
 import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
@@ -141,6 +142,10 @@ interface RealDataLayersProps {
   onLoadingChange?: (isLoading: boolean) => void;
   onActiveLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
+  /** Narrows a multi-scenario hazard catalog (e.g. Cook Islands) down to one
+   * layer to render; undefined/null falls back to a deterministic default
+   * instead of rendering every scenario combination at once. */
+  hazardScenarioSelection?: HazardScenarioSelection | null;
   /** 0–100 scale applied to all raster layer opacities */
   layerOpacityScale?: number;
   showCycloneTrack?: boolean;
@@ -161,6 +166,7 @@ export default function RealDataLayers({
   onLoadingChange,
   onActiveLayersChange,
   partnerHazardLayers = [],
+  hazardScenarioSelection,
   layerOpacityScale = 70,
   showCycloneTrack = true,
   cycloneTrackData = null,
@@ -830,7 +836,12 @@ export default function RealDataLayers({
               `Skipping WMS layers for ${country} because current temporal filters exclude its historical event.`
             );
             // Hide any already-loaded layers for this country so they don't linger.
-            getLayersForCountry(country, partnerHazardLayers, selectedEventIds).forEach(layer => {
+            getLayersForCountry(
+              country,
+              partnerHazardLayers,
+              selectedEventIds,
+              hazardScenarioSelection
+            ).forEach(layer => {
               const layerId = `wms-layer-${layer.id}`;
               try {
                 if (map.getLayer(layerId)) {
@@ -843,7 +854,12 @@ export default function RealDataLayers({
             continue;
           }
 
-          const countryLayers = getLayersForCountry(country, partnerHazardLayers, selectedEventIds);
+          const countryLayers = getLayersForCountry(
+            country,
+            partnerHazardLayers,
+            selectedEventIds,
+            hazardScenarioSelection
+          );
           const availableLayers = countryLayers.filter(layer =>
             hazardTypesToShow.includes(layer.hazardType)
           );
@@ -1251,6 +1267,7 @@ export default function RealDataLayers({
     showWindLayer,
     showInundationLayer,
     partnerHazardLayers,
+    hazardScenarioSelection,
     onActiveLayersChange,
     onLoadingChange,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
@@ -1282,7 +1299,12 @@ export default function RealDataLayers({
         effectiveEndDate
       );
 
-      getLayersForCountry(country, partnerHazardLayers, selectedEventIds).forEach(layer => {
+      getLayersForCountry(
+        country,
+        partnerHazardLayers,
+        selectedEventIds,
+        hazardScenarioSelection
+      ).forEach(layer => {
         const layerId = `wms-layer-${layer.id}`;
 
         try {
@@ -1311,6 +1333,7 @@ export default function RealDataLayers({
     styleChangeCounter,
     filters,
     partnerHazardLayers,
+    hazardScenarioSelection,
   ]);
 
   // Update WMS layer opacity dynamically when map mode or global opacity changes.

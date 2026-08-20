@@ -142,6 +142,19 @@ export interface RealWMSLayer {
    * literal {z}/{x}/{y} placeholders. When set, this layer is rendered as a
    * plain raster tile source instead of going through the WMS URL builders. */
   tileUrlTemplate?: string;
+  /** Scenario dimensions for multi-scenario hazard catalogs (currently only
+   * Cook Islands' Zarr-backed xyz layers). One catalog can contain thousands
+   * of (product x SLR x return-period/event) combinations, so a UI selector
+   * narrows these down to a single layer to render rather than rendering
+   * every combination as its own map source at once. */
+  hazardScenario?: {
+    /** hazard_tiles product key, e.g. 'combined' | 'tc' | 'swell' |
+     * 'historical_tcs' | 'synthetic_tcs' | 'swell_driven'. */
+    product: string;
+    slrScenarioM: number;
+    returnPeriodYears: number | null;
+    eventLabel: string | null;
+  };
 }
 
 const DEFAULT_STYLE = 'default-scalar/default';
@@ -565,10 +578,78 @@ export function buildWMSImageUrl(
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
 
+export type HazardScenarioSelection = NonNullable<RealWMSLayer['hazardScenario']>;
+
+function hazardScenarioMatches(a: HazardScenarioSelection, b: HazardScenarioSelection): boolean {
+  return (
+    a.product === b.product &&
+    a.slrScenarioM === b.slrScenarioM &&
+    a.returnPeriodYears === b.returnPeriodYears &&
+    a.eventLabel === b.eventLabel
+  );
+}
+
+// A multi-scenario catalog (currently only Cook Islands) can contain
+// thousands of (product x SLR x return-period/event) layers. Rendering all
+// of them at once means adding thousands of map sources simultaneously, so
+// this narrows a layer set down to the layers matching a single scenario
+// selection — falling back to a deterministic default when none is chosen
+// yet, rather than rendering everything.
+export function getDefaultHazardScenario(layers: RealWMSLayer[]): HazardScenarioSelection | null {
+  const scenarioLayers = layers.filter(
+    (layer): layer is RealWMSLayer & { hazardScenario: HazardScenarioSelection } =>
+      !!layer.hazardScenario
+  );
+  if (scenarioLayers.length === 0) {
+    return null;
+  }
+
+  const sorted = [...scenarioLayers].sort((layerA, layerB) => {
+    const a = layerA.hazardScenario;
+    const b = layerB.hazardScenario;
+    if (a.product !== b.product) {
+      if (a.product === 'combined') return -1;
+      if (b.product === 'combined') return 1;
+      return a.product.localeCompare(b.product);
+    }
+    if (a.slrScenarioM !== b.slrScenarioM) return a.slrScenarioM - b.slrScenarioM;
+    if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
+      return a.returnPeriodYears - b.returnPeriodYears;
+    }
+    if (a.returnPeriodYears !== null) return -1;
+    if (b.returnPeriodYears !== null) return 1;
+    return (a.eventLabel ?? '').localeCompare(b.eventLabel ?? '');
+  });
+
+  return sorted[0].hazardScenario;
+}
+
+function narrowByHazardScenario(
+  layers: RealWMSLayer[],
+  selection?: HazardScenarioSelection | null
+): RealWMSLayer[] {
+  const scenarioLayers = layers.filter(layer => layer.hazardScenario);
+  if (scenarioLayers.length === 0) {
+    return layers;
+  }
+
+  const nonScenarioLayers = layers.filter(layer => !layer.hazardScenario);
+  const effectiveSelection = selection ?? getDefaultHazardScenario(scenarioLayers);
+  if (!effectiveSelection) {
+    return nonScenarioLayers;
+  }
+
+  const matched = scenarioLayers.filter(layer =>
+    hazardScenarioMatches(layer.hazardScenario as HazardScenarioSelection, effectiveSelection)
+  );
+  return [...nonScenarioLayers, ...matched];
+}
+
 export function getLayersForCountry(
   countryCode: CountryCode,
   dynamicLayers: RealWMSLayer[] = [],
-  selectedEventIds: string[] = []
+  selectedEventIds: string[] = [],
+  hazardScenarioSelection?: HazardScenarioSelection | null
 ): RealWMSLayer[] {
   const partnerLayers = dynamicLayers.filter(layer => layer.countryCode === countryCode);
   const filterByEventIds = (layers: RealWMSLayer[]) => {
@@ -585,11 +666,20 @@ export function getLayersForCountry(
   };
 
   if (partnerLayers.length > 0) {
-    return filterByEventIds(partnerLayers);
+    return filterByEventIds(narrowByHazardScenario(partnerLayers, hazardScenarioSelection));
   }
 
   return filterByEventIds(REAL_WMS_LAYERS.filter(layer => layer.countryCode === countryCode));
 }
+
+export const HAZARD_SCENARIO_PRODUCT_LABELS: Record<string, string> = {
+  combined: 'Combined (TC + Swell)',
+  tc: 'Tropical Cyclone (probabilistic)',
+  swell: 'Swell (probabilistic)',
+  historical_tcs: 'Historical Cyclones',
+  synthetic_tcs: 'Synthetic Cyclones',
+  swell_driven: 'Swell Events',
+};
 
 export const WMS_STYLES = {
   DEFAULT: 'default-scalar/default',
