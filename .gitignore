@@ -35,9 +35,20 @@ yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files - never commit filled-in environment files, only .env.example
 .env
+.env.local
+.env.development
+.env.staging
+.env.production
 .env*.local
+
+# accidental network capture files - can contain live session cookies
+*.har
+
+# stray editor backup/workspace files
+*.backup
+*.code-workspace
 
 # vercel
 .vercel
