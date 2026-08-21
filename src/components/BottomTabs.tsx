@@ -22,7 +22,7 @@ import {
 } from '@/data/countryConfigs';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { areaMatchesSelection } from '@/utils/adminNormalization';
-import { computeFilteredData } from '../utils/filteredData';
+import { getFilteredData } from '../stores/filteredDataStore';
 import { aggregateEventsByLevel, filterEconomicDamageData } from '@/utils/filterUtils';
 import {
   AlertCircle,
@@ -154,7 +154,7 @@ export default function BottomTabs({
     filteredSectorEconomicData,
     filteredAssetEconomicData,
   } = useMemo(() => {
-    const result = computeFilteredData({
+    const result = getFilteredData({
       events,
       exposureData,
       economicDamageData,

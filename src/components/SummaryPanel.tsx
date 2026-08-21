@@ -61,7 +61,7 @@ import {
 } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
-import { computeFilteredData } from '../utils/filteredData';
+import { getFilteredData } from '../stores/filteredDataStore';
 import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
 import {
   areaMatchesSelection,
@@ -280,7 +280,7 @@ export default function SummaryPanel({
 
   const { filteredEvents, aggregatedEventData } = useMemo(
     () =>
-      computeFilteredData({
+      getFilteredData({
         events,
         filters,
         districts,

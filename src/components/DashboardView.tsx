@@ -43,7 +43,7 @@ import {
   loadDamagedRoads,
   fetchHazardScenarioRiskSummary,
 } from '@/utils/realDataLoader';
-import { computeFilteredData } from '@/utils/filteredData';
+import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
 import { highlightPoint } from '@/utils/mapHighlight';
@@ -1574,7 +1574,7 @@ export default function DashboardView({
     aggregatedEventData,
   } = useMemo(
     () =>
-      computeFilteredData({
+      getFilteredData({
         events: countryEvents,
         exposureData,
         economicDamageData,
