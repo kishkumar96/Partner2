@@ -41,6 +41,7 @@ import {
   expandEventsToRegionalEntries,
   loadDamagedBuildings,
   loadDamagedRoads,
+  fetchHazardScenarioRiskSummary,
 } from '@/utils/realDataLoader';
 import { computeFilteredData } from '@/utils/filteredData';
 import { detectStoryBeats } from '@/utils/cycloneStory';
@@ -1452,6 +1453,39 @@ export default function DashboardView({
     () => hazardScenarioSelection ?? getDefaultHazardScenario(countryHazardScenarioLayers),
     [hazardScenarioSelection, countryHazardScenarioLayers]
   );
+
+  // National-level loss/exposure totals for the scenario currently shown on
+  // the map, so the risk summary panel matches the selected SLR x
+  // return-period/event instead of one fixed, scenario-independent figure.
+  // Only populated where RiskScenario data has actually been ingested
+  // (currently CK only) -- null elsewhere, falling back to the existing
+  // static totals.
+  const [hazardScenarioRiskSummary, setHazardScenarioRiskSummary] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
+  useEffect(() => {
+    if (!effectiveHazardScenario) {
+      setHazardScenarioRiskSummary(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchHazardScenarioRiskSummary(selectedCountry, effectiveHazardScenario, controller.signal)
+      .then(summary => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioRiskSummary(summary);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioRiskSummary(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedCountry, effectiveHazardScenario]);
 
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
@@ -2978,6 +3012,7 @@ export default function DashboardView({
             regionalSummary={regionalSummary}
             regionalSummaryBySector={regionalSummaryBySector}
             impactBySector={impactBySector || []}
+            scenarioRiskSummary={hazardScenarioRiskSummary}
           />
         </div>
       </div>

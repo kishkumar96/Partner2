@@ -28,7 +28,7 @@ import {
 } from '@/services/partnerApiService';
 import { getAreaId, getAreaName } from '@/utils/adminNormalization';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
-import type { RealWMSLayer } from '@/data/realThreddsLayers';
+import type { HazardScenarioSelection, RealWMSLayer } from '@/data/realThreddsLayers';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -1706,6 +1706,60 @@ async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promis
     }
 
     return results;
+  } catch {
+    return null;
+  }
+}
+
+// RiskScenario rows carry no product label of their own (tc/combined/
+// historical_tcs/...) -- only their parent RiskInformation's title does,
+// following the exact naming import_ck_risk_scenarios.py used when
+// ingesting them ("CK {product} national impact[ + AAL]"). This is
+// currently CK-specific since CK is the only country with RiskScenario
+// data ingested.
+function matchesHazardScenarioProduct(riskInformationTitle: unknown, product: string): boolean {
+  return (
+    typeof riskInformationTitle === 'string' && riskInformationTitle.startsWith(`CK ${product} `)
+  );
+}
+
+/**
+ * Looks up the national-level RiskScenario row (loss/exposure totals) for
+ * the currently-selected hazard scenario, so the risk/impact summary can
+ * match whichever SLR x return-period/event is shown on the map instead of
+ * always showing one fixed, scenario-independent figure.
+ */
+export async function fetchHazardScenarioRiskSummary(
+  countryCode: CountryCode,
+  scenario: HazardScenarioSelection,
+  signal?: AbortSignal
+): Promise<Record<string, unknown> | null> {
+  try {
+    const mapping = await mapCountryPartnerApis(countryCode);
+    if (mapping.countryId === null || !mapping.scopedUrls) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      slr_scenario_m: String(scenario.slrScenarioM),
+      is_annual_average_loss: 'false',
+    });
+    if (scenario.returnPeriodYears !== null) {
+      params.set('return_period_years', String(scenario.returnPeriodYears));
+    }
+    if (scenario.eventLabel !== null) {
+      params.set('event_label', scenario.eventLabel);
+    }
+
+    const url = `${mapping.scopedUrls.risk_scenario}&${params.toString()}`;
+    const payload = await fetchPartnerCollection(url, signal);
+    const results = toArrayPayload(payload);
+
+    return (
+      results.find(row =>
+        matchesHazardScenarioProduct(row.risk_information_title, scenario.product)
+      ) ?? null
+    );
   } catch {
     return null;
   }

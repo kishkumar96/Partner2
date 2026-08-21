@@ -5,6 +5,7 @@ export type PartnerApiResource =
   | 'country'
   | 'cyclone_track'
   | 'risk_information'
+  | 'risk_scenario'
   | 'hazard_information'
   | 'citizen_science'
   | 'event';
@@ -117,6 +118,7 @@ export function buildPartnerApiEndpoints(
       country: `${v1}/country/`,
       cyclone_track: `${v1}/cyclone_track/`,
       risk_information: `${v1}/risk_information/`,
+      risk_scenario: `${v1}/risk_scenario/`,
       hazard_information: `${v1}/hazard_information/`,
       citizen_science: `${v1}/citizen_science/`,
       event: `${v1}/event/`,
@@ -178,6 +180,10 @@ export function buildCountryScopedResourceUrls(
   return {
     cyclone_track: `${endpoints.resource.cyclone_track}?country=${countryId}`,
     risk_information: `${endpoints.resource.risk_information}?country=${countryId}`,
+    // RiskScenario has no direct `country` field of its own (it's reached
+    // through its RiskInformation parent), so this filters on the FK path
+    // instead of the `?country=` convention every other resource here uses.
+    risk_scenario: `${endpoints.resource.risk_scenario}?risk_information__country=${countryId}`,
     hazard_information: `${endpoints.resource.hazard_information}?country=${countryId}`,
     citizen_science: `${endpoints.resource.citizen_science}?country=${countryId}`,
     event: `${endpoints.resource.event}?country=${countryId}`,

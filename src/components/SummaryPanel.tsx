@@ -170,6 +170,13 @@ interface SummaryPanelProps {
   regionalSummary?: RegionalSummary[];
   regionalSummaryBySector?: RegionalSummaryBySector[];
   impactBySector?: any[];
+  /** National-level loss/exposure totals (RiskScenario) for the hazard
+   * scenario currently selected on the map, e.g. { total_loss,
+   * exposed_population, ... }. When present, takes priority over the
+   * static csvTotals for the headline figures -- it has no per-region
+   * breakdown, so the district count/label falls back to the existing
+   * regional data rather than being replaced. */
+  scenarioRiskSummary?: Record<string, unknown> | null;
 }
 
 function PopoutVisualization({
@@ -250,6 +257,7 @@ export default function SummaryPanel({
   regionalSummary = [],
   regionalSummaryBySector = [],
   impactBySector = [],
+  scenarioRiskSummary = null,
 }: SummaryPanelProps) {
   const geographyUi = selectedCountry
     ? COUNTRY_CONFIGS[selectedCountry].ui
@@ -420,6 +428,23 @@ export default function SummaryPanel({
 
     return null;
   }, [selectedRegion, regionFilteredData, nationalSummary, regionalSummary]);
+
+  // National totals for the currently-selected hazard scenario (SLR x
+  // return-period/event), when RiskScenario data exists for it. Takes
+  // priority over csvTotals for the headline figures below -- it's
+  // national-only (no per-region breakdown), so it's ignored once a
+  // specific region is selected, where the regional csvTotals is more
+  // relevant than one fixed national number.
+  const scenarioTotals = useMemo(() => {
+    if (!scenarioRiskSummary || selectedRegion) return null;
+    const totalLoss = Number(scenarioRiskSummary.total_loss);
+    const affectedPopulation = Number(scenarioRiskSummary.exposed_population);
+    if (!Number.isFinite(totalLoss) && !Number.isFinite(affectedPopulation)) return null;
+    return {
+      totalLoss: Number.isFinite(totalLoss) ? totalLoss : 0,
+      affectedPopulation: Number.isFinite(affectedPopulation) ? affectedPopulation : 0,
+    };
+  }, [scenarioRiskSummary, selectedRegion]);
 
   // Check if filters are active (Tier 3)
   const hasActiveFilters = useMemo(
@@ -831,11 +856,15 @@ export default function SummaryPanel({
               {/* Total Economic Damage */}
               <HeroMetric
                 label="Total Economic Damage"
-                value={formatSummaryCurrency(csvTotals?.totalLoss ?? stats.totalEconomicDamage)}
+                value={formatSummaryCurrency(
+                  scenarioTotals?.totalLoss ?? csvTotals?.totalLoss ?? stats.totalEconomicDamage
+                )}
                 subtitle={
-                  csvTotals
-                    ? `Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
-                    : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                  scenarioTotals
+                    ? 'For the selected hazard scenario'
+                    : csvTotals
+                      ? `Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                      : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                 }
                 icon={DollarSign}
                 color="red"
@@ -845,12 +874,16 @@ export default function SummaryPanel({
               <HeroMetric
                 label="Affected Population"
                 value={formatSummaryNumber(
-                  csvTotals?.affectedPopulation ?? stats.totalAffectedPopulation
+                  scenarioTotals?.affectedPopulation ??
+                    csvTotals?.affectedPopulation ??
+                    stats.totalAffectedPopulation
                 )}
                 subtitle={
-                  csvTotals && csvTotals.totalPopulation > 0
-                    ? `${formatSummaryPercent(csvTotals.affectedPopulation, csvTotals.totalPopulation)} of total population`
-                    : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
+                  scenarioTotals
+                    ? 'For the selected hazard scenario'
+                    : csvTotals && csvTotals.totalPopulation > 0
+                      ? `${formatSummaryPercent(csvTotals.affectedPopulation, csvTotals.totalPopulation)} of total population`
+                      : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
                 }
                 icon={Users}
                 color="orange"
