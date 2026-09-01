@@ -679,6 +679,9 @@ export const HAZARD_SCENARIO_PRODUCT_LABELS: Record<string, string> = {
   historical_tcs: 'Historical Cyclones',
   synthetic_tcs: 'Synthetic Cyclones',
   swell_driven: 'Swell Events',
+  coastal_flood: 'Coastal Flood (Sea Level Rise)',
+  fluvial_flood: 'Fluvial / Pluvial Flood (Rainfall & River)',
+  rapid_impact_assessment: 'Rapid Impact Assessment Cyclones',
 };
 
 export const WMS_STYLES = {

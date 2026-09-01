@@ -75,7 +75,7 @@ const AdvancedCharts = memo(function AdvancedCharts({
         name: region,
         totalLoss: regionalSummaryBySector
           .filter(r => r.Region === region)
-          .reduce((sum, r) => sum + (r.Total_Loss || 0), 0),
+          .reduce((sum, r) => sum + (Number(r.Total_Loss) || 0), 0),
       }))
       .sort((a, b) => b.totalLoss - a.totalLoss)
       .slice(0, maxRegions)

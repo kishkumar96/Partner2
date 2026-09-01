@@ -177,6 +177,14 @@ interface SummaryPanelProps {
    * breakdown, so the district count/label falls back to the existing
    * regional data rather than being replaced. */
   scenarioRiskSummary?: Record<string, unknown> | null;
+  /** True when the map's "Hazard scenario" selector (SLR/return-period) has
+   * a scenario picked for this country. Some countries only have the map
+   * layer wired up (real WMS flood tiles) without RiskScenario rows behind
+   * it, so scenarioRiskSummary stays null even though the selector is
+   * live -- this flags that case so the headline figures can say plainly
+   * that they aren't following the selector, instead of leaving it
+   * ambiguous. */
+  hazardScenarioMapActive?: boolean;
 }
 
 function PopoutVisualization({
@@ -258,6 +266,7 @@ export default function SummaryPanel({
   regionalSummaryBySector = [],
   impactBySector = [],
   scenarioRiskSummary = null,
+  hazardScenarioMapActive = false,
 }: SummaryPanelProps) {
   const geographyUi = selectedCountry
     ? COUNTRY_CONFIGS[selectedCountry].ui
@@ -517,7 +526,7 @@ export default function SummaryPanel({
 
       if (validSectors.length === 0) return null;
 
-      const total = validSectors.reduce((sum, s) => sum + (s[valueField] || 0), 0);
+      const total = validSectors.reduce((sum, s) => sum + (Number(s[valueField]) || 0), 0);
 
       return {
         labels: validSectors.map(s => s.Sector),
@@ -889,6 +898,17 @@ export default function SummaryPanel({
                 color="orange"
               />
             </div>
+
+            {hazardScenarioMapActive && !scenarioRiskSummary && (
+              <div className="flex items-start gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <Hourglass className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-snug text-amber-200">
+                  The map&apos;s hazard scenario selector (sea level rise / return period) changes
+                  which flood layer is shown, but the figures above don&apos;t follow it yet for
+                  this country — that needs loss modeling that hasn&apos;t been done here.
+                </p>
+              </div>
+            )}
 
             {/* Sector Breakdown - Doughnut Charts */}
             {(exposureDoughnutData || damageDoughnutData) && (

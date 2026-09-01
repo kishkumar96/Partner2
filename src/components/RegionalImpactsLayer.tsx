@@ -232,7 +232,10 @@ export default function RegionalImpactsLayer({
           sectorGeojson = null;
           dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
         } else if (partnerApiActive) {
-          console.warn('⚠️ Partner API is enabled but no regional impacts data was provided');
+          // Partner API data hasn't resolved into dashboard state yet; this
+          // effect re-runs once it does (regionalImpactsData is a dependency
+          // below), so this is an expected wait, not a failure.
+          console.log('⏳ Partner API regional impacts data not ready yet, will retry when loaded');
           isLoadingRef.current = false;
           return;
         } else {

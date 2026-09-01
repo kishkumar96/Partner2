@@ -1891,6 +1891,45 @@ function buildPartnerHazardLayers(
       return;
     }
 
+    // A country's WMS hazard rows can carry the same SLR/return-period/event
+    // dimensions as the CK Zarr/xyz catalog (e.g. the VU/TO/WS coastal-flood
+    // and VU fluvial-flood imports), populated directly on the row rather
+    // than encoded into layer_name -- so, unlike the xyz branch above,
+    // these are read straight off the columns. Product is inferred from the
+    // source URL rather than stored directly, since these imports are the
+    // only WMS-scenario sources so far and none needed a schema change to
+    // tell them apart.
+    const wmsSlrScenarioM = toNumber(row.slr_scenario_m);
+    const isFluvialFlood = typeof row.url === 'string' && row.url.includes('/vu_hazard/Fluvial/');
+
+    // A row tagged with model_run came from an actual RiskScape run against
+    // a specific cyclone forecast (see the `model` app: ModelRun links a
+    // Model to a CycloneTrack) rather than a pre-built static/probabilistic
+    // catalog -- it gets its own category regardless of whether it also
+    // happens to carry an SLR value, since "which live run" is the
+    // meaningful axis here, not sea level rise. No rows carry this yet
+    // (the run pipeline itself isn't wired to anything), so this is purely
+    // forward-looking: the moment one does, it lands in its own place
+    // instead of being folded into a static scenario catalog.
+    const wmsModelRunId = toNumber(row.model_run);
+    const wmsHazardScenario =
+      wmsModelRunId !== null
+        ? {
+            product: 'rapid_impact_assessment',
+            slrScenarioM: wmsSlrScenarioM ?? 0,
+            returnPeriodYears: toNumber(row.return_period_years),
+            eventLabel:
+              (typeof row.event_label === 'string' && row.event_label) || `Run #${wmsModelRunId}`,
+          }
+        : wmsSlrScenarioM !== null
+          ? {
+              product: isFluvialFlood ? 'fluvial_flood' : 'coastal_flood',
+              slrScenarioM: wmsSlrScenarioM,
+              returnPeriodYears: toNumber(row.return_period_years),
+              eventLabel: typeof row.event_label === 'string' ? row.event_label : null,
+            }
+          : undefined;
+
     layers.push({
       id: `partner-${countryCode.toLowerCase()}-${layerIdBase}-${hazardType}`,
       eventId: hazardIdToEventId.get(String(row.id)) ?? undefined,
@@ -1914,6 +1953,7 @@ function buildPartnerHazardLayers(
             }
           : undefined,
       source: 'partner_api',
+      hazardScenario: wmsHazardScenario,
     });
   });
 
@@ -1986,18 +2026,24 @@ async function loadPartnerApiCountryData(
       toArrayPayload(riskPayload),
       mapping.countryId
     ).filter(row => row.country !== null);
-    const scopedRiskRows = filterPartnerRowsByIds(
-      countryRiskRows,
-      activeEventRecord.backendRiskIds ?? [],
-      ['id']
-    );
+    // A scenario catalog can be country-scoped without an Event row (the
+    // Cook Islands catalogue is intentionally model/scenario based). In that
+    // case there is no event-to-risk relationship to filter on, so retain the
+    // country's API records instead of rendering an empty dashboard.
+    const scopedRiskRows =
+      (activeEventRecord.backendRiskIds?.length ?? 0) > 0
+        ? filterPartnerRowsByIds(countryRiskRows, activeEventRecord.backendRiskIds ?? [], ['id'])
+        : countryRiskRows;
     const riskRows = dedupePartnerRiskRows(scopedRiskRows);
     const allHazardIds = normalizedEventRecords.flatMap(er => er.backendHazardIds ?? []);
-    const hazardRows = filterPartnerRowsByIds(
-      filterPartnerRowsByCountryId(toArrayPayload(hazardPayload), mapping.countryId),
-      allHazardIds,
-      ['id']
+    const countryHazardRows = filterPartnerRowsByCountryId(
+      toArrayPayload(hazardPayload),
+      mapping.countryId
     );
+    const hazardRows =
+      allHazardIds.length > 0
+        ? filterPartnerRowsByIds(countryHazardRows, allHazardIds, ['id'])
+        : countryHazardRows;
     const riskData = extractPartnerRiskBundle(riskRows);
 
     // Build per-event risk bundles for all backend events (enables multi-event metrics).
