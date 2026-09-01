@@ -162,6 +162,22 @@ const MapPanel = memo(function MapPanel({
     });
   }, [hazardScenarioLayers]);
 
+  // How many distinct named storm events each product offers, so a product
+  // like "Historical Cyclones" can advertise "(17 events)" right in the
+  // dropdown -- otherwise the only way to discover event browsing exists at
+  // all is to already know to pick that product first and look at the
+  // (differently-labeled) third field afterward.
+  const hazardScenarioEventCounts = useMemo(() => {
+    const counts = new Map<string, Set<string>>();
+    hazardScenarioLayers.forEach(layer => {
+      const scenario = layer.hazardScenario;
+      if (!scenario || scenario.eventLabel === null) return;
+      if (!counts.has(scenario.product)) counts.set(scenario.product, new Set());
+      counts.get(scenario.product)!.add(scenario.eventLabel);
+    });
+    return new Map(Array.from(counts.entries()).map(([product, labels]) => [product, labels.size]));
+  }, [hazardScenarioLayers]);
+
   const selectedProduct = hazardScenarioSelection?.product ?? hazardScenarioProducts[0];
 
   const hazardScenarioSlrOptions = useMemo(() => {
@@ -559,13 +575,18 @@ const MapPanel = memo(function MapPanel({
                                       );
                                     }
                                   }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200"
+                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
                                 >
-                                  {hazardScenarioProducts.map(product => (
-                                    <option key={product} value={product}>
-                                      {HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product}
-                                    </option>
-                                  ))}
+                                  {hazardScenarioProducts.map(product => {
+                                    const label =
+                                      HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product;
+                                    const eventCount = hazardScenarioEventCounts.get(product) ?? 0;
+                                    return (
+                                      <option key={product} value={product}>
+                                        {eventCount > 1 ? `${label} (${eventCount} events)` : label}
+                                      </option>
+                                    );
+                                  })}
                                 </select>
                               </label>
 
@@ -590,7 +611,7 @@ const MapPanel = memo(function MapPanel({
                                       );
                                     }
                                   }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200"
+                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
                                 >
                                   {hazardScenarioSlrOptions.map(slr => (
                                     <option key={slr} value={slr}>
@@ -617,7 +638,7 @@ const MapPanel = memo(function MapPanel({
                                       ev || null
                                     );
                                   }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200"
+                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
                                 >
                                   {hazardScenarioSelectorOptions.map(opt => {
                                     const key = `${opt.returnPeriodYears ?? ''}|${opt.eventLabel ?? ''}`;

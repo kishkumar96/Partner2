@@ -25,6 +25,13 @@ const nextConfig: NextConfig = {
   // Base path for subdirectory deployment (disabled in dev for convenience)
   basePath,
 
+  // Dev-mode build indicator defaults to bottom-left, which sits directly
+  // under Map Controls' hazard-scenario dropdowns once that panel scrolls
+  // far enough -- moved out of the way rather than fixing the panel around it.
+  devIndicators: {
+    position: 'bottom-right',
+  },
+
   env: {
     NEXT_PUBLIC_DATA_VERSION: dataVersion,
   },

@@ -18,6 +18,7 @@ import {
   Loader2,
   Wind,
   Compass,
+  Scale,
 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import ActiveFilters from '@/components/ActiveFilters';
@@ -118,6 +119,10 @@ const Toast = dynamic(() => import('@/components/Toast'), {
   loading: () => null,
 });
 
+const CountryComparisonModal = dynamic(() => import('@/components/CountryComparisonModal'), {
+  ssr: false,
+});
+
 const BasemapPreferenceModal = dynamic(() => import('@/components/BasemapPreferenceModal'), {
   ssr: false,
   loading: () => null,
@@ -177,6 +182,7 @@ export default function DashboardView({
   const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
   const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
   const [showBasemapPreferenceModal, setShowBasemapPreferenceModal] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
     initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
@@ -2383,7 +2389,7 @@ export default function DashboardView({
             </div>
           </div>
 
-          <div className="min-w-0 xl:justify-self-end">
+          <div className="min-w-0 xl:justify-self-stretch">
             <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
               <div
                 className="flex min-w-max items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]"
@@ -2402,6 +2408,16 @@ export default function DashboardView({
                       showMetadata ? 'rotate-0' : 'rotate-180'
                     }`}
                   />
+                </button>
+
+                <button
+                  onClick={() => setShowCompareModal(true)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-purple-500/35 bg-purple-500/10 px-3 py-2 text-xs font-medium text-purple-300 transition-colors hover:border-purple-500/45 hover:bg-purple-500/15 sm:min-h-12 sm:text-sm"
+                  aria-haspopup="dialog"
+                  aria-label="Compare all countries"
+                >
+                  <Scale className="h-3.5 w-3.5" />
+                  <span>Compare</span>
                 </button>
 
                 {allowCountrySwitch ? (
@@ -2788,7 +2804,7 @@ export default function DashboardView({
                       dataSource="PDIE Real Data"
                       temporalScope="Cumulative"
                       dataValues={legendDataValues}
-                      isLeftPanelOpen={showFilters}
+                      isLeftPanelOpen={showFilters || showMapControls}
                       showBuildings={showBuildingsLayer && !!damagedBuildings}
                       showRoads={showRoadsLayer && !!damagedRoads}
                       showCyclone={showCycloneControls && !!cycloneForecast}
@@ -3013,6 +3029,7 @@ export default function DashboardView({
             regionalSummaryBySector={regionalSummaryBySector}
             impactBySector={impactBySector || []}
             scenarioRiskSummary={hazardScenarioRiskSummary}
+            hazardScenarioMapActive={!!effectiveHazardScenario}
           />
         </div>
       </div>
@@ -3031,6 +3048,8 @@ export default function DashboardView({
       {showBasemapPreferenceModal && BasemapPreferenceModal && (
         <BasemapPreferenceModal onSelect={handleBasemapSelect} onSkip={handleBasemapSkip} />
       )}
+
+      <CountryComparisonModal open={showCompareModal} onClose={() => setShowCompareModal(false)} />
 
       <GuidedTour
         open={isTourOpen}
