@@ -3,13 +3,12 @@
 /**
  * Side-by-side comparison of all four countries' headline impact figures.
  * Reuses the same loadAllRealData/fetchHazardScenarioRiskSummary pipeline
- * every single-country dashboard already relies on (just with the heavy
- * damaged-buildings/roads/supplementary fetches skipped), rather than a
- * bespoke summary endpoint -- so a number shown here is guaranteed to match
- * what that country's own dashboard shows.
+ * every single-country dashboard already relies on, rather than a bespoke
+ * summary endpoint -- so a number shown here is guaranteed to match what
+ * that country's own dashboard shows.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, TriangleAlert, Scale } from 'lucide-react';
 import CountryFlag from '@/components/CountryFlag';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
@@ -126,6 +125,52 @@ export default function CountryComparisonModal({
       >
   );
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  // Same focus-management pattern as MapAccessibleFeatures: move focus in
+  // on open, back to whatever triggered it on close -- otherwise a keyboard
+  // or screen-reader user has no indication focus went anywhere, and Tab
+  // keeps walking the page behind the modal instead of its own content.
+  useEffect(() => {
+    if (open) {
+      previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+      closeButtonRef.current?.focus();
+    } else {
+      previouslyFocusedRef.current?.focus();
+    }
+  }, [open]);
+
+  const getFocusableElements = () => {
+    if (!dialogRef.current) return [];
+    return Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(el => !el.hasAttribute('disabled'));
+  };
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = getFocusableElements();
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
 
@@ -161,6 +206,8 @@ export default function CountryComparisonModal({
 
   return (
     <div
+      ref={dialogRef}
+      onKeyDown={handleDialogKeyDown}
       className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
@@ -182,6 +229,7 @@ export default function CountryComparisonModal({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Close compare countries"

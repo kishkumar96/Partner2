@@ -7,7 +7,7 @@
  * Selection is saved to localStorage and never shown again unless reset.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Globe2, Map, Satellite, Check } from 'lucide-react';
 import { saveBasemapPreference } from '@/utils/userPreferences';
 import { BASEMAP_STYLES } from '@/utils/basemaps';
@@ -48,6 +48,27 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
   const [selectedId, setSelectedId] = useState<string>('positron');
   const [dontShowAgain, setDontShowAgain] = useState(true);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const firstOptionRef = useRef<HTMLButtonElement>(null);
+
+  // This modal is mounted/unmounted by its parent rather than toggled via
+  // an `open` prop, so focus-in happens once on mount and focus-out (via
+  // browser default, since the trigger that caused it to mount wasn't a
+  // click) is left alone -- same reasoning CountryComparisonModal uses,
+  // adapted for how this component is actually wired.
+  useEffect(() => {
+    firstOptionRef.current?.focus();
+  }, []);
+
+  const getFocusableElements = () => {
+    if (!dialogRef.current) return [];
+    return Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(el => !el.hasAttribute('disabled'));
+  };
+
   const handleContinue = () => {
     const selected = BASEMAP_OPTIONS.find(opt => opt.id === selectedId);
     if (selected) {
@@ -68,8 +89,35 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
     onSkip();
   };
 
+  const handleDialogKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      handleSkip();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = getFocusableElements();
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div
+      ref={dialogRef}
+      onKeyDown={handleDialogKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="basemap-modal-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+    >
       <div className="w-full max-w-2xl rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-900/98 to-slate-950/98 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-700/50 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
@@ -78,7 +126,7 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
               <Globe2 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-100">
+              <h2 id="basemap-modal-title" className="text-xl font-bold text-slate-100">
                 Welcome to the Climate Risk Dashboard
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">Choose your preferred basemap style</p>
@@ -95,7 +143,7 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
 
           {/* Options Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-            {BASEMAP_OPTIONS.map(option => {
+            {BASEMAP_OPTIONS.map((option, index) => {
               const Icon = option.icon;
               const isSelected = selectedId === option.id;
               const isRecommended = option.id === 'positron';
@@ -103,6 +151,7 @@ export default function BasemapPreferenceModal({ onSelect, onSkip }: BasemapPref
               return (
                 <button
                   key={option.id}
+                  ref={index === 0 ? firstOptionRef : undefined}
                   type="button"
                   onClick={() => setSelectedId(option.id)}
                   className={`group relative rounded-xl p-4 text-left transition-all ${
