@@ -172,4 +172,10 @@ export interface RealDataLoadResult {
   partnerHazardLayers?: RealWMSLayer[];
   /** Full EventRecord list (including backend-only entries) for use by asset loaders. */
   fetchedEventRecords?: EventRecord[];
+  /** risk_information row id for damaged-buildings/damaged-roads, present
+   * even though damagedBuildings/damagedRoads above are null (their
+   * geometry is deferred from the list fetch) -- pass to
+   * fetchPartnerRiskInformationGeometry to load on demand. */
+  damagedBuildingsRowId?: string | null;
+  damagedRoadsRowId?: string | null;
 }

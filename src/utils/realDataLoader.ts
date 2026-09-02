@@ -1250,6 +1250,12 @@ interface PartnerRiskBundle {
   regionalSummaryBySector: Array<Record<string, unknown>>;
   damagedBuildings: GeoJSON.FeatureCollection | null;
   damagedRoads: GeoJSON.FeatureCollection | null;
+  // The row's own id, captured even when defer_large_assets left its
+  // geometry null -- lets a caller fetch that one row's full geometry on
+  // demand (fetchPartnerRiskInformationGeometry) once its map overlay is
+  // actually switched on, instead of every page load paying for it.
+  damagedBuildingsRowId: string | null;
+  damagedRoadsRowId: string | null;
 }
 
 function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
@@ -1264,6 +1270,8 @@ function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
     regionalSummaryBySector: [],
     damagedBuildings: null,
     damagedRoads: null,
+    damagedBuildingsRowId: null,
+    damagedRoadsRowId: null,
   };
 }
 
@@ -1442,7 +1450,15 @@ function extractPartnerRiskBundle(riskRows: Array<Record<string, unknown>>): Par
   return riskRows.reduce((bundle, row) => {
     const key = inferPartnerRiskKey(row, row.geometry);
     if (!key) return bundle;
-    return mergePartnerRiskBundle(bundle, key, row.geometry);
+    const next = mergePartnerRiskBundle(bundle, key, row.geometry);
+    const rowId = typeof row.id === 'number' || typeof row.id === 'string' ? String(row.id) : null;
+    if (key === 'damagedBuildings' && !next.damagedBuildingsRowId && rowId) {
+      return { ...next, damagedBuildingsRowId: rowId };
+    }
+    if (key === 'damagedRoads' && !next.damagedRoadsRowId && rowId) {
+      return { ...next, damagedRoadsRowId: rowId };
+    }
+    return next;
   }, createEmptyPartnerRiskBundle());
 }
 
@@ -1760,6 +1776,36 @@ export async function fetchHazardScenarioRiskSummary(
         matchesHazardScenarioProduct(row.risk_information_title, scenario.product)
       ) ?? null
     );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches one risk_information row's full geometry by id, bypassing the
+ * defer_large_assets exclusion the list endpoint applies (the retrieve
+ * endpoint doesn't take that param, so it always returns full geometry).
+ * Used to load damaged-buildings/damaged-roads on demand -- once their map
+ * overlay is switched on -- instead of on every page load.
+ */
+export async function fetchPartnerRiskInformationGeometry(
+  countryCode: CountryCode,
+  rowId: string,
+  signal?: AbortSignal
+): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    const mapping = await mapCountryPartnerApis(countryCode);
+    if (mapping.countryId === null) {
+      return null;
+    }
+
+    const url = `${mapping.endpoints.resource.risk_information}${rowId}/`;
+    const payload = await fetchPartnerCollection(url, signal);
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+
+    return extractFeatureCollectionFromValue((payload as Record<string, unknown>).geometry);
   } catch {
     return null;
   }
@@ -2617,6 +2663,8 @@ export async function loadAllRealData(
     },
     partnerHazardLayers: partnerData.hazardLayers,
     fetchedEventRecords: eventRecords,
+    damagedBuildingsRowId: partnerData.riskData.damagedBuildingsRowId,
+    damagedRoadsRowId: partnerData.riskData.damagedRoadsRowId,
   };
 }
 

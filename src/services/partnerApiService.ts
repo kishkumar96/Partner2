@@ -179,7 +179,11 @@ export function buildCountryScopedResourceUrls(
 
   return {
     cyclone_track: `${endpoints.resource.cyclone_track}?country=${countryId}`,
-    risk_information: `${endpoints.resource.risk_information}?country=${countryId}`,
+    // defer_large_assets skips the damaged-buildings/damaged-roads geometry
+    // in this listing (tens of MB per country, only needed once that map
+    // overlay is switched on) -- see loadPartnerApiCountryData, which
+    // re-fetches a row's full geometry individually by id on demand.
+    risk_information: `${endpoints.resource.risk_information}?country=${countryId}&defer_large_assets=true`,
     // RiskScenario has no direct `country` field of its own (it's reached
     // through its RiskInformation parent), so this filters on the FK path
     // instead of the `?country=` convention every other resource here uses.

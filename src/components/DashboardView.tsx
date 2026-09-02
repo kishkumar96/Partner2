@@ -43,6 +43,7 @@ import {
   loadDamagedBuildings,
   loadDamagedRoads,
   fetchHazardScenarioRiskSummary,
+  fetchPartnerRiskInformationGeometry,
 } from '@/utils/realDataLoader';
 import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
@@ -357,6 +358,12 @@ export default function DashboardView({
   const filtersRef = useRef(filters);
   const damagedBuildingsRef = useRef<any>(null);
   const damagedRoadsRef = useRef<any>(null);
+  // Partner-API risk_information row id for damaged buildings/roads, whose
+  // geometry the initial load deliberately skips (defer_large_assets) --
+  // loadDamageLayer fetches it by id on demand when set, instead of the
+  // local-DB fallback path.
+  const damagedBuildingsRowIdRef = useRef<string | null>(null);
+  const damagedRoadsRowIdRef = useRef<string | null>(null);
   const damageAutoLoadRequestedRef = useRef<{ buildings: boolean; roads: boolean }>({
     buildings: false,
     roads: false,
@@ -672,8 +679,21 @@ export default function DashboardView({
       damageLoadAbortRef.current[type] = controller;
 
       try {
-        const data =
-          type === 'buildings'
+        // A known partner-API row id means this country's damaged
+        // buildings/roads live in risk_information with their geometry
+        // deliberately deferred from the initial load -- fetch that one
+        // row by id instead of the local-DB fallback path, which has
+        // nothing for partner-API-only countries.
+        const partnerRowId =
+          type === 'buildings' ? damagedBuildingsRowIdRef.current : damagedRoadsRowIdRef.current;
+
+        const data = partnerRowId
+          ? await fetchPartnerRiskInformationGeometry(
+              selectedCountry,
+              partnerRowId,
+              controller.signal
+            )
+          : type === 'buildings'
             ? await loadDamagedBuildings({
                 signal: controller.signal,
                 countryCode: selectedCountry,
@@ -1836,6 +1856,9 @@ export default function DashboardView({
       if (realData.fetchedEventRecords && realData.fetchedEventRecords.length > 0) {
         fetchedEventRecordsRef.current = realData.fetchedEventRecords;
       }
+
+      damagedBuildingsRowIdRef.current = realData.damagedBuildingsRowId ?? null;
+      damagedRoadsRowIdRef.current = realData.damagedRoadsRowId ?? null;
 
       if (realData.events && realData.events.length > 0) {
         setEvents(realData.events);
