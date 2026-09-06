@@ -206,7 +206,7 @@ const nextConfig: NextConfig = {
             // Export libraries - lazy load only when needed (no preload)
             exports: {
               name: 'exports',
-              test: /[\\/]node_modules[\\/](exceljs|jspdf|html2canvas|file-saver|dompurify|canvg)[\\/]/,
+              test: /[\\/]node_modules[\\/](jspdf|html2canvas|file-saver|dompurify|canvg)[\\/]/,
               chunks: 'async',
               priority: 40,
               enforce: true,
