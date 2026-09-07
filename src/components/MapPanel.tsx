@@ -137,6 +137,7 @@ const MapPanel = memo(function MapPanel({
     basemap: true,
     shading: true,
     overlays: true,
+    hazardScenario: true,
     legendSymbology: false,
     view3D: false,
   });
@@ -394,6 +395,152 @@ const MapPanel = memo(function MapPanel({
           </div>
         )}
 
+        {/* Hazard scenario — a dedicated, always-visible control, not buried
+            inside the Flood overlay row. Sets the SLR/return-period/event
+            selection that both the map layer and the risk summary use;
+            includes its own show/hide toggle (bound to the same
+            showInundationLayer state as the Overlays row below, so the two
+            stay in sync automatically) so this section is self-sufficient. */}
+        {hazardScenarioProducts.length > 0 && onInundationLayerToggle && (
+          <div className="mx-3 mt-2 rounded-xl border border-blue-500/30 bg-slate-900/45 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('hazardScenario')}
+              className={sectionTriggerClass}
+            >
+              <Waves className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+                Hazard Scenario
+              </h3>
+              {!expandedSections.hazardScenario && (
+                <span className="text-[10px] text-slate-400 ml-auto mr-2">
+                  {HAZARD_SCENARIO_PRODUCT_LABELS[selectedProduct] ?? selectedProduct}
+                </span>
+              )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.hazardScenario ? 'rotate-180' : ''} ${!expandedSections.hazardScenario ? 'ml-auto' : ''}`}
+              />
+            </button>
+            {expandedSections.hazardScenario && (
+              <div className="px-4 pb-3 pt-2 border-t border-slate-700/40 bg-slate-900/35 space-y-2.5">
+                <label className="flex items-center justify-between cursor-pointer group">
+                  <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                    Show on map
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {showInundationLayer ? 'On' : 'Off'}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={showInundationLayer}
+                      onChange={e => onInundationLayerToggle(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-purple-400 cursor-pointer focus:ring-1 focus:ring-purple-500/50"
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="block text-[10px] text-slate-400 mb-1">Product</span>
+                  <select
+                    value={selectedProduct}
+                    onChange={e => {
+                      const product = e.target.value;
+                      const slrOptions = Array.from(
+                        new Set(
+                          hazardScenarioLayers
+                            .filter(l => l.hazardScenario?.product === product)
+                            .map(l => l.hazardScenario!.slrScenarioM)
+                        )
+                      ).sort((a, b) => a - b);
+                      const firstMatch = pickDefaultScenarioFor(product, slrOptions[0]);
+                      if (firstMatch) {
+                        emitHazardScenario(
+                          product,
+                          firstMatch.slrScenarioM,
+                          firstMatch.returnPeriodYears,
+                          firstMatch.eventLabel
+                        );
+                      }
+                    }}
+                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                  >
+                    {hazardScenarioProducts.map(product => {
+                      const label = HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product;
+                      const eventCount = hazardScenarioEventCounts.get(product) ?? 0;
+                      return (
+                        <option key={product} value={product}>
+                          {eventCount > 1 ? `${label} (${eventCount} events)` : label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="block text-[10px] text-slate-400 mb-1">Sea level rise</span>
+                  <select
+                    value={selectedSlr}
+                    onChange={e => {
+                      const slrScenarioM = Number(e.target.value);
+                      const firstMatch = pickDefaultScenarioFor(selectedProduct, slrScenarioM);
+                      if (firstMatch) {
+                        emitHazardScenario(
+                          selectedProduct,
+                          slrScenarioM,
+                          firstMatch.returnPeriodYears,
+                          firstMatch.eventLabel
+                        );
+                      }
+                    }}
+                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                  >
+                    {hazardScenarioSlrOptions.map(slr => (
+                      <option key={slr} value={slr}>
+                        {slr} m
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="block text-[10px] text-slate-400 mb-1">
+                    {hazardScenarioSelectorOptions[0]?.returnPeriodYears !== null
+                      ? 'Return period'
+                      : 'Event'}
+                  </span>
+                  <select
+                    value={selectedSelectorKey}
+                    onChange={e => {
+                      const [rp, ev] = e.target.value.split('|');
+                      emitHazardScenario(
+                        selectedProduct,
+                        selectedSlr,
+                        rp ? Number(rp) : null,
+                        ev || null
+                      );
+                    }}
+                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                  >
+                    {hazardScenarioSelectorOptions.map(opt => {
+                      const key = `${opt.returnPeriodYears ?? ''}|${opt.eventLabel ?? ''}`;
+                      const label =
+                        opt.returnPeriodYears !== null
+                          ? `${opt.returnPeriodYears} yr return period`
+                          : `Event ${opt.eventLabel}`;
+                      return (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Overlays — per-layer accordion rows */}
         {(onCycloneLayerToggle ||
           onWindLayerToggle ||
@@ -567,119 +714,10 @@ const MapPanel = memo(function MapPanel({
                           )}
 
                           {id === 'flood' && hazardScenarioProducts.length > 0 && (
-                            <div className="pt-2 mt-2 border-t border-slate-700/40 space-y-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                Hazard scenario
-                              </p>
-
-                              <label className="block">
-                                <span className="block text-[10px] text-slate-400 mb-1">
-                                  Product
-                                </span>
-                                <select
-                                  value={selectedProduct}
-                                  onChange={e => {
-                                    const product = e.target.value;
-                                    const slrOptions = Array.from(
-                                      new Set(
-                                        hazardScenarioLayers
-                                          .filter(l => l.hazardScenario?.product === product)
-                                          .map(l => l.hazardScenario!.slrScenarioM)
-                                      )
-                                    ).sort((a, b) => a - b);
-                                    const firstMatch = pickDefaultScenarioFor(
-                                      product,
-                                      slrOptions[0]
-                                    );
-                                    if (firstMatch) {
-                                      emitHazardScenario(
-                                        product,
-                                        firstMatch.slrScenarioM,
-                                        firstMatch.returnPeriodYears,
-                                        firstMatch.eventLabel
-                                      );
-                                    }
-                                  }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
-                                >
-                                  {hazardScenarioProducts.map(product => {
-                                    const label =
-                                      HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product;
-                                    const eventCount = hazardScenarioEventCounts.get(product) ?? 0;
-                                    return (
-                                      <option key={product} value={product}>
-                                        {eventCount > 1 ? `${label} (${eventCount} events)` : label}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                              </label>
-
-                              <label className="block">
-                                <span className="block text-[10px] text-slate-400 mb-1">
-                                  Sea level rise
-                                </span>
-                                <select
-                                  value={selectedSlr}
-                                  onChange={e => {
-                                    const slrScenarioM = Number(e.target.value);
-                                    const firstMatch = pickDefaultScenarioFor(
-                                      selectedProduct,
-                                      slrScenarioM
-                                    );
-                                    if (firstMatch) {
-                                      emitHazardScenario(
-                                        selectedProduct,
-                                        slrScenarioM,
-                                        firstMatch.returnPeriodYears,
-                                        firstMatch.eventLabel
-                                      );
-                                    }
-                                  }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
-                                >
-                                  {hazardScenarioSlrOptions.map(slr => (
-                                    <option key={slr} value={slr}>
-                                      {slr} m
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label className="block">
-                                <span className="block text-[10px] text-slate-400 mb-1">
-                                  {hazardScenarioSelectorOptions[0]?.returnPeriodYears !== null
-                                    ? 'Return period'
-                                    : 'Event'}
-                                </span>
-                                <select
-                                  value={selectedSelectorKey}
-                                  onChange={e => {
-                                    const [rp, ev] = e.target.value.split('|');
-                                    emitHazardScenario(
-                                      selectedProduct,
-                                      selectedSlr,
-                                      rp ? Number(rp) : null,
-                                      ev || null
-                                    );
-                                  }}
-                                  className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
-                                >
-                                  {hazardScenarioSelectorOptions.map(opt => {
-                                    const key = `${opt.returnPeriodYears ?? ''}|${opt.eventLabel ?? ''}`;
-                                    const label =
-                                      opt.returnPeriodYears !== null
-                                        ? `${opt.returnPeriodYears} yr return period`
-                                        : `Event ${opt.eventLabel}`;
-                                    return (
-                                      <option key={key} value={key}>
-                                        {label}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                              </label>
-                            </div>
+                            <p className="text-[10px] text-slate-400">
+                              Dataset, sea-level-rise, and return-period/event controls are in the
+                              Hazard Scenario section above.
+                            </p>
                           )}
                         </div>
                       </div>
