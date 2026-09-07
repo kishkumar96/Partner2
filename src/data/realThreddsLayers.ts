@@ -678,10 +678,42 @@ export const HAZARD_SCENARIO_PRODUCT_LABELS: Record<string, string> = {
   swell: 'Swell (probabilistic)',
   historical_tcs: 'Historical Cyclones',
   synthetic_tcs: 'Synthetic Cyclones',
-  swell_driven: 'Swell Events',
+  swell_driven: 'Historical Swell Events',
   coastal_flood: 'Coastal Flood (Sea Level Rise)',
   fluvial_flood: 'Fluvial / Pluvial Flood (Rainfall & River)',
   rapid_impact_assessment: 'Rapid Impact Assessment Cyclones',
+};
+
+// Two fundamentally different kinds of thing a "hazard scenario" can be,
+// which the UI must not blur together (a disaster manager reasons about a
+// real storm that happened very differently from a statistical planning
+// figure): whether a product is real, dated history, or a synthetic/
+// statistical construct used to estimate risk. Not derivable from the
+// event/return_period selector dimension alone -- synthetic_tcs shares the
+// "event" selector with historical_tcs/swell_driven despite being
+// statistically generated, never observed, storms (see
+// hazard_tiles/views.py's PRODUCTS mapping in the middleware repo).
+export type HazardScenarioCategory = 'observed' | 'planning';
+
+export const HAZARD_SCENARIO_PRODUCT_CATEGORY: Record<string, HazardScenarioCategory> = {
+  historical_tcs: 'observed',
+  swell_driven: 'observed',
+  // A rapid_impact_assessment row is a RiskScape run against one specific,
+  // real cyclone forecast (see model.ModelRun) -- an actual event being
+  // assessed, not a statistical planning figure -- even though no country's
+  // catalog uses this product yet.
+  rapid_impact_assessment: 'observed',
+  combined: 'planning',
+  tc: 'planning',
+  swell: 'planning',
+  synthetic_tcs: 'planning',
+  coastal_flood: 'planning',
+  fluvial_flood: 'planning',
+};
+
+export const HAZARD_SCENARIO_CATEGORY_LABELS: Record<HazardScenarioCategory, string> = {
+  observed: 'Observed Historical Events',
+  planning: 'Probabilistic Planning Scenarios',
 };
 
 export const WMS_STYLES = {

@@ -30,6 +30,9 @@ import {
   LegendSettings,
   createDefaultLegendSettings,
   HAZARD_SCENARIO_PRODUCT_LABELS,
+  HAZARD_SCENARIO_PRODUCT_CATEGORY,
+  HAZARD_SCENARIO_CATEGORY_LABELS,
+  HazardScenarioCategory,
   HazardScenarioSelection,
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
@@ -94,6 +97,13 @@ interface MapPanelProps {
   hazardScenarioSelection?: HazardScenarioSelection | null;
   onHazardScenarioChange?: (selection: HazardScenarioSelection) => void;
 }
+
+// Which of "actually happened" vs "statistical estimate" a product is --
+// see HAZARD_SCENARIO_PRODUCT_CATEGORY's doc comment for why this can't be
+// derived from the return-period/event selector alone. Module-scope (not a
+// component-body closure) so it has a stable reference for hook deps.
+const productCategory = (product: string): HazardScenarioCategory =>
+  HAZARD_SCENARIO_PRODUCT_CATEGORY[product] ?? 'planning';
 
 const MapPanel = memo(function MapPanel({
   mapStyle,
@@ -186,6 +196,26 @@ const MapPanel = memo(function MapPanel({
 
   const selectedProduct = hazardScenarioSelection?.product ?? hazardScenarioProducts[0];
 
+  // Only worth surfacing a category toggle when the country's own catalog
+  // actually spans both -- CK does today (historical/synthetic cyclones
+  // alongside probabilistic combined/tc/swell); VU/TO/WS's coastal/fluvial
+  // flood catalogs are planning-only, so no toggle clutters their single
+  // category.
+  const availableHazardCategories = useMemo(() => {
+    const present = new Set(hazardScenarioProducts.map(productCategory));
+    return (['observed', 'planning'] as HazardScenarioCategory[]).filter(cat => present.has(cat));
+  }, [hazardScenarioProducts]);
+
+  const [categoryOverride, setCategoryOverride] = useState<HazardScenarioCategory | null>(null);
+  const activeHazardCategory =
+    categoryOverride ?? productCategory(selectedProduct) ?? availableHazardCategories[0];
+
+  const hazardScenarioProductsInCategory = useMemo(
+    () =>
+      hazardScenarioProducts.filter(product => productCategory(product) === activeHazardCategory),
+    [hazardScenarioProducts, activeHazardCategory]
+  );
+
   const hazardScenarioSlrOptions = useMemo(() => {
     const slrs = new Set<number>();
     hazardScenarioLayers.forEach(layer => {
@@ -261,6 +291,28 @@ const MapPanel = memo(function MapPanel({
       if (b.returnPeriodYears !== null) return 1;
       return (a.eventLabel ?? '').localeCompare(b.eventLabel ?? '');
     })[0];
+  };
+
+  // Shared by the Product dropdown and the observed/planning category
+  // toggle, so switching category always lands on a real, selectable
+  // product+SLR pair rather than an arbitrary or stale one.
+  const selectProduct = (product: string) => {
+    const slrOptions = Array.from(
+      new Set(
+        hazardScenarioLayers
+          .filter(l => l.hazardScenario?.product === product)
+          .map(l => l.hazardScenario!.slrScenarioM)
+      )
+    ).sort((a, b) => a - b);
+    const firstMatch = pickDefaultScenarioFor(product, slrOptions[0]);
+    if (firstMatch) {
+      emitHazardScenario(
+        product,
+        firstMatch.slrScenarioM,
+        firstMatch.returnPeriodYears,
+        firstMatch.eventLabel
+      );
+    }
   };
 
   const sectionTriggerClass =
@@ -440,32 +492,55 @@ const MapPanel = memo(function MapPanel({
                   </div>
                 </label>
 
+                {availableHazardCategories.length > 1 && (
+                  <div className="block">
+                    <span className="block text-[10px] text-slate-400 mb-1">Scenario type</span>
+                    <div
+                      className="grid grid-cols-2 gap-1.5"
+                      role="tablist"
+                      aria-label="Scenario type"
+                    >
+                      {availableHazardCategories.map(category => (
+                        <button
+                          key={category}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeHazardCategory === category}
+                          onClick={() => {
+                            setCategoryOverride(category);
+                            const firstProduct = hazardScenarioProducts.find(
+                              product => productCategory(product) === category
+                            );
+                            if (firstProduct) selectProduct(firstProduct);
+                          }}
+                          className={`px-2 py-1.5 rounded-lg text-[10.5px] font-semibold text-center leading-tight transition-colors border ${
+                            activeHazardCategory === category
+                              ? category === 'observed'
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                              : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border-transparent'
+                          }`}
+                        >
+                          {HAZARD_SCENARIO_CATEGORY_LABELS[category]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-500 leading-snug">
+                      {activeHazardCategory === 'observed'
+                        ? 'A specific storm or swell event that actually happened, on record.'
+                        : 'A statistical estimate of risk at a given likelihood, not a real event.'}
+                    </p>
+                  </div>
+                )}
+
                 <label className="block">
                   <span className="block text-[10px] text-slate-400 mb-1">Product</span>
                   <select
                     value={selectedProduct}
-                    onChange={e => {
-                      const product = e.target.value;
-                      const slrOptions = Array.from(
-                        new Set(
-                          hazardScenarioLayers
-                            .filter(l => l.hazardScenario?.product === product)
-                            .map(l => l.hazardScenario!.slrScenarioM)
-                        )
-                      ).sort((a, b) => a - b);
-                      const firstMatch = pickDefaultScenarioFor(product, slrOptions[0]);
-                      if (firstMatch) {
-                        emitHazardScenario(
-                          product,
-                          firstMatch.slrScenarioM,
-                          firstMatch.returnPeriodYears,
-                          firstMatch.eventLabel
-                        );
-                      }
-                    }}
+                    onChange={e => selectProduct(e.target.value)}
                     className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
                   >
-                    {hazardScenarioProducts.map(product => {
+                    {hazardScenarioProductsInCategory.map(product => {
                       const label = HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product;
                       const eventCount = hazardScenarioEventCounts.get(product) ?? 0;
                       return (
