@@ -204,7 +204,16 @@ export default function DashboardView({
   // override yet, so getLayersForCountry falls back to a deterministic
   // default rather than rendering every scenario combination at once.
   const [hazardScenarioSelection, setHazardScenarioSelection] =
-    useState<HazardScenarioSelection | null>(null);
+    useState<HazardScenarioSelection | null>(
+      urlState.hazardScenarioProduct
+        ? {
+            product: urlState.hazardScenarioProduct,
+            slrScenarioM: urlState.hazardScenarioSlr ?? 0,
+            returnPeriodYears: urlState.hazardScenarioReturnPeriod ?? null,
+            eventLabel: urlState.hazardScenarioEvent ?? null,
+          }
+        : null
+    );
   const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
     initialShowMapControls ? false : (urlState.showFilters ?? false)
@@ -518,6 +527,10 @@ export default function DashboardView({
           showFilters,
           showMapControls,
           showSummary,
+          hazardScenarioProduct: hazardScenarioSelection?.product,
+          hazardScenarioSlr: hazardScenarioSelection?.slrScenarioM,
+          hazardScenarioReturnPeriod: hazardScenarioSelection?.returnPeriodYears ?? undefined,
+          hazardScenarioEvent: hazardScenarioSelection?.eventLabel ?? undefined,
           // Merge with any partial updates
           ...state,
         };
@@ -548,6 +561,7 @@ export default function DashboardView({
       showFilters,
       showMapControls,
       showSummary,
+      hazardScenarioSelection,
       pathname,
       router,
     ]
@@ -565,6 +579,7 @@ export default function DashboardView({
     filters.selectedHazards,
     filters.selectedSectors,
     filters.aggregationLevel,
+    hazardScenarioSelection,
     updateUrl,
   ]);
 
@@ -2566,6 +2581,11 @@ export default function DashboardView({
                     storyMode,
                     showSummary,
                     showFilters,
+                    hazardScenarioProduct: hazardScenarioSelection?.product,
+                    hazardScenarioSlr: hazardScenarioSelection?.slrScenarioM,
+                    hazardScenarioReturnPeriod:
+                      hazardScenarioSelection?.returnPeriodYears ?? undefined,
+                    hazardScenarioEvent: hazardScenarioSelection?.eventLabel ?? undefined,
                   }}
                   compact
                   className="min-h-11 rounded-xl border-slate-600/60 bg-slate-700/35 px-3 py-2 hover:bg-slate-700/55 sm:min-h-12"

@@ -42,6 +42,15 @@ export interface MapURLState {
   showFilters?: boolean;
   showMapControls?: boolean;
   showSummary?: boolean;
+
+  // Hazard scenario (SLR x return-period/event pick out of a multi-scenario
+  // catalog, currently Cook Islands only) -- the user's explicit choice, not
+  // whatever default it happens to resolve to, so a shared link reproduces
+  // exactly what the sender was looking at rather than "whatever's first."
+  hazardScenarioProduct?: string;
+  hazardScenarioSlr?: number;
+  hazardScenarioReturnPeriod?: number;
+  hazardScenarioEvent?: string;
 }
 
 export function serializeMapState(state: MapURLState): URLSearchParams {
@@ -82,6 +91,19 @@ export function serializeMapState(state: MapURLState): URLSearchParams {
   if (state.showFilters) params.set('filters', 'true');
   if (state.showMapControls) params.set('map', 'true');
   if (state.showSummary) params.set('summary', 'true');
+
+  if (state.hazardScenarioProduct) {
+    params.set('hazProduct', state.hazardScenarioProduct);
+    if (state.hazardScenarioSlr !== undefined) {
+      params.set('hazSlr', String(state.hazardScenarioSlr));
+    }
+    if (state.hazardScenarioReturnPeriod !== undefined) {
+      params.set('hazRp', String(state.hazardScenarioReturnPeriod));
+    }
+    if (state.hazardScenarioEvent) {
+      params.set('hazEvent', state.hazardScenarioEvent);
+    }
+  }
 
   return params;
 }
@@ -135,6 +157,17 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
   if (params.get('filters') === 'true') state.showFilters = true;
   if (params.get('map') === 'true') state.showMapControls = true;
   if (params.get('summary') === 'true') state.showSummary = true;
+
+  const hazProduct = params.get('hazProduct');
+  if (hazProduct) {
+    state.hazardScenarioProduct = hazProduct;
+    const hazSlr = params.get('hazSlr');
+    if (hazSlr !== null) state.hazardScenarioSlr = parseFloat(hazSlr);
+    const hazRp = params.get('hazRp');
+    if (hazRp !== null) state.hazardScenarioReturnPeriod = parseInt(hazRp, 10);
+    const hazEvent = params.get('hazEvent');
+    if (hazEvent) state.hazardScenarioEvent = hazEvent;
+  }
 
   return state;
 }
