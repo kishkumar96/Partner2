@@ -21,6 +21,7 @@ import { debugLogger } from '@/utils/debugLogger';
 import { logger } from '@/utils/logger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
+import HazardScenarioBadge from './HazardScenarioBadge';
 import RealDataLayers from './RealDataLayers';
 import RegionalImpactsLayer from './RegionalImpactsLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
@@ -1313,6 +1314,14 @@ export default function MapView({
     <div className="relative flex-1 h-full">
       <div ref={mapContainer} className="w-full h-full" />
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
+
+      {showOverlays && selectedCountry && (
+        <HazardScenarioBadge
+          selection={hazardScenarioSelection ?? null}
+          countryName={COUNTRIES[selectedCountry]?.name ?? selectedCountry}
+          visible={showInundationLayer}
+        />
+      )}
 
       {showOverlays && wmsWarning && (
         <div className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)] rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">

@@ -1472,6 +1472,22 @@ export default function DashboardView({
     [partnerHazardLayers, selectedCountry]
   );
 
+  // Whether the active country's own hazard catalog actually contains a wind
+  // layer (true for VU/TO/WS today, false for CK -- its catalog is
+  // inundation-only). Drives an explicit "not modelled" message on the Wind
+  // toggle instead of a toggle that silently does nothing when switched on --
+  // see CK_RISK_ANALYSIS_ASSESSMENT.md's still-open "confirm wind hazard is
+  // genuinely out of scope for CK" item. Only meaningful once this
+  // country's own partner-API catalog has loaded; defaults to available so
+  // it never falsely claims "unavailable" while data is still in flight.
+  const countryHasWindLayers = useMemo(() => {
+    const countryLayers = partnerHazardLayers.filter(
+      layer => layer.countryCode === selectedCountry
+    );
+    if (countryLayers.length === 0) return true;
+    return countryLayers.some(layer => layer.hazardType === 'wind');
+  }, [partnerHazardLayers, selectedCountry]);
+
   // The scenario actually rendered on the map: the user's explicit pick, or
   // a deterministic default so the map always shows exactly one scenario
   // instead of every SLR x return-period/event combination at once.
@@ -2589,6 +2605,7 @@ export default function DashboardView({
                   impactBySector={impactBySector}
                   nationalSummary={nationalSummary}
                   mapInstance={mapInstance}
+                  hazardScenario={showInundationLayer ? effectiveHazardScenario : null}
                 />
               </div>
             </div>
@@ -2781,6 +2798,7 @@ export default function DashboardView({
             onExtrusionExaggerationChange={setExtrusionExaggeration}
             showWindLayer={showWindLayer}
             showInundationLayer={showInundationLayer}
+            windLayersAvailable={countryHasWindLayers}
             onWindLayerToggle={setShowWindLayer}
             onInundationLayerToggle={setShowInundationLayer}
             showBuildingsLayer={showBuildingsLayer}

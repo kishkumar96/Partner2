@@ -33,7 +33,7 @@ import {
   HazardScenarioSelection,
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
-import type { CountryCode } from '@/types/thredds';
+import { COUNTRIES, type CountryCode } from '@/types/thredds';
 import { CollapsibleLegendPanel } from '@/components/legend';
 
 interface MapPanelProps {
@@ -43,6 +43,10 @@ interface MapPanelProps {
 
   // Layer toggles
   showWindLayer?: boolean;
+  // False when the active country's hazard catalog has no wind layer at all
+  // (e.g. Cook Islands, inundation-only) -- surfaces an explicit in-place
+  // message instead of a toggle that silently does nothing when switched on.
+  windLayersAvailable?: boolean;
   showInundationLayer?: boolean;
   showBuildingsLayer?: boolean;
   showRoadsLayer?: boolean;
@@ -95,6 +99,7 @@ const MapPanel = memo(function MapPanel({
   mapStyle,
   onMapStyleChange,
   showWindLayer = true,
+  windLayersAvailable = true,
   showInundationLayer = true,
   showBuildingsLayer = false,
   showRoadsLayer = false,
@@ -416,6 +421,11 @@ const MapPanel = memo(function MapPanel({
                 checked: showWindLayer,
                 onToggle: onWindLayerToggle,
                 color: 'text-cyan-400',
+                unavailableMessage: windLayersAvailable
+                  ? undefined
+                  : `Wind modelling unavailable for ${
+                      countryCode ? (COUNTRIES[countryCode]?.name ?? countryCode) : 'this country'
+                    }`,
               },
               onInundationLayerToggle && {
                 id: 'flood',
@@ -451,6 +461,7 @@ const MapPanel = memo(function MapPanel({
                   checked,
                   onToggle,
                   color,
+                  unavailableMessage,
                 } = row as {
                   id: string;
                   label: string;
@@ -458,6 +469,7 @@ const MapPanel = memo(function MapPanel({
                   checked: boolean;
                   onToggle: (v: boolean) => void;
                   color: string;
+                  unavailableMessage?: string;
                 };
                 const isOpen = expandedOverlayId === id;
                 return (
@@ -478,10 +490,14 @@ const MapPanel = memo(function MapPanel({
                       </span>
                       <span
                         className={`text-[10px] font-semibold mr-2 ${
-                          checked ? 'text-slate-300' : 'text-slate-400'
+                          unavailableMessage
+                            ? 'text-slate-500'
+                            : checked
+                              ? 'text-slate-300'
+                              : 'text-slate-400'
                         }`}
                       >
-                        {checked ? 'On' : 'Off'}
+                        {unavailableMessage ? 'N/A' : checked ? 'On' : 'Off'}
                       </span>
                       <ChevronDown
                         className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
@@ -495,45 +511,54 @@ const MapPanel = memo(function MapPanel({
                         className="border-t border-slate-700/40 bg-slate-900/35 px-4 py-2.5"
                       >
                         <div className="space-y-2.5">
-                          <label className="flex items-center justify-between cursor-pointer group">
-                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
-                              Show layer
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-semibold text-slate-400">
-                                {checked ? 'On' : 'Off'}
+                          {unavailableMessage ? (
+                            <p className="text-[11px] text-amber-300/90 leading-snug">
+                              {unavailableMessage}. This hazard is not part of the modelled catalog
+                              for this country — not a loading error.
+                            </p>
+                          ) : (
+                            <label className="flex items-center justify-between cursor-pointer group">
+                              <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                Show layer
                               </span>
-                              {id === 'cyclone' ? (
-                                <button
-                                  type="button"
-                                  aria-pressed={checked}
-                                  aria-label={checked ? 'Hide cyclone track' : 'Show cyclone track'}
-                                  onClick={() => onToggle(!checked)}
-                                  className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 transition-colors border focus-visible:outline-none focus-visible:ring-1 ${
-                                    checked
-                                      ? 'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25 hover:border-blue-500/40 focus-visible:ring-blue-400'
-                                      : 'bg-slate-700/30 text-slate-300 border-slate-600/40 hover:bg-slate-700/45 hover:border-slate-500/50 focus-visible:ring-slate-400'
-                                  }`}
-                                >
-                                  {checked ? (
-                                    <Eye className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <EyeOff className="h-3.5 w-3.5" />
-                                  )}
-                                  <span className="text-[10px] font-semibold">
-                                    {checked ? 'Visible' : 'Hidden'}
-                                  </span>
-                                </button>
-                              ) : (
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={e => onToggle(e.target.checked)}
-                                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-purple-400 cursor-pointer focus:ring-1 focus:ring-purple-500/50"
-                                />
-                              )}
-                            </div>
-                          </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-semibold text-slate-400">
+                                  {checked ? 'On' : 'Off'}
+                                </span>
+                                {id === 'cyclone' ? (
+                                  <button
+                                    type="button"
+                                    aria-pressed={checked}
+                                    aria-label={
+                                      checked ? 'Hide cyclone track' : 'Show cyclone track'
+                                    }
+                                    onClick={() => onToggle(!checked)}
+                                    className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 transition-colors border focus-visible:outline-none focus-visible:ring-1 ${
+                                      checked
+                                        ? 'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25 hover:border-blue-500/40 focus-visible:ring-blue-400'
+                                        : 'bg-slate-700/30 text-slate-300 border-slate-600/40 hover:bg-slate-700/45 hover:border-slate-500/50 focus-visible:ring-slate-400'
+                                    }`}
+                                  >
+                                    {checked ? (
+                                      <Eye className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <EyeOff className="h-3.5 w-3.5" />
+                                    )}
+                                    <span className="text-[10px] font-semibold">
+                                      {checked ? 'Visible' : 'Hidden'}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={e => onToggle(e.target.checked)}
+                                    className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-purple-400 cursor-pointer focus:ring-1 focus:ring-purple-500/50"
+                                  />
+                                )}
+                              </div>
+                            </label>
+                          )}
 
                           {id === 'cyclone' && (
                             <p className="text-[10px] text-slate-400">

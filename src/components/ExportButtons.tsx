@@ -6,6 +6,7 @@ import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types
 import QRCode from 'qrcode';
 import { getCountrySlugFromCode } from '@/utils/countrySlug';
 import { logger } from '@/utils/logger';
+import { HazardScenarioSelection, HAZARD_SCENARIO_PRODUCT_LABELS } from '@/data/realThreddsLayers';
 import PDFPreviewModal, { PDFTemplate } from './PDFPreviewModal';
 import {
   PDF_TEMPLATE_CONFIG,
@@ -18,6 +19,24 @@ const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
 
 // Helper to create asset URLs with correct base path
 const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+
+// Mirrors HazardScenarioBadge's on-screen fields (dataset, SLR, return
+// period/event) as a single caption line -- see the note on the
+// `hazardScenario` prop above for why this can't just ride along in the
+// captured map image.
+function formatHazardScenarioCaption(scenario: HazardScenarioSelection | null): string | null {
+  if (!scenario) return null;
+  const productLabel = HAZARD_SCENARIO_PRODUCT_LABELS[scenario.product] ?? scenario.product;
+  const periodLabel =
+    scenario.returnPeriodYears !== null
+      ? `${scenario.returnPeriodYears}-yr return period`
+      : scenario.eventLabel
+        ? `event: ${scenario.eventLabel}`
+        : null;
+  const parts = [`Scenario: ${productLabel}`, `SLR ${scenario.slrScenarioM} m`];
+  if (periodLabel) parts.push(periodLabel);
+  return parts.join(' | ');
+}
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -113,6 +132,13 @@ interface ExportButtonsProps {
   mapInstance?: MapLike;
   reportLocale?: string;
   includeMapInPdf?: boolean;
+  // Modelled hazard scenario currently shown on the map (dataset, sea-level-rise
+  // assumption, return period/event) -- printed alongside the map caption so a
+  // report retains the same decision-record provenance the on-screen badge
+  // gives a live viewer. The map image itself is a raw canvas grab (see
+  // captureMapCanvas) that can't include the HTML overlay, so this is drawn
+  // as its own text block rather than relying on the screenshot to carry it.
+  hazardScenario?: HazardScenarioSelection | null;
 }
 
 export default function ExportButtons({
@@ -131,6 +157,7 @@ export default function ExportButtons({
   mapInstance = null,
   reportLocale,
   includeMapInPdf = true,
+  hazardScenario = null,
 }: ExportButtonsProps) {
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -870,6 +897,10 @@ export default function ExportButtons({
           doc.setFont('helvetica', 'italic');
           doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, MX, mapY + 7 + mapH + 3);
+          const scenarioCaption = formatHazardScenarioCaption(hazardScenario);
+          if (scenarioCaption) {
+            doc.text(scenarioCaption, MX, mapY + 7 + mapH + 7);
+          }
         }
       } else {
         // When using template, add dynamic text overlays
@@ -971,6 +1002,11 @@ export default function ExportButtons({
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, PW / 2, y + h + 3, { align: 'center' });
+          const scenarioCaption = formatHazardScenarioCaption(hazardScenario);
+          if (scenarioCaption) {
+            doc.setFontSize(7);
+            doc.text(scenarioCaption, PW / 2, y + h + 6.5, { align: 'center' });
+          }
         }
       }
 
