@@ -33,6 +33,8 @@ import {
   createDefaultLegendSettings,
   getDefaultHazardScenario,
   HazardScenarioSelection,
+  HAZARD_SCENARIO_PRODUCT_CATEGORY,
+  HAZARD_SCENARIO_PRODUCT_LABELS,
   LegendSettings,
 } from '@/data/realThreddsLayers';
 import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
@@ -1511,6 +1513,29 @@ export default function DashboardView({
     [hazardScenarioSelection, countryHazardScenarioLayers]
   );
 
+  // The header's "Active event context" and the Metadata chip both used to
+  // read activeCycloneName unconditionally -- for a country like Cook
+  // Islands with no real Event record, that's just the generic "Tropical
+  // Cyclone" fallback, completely disconnected from whichever historical/
+  // synthetic/swell event is actually selected in the Hazard Scenario
+  // section. When the active scenario is itself a real, dated/named
+  // observed event (not a statistical planning figure), prefer showing
+  // that -- it's more specific and it's what the map and risk figures
+  // actually reflect.
+  const activeEventContextLabel = useMemo(() => {
+    if (
+      effectiveHazardScenario &&
+      HAZARD_SCENARIO_PRODUCT_CATEGORY[effectiveHazardScenario.product] === 'observed' &&
+      effectiveHazardScenario.eventLabel
+    ) {
+      const productLabel =
+        HAZARD_SCENARIO_PRODUCT_LABELS[effectiveHazardScenario.product] ??
+        effectiveHazardScenario.product;
+      return `${productLabel} — ${effectiveHazardScenario.eventLabel}`;
+    }
+    return activeCycloneName;
+  }, [effectiveHazardScenario, activeCycloneName]);
+
   // National-level loss/exposure totals for the scenario currently shown on
   // the map, so the risk summary panel matches the selected SLR x
   // return-period/event instead of one fixed, scenario-independent figure.
@@ -2376,7 +2401,7 @@ export default function DashboardView({
                 <p className="mt-1 text-xs text-slate-400 sm:text-sm">
                   {isLoadingData
                     ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
-                    : `Active event context: ${activeCycloneName}`}
+                    : `Active event context: ${activeEventContextLabel}`}
                 </p>
               </div>
             </div>
@@ -2649,7 +2674,7 @@ export default function DashboardView({
                   Country: {COUNTRIES[selectedCountry].name}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
-                  Event: {activeCycloneName}
+                  Event: {activeEventContextLabel}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Hazards: {metadataHazardSummary}
