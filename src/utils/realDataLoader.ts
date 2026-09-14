@@ -2086,9 +2086,31 @@ async function loadPartnerApiCountryData(
       toArrayPayload(hazardPayload),
       mapping.countryId
     );
+    // A country's hazard rows can be a mix of two independent things: rows
+    // tied to a specific named Event (VU's Lola/Harold-style single-storm
+    // layers, linked via Event.hazards) and rows belonging to an
+    // event-independent multi-scenario catalog (SLR x return-period/event --
+    // Cook Islands' full historical/synthetic/swell/probabilistic catalog,
+    // or VU/TO/WS's coastal/fluvial-flood scenario rows). Narrowing
+    // unconditionally to just the active event's linked hazards -- the
+    // original behaviour below -- silently discarded an entire country's
+    // scenario catalog the moment any Event with linked hazards existed for
+    // it, since none of those thousands of scenario rows are ever linked to
+    // an Event. Scenario-tagged rows (protocol='xyz', or carrying an SLR/
+    // model_run dimension) are therefore always retained regardless of
+    // event linkage; only non-scenario rows get narrowed to the active
+    // event's set.
+    const isHazardScenarioRow = (row: Record<string, unknown>): boolean =>
+      row.protocol === 'xyz' ||
+      toNumber(row.slr_scenario_m) !== null ||
+      toNumber(row.model_run) !== null;
     const hazardRows =
       allHazardIds.length > 0
-        ? filterPartnerRowsByIds(countryHazardRows, allHazardIds, ['id'])
+        ? countryHazardRows.filter(
+            row =>
+              isHazardScenarioRow(row) ||
+              filterPartnerRowsByIds([row], allHazardIds, ['id']).length > 0
+          )
         : countryHazardRows;
     const riskData = extractPartnerRiskBundle(riskRows);
 
