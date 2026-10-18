@@ -1,0 +1,9 @@
+# Modern browsers only (removes legacy polyfills, saves ~14 KiB)
+# Targets browsers supporting ES2022 features natively
+last 2 Chrome versions
+last 2 Edge versions
+last 2 Safari versions
+last 2 Firefox versions
+not dead
+not IE 11
+not op_mini all

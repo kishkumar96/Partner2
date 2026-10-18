@@ -7,7 +7,7 @@
     "prebuild": "npm run config:check",
     "build": "next build",
     "build:production": "cross-env NODE_ENV=production next build",
-    "start": "next start --port 3002",
+    "start": "next start --port ${PORT:-3002}",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "type-check": "npm run config:check && tsc --noEmit",

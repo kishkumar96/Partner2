@@ -445,7 +445,7 @@ export function MapControls({
                             {isExpanded && (
                               <div
                                 id={`${section.id}-overlay-panel`}
-                                className="border-t border-slate-700/70 px-3 py-3 space-y-2"
+                                className="border-t border-slate-700/70 px-3 py-3 space-y-2 animate-in slide-in-from-top-2 duration-200"
                               >
                                 <p className="text-[11px] text-slate-400">{section.description}</p>
                                 <label className="flex items-center justify-between gap-3 cursor-pointer group">
@@ -490,6 +490,8 @@ export function MapControls({
                         <span className="text-xs font-mono text-slate-300">{layerOpacity}%</span>
                       </div>
                       <input
+                        id="layer-opacity-range"
+                        name="layerOpacity"
                         type="range"
                         min={0}
                         max={100}

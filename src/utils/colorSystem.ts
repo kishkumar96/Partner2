@@ -113,7 +113,7 @@ export function createLossColorExpression(countryCode?: CountryCode | null): any
   return [
     'interpolate',
     ['linear'],
-    ['get', 'Total_Loss'],
+    ['to-number', ['get', 'Total_Loss'], 0],
     ...scale.flatMap(({ threshold, color }) => [threshold, color]),
   ];
 }
@@ -126,7 +126,7 @@ export function createWindColorExpression(): any {
   return [
     'interpolate',
     ['linear'],
-    ['get', 'Max_Wind_Gusts'],
+    ['to-number', ['get', 'Max_Wind_Gusts'], 0],
     ...WIND_SEQUENTIAL_COLORS.flatMap(({ threshold, color }) => [threshold, color]),
   ];
 }

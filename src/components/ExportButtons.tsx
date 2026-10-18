@@ -19,10 +19,27 @@ import {
   getPdfKeyFigureIconLayout,
 } from './pdfTemplateConfig';
 
-const BASE_PATH = process.env.NODE_ENV === 'production' ? '/partner2' : '';
+const normalizeBasePath = (basePath?: string) => {
+  if (!basePath || basePath === '/') {
+    return '';
+  }
+  const withLeadingSlash = basePath.startsWith('/') ? basePath : `/${basePath}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+};
+
+const DEFAULT_PRODUCTION_BASE_PATH = '/partner2';
+const resolvedBasePath =
+  process.env.NEXT_PUBLIC_BASE_PATH ??
+  (process.env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_BASE_PATH : undefined);
+const BASE_PATH = normalizeBasePath(resolvedBasePath);
 
 // Helper to create asset URLs with correct base path
-const pdfAsset = (path: string) => `${BASE_PATH}${path}`;
+const pdfAsset = (path: string) => {
+  if (!path) return path;
+  if (/^(?:[a-z]+:)?\/\//i.test(path)) return path;
+  if (!path.startsWith('/')) return path;
+  return `${BASE_PATH}${path}`;
+};
 
 // Mirrors HazardScenarioBadge's on-screen fields (dataset, SLR, return
 // period/event) as a single caption line -- see the note on the
@@ -288,6 +305,7 @@ export default function ExportButtons({
         }
   ): Promise<string | undefined> => {
     try {
+      const normalizedPath = pdfAsset(path);
       // URL-encode the path to handle spaces and special characters
       const encodedPath = path
         .split('/')
@@ -371,40 +389,53 @@ export default function ExportButtons({
     filename: string = buildPdfFilename()
   ) => {
     const templateRoot = rootRef.current;
-    if (!templateRoot) return false;
+    if (!templateRoot) {
+      logger.warn('downloadPDFFromPreview: previewTemplateRef.current is null');
+      return false;
+    }
 
     const pageNodes = Array.from(templateRoot.children).filter(
       (node): node is HTMLDivElement => node instanceof HTMLDivElement
     );
-    if (pageNodes.length === 0) return false;
-
-    const [{ jsPDF }, html2canvasModule] = await Promise.all([
-      import('jspdf'),
-      import('html2canvas'),
-    ]);
-    const html2canvas = html2canvasModule.default;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    for (let index = 0; index < pageNodes.length; index += 1) {
-      const pageNode = pageNodes[index];
-      const canvas = await html2canvas(pageNode, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: pageNode.scrollWidth,
-        windowHeight: pageNode.scrollHeight,
-      });
-
-      const imageData = canvas.toDataURL('image/png');
-      if (index > 0) {
-        doc.addPage();
-      }
-      doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+    if (pageNodes.length === 0) {
+      logger.warn('downloadPDFFromPreview: no page nodes found in template');
+      return false;
     }
 
-    doc.save(filename);
-    return true;
+    try {
+      logger.info(`downloadPDFFromPreview: capturing ${pageNodes.length} pages from preview`);
+
+      const [{ jsPDF }, html2canvasModule] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
+      const html2canvas = html2canvasModule.default;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      for (let index = 0; index < pageNodes.length; index += 1) {
+        const pageNode = pageNodes[index];
+        const canvas = await html2canvas(pageNode, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: pageNode.scrollWidth,
+          windowHeight: pageNode.scrollHeight,
+        });
+
+        const imageData = canvas.toDataURL('image/png');
+        if (index > 0) {
+          doc.addPage();
+        }
+        doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
+      }
+
+      doc.save(filename);
+      return true;
+    } catch (error) {
+      logger.error('downloadPDFFromPreview failed, will fall back to legacy rendering:', error);
+      return false;
+    }
   };
 
   // ─── Forecast brief (Rapid Exposure Forecast) ──────────────────────────────
@@ -692,9 +723,11 @@ export default function ExportButtons({
 
       const downloadedFromPreview = await downloadPDFFromPreview();
       if (downloadedFromPreview) {
+        logger.info('PDF download completed using high-quality preview capture');
         return;
       }
 
+      logger.warn('Preview-based download not available, using legacy jsPDF rendering');
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 

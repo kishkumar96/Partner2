@@ -111,6 +111,8 @@ export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: Bu
           {/* Region filter */}
           {uniqueRegions.length > 1 && (
             <select
+              id="buildings-region-filter"
+              name="buildingsRegionFilter"
               value={filter.region?.[0] || ''}
               onChange={e =>
                 handleFilterChange({
@@ -223,6 +225,8 @@ export default function BuildingsTable({ data, onZoom, maxHeight = '600px' }: Bu
           <div className="flex items-center gap-2">
             <span className="text-slate-300">Rows per page:</span>
             <select
+              id="buildings-page-size"
+              name="buildingsPageSize"
               value={pagination.pageSize}
               onChange={e => handlePageSizeChange(Number(e.target.value))}
               className="px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"

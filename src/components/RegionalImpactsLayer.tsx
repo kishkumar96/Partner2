@@ -124,6 +124,21 @@ interface RegionalImpactsLayerProps {
   legendSettings?: LegendSettings;
   /** Rapid Exposure Forecast: shade by forecast wind band, not loss */
   forecastDanger?: boolean;
+  /** Reports what the layer is drawing, for the localhost-only debug panel in MapView */
+  onDebugStateChange?: (state: RegionalImpactsDebugState) => void;
+}
+
+export interface RegionalImpactsDebugState {
+  countryCode: CountryCode | null;
+  mapStyle: 'loss' | 'wind' | 'satellite' | 'street';
+  visible: boolean;
+  loading: boolean;
+  error: string | null;
+  featureCount: number;
+  sectorFeatureCount: number;
+  hasTotalLoss: boolean;
+  hasMaxWindGusts: boolean;
+  selectedRegion: string | null;
 }
 
 export default function RegionalImpactsLayer({
@@ -139,6 +154,7 @@ export default function RegionalImpactsLayer({
   layerOpacityScale = 70,
   legendSettings,
   forecastDanger = false,
+  onDebugStateChange,
 }: RegionalImpactsLayerProps) {
   // Store event handlers as refs to enable proper cleanup
   const handlersRef = useRef<{
@@ -166,6 +182,25 @@ export default function RegionalImpactsLayer({
   const legendSettingsRef = useRef(legendSettings);
   const forecastDangerRef = useRef(forecastDanger);
   const regionalSummaryDataRef = useRef(regionalSummaryData);
+
+  useEffect(() => {
+    if (!onDebugStateChange) return;
+    const features = regionalImpactsData?.features ?? [];
+    const has = (key: string) =>
+      features.some(feature => key in ((feature.properties ?? {}) as Record<string, unknown>));
+    onDebugStateChange({
+      countryCode: countryCode ?? null,
+      mapStyle,
+      visible,
+      loading: false,
+      error: null,
+      featureCount: features.length,
+      sectorFeatureCount: 0,
+      hasTotalLoss: has('Total_Loss'),
+      hasMaxWindGusts: has('Max_Wind_Gusts'),
+      selectedRegion: selectedRegion ?? null,
+    });
+  }, [onDebugStateChange, regionalImpactsData, countryCode, mapStyle, visible, selectedRegion]);
 
   useEffect(() => {
     selectedRegionRef.current = selectedRegion;

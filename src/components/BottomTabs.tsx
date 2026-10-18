@@ -2,11 +2,8 @@
 
 import { districtImpactRows } from '@/utils/districtImpactRows';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import EnhancedRegionalTable from './EnhancedRegionalTable';
-import ComparativeAnalytics from './ComparativeAnalytics';
-import BuildingsTable from './BuildingsTable';
-import RoadsTable from './RoadsTable';
 import ScenarioBreakdownTable, { ScenarioBaselineNotice } from './ScenarioBreakdownTable';
+import dynamic from 'next/dynamic';
 import {
   Event,
   Hazard,
@@ -42,6 +39,22 @@ import {
   MapPin,
   Construction,
 } from 'lucide-react';
+
+const EnhancedRegionalTable = dynamic(() => import('./EnhancedRegionalTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading regional table...</div>,
+});
+
+const ComparativeAnalytics = dynamic(() => import('./ComparativeAnalytics'), {
+  loading: () => <div className="text-xs text-slate-400">Loading analytics...</div>,
+});
+
+const BuildingsTable = dynamic(() => import('./BuildingsTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading buildings...</div>,
+});
+
+const RoadsTable = dynamic(() => import('./RoadsTable'), {
+  loading: () => <div className="text-xs text-slate-400">Loading roads...</div>,
+});
 
 interface BottomTabsProps {
   events: Event[];
@@ -568,7 +581,7 @@ export default function BottomTabs({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors sm:px-4 ${
+            className={`flex-shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors sm:px-4 min-w-[120px] ${
               activeTab === tab.id
                 ? 'border-blue-400 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'

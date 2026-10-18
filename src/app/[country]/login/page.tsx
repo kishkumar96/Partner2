@@ -83,7 +83,7 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
                   countryCode={countryCode}
                   aria-label={COUNTRIES[countryCode].name}
                   title={COUNTRIES[countryCode].name}
-                  className="w-5 h-5"
+                  style={{ fontSize: '1.25rem', lineHeight: 1 }}
                 />
                 <span className="text-sm font-medium">{COUNTRIES[countryCode].name}</span>
               </div>

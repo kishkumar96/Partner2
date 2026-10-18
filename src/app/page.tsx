@@ -34,7 +34,7 @@ export default function RootPage() {
                     countryCode={country.code}
                     aria-label={country.name}
                     title={country.name}
-                    className="w-7 h-7"
+                    style={{ fontSize: '1.75rem', lineHeight: 1 }}
                   />
                 </div>
                 <div className="mt-2 text-lg font-semibold">{country.name}</div>

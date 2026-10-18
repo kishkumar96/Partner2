@@ -56,6 +56,8 @@ const KNOWN_NON_CRITICAL_PATTERNS = [
   /style diff/i,
   /setState.*not mounted/i,
   /Cannot read properties of null/i, // Common React cleanup race condition
+  /signal is aborted without reason/i,
+  /\bAbortError\b/i,
 ];
 
 /**
@@ -117,6 +119,26 @@ function formatLogEntry(entry: LogEntry): string {
   return `[${timestamp}] [${levelLabel}] [${entry.category}] ${entry.message}`;
 }
 
+function serializeDetails(details: unknown): string {
+  if (details instanceof Error) {
+    return JSON.stringify(
+      {
+        name: details.name,
+        message: details.message,
+        stack: details.stack,
+      },
+      null,
+      2
+    );
+  }
+
+  if (details && typeof details === 'object') {
+    return JSON.stringify(details, null, 2);
+  }
+
+  return details ? String(details) : '';
+}
+
 /**
  * Core logging function
  */
@@ -142,10 +164,8 @@ function log(level: LogLevel, category: LogCategory, message: string, details?: 
   const formattedMessage = formatLogEntry(entry);
 
   // Format details for better console output
-  const formattedDetails =
-    details && typeof details === 'object'
-      ? '\n' + JSON.stringify(details, null, 2)
-      : details || '';
+  const serializedDetails = serializeDetails(details);
+  const formattedDetails = serializedDetails ? `\n${serializedDetails}` : '';
 
   // Use original console methods to prevent infinite recursion
   try {
