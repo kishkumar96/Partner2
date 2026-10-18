@@ -4,12 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3002",
+    "prebuild": "npm run config:check",
     "build": "next build",
     "build:production": "cross-env NODE_ENV=production next build",
     "start": "next start --port 3002",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "type-check": "tsc --noEmit",
+    "type-check": "npm run config:check && tsc --noEmit",
+    "config:validate": "node scripts/config.mjs validate",
+    "config:generate": "node scripts/config.mjs generate",
+    "config:check": "node scripts/config.mjs check",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "test": "jest",
@@ -86,7 +90,8 @@
     "lighthouse": "^12.2.1",
     "prettier": "3.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4.5.4"
   },
   "engines": {
     "node": ">=20.9.0",
