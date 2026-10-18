@@ -270,12 +270,12 @@ Edit `.env.local`:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://postgres:climate_secure_2026@localhost:5432/climate_risk
-POSTGRES_PASSWORD=climate_secure_2026
+DATABASE_URL=postgresql://postgres:<your-password>@localhost:5432/climate_risk
+POSTGRES_PASSWORD=<your-password>
 
 # Cache
-REDIS_URL=redis://:redis_secure_2026@localhost:6379
-REDIS_PASSWORD=redis_secure_2026
+REDIS_URL=redis://:<your-redis-password>@localhost:6379
+REDIS_PASSWORD=<your-redis-password>
 
 # Tiles
 TILESERVER_URL=http://localhost:7800
@@ -376,7 +376,7 @@ docker-compose exec tileserver env | grep DATABASE_URL
 ls -lh public/*.geojson public/*.csv
 
 # Re-run import with verbose output
-DATABASE_URL=postgresql://postgres:climate_secure_2026@localhost:5432/climate_risk \
+DATABASE_URL=postgresql://postgres:<your-password>@localhost:5432/climate_risk \
   node scripts/import-data.js
 ```
 
