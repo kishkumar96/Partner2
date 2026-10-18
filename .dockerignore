@@ -17,3 +17,6 @@ node_modules
 coverage
 reports
 *.har
+
+# Django backend lives in this repo but ships as its own image
+middleware
