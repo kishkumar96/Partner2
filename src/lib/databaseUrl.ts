@@ -20,6 +20,8 @@ export function getDatabaseUrl(env: Record<string, string | undefined> = process
   return url;
 }
 
-export function isDatabaseConfigured(env: Record<string, string | undefined> = process.env): boolean {
+export function isDatabaseConfigured(
+  env: Record<string, string | undefined> = process.env
+): boolean {
   return Boolean(env.DATABASE_URL?.trim());
 }

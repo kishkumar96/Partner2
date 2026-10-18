@@ -2,7 +2,9 @@ import { DatabaseNotConfiguredError, getDatabaseUrl, isDatabaseConfigured } from
 
 describe('getDatabaseUrl', () => {
   it('returns the URL from the environment, trimmed', () => {
-    expect(getDatabaseUrl({ DATABASE_URL: ' postgresql://user:password@host:5432/dbname ' })).toBe('postgresql://user:password@host:5432/dbname');
+    expect(getDatabaseUrl({ DATABASE_URL: ' postgresql://user:password@host:5432/dbname ' })).toBe(
+      'postgresql://user:password@host:5432/dbname'
+    );
   });
 
   it('refuses to guess: no URL is an error, never a default credential', () => {
@@ -12,7 +14,9 @@ describe('getDatabaseUrl', () => {
   });
 
   it('says whether a database is configured', () => {
-    expect(isDatabaseConfigured({ DATABASE_URL: 'postgresql://user:password@host/dbname' })).toBe(true);
+    expect(isDatabaseConfigured({ DATABASE_URL: 'postgresql://user:password@host/dbname' })).toBe(
+      true
+    );
     expect(isDatabaseConfigured({})).toBe(false);
   });
 });
@@ -50,6 +54,8 @@ describe('the connection pool', () => {
     jest.doMock('pg', () => ({ Pool }));
     const db = require('../db').default;
     await db.query('SELECT 1');
-    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({ connectionString: 'postgresql://user:password@host:5432/dbname' }));
+    expect(Pool).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionString: 'postgresql://user:password@host:5432/dbname' })
+    );
   });
 });

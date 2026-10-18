@@ -7,12 +7,23 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.resolve(__dirname, '../../..');
-const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'coverage', 'out', 'build', 'dist', '.husky']);
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.next',
+  '.git',
+  'coverage',
+  'out',
+  'build',
+  'dist',
+  '.husky',
+]);
 const SKIP_FILES = new Set(['package-lock.json', 'noHardcodedCredentials.test.ts']);
-const SCANNED = /\.(ts|tsx|js|mjs|cjs|py|yml|yaml|tf|md|sh|json|env|example)$|Jenkinsfile$|Dockerfile$/;
+const SCANNED =
+  /\.(ts|tsx|js|mjs|cjs|py|yml|yaml|tf|md|sh|json|env|example)$|Jenkinsfile$|Dockerfile$/;
 
 // A password that is obviously a stand-in
-const PLACEHOLDER = /^(password|passwd|pass|user|secret|changeme|xxx+|\*+|<[^>]*>|\$\{[^}]*\}|\$[A-Z_]+|%s|\{[^}]*\})$/i;
+const PLACEHOLDER =
+  /^(password|passwd|pass|user|secret|changeme|xxx+|\*+|<[^>]*>|\$\{[^}]*\}|\$[A-Z_]+|%s|\{[^}]*\})$/i;
 
 function* files(dir: string): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -25,7 +36,8 @@ function* files(dir: string): Generator<string> {
   }
 }
 
-const URL_WITH_PASSWORD = /\b(?:postgres(?:ql)?|redis|mysql|mongodb(?:\+srv)?):\/\/[^\s:/@'"`]*:([^\s@'"`]+)@/g;
+const URL_WITH_PASSWORD =
+  /\b(?:postgres(?:ql)?|redis|mysql|mongodb(?:\+srv)?):\/\/[^\s:/@'"`]*:([^\s@'"`]+)@/g;
 // ${NAME:-literal} where NAME is a password / secret / token / key
 const SECRET_DEFAULT = /\$\{[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY)[A-Z0-9_]*:-([^}]+)\}/g;
 
@@ -35,10 +47,12 @@ function findings(): string[] {
     const text = fs.readFileSync(file, 'utf8');
     const rel = path.relative(root, file);
     for (const match of text.matchAll(URL_WITH_PASSWORD)) {
-      if (!PLACEHOLDER.test(match[1])) found.push(`${rel}: a connection string with a password (${match[0].slice(0, 40)}…)`);
+      if (!PLACEHOLDER.test(match[1]))
+        found.push(`${rel}: a connection string with a password (${match[0].slice(0, 40)}…)`);
     }
     for (const match of text.matchAll(SECRET_DEFAULT)) {
-      if (!PLACEHOLDER.test(match[1])) found.push(`${rel}: a secret-like default value (${match[0].slice(0, 60)})`);
+      if (!PLACEHOLDER.test(match[1]))
+        found.push(`${rel}: a secret-like default value (${match[0].slice(0, 60)})`);
     }
   }
   return found;
