@@ -15,8 +15,9 @@ import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { getDefaultHazardScenario } from '@/data/realThreddsLayers';
 import { loadAllRealData, fetchHazardScenarioRiskSummary } from '@/utils/realDataLoader';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { listCountryCodes } from '@/config/registry';
 
-const ALL_COUNTRIES: CountryCode[] = ['VU', 'WS', 'TO', 'CK'];
+const ALL_COUNTRIES: CountryCode[] = listCountryCodes();
 
 interface CountryComparisonRow {
   countryCode: CountryCode;

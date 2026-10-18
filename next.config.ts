@@ -1,4 +1,12 @@
 import type { NextConfig } from "next";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// The country slugs come from config/release.json (checked by `npm run config:check`),
+// so adding a country needs no edit here.
+const COUNTRY_SLUGS: string[] = JSON.parse(
+  readFileSync(join(process.cwd(), "config/release.json"), "utf8")
+).countries;
 
 function normalizeBasePath(basePath: string | undefined): string {
   const trimmed = (basePath ?? '').trim();
@@ -96,7 +104,7 @@ const nextConfig: NextConfig = {
       // Cache country data files with shorter TTL.
       // These assets live under /public/<country> and are served at /<country>/...
       {
-        source: '/:country(vanuatu|samoa|tonga|cook-islands)/:file*\\.(csv|geojson|gpkg)',
+        source: `/:country(${COUNTRY_SLUGS.join('|')})/:file*\\.(csv|geojson|gpkg)`,
         headers: [
           {
             key: 'Cache-Control',

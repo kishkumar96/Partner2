@@ -1,5 +1,6 @@
 import { AggregationLevel, District, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
+import { getCountryPresentation, listCountryCodes } from '@/config/registry';
 import {
   vanuatuDistricts,
   vanuatuHazards,
@@ -26,7 +27,13 @@ export interface CountryConfig {
 }
 
 export function getCountryAppName(countryCode: CountryCode): string {
-  return `${COUNTRIES[countryCode].name} Tropical Cyclone Rapid Impact Assessment Tool`;
+  return getCountryPresentation(countryCode).appName;
+}
+
+/** A country's labels for its areas, from config/countries/<country>.json */
+function uiFor(countryCode: CountryCode): CountryConfig['ui'] {
+  const { appName, terminology } = getCountryPresentation(countryCode);
+  return { appName, ...terminology };
 }
 
 const emptyConfig = (country: CountryCode): CountryConfig => ({
@@ -38,70 +45,34 @@ const emptyConfig = (country: CountryCode): CountryConfig => ({
   defaultMapCenter: COUNTRIES[country].center,
   defaultZoom: COUNTRIES[country].zoom,
   dataAvailable: false,
-  ui: {
-    appName: getCountryAppName(country),
-    focusAreaSingular: 'Region',
-    focusAreaPlural: 'Regions',
-    broaderAreaSingular: 'Region',
-    broaderAreaPlural: 'Regions',
-    nationalLabel: 'National',
-  },
+  ui: uiFor(country),
 });
 
 const coreHazardsForWmsCountries = vanuatuHazards.filter(
   hazard => hazard.id === 'tropical-cyclone' || hazard.id === 'flood'
 );
 
-export const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
+/**
+ * What each country has beyond the standard (empty) configuration: the areas it reports by and
+ * whether its hazard/risk data is loaded. A country with no entry here, such as one just added in
+ * config/, gets the empty configuration with `dataAvailable: false`, which the dashboard shows as
+ * "no data yet" instead of failing. (Moving this into config/ is Phase 2.)
+ */
+const COUNTRY_DATA: Partial<Record<CountryCode, Partial<CountryConfig>>> = {
   VU: {
     hazards: coreHazardsForWmsCountries,
-    sectors: vanuatuSectors,
     provinces: vanuatuProvinces,
     districts: vanuatuDistricts,
-    defaultMapCenter: COUNTRIES.VU.center,
-    defaultZoom: COUNTRIES.VU.zoom,
-    dataAvailable: true,
-    ui: {
-      appName: getCountryAppName('VU'),
-      focusAreaSingular: 'District',
-      focusAreaPlural: 'Districts',
-      broaderAreaSingular: 'Province',
-      broaderAreaPlural: 'Provinces',
-      nationalLabel: 'National',
-    },
-  },
-  WS: {
-    ...emptyConfig('WS'),
-    hazards: coreHazardsForWmsCountries,
-    dataAvailable: true,
-    ui: {
-      appName: getCountryAppName('WS'),
-      focusAreaSingular: 'District',
-      focusAreaPlural: 'Districts',
-      broaderAreaSingular: 'District',
-      broaderAreaPlural: 'Districts',
-      nationalLabel: 'National',
-    },
-  },
-  TO: {
-    ...emptyConfig('TO'),
-    hazards: coreHazardsForWmsCountries,
-    dataAvailable: true,
-    ui: {
-      appName: getCountryAppName('TO'),
-      focusAreaSingular: 'District',
-      focusAreaPlural: 'Districts',
-      broaderAreaSingular: 'District',
-      broaderAreaPlural: 'Districts',
-      nationalLabel: 'National',
-    },
-  },
-  CK: {
-    ...emptyConfig('CK'),
-    hazards: coreHazardsForWmsCountries,
     dataAvailable: true,
   },
+  WS: { hazards: coreHazardsForWmsCountries, dataAvailable: true },
+  TO: { hazards: coreHazardsForWmsCountries, dataAvailable: true },
+  CK: { hazards: coreHazardsForWmsCountries, dataAvailable: true },
 };
+
+export const COUNTRY_CONFIGS = Object.fromEntries(
+  listCountryCodes().map(code => [code, { ...emptyConfig(code), ...COUNTRY_DATA[code] }])
+) as Record<CountryCode, CountryConfig>;
 
 export function getAggregationLabel(countryCode: CountryCode, level: AggregationLevel): string {
   const ui = COUNTRY_CONFIGS[countryCode].ui;

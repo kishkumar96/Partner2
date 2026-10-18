@@ -13,6 +13,7 @@ import {
 } from '@/lib/countryAuth';
 import { validateSecurityConfigOrThrow } from '@/lib/securityConfig';
 import { getTenantCountryCodeFromEnv, getTenantCountrySlugFromEnv } from '@/utils/tenantCountry';
+import { getDefaultCountry } from '@/config/registry';
 
 // Slugs that represent country dashboard routes
 const COUNTRY_SLUGS = Object.keys(SLUG_TO_CODE);
@@ -83,7 +84,7 @@ export async function proxy(request: NextRequest) {
     if (country !== null) {
       const slug = getCountrySlugFromCode(country);
       const nextUrl = request.nextUrl.clone();
-      nextUrl.pathname = `/${slug ?? 'vanuatu'}`;
+      nextUrl.pathname = `/${slug ?? getDefaultCountry().slug}`;
       nextUrl.searchParams.delete('country');
       return NextResponse.redirect(nextUrl);
     }

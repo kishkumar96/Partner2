@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { getConfigRelease } from '@/config/registry';
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
@@ -17,6 +18,8 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     status: 'unknown',
+    // Which configuration this deployment was built from; reported even when a service is down
+    config: getConfigRelease(),
     services: {
       database: 'unknown',
     },

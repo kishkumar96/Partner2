@@ -6,12 +6,10 @@ import {
   isPartnerApiEnabled,
   mapCountryPartnerApis,
 } from '@/services/partnerApiService';
+import { getCountryByCode } from '@/config/registry';
 
 function resolveCountryCode(value: string | null): CountryCode | null {
-  const normalized = (value ?? '').trim().toUpperCase();
-  return normalized === 'VU' || normalized === 'WS' || normalized === 'TO' || normalized === 'CK'
-    ? normalized
-    : null;
+  return getCountryByCode(value)?.code ?? null;
 }
 
 function toArrayPayload(payload: unknown): Array<Record<string, unknown>> {

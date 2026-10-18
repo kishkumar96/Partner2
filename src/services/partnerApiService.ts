@@ -1,5 +1,6 @@
 import type { CountryCode } from '@/types/thredds';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import { getCountryByCode, listCountries, listCountryCodes } from '@/config/registry';
 
 export type PartnerApiResource =
   | 'country'
@@ -26,7 +27,7 @@ const DEFAULT_PARTNER_API_BASE = 'http://localhost:8000';
 const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
   process.env.NODE_ENV === 'production' ? '/partner2' : ''
 );
-const DEFAULT_PARTNER_API_COUNTRIES: CountryCode[] = ['VU', 'WS', 'TO', 'CK'];
+const DEFAULT_PARTNER_API_COUNTRIES: CountryCode[] = listCountryCodes();
 let cachedPartnerCountries: Array<Record<string, unknown>> | null = null;
 let cachedPartnerCountriesPromise: Promise<Array<Record<string, unknown>>> | null = null;
 
@@ -42,11 +43,7 @@ export function isPartnerApiEnabled(): boolean {
 }
 
 function normalizeCountryCode(value: string): CountryCode | null {
-  const normalized = value.trim().toUpperCase();
-  if (normalized === 'VU' || normalized === 'WS' || normalized === 'TO' || normalized === 'CK') {
-    return normalized;
-  }
-  return null;
+  return getCountryByCode(value)?.code ?? null;
 }
 
 function getPartnerApiEnabledCountries(): CountryCode[] {
@@ -79,13 +76,13 @@ export function isPartnerApiCountryStrict(countryCode: CountryCode): boolean {
   return getPartnerApiStrictCountries().includes(countryCode);
 }
 
-// Human-readable country aliases used to resolve Samoa/Tonga country records.
-const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
-  VU: { code: 'VU', names: ['vanuatu', 'republic of vanuatu'] },
-  WS: { code: 'WS', names: ['samoa', 'independent state of samoa'] },
-  TO: { code: 'TO', names: ['tonga', 'kingdom of tonga'] },
-  CK: { code: 'CK', names: ['cook islands'] },
-};
+// Human-readable country aliases used to resolve each country's Partner API record (config/countries).
+const COUNTRY_IDENTITIES = Object.fromEntries(
+  listCountries().map(country => [
+    country.code,
+    { code: country.code, names: [...country.partnerApi.aliases] },
+  ])
+) as Record<CountryCode, PartnerCountryIdentity>;
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
