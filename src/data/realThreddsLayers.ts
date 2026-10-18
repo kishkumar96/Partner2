@@ -1,6 +1,7 @@
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import { getLossSequentialColors, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSystem';
 import { CountryCode } from '@/types/thredds';
+import { getStaticLayerCatalog, listCountryCodes } from '@/config/registry';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 export interface LegendThreshold {
@@ -164,18 +165,19 @@ const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
   process.env.NODE_ENV === 'production' ? '/partner2' : ''
 );
 
-const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
-  VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
-  WS: '/POP/Partner2/case_study2/hazard/ws_hazard/TC/Gita',
-  TO: '/POP/Partner2/case_study2/Harold_TO',
-  CK: '/POP/Partner2/case_study2/hazard/ck_hazard/TC/Meena',
-};
+// Each country's dataset base path, and its static layers, live in config/layers/<country>.json.
 
 function buildDatasetPath(layer: RealWMSLayer): string {
   if (layer.datasetPath) {
     return layer.datasetPath;
   }
-  return `${COUNTRY_DATASET_BASE_PATH[layer.countryCode]}/${layer.ncFile}`;
+  const basePath = getStaticLayerCatalog(layer.countryCode)?.datasetBasePath;
+  if (!basePath) {
+    throw new Error(
+      `Layer ${layer.id} has no dataset path: ${layer.countryCode} has no datasetBasePath in config/layers`
+    );
+  }
+  return `${basePath}/${layer.ncFile}`;
 }
 
 const WEB_MERCATOR_MAX_LAT = 85.05112878;
@@ -252,239 +254,9 @@ function createBaseWmsParams(options: {
   });
 }
 
-export const REAL_WMS_LAYERS: RealWMSLayer[] = [
-  {
-    id: 'vu-tc-lola-wind',
-    eventId: 'tc-lola-2024',
-    name: 'TC Lola Wind Hazard',
-    countryCode: 'VU',
-    ncFile: 'local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Lola (local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [166.54033818684763, -20.264667548114673, 170.24232553831496, -13.059866369838865],
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'vu-tc-lola-inundation',
-    eventId: 'tc-lola-2024',
-    name: 'TC Lola Flood Hazard',
-    countryCode: 'VU',
-    ncFile: '_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Lola (_merged.nc)',
-    hazardType: 'flood',
-    bbox: [166.54033818684763, -20.264667548114673, 170.24232553831496, -13.059866369838865],
-    maxNativeZoom: 15,
-    styleConfig: {
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0,4',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'vu-tc-lola-flood-depth',
-    eventId: 'tc-lola-2024',
-    name: 'TC Lola Flood Depth (South Santo)',
-    countryCode: 'VU',
-    ncFile: 'Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM.nc',
-    layerName: 'Depth',
-    description: 'Flood depth from TC Lola - Pluvial and Fluvial flooding (South Santo)',
-    hazardType: 'fluvial-depth',
-    bbox: [166.5, -16.0, 167.5, -15.0],
-    styleConfig: {
-      styles: 'default-scalar/seq-Blues',
-      colorScaleRange: '0,5',
-      numColorBands: 8,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ws-tc-gita-wind',
-    eventId: 'tc-gita-samoa-2018',
-    name: 'TC Gita Wind Hazard',
-    countryCode: 'WS',
-    ncFile: 'SA_savaii_upolu_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Gita',
-    hazardType: 'wind',
-    bbox: [-172.80922022199999, -14.079136103075408, -171.3973987012869, -13.434475695],
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:4326',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,47.79',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ws-tc-gita-inundation',
-    eventId: 'tc-gita-samoa-2018',
-    name: 'TC Gita Flood Hazard',
-    countryCode: 'WS',
-    ncFile: 'WS_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Gita (WS_merged.nc)',
-    hazardType: 'flood',
-    bbox: [-172.80922022199999, -14.079136103075408, -171.3973987012869, -13.434475695],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.01,5',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-  {
-    id: 'to-tc-harold-wind',
-    eventId: 'tc-harold-tonga-2020',
-    name: 'TC Harold Wind Hazard',
-    countryCode: 'TO',
-    ncFile: 'local_wind_merged.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Harold (local_wind_merged.nc)',
-    hazardType: 'wind',
-    bbox: [-176.5, -23.5, -173.0, -15.0],
-    styleConfig: {
-      wmsVersion: '1.3.0',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '27.54,59.99',
-      numColorBands: 250,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'to-tc-harold-inundation',
-    eventId: 'tc-harold-tonga-2020',
-    name: 'TC Harold Flood Hazard',
-    countryCode: 'TO',
-    ncFile: 'best.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Harold (best.nc)',
-    hazardType: 'flood',
-    bbox: [-176.5, -23.5, -173.0, -15.0],
-    maxNativeZoom: 12,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.0586,1.899',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'extend',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-wind-subdomain-1',
-    eventId: 'tc-ck-event',
-    name: 'TC Meena Wind Hazard (Subdomain 1)',
-    countryCode: 'CK',
-    ncFile: '_CK_subdomain_1_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Meena (_CK_subdomain_1_local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [-166.24347222222224, -13.386527777777781, -157.24347222222212, -8.38652777777778],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-wind-subdomain-2',
-    eventId: 'tc-ck-event',
-    name: 'TC Meena Wind Hazard (Subdomain 2)',
-    countryCode: 'CK',
-    ncFile: '_CK_subdomain_2_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Meena (_CK_subdomain_2_local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [-160.60208333348902, -22.813472222378515, -156.60208333319275, -18.813472222156314],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-inundation',
-    eventId: 'tc-ck-event',
-    name: 'TC Meena Flood Hazard',
-    countryCode: 'CK',
-    ncFile: 'CK_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Meena (CK_merged.nc)',
-    hazardType: 'flood',
-    bbox: [-163.19974846337783, -21.95943031456599, -157.32122955564233, -17.986887908850672],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.01,5',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-];
+export const REAL_WMS_LAYERS: RealWMSLayer[] = listCountryCodes().flatMap(countryCode =>
+  (getStaticLayerCatalog(countryCode)?.layers ?? []).map(layer => ({ ...layer, countryCode }))
+);
 
 function withBasePath(path: string): string {
   return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);

@@ -1,0 +1,28 @@
+{
+  "$schema": "../events.schema.json",
+  "country": "WS",
+  "events": [
+    {
+      "id": "tc-gita-samoa-2018",
+      "name": "Tropical Cyclone Gita",
+      "date": "2018-02-09",
+      "hazardId": "tropical-cyclone",
+      "location": {
+        "lat": -13.759,
+        "lng": -172.1046
+      },
+      "bbox": [
+        -173,
+        -15,
+        -171,
+        -13
+      ],
+      "trackFile": "cyclone-track.geojson",
+      "isDefault": true,
+      "aliases": [
+        "gita",
+        "tropical cyclone gita"
+      ]
+    }
+  ]
+}

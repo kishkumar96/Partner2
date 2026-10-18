@@ -132,6 +132,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+# src/lib holds application source, not Python build output
+!src/lib/
 lib64/
 parts/
 sdist/

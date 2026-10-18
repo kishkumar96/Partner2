@@ -1,5 +1,6 @@
 import type { CountryCode } from '@/types/thredds';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import { getCountryByCode, listCountries, listCountryCodes } from '@/config/registry';
 
 export type PartnerApiResource =
   | 'country'
@@ -34,7 +35,7 @@ const DEFAULT_PARTNER_API_BASE = 'http://localhost:8000';
 const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
   process.env.NODE_ENV === 'production' ? '/partner2' : ''
 );
-const DEFAULT_PARTNER_API_COUNTRIES: CountryCode[] = ['VU', 'WS', 'TO', 'CK'];
+const DEFAULT_PARTNER_API_COUNTRIES: CountryCode[] = listCountryCodes();
 let cachedPartnerCountries: Array<Record<string, unknown>> | null = null;
 let cachedPartnerCountriesPromise: Promise<Array<Record<string, unknown>>> | null = null;
 
@@ -50,11 +51,7 @@ export function isPartnerApiEnabled(): boolean {
 }
 
 function normalizeCountryCode(value: string): CountryCode | null {
-  const normalized = value.trim().toUpperCase();
-  if (normalized === 'VU' || normalized === 'WS' || normalized === 'TO' || normalized === 'CK') {
-    return normalized;
-  }
-  return null;
+  return getCountryByCode(value)?.code ?? null;
 }
 
 function getPartnerApiEnabledCountries(): CountryCode[] {
@@ -87,13 +84,13 @@ export function isPartnerApiCountryStrict(countryCode: CountryCode): boolean {
   return getPartnerApiStrictCountries().includes(countryCode);
 }
 
-// Human-readable country aliases used to resolve Samoa/Tonga country records.
-const COUNTRY_IDENTITIES: Record<CountryCode, PartnerCountryIdentity> = {
-  VU: { code: 'VU', names: ['vanuatu', 'republic of vanuatu'] },
-  WS: { code: 'WS', names: ['samoa', 'independent state of samoa'] },
-  TO: { code: 'TO', names: ['tonga', 'kingdom of tonga'] },
-  CK: { code: 'CK', names: ['cook islands'] },
-};
+// Human-readable country aliases used to resolve each country's Partner API record (config/countries).
+const COUNTRY_IDENTITIES = Object.fromEntries(
+  listCountries().map(country => [
+    country.code,
+    { code: country.code, names: [...country.partnerApi.aliases] },
+  ])
+) as Record<CountryCode, PartnerCountryIdentity>;
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -151,6 +148,34 @@ function isMatchingCountryRecord(record: Record<string, unknown>, code: CountryC
   );
 }
 
+/** A record's canonical `code` ("CK"), upper-cased, or null when the API does not give one. */
+function recordCode(record: Record<string, unknown>): string | null {
+  const code = record.code;
+  return typeof code === 'string' && code.trim() ? code.trim().toUpperCase() : null;
+}
+
+/**
+ * Find a country's record in the /country/ payload.
+ *
+ * The record's canonical `code` is authoritative: ids and names differ between deployments (Cook Islands
+ * is id 3 on the live API and 1 locally; Tonga's short name is "Ton"), so the code is the only thing that
+ * means the same everywhere. A record that carries a different code is never matched by name, so
+ * "American Samoa" (AS) cannot be mistaken for Samoa (WS). Only records with no code, from an API that has
+ * not been migrated yet, fall back to matching names.
+ */
+export function findCountryRecord(
+  countries: Array<Record<string, unknown>>,
+  countryCode: CountryCode
+): Record<string, unknown> | null {
+  const byCode = countries.find(country => recordCode(country) === countryCode);
+  if (byCode) return byCode;
+  return (
+    countries.find(
+      country => recordCode(country) === null && isMatchingCountryRecord(country, countryCode)
+    ) ?? null
+  );
+}
+
 /**
  * Resolve a country ID from /country/ endpoint payload.
  * The server schema can vary, so this accepts common id key names.
@@ -159,7 +184,7 @@ export function resolveCountryId(
   countries: Array<Record<string, unknown>>,
   countryCode: CountryCode
 ): number | null {
-  const match = countries.find(country => isMatchingCountryRecord(country, countryCode));
+  const match = findCountryRecord(countries, countryCode);
   if (!match) return null;
 
   const rawId = match.id ?? match.pk ?? match.country_id ?? match.countryId;

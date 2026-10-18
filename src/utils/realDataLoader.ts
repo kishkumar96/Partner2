@@ -37,6 +37,7 @@ import {
   normalizePartnerEventRecords,
   scopeRiskRowsToEvent,
 } from '@/utils/partnerEvents';
+import { listCountryCodes } from '@/config/registry';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -119,7 +120,7 @@ function proxyPartnerApiUrl(url: string): string {
  * New event resolution should use event records from `src/data/eventRecords.ts`.
  */
 export const COUNTRY_CYCLONE_CONFIG = Object.fromEntries(
-  (['VU', 'WS', 'TO', 'CK'] as CountryCode[]).map(countryCode => {
+  listCountryCodes().map(countryCode => {
     const eventRecord = getDefaultEventRecord(countryCode);
     return [
       countryCode,
