@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: climate_risk_staging
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING:-staging_secure_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING:?set POSTGRES_PASSWORD_STAGING}
       POSTGRES_INITDB_ARGS: "-E UTF8"
     volumes:
       - pgdata-staging:/var/lib/postgresql/data
@@ -26,7 +26,7 @@ services:
   redis-staging:
     image: redis:7-alpine
     container_name: climate-redis-staging
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD_STAGING:-staging_redis_secure_2026}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD_STAGING:?set REDIS_PASSWORD_STAGING}
     volumes:
       - redisdata-staging:/data
     ports:
@@ -45,7 +45,7 @@ services:
     image: pramsey/pg_tileserv:latest
     container_name: climate-tileserver-staging
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD_STAGING:-staging_secure_2026}@postgres-staging:5432/climate_risk_staging
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD_STAGING:?set POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/climate_risk_staging
       TS_BASEPATH: /tiles
     ports:
       - "7801:7800"
@@ -71,8 +71,8 @@ services:
       - HOSTNAME=0.0.0.0
       - AUTH_REQUIRE_REDIS=false
       - NEXT_PUBLIC_ENVIRONMENT=staging
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD_STAGING:-staging_secure_2026}@postgres-staging:5432/climate_risk_staging
-      - REDIS_URL=redis://:${REDIS_PASSWORD_STAGING:-staging_redis_secure_2026}@redis-staging:6379
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD_STAGING:?set POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/climate_risk_staging
+      - REDIS_URL=redis://:${REDIS_PASSWORD_STAGING:?set REDIS_PASSWORD_STAGING}@redis-staging:6379
       - TILESERVER_URL=http://tileserver-staging:7800
       - NEXT_PUBLIC_TILESERVER_URL=http://localhost:7801
     depends_on:

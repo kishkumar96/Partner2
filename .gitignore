@@ -133,6 +133,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but src/lib is application code, not a Python build directory (new files there were being ignored)
+!src/lib/
 parts/
 sdist/
 var/

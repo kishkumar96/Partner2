@@ -13,11 +13,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 import { resolveCountryCode } from '@/lib/countryAuth';
+import { DatabaseNotConfiguredError, getDatabaseUrl } from '@/lib/databaseUrl';
 import { ensureCountryApiAccessEnhanced } from '@/lib/countryApiAuth';
 import type { CountryCode } from '@/types/thredds';
-
-const DATABASE_URL =
-  process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
 
 const DB_CONNECT_TIMEOUT_MS = 500;
 const DB_QUERY_TIMEOUT_MS = 5000;
@@ -33,6 +31,7 @@ function isDbConnectivityError(error: unknown): boolean {
   const message = (err?.message || '').toLowerCase();
 
   return (
+    error instanceof DatabaseNotConfiguredError ||
     code === 'ETIMEDOUT' ||
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
@@ -117,7 +116,7 @@ export async function GET(request: NextRequest) {
     if (authResponse) return authResponse;
 
     const client = new Client({
-      connectionString: DATABASE_URL,
+      connectionString: getDatabaseUrl(),
       connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
       query_timeout: DB_QUERY_TIMEOUT_MS,
       statement_timeout: DB_QUERY_TIMEOUT_MS,
