@@ -1,0 +1,66 @@
+# Production stack: gunicorn instead of runserver, code baked into the image (no bind mount),
+# and nothing but nginx reachable from outside. Use with:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# TLS is terminated in front of this (host nginx/Caddy/load balancer) and forwards to NGINX_PORT.
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             gunicorn middleware_partner_api.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+    env_file: .env
+    volumes:
+      - static_volume:/code/staticfiles
+      - media_volume:/code/media
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      default:
+        # Host-header validation rejects names with underscores
+        aliases:
+          - middleware-api
+
+  # One worker only: two on the same queue would race for the same lease.
+  runner:
+    build: .
+    restart: unless-stopped
+    command: python manage.py run_model_queue --server-name riskscape.nz
+    env_file: .env
+    volumes:
+      - media_volume:/code/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: ${POSTGRESDB_USER}
+      POSTGRES_PASSWORD: ${POSTGRESDB_ROOT_PASSWORD}
+      POSTGRES_DB: ${POSTGRESDB_DATABASE}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRESDB_USER} -d ${POSTGRESDB_DATABASE}"]
+      interval: 5s
+      retries: 10
+    # No published port: only the web and runner containers reach the database.
+
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    volumes:
+      - static_volume:/code/staticfiles
+      - media_volume:/code/media
+    ports:
+      - "${NGINX_PORT:-8089}:80"
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:

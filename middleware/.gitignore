@@ -1,0 +1,22 @@
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+
+.DS_Store
+*.log
+.pytest_cache/
+.mypy_cache/
+
+# Local mail test scripts (contain credentials/secrets)
+send_mail.py
+mail_test.py*
+
+# Zarr hazard catalog data (large binary, not source)
+/data/
+
+# Uploaded/generated files and database dumps
+/media/
+*.sql
