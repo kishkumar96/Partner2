@@ -1,5 +1,6 @@
 import type { CountryCode } from '@/types/thredds';
 import { COUNTRIES } from '@/types/thredds';
+import { getStaticEvents, getStaticLayerCatalog, listCountryCodes } from '@/config/registry';
 
 export interface EventRecord {
   id: string;
@@ -24,72 +25,20 @@ export interface EventRecord {
   aliases?: string[];
 }
 
-const LOCAL_EVENT_RECORDS: Record<CountryCode, EventRecord[]> = {
-  VU: [
-    {
-      id: 'tc-lola-2024',
-      countryCode: 'VU',
-      name: 'Tropical Cyclone Lola',
-      date: '2024-01-30',
-      hazardId: 'tropical-cyclone',
-      location: { lat: -17.7333, lng: 168.3167 },
-      bbox: [165, -21, 170, -13],
-      trackFile: 'cyclone-track.geojson',
-      hazardLayerIds: ['vu-tc-lola-wind', 'vu-tc-lola-inundation', 'vu-tc-lola-flood-depth'],
+// The approved fallback events live in config/events/<country>.json. A country's layers point at their
+// event through `eventId`, so an event's layers are found from there, not copied by hand into the event.
+const LOCAL_EVENT_RECORDS = Object.fromEntries(
+  listCountryCodes().map(countryCode => {
+    const layers = getStaticLayerCatalog(countryCode)?.layers ?? [];
+    const records: EventRecord[] = getStaticEvents(countryCode).map(event => ({
+      ...event,
+      countryCode,
+      hazardLayerIds: layers.filter(layer => layer.eventId === event.id).map(layer => layer.id),
       source: 'local',
-      isDefault: true,
-      aliases: ['lola', 'tropical cyclone lola'],
-    },
-  ],
-  WS: [
-    {
-      id: 'tc-gita-samoa-2018',
-      countryCode: 'WS',
-      name: 'Tropical Cyclone Gita',
-      date: '2018-02-09',
-      hazardId: 'tropical-cyclone',
-      location: { lat: -13.759, lng: -172.1046 },
-      bbox: [-173, -15, -171, -13],
-      trackFile: 'cyclone-track.geojson',
-      hazardLayerIds: ['ws-tc-gita-wind', 'ws-tc-gita-flood'],
-      source: 'local',
-      isDefault: true,
-      aliases: ['gita', 'tropical cyclone gita'],
-    },
-  ],
-  TO: [
-    {
-      id: 'tc-harold-tonga-2020',
-      countryCode: 'TO',
-      name: 'Tropical Cyclone Harold',
-      date: '2020-04-09',
-      hazardId: 'tropical-cyclone',
-      location: { lat: -21.179, lng: -175.198 },
-      bbox: [-177, -23, -173, -18],
-      trackFile: 'cyclone-track.geojson',
-      hazardLayerIds: ['to-tc-harold-wind', 'to-tc-harold-flood'],
-      source: 'local',
-      isDefault: true,
-      aliases: ['harold', 'tropical cyclone harold'],
-    },
-  ],
-  CK: [
-    {
-      id: 'tc-ck-event',
-      countryCode: 'CK',
-      name: 'Tropical Cyclone Event',
-      date: '2024-01-01',
-      hazardId: 'tropical-cyclone',
-      location: { lat: -21.2367, lng: -159.7777 },
-      bbox: [-161, -23, -157, -18],
-      trackFile: 'cyclone-track.geojson',
-      hazardLayerIds: ['ck-tc-meena-wind', 'ck-tc-meena-flood'],
-      source: 'local',
-      isDefault: true,
-      aliases: ['cook islands tropical cyclone'],
-    },
-  ],
-};
+    }));
+    return [countryCode, records];
+  })
+) as Record<CountryCode, EventRecord[]>;
 
 function normalizeText(value: string): string {
   return value

@@ -1,0 +1,84 @@
+{
+  "$schema": "../layers.schema.json",
+  "country": "VU",
+  "datasetBasePath": "/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola",
+  "layers": [
+    {
+      "id": "vu-tc-lola-wind",
+      "eventId": "tc-lola-2024",
+      "name": "TC Lola Wind Hazard",
+      "ncFile": "local_wind.nc",
+      "layerName": "Depth",
+      "description": "Wind hazard from TC Lola (local_wind.nc)",
+      "hazardType": "wind",
+      "bbox": [
+        166.54033818684763,
+        -20.264667548114673,
+        170.24232553831496,
+        -13.059866369838865
+      ],
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:3857",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.1,65.74",
+        "numColorBands": 50,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "extend",
+        "logScale": false
+      }
+    },
+    {
+      "id": "vu-tc-lola-inundation",
+      "eventId": "tc-lola-2024",
+      "name": "TC Lola Flood Hazard",
+      "ncFile": "_merged.nc",
+      "layerName": "Depth",
+      "description": "Flood/inundation hazard from TC Lola (_merged.nc)",
+      "hazardType": "flood",
+      "bbox": [
+        166.54033818684763,
+        -20.264667548114673,
+        170.24232553831496,
+        -13.059866369838865
+      ],
+      "maxNativeZoom": 15,
+      "styleConfig": {
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0,4",
+        "numColorBands": 20,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "extend",
+        "logScale": false
+      }
+    },
+    {
+      "id": "vu-tc-lola-flood-depth",
+      "eventId": "tc-lola-2024",
+      "name": "TC Lola Flood Depth (South Santo)",
+      "ncFile": "Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM.nc",
+      "layerName": "Depth",
+      "description": "Flood depth from TC Lola - Pluvial and Fluvial flooding (South Santo)",
+      "hazardType": "fluvial-depth",
+      "bbox": [
+        166.5,
+        -16,
+        167.5,
+        -15
+      ],
+      "styleConfig": {
+        "styles": "default-scalar/seq-Blues",
+        "colorScaleRange": "0,5",
+        "numColorBands": 8,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "transparent",
+        "logScale": false
+      }
+    }
+  ]
+}

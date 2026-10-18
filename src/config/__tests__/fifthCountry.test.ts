@@ -39,6 +39,9 @@ import { isPartnerApiCountryEnabled } from '@/services/partnerApiService';
 import { getTenantCountryCodeFromEnv, getTenantCountrySlugFromEnv } from '@/utils/tenantCountry';
 import { resolveCountryCode } from '@/lib/countryAuth';
 import { COUNTRY_CONFIGS, getAggregationLabel } from '@/data/countryConfigs';
+import { getDefaultEventRecord, getLocalEventRecords } from '@/data/eventRecords';
+import { getLayersForCountry } from '@/data/realThreddsLayers';
+import { getStaticEvents, getStaticLayerCatalog } from '@/config/registry';
 
 describe('a fifth configured country', () => {
   it('appears in the registry after the four, in order', () => {
@@ -91,5 +94,13 @@ describe('a fifth configured country', () => {
   it('leaves the four existing countries untouched', () => {
     expect(COUNTRY_CONFIGS.VU.dataAvailable).toBe(true);
     expect(COUNTRY_CONFIGS.CK.dataAvailable).toBe(true);
+  });
+
+  it('with no events or layers in config, has none and falls back to a generic default event', () => {
+    expect(getStaticEvents('FJ')).toEqual([]);
+    expect(getStaticLayerCatalog('FJ')).toBeNull();
+    expect(getLocalEventRecords('FJ' as never)).toEqual([]);
+    expect(getLayersForCountry('FJ' as never)).toEqual([]);
+    expect(getDefaultEventRecord('FJ' as never).id).toBe('fj-default-event');
   });
 });

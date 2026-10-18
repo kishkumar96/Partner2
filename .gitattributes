@@ -1,3 +1,5 @@
 src/generated/** linguist-generated=true
 config/schema.json linguist-generated=true
 config/release.schema.json linguist-generated=true
+config/events.schema.json linguist-generated=true
+config/layers.schema.json linguist-generated=true

@@ -10,6 +10,8 @@ import {
   CONFIG_RELEASE,
   COUNTRY_DEFINITIONS,
   DEFAULT_COUNTRY_CODE,
+  EVENT_DEFINITIONS,
+  LAYER_DEFINITIONS,
 } from '@/generated/config-registry';
 
 export type CountryDefinition = (typeof COUNTRY_DEFINITIONS)[number];
@@ -89,4 +91,88 @@ export function getConfigRelease(): ConfigRelease {
 /** What /api/config reports: the release and the configured country codes, nothing else. */
 export function getConfigDiagnostic(): ConfigRelease & { countries: CountryCode[] } {
   return { ...getConfigRelease(), countries: listCountryCodes() };
+}
+
+type BBox = [number, number, number, number];
+
+/** An approved fallback event: shown when the Partner API has no event of its own. */
+export interface StaticEventDefinition {
+  id: string;
+  name: string;
+  date: string;
+  hazardId: string;
+  location: { lat: number; lng: number };
+  bbox: BBox;
+  trackFile?: string;
+  forecastFile?: string;
+  isDefault: boolean;
+  aliases: string[];
+}
+
+export interface StaticLayerStyle {
+  wmsVersion?: '1.1.1' | '1.3.0';
+  crs?: 'EPSG:4326' | 'EPSG:3857';
+  styles?: string;
+  colorScaleRange?: string;
+  numColorBands?: number;
+  aboveMaxColor?: string;
+  belowMinColor?: string;
+  bgColor?: string;
+  logScale?: boolean;
+  time?: string;
+}
+
+/** A static hazard map layer (a THREDDS dataset). */
+export interface StaticLayerDefinition {
+  id: string;
+  eventId?: string;
+  name: string;
+  ncFile: string;
+  layerName: string;
+  description: string;
+  hazardType: 'wind' | 'flood' | 'inundation' | 'cyclone' | 'fluvial-depth';
+  bbox: BBox;
+  maxNativeZoom?: number;
+  styleConfig?: StaticLayerStyle;
+  datasetPath?: string;
+}
+
+export interface StaticLayerCatalog {
+  /** Where the country's static hazard datasets live on the THREDDS server */
+  datasetBasePath: string;
+  layers: StaticLayerDefinition[];
+}
+
+// The generated tables are readonly literals keyed only by countries that have entries
+const eventTable = EVENT_DEFINITIONS as unknown as Record<
+  string,
+  ReadonlyArray<StaticEventDefinition & { enabled?: boolean }>
+>;
+const layerTable = LAYER_DEFINITIONS as unknown as Record<
+  string,
+  { datasetBasePath: string; layers: ReadonlyArray<StaticLayerDefinition & { enabled?: boolean }> }
+>;
+
+/** Strip `enabled` and deep-copy (the data is plain JSON), so callers cannot alter the registry. */
+const withoutEnabled = <T extends { enabled?: boolean }>({
+  enabled: _enabled,
+  ...rest
+}: T): Omit<T, 'enabled'> => JSON.parse(JSON.stringify(rest));
+
+/** A country's approved fallback events, disabled ones left out; [] when it has none. */
+export function getStaticEvents(code: string): StaticEventDefinition[] {
+  const country = getCountryByCode(code);
+  if (!country) return [];
+  return (eventTable[country.code] ?? [])
+    .filter(event => event.enabled !== false)
+    .map(withoutEnabled);
+}
+
+/** A country's static map layers, disabled ones left out; null when it has none. */
+export function getStaticLayerCatalog(code: string): StaticLayerCatalog | null {
+  const country = getCountryByCode(code);
+  const entry = country ? layerTable[country.code] : undefined;
+  if (!entry) return null;
+  const layers = entry.layers.filter(layer => layer.enabled !== false).map(withoutEnabled);
+  return layers.length > 0 ? { datasetBasePath: entry.datasetBasePath, layers } : null;
 }
