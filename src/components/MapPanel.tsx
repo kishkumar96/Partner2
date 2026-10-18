@@ -8,17 +8,25 @@
  * - MapPanel: Controls HOW to visualize data (display settings)
  */
 
-import { useState, memo, useMemo, type Ref } from 'react';
+import { useEffect, useRef, useState, memo, useMemo, type ReactNode, type Ref } from 'react';
+import ForecastLayersSection from '@/components/ForecastLayersSection';
+import ForecastRunSelector from '@/components/ForecastRunSelector';
+import type { ForecastRun } from '@/utils/forecastRuns';
+import { formatUtcDateTime } from '@/utils/formatters';
+import type { ForecastLayerControls } from '@/utils/useForecastLayers';
 import {
   ChevronDown,
   Loader2,
   Map as MapIcon,
+  Moon,
+  Globe2,
   Satellite,
   Wind,
   Waves,
   Building2,
   Construction,
   Layers,
+  Clock,
   CloudRain,
   Play,
   Pause,
@@ -32,17 +40,84 @@ import {
   HAZARD_SCENARIO_PRODUCT_LABELS,
   HAZARD_SCENARIO_PRODUCT_CATEGORY,
   HAZARD_SCENARIO_CATEGORY_LABELS,
+  canShowLossCurve,
+  compareHazardScenarioPeriods,
   HazardScenarioCategory,
   HazardScenarioSelection,
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
 import { COUNTRIES, type CountryCode } from '@/types/thredds';
 import { CollapsibleLegendPanel } from '@/components/legend';
+import { BASEMAP_STYLES } from '@/utils/basemaps';
+import LossCurveSelector from '@/components/LossCurveSelector';
+import type { HazardScenarioCurve } from '@/utils/realDataLoader';
+
+const BASEMAP_OPTIONS = [
+  { style: BASEMAP_STYLES.positron, name: 'Light', hint: 'Best for printing', icon: Globe2 },
+  { style: BASEMAP_STYLES.voyager, name: 'Detailed', hint: 'Roads and labels', icon: MapIcon },
+  { style: BASEMAP_STYLES.dark, name: 'Dark', hint: 'Low light', icon: Moon },
+];
+
+const sectionTriggerClass =
+  'flex w-full items-center gap-2 bg-slate-900/60 px-3 py-2.5 text-left transition-colors hover:bg-slate-800/70 group';
+
+interface SectionHeaderProps {
+  /** id of the collapsible body this header controls */
+  controls: string;
+  icon: ReactNode;
+  title: string;
+  /** Shown in place of the body while collapsed */
+  summary?: ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+// Collapsible section header: the heading wraps the button (a heading inside
+// a button is invalid and drops out of screen readers' heading navigation),
+// and aria-expanded tells assistive tech whether the section is open.
+function SectionHeader({ controls, icon, title, summary, expanded, onToggle }: SectionHeaderProps) {
+  return (
+    <h3>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={controls}
+        className={sectionTriggerClass}
+      >
+        {icon}
+        <span className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
+          {title}
+        </span>
+        {!expanded && summary && (
+          <span className="text-[10px] text-slate-400 ml-auto mr-2">{summary}</span>
+        )}
+        <ChevronDown
+          aria-hidden="true"
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : 'ml-auto'}`}
+        />
+      </button>
+    </h3>
+  );
+}
 
 interface MapPanelProps {
+  /** A Rapid Exposure Forecast's overlay switches, shown as their own section */
+  forecastLayers?: ForecastLayerControls | null;
+  /** Changes when the map's "Layers" button asks for the forecast section to open */
+  forecastLayersFocusKey?: number;
+  /** The storm's advisories (track issue times) to choose between, newest first */
+  forecastRuns?: ForecastRun[];
+  activeForecastRunId?: string | null;
+  onForecastRunSelect?: (runId: string) => void;
+  /** The Overlays group (cyclone, wind, inundation, damage) belongs to the post-event assessment only */
+  showOverlayRows?: boolean;
   // Regional shading
   mapStyle?: 'loss' | 'wind';
   onMapStyleChange?: (style: 'loss' | 'wind') => void;
+  /** Current basemap style URL (one of BASEMAP_STYLES) */
+  basemapStyle?: string;
+  onBasemapChange?: (style: string) => void;
 
   // Layer toggles
   showWindLayer?: boolean;
@@ -60,6 +135,8 @@ interface MapPanelProps {
   onRoadsLayerToggle?: (visible: boolean) => void;
   onCycloneLayerToggle?: (visible: boolean) => void;
   hasCycloneData?: boolean;
+  /** The animation plays a forecast track, so say its positions are forecast, not observed */
+  cycloneIsForecast?: boolean;
   isCyclonePlaying?: boolean;
   onToggleCyclonePlaying?: (isPlaying: boolean) => void;
   cycloneControlsHostRef?: Ref<HTMLDivElement>;
@@ -95,6 +172,8 @@ interface MapPanelProps {
   // layers, in which case no selector is shown.
   hazardScenarioLayers?: RealWMSLayer[];
   hazardScenarioSelection?: HazardScenarioSelection | null;
+  /** Loss curve of the selected product, when it has return periods */
+  hazardScenarioCurve?: HazardScenarioCurve | null;
   onHazardScenarioChange?: (selection: HazardScenarioSelection) => void;
 }
 
@@ -108,6 +187,8 @@ const productCategory = (product: string): HazardScenarioCategory =>
 const MapPanel = memo(function MapPanel({
   mapStyle,
   onMapStyleChange,
+  basemapStyle,
+  onBasemapChange,
   showWindLayer = true,
   windLayersAvailable = true,
   showInundationLayer = true,
@@ -120,6 +201,7 @@ const MapPanel = memo(function MapPanel({
   onRoadsLayerToggle,
   onCycloneLayerToggle,
   hasCycloneData = false,
+  cycloneIsForecast = false,
   isCyclonePlaying = false,
   onToggleCyclonePlaying,
   cycloneControlsHostRef,
@@ -141,17 +223,34 @@ const MapPanel = memo(function MapPanel({
   hazardZoomBlocked = false,
   hazardScenarioLayers = [],
   hazardScenarioSelection,
+  hazardScenarioCurve = null,
   onHazardScenarioChange,
+  forecastLayers = null,
+  forecastLayersFocusKey = 0,
+  forecastRuns = [],
+  activeForecastRunId = null,
+  onForecastRunSelect,
+  showOverlayRows = true,
 }: MapPanelProps) {
   const [expandedSections, setExpandedSections] = useState({
-    basemap: true,
+    basemap: false,
     shading: true,
     overlays: true,
     hazardScenario: true,
+    forecastLayers: true,
+    forecastAdvisory: true,
     legendSymbology: false,
     view3D: false,
   });
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const forecastSectionRef = useRef<HTMLDivElement>(null);
+
+  // The map's "Layers" button: open the section and bring it into view
+  useEffect(() => {
+    if (!forecastLayersFocusKey) return;
+    setExpandedSections(prev => ({ ...prev, forecastLayers: true }));
+    forecastSectionRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [forecastLayersFocusKey]);
   const [expandedOverlayId, setExpandedOverlayId] = useState<string | null>(null);
 
   const toggleOverlay = (id: string) => setExpandedOverlayId(cur => (cur === id ? null : id));
@@ -247,15 +346,28 @@ const MapPanel = memo(function MapPanel({
         });
       }
     });
-    return Array.from(seen.values()).sort((a, b) => {
-      if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
-        return a.returnPeriodYears - b.returnPeriodYears;
-      }
-      if (a.returnPeriodYears !== null) return -1;
-      if (b.returnPeriodYears !== null) return 1;
-      return (a.eventLabel ?? '').localeCompare(b.eventLabel ?? '');
-    });
+    return Array.from(seen.values()).sort(compareHazardScenarioPeriods);
   }, [hazardScenarioLayers, selectedProduct, selectedSlr]);
+
+  // Every product|slr|rp|event combination that has a map layer, so the loss
+  // curve only offers points the map can actually show.
+  const availableScenarioKeys = useMemo(
+    () =>
+      new Set(
+        hazardScenarioLayers
+          .filter(layer => layer.hazardScenario)
+          .map(layer => {
+            const sc = layer.hazardScenario!;
+            return `${sc.product}|${sc.slrScenarioM}|${sc.returnPeriodYears ?? ''}|${sc.eventLabel ?? ''}`;
+          })
+      ),
+    [hazardScenarioLayers]
+  );
+  const showLossCurve = canShowLossCurve(
+    hazardScenarioCurve,
+    hazardScenarioSelection,
+    selectedProduct
+  );
 
   const selectedSelectorKey = `${hazardScenarioSelection?.returnPeriodYears ?? ''}|${hazardScenarioSelection?.eventLabel ?? ''}`;
 
@@ -268,12 +380,11 @@ const MapPanel = memo(function MapPanel({
     onHazardScenarioChange?.({ product, slrScenarioM, returnPeriodYears, eventLabel });
   };
 
-  // Deterministic (lowest return period, else first event alphabetically)
-  // pick for a product+SLR pair, used when switching product/SLR resets the
-  // return-period/event choice — so it always lands on the same option the
-  // return-period/event dropdown itself would show first, not an arbitrary
-  // one from row-insertion order.
-  const pickDefaultScenarioFor = (
+  // Scenario to land on when the product or SLR changes. Keeps the current
+  // return period / event when the new product+SLR has it, so comparing the
+  // 100-yr loss at 0 m and 1 m SLR doesn't silently fall back to 10 yr;
+  // otherwise the first option the return-period/event dropdown shows.
+  const pickScenarioFor = (
     product: string,
     slrScenarioM: number
   ): HazardScenarioSelection | undefined => {
@@ -283,14 +394,14 @@ const MapPanel = memo(function MapPanel({
           l.hazardScenario?.product === product && l.hazardScenario?.slrScenarioM === slrScenarioM
       )
       .map(l => l.hazardScenario as HazardScenarioSelection);
-    return candidates.sort((a, b) => {
-      if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
-        return a.returnPeriodYears - b.returnPeriodYears;
-      }
-      if (a.returnPeriodYears !== null) return -1;
-      if (b.returnPeriodYears !== null) return 1;
-      return (a.eventLabel ?? '').localeCompare(b.eventLabel ?? '');
-    })[0];
+    const current = hazardScenarioSelection;
+    const same = current
+      ? candidates.find(
+          c =>
+            c.returnPeriodYears === current.returnPeriodYears && c.eventLabel === current.eventLabel
+        )
+      : undefined;
+    return same ?? candidates.sort(compareHazardScenarioPeriods)[0];
   };
 
   // Shared by the Product dropdown and the observed/planning category
@@ -304,7 +415,12 @@ const MapPanel = memo(function MapPanel({
           .map(l => l.hazardScenario!.slrScenarioM)
       )
     ).sort((a, b) => a - b);
-    const firstMatch = pickDefaultScenarioFor(product, slrOptions[0]);
+    // Keep the current SLR too when the new product has it
+    const slr =
+      hazardScenarioSelection && slrOptions.includes(hazardScenarioSelection.slrScenarioM)
+        ? hazardScenarioSelection.slrScenarioM
+        : slrOptions[0];
+    const firstMatch = pickScenarioFor(product, slr);
     if (firstMatch) {
       emitHazardScenario(
         product,
@@ -314,9 +430,6 @@ const MapPanel = memo(function MapPanel({
       );
     }
   };
-
-  const sectionTriggerClass =
-    'flex w-full items-center gap-2 bg-slate-900/60 px-3 py-2.5 text-left transition-colors hover:bg-slate-800/70 group';
 
   return (
     <div className="w-full border-l border-purple-500/15 bg-gradient-to-b from-slate-950/95 via-slate-900/95 to-slate-950/95 shadow-[inset_1px_0_0_rgba(168,85,247,0.08)] flex flex-col flex-shrink-0 h-full min-h-0 overflow-hidden isolate md:w-80">
@@ -350,7 +463,7 @@ const MapPanel = memo(function MapPanel({
           <p className="mt-1 text-[10px] text-slate-400">
             {showAdvancedControls
               ? 'Fine-tune map presentation'
-              : 'Control how the map displays data'}
+              : 'Changes how the map looks, not the figures'}
           </p>
         </div>
 
@@ -396,26 +509,21 @@ const MapPanel = memo(function MapPanel({
         {/* Map shading section */}
         {onMapStyleChange && mapStyle && (
           <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => toggleSection('shading')}
-              className={sectionTriggerClass}
-            >
-              <Layers className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-              <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                Map Shading
-              </h3>
-              {!expandedSections.shading && (
-                <span className="text-[10px] text-slate-400 ml-auto mr-2">
-                  {mapStyle === 'loss' ? 'Estimated damage' : 'Wind intensity'}
-                </span>
-              )}
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.shading ? 'rotate-180' : ''} ${!expandedSections.shading ? 'ml-auto' : ''}`}
-              />
-            </button>
+            <SectionHeader
+              controls="map-panel-section-shading"
+              icon={
+                <Layers className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" aria-hidden="true" />
+              }
+              title="Map Shading"
+              summary={mapStyle === 'loss' ? 'Estimated damage' : 'Wind intensity'}
+              expanded={expandedSections.shading}
+              onToggle={() => toggleSection('shading')}
+            />
             {expandedSections.shading && (
-              <div className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35">
+              <div
+                id="map-panel-section-shading"
+                className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
+              >
                 <div className="grid grid-cols-2 gap-2 mt-3" data-tour="map-style-selector">
                   <button
                     type="button"
@@ -447,34 +555,142 @@ const MapPanel = memo(function MapPanel({
           </div>
         )}
 
-        {/* Hazard scenario — a dedicated, always-visible control, not buried
+        {/* Basemap -- the only place to change it (and where the choice is saved) */}
+        {onBasemapChange && basemapStyle && (
+          <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
+            <SectionHeader
+              controls="map-panel-section-basemap"
+              icon={
+                <MapIcon className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" aria-hidden="true" />
+              }
+              title="Basemap"
+              summary={BASEMAP_OPTIONS.find(o => o.style === basemapStyle)?.name}
+              expanded={expandedSections.basemap}
+              onToggle={() => toggleSection('basemap')}
+            />
+            {expandedSections.basemap && (
+              <div
+                id="map-panel-section-basemap"
+                className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
+              >
+                <div className="grid grid-cols-3 gap-2 mt-3" role="group" aria-label="Basemap">
+                  {BASEMAP_OPTIONS.map(option => {
+                    const active = option.style === basemapStyle;
+                    return (
+                      <button
+                        key={option.name}
+                        type="button"
+                        aria-pressed={active}
+                        title={option.hint}
+                        onClick={() => onBasemapChange(option.style)}
+                        className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          active
+                            ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40'
+                            : 'text-slate-300 hover:text-white hover:bg-slate-700/50 border border-transparent'
+                        }`}
+                      >
+                        <option.icon className="w-4 h-4" aria-hidden="true" />
+                        {option.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Forecast advisory: which track issue time (model run) the dashboard shows.
+            Its own top-level section, above the layers it changes. */}
+        {forecastRuns.length >= 2 && onForecastRunSelect && (
+          <div
+            className="mx-3 mt-2 rounded-xl border border-sky-500/30 bg-slate-900/45 overflow-hidden"
+            data-testid="forecast-advisory-section"
+          >
+            <SectionHeader
+              controls="map-panel-section-forecastAdvisory"
+              icon={<Clock className="w-3.5 h-3.5 text-sky-300 flex-shrink-0" aria-hidden="true" />}
+              title="Forecast advisory"
+              summary={
+                formatUtcDateTime(
+                  forecastRuns.find(run => run.id === activeForecastRunId)?.issuedAt
+                ) || `${forecastRuns.length} advisories`
+              }
+              expanded={expandedSections.forecastAdvisory}
+              onToggle={() => toggleSection('forecastAdvisory')}
+            />
+            {expandedSections.forecastAdvisory && (
+              <div
+                id="map-panel-section-forecastAdvisory"
+                className="space-y-2 border-t border-slate-700/40 bg-slate-900/35 px-4 pb-3 pt-2"
+              >
+                <p className="text-[10px] text-slate-400">
+                  Each advisory is a separate model run. Choosing one changes every figure and the
+                  map.
+                </p>
+                <ForecastRunSelector
+                  runs={forecastRuns}
+                  activeRunId={activeForecastRunId}
+                  onSelect={onForecastRunSelect}
+                  variant="plain"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Forecast layers: a Rapid Exposure Forecast's overlays. Open while a
+            forecast is the product; the map's "Layers" button reopens it. */}
+        {forecastLayers && (
+          <div
+            ref={forecastSectionRef}
+            className="mx-3 mt-2 rounded-xl border border-sky-500/30 bg-slate-900/45 overflow-hidden"
+          >
+            <SectionHeader
+              controls="map-panel-section-forecastLayers"
+              icon={
+                <Layers className="w-3.5 h-3.5 text-sky-300 flex-shrink-0" aria-hidden="true" />
+              }
+              title="Forecast layers"
+              summary={forecastLayers.summary}
+              expanded={expandedSections.forecastLayers}
+              onToggle={() => toggleSection('forecastLayers')}
+            />
+            {expandedSections.forecastLayers && (
+              <ForecastLayersSection
+                controls={forecastLayers}
+                id="map-panel-section-forecastLayers"
+              />
+            )}
+          </div>
+        )}
+
+        {/* Hazard scenario -a dedicated, always-visible control, not buried
             inside the Flood overlay row. Sets the SLR/return-period/event
             selection that both the map layer and the risk summary use;
             includes its own show/hide toggle (bound to the same
-            showInundationLayer state as the Overlays row below, so the two
+            its own switch (the Overlays rows are the assessment's), so the two
             stay in sync automatically) so this section is self-sufficient. */}
         {hazardScenarioProducts.length > 0 && onInundationLayerToggle && (
           <div className="mx-3 mt-2 rounded-xl border border-blue-500/30 bg-slate-900/45 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => toggleSection('hazardScenario')}
-              className={sectionTriggerClass}
-            >
-              <Waves className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-              <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                Hazard Scenario
-              </h3>
-              {!expandedSections.hazardScenario && (
-                <span className="text-[10px] text-slate-400 ml-auto mr-2">
-                  {HAZARD_SCENARIO_PRODUCT_LABELS[selectedProduct] ?? selectedProduct}
-                </span>
-              )}
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.hazardScenario ? 'rotate-180' : ''} ${!expandedSections.hazardScenario ? 'ml-auto' : ''}`}
-              />
-            </button>
+            <SectionHeader
+              controls="map-panel-section-hazardScenario"
+              icon={
+                <Waves className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" aria-hidden="true" />
+              }
+              title="Hazard Scenario"
+              summary={HAZARD_SCENARIO_PRODUCT_LABELS[selectedProduct] ?? selectedProduct}
+              expanded={expandedSections.hazardScenario}
+              onToggle={() => toggleSection('hazardScenario')}
+            />
             {expandedSections.hazardScenario && (
-              <div className="px-4 pb-3 pt-2 border-t border-slate-700/40 bg-slate-900/35 space-y-2.5">
+              <div
+                id="map-panel-section-hazardScenario"
+                className="px-4 pb-3 pt-2 border-t border-slate-700/40 bg-slate-900/35 space-y-2.5"
+              >
+                <p className="text-[10px] text-slate-400">
+                  Choosing a scenario changes the loss estimate.
+                </p>
                 <label className="flex items-center justify-between cursor-pointer group">
                   <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
                     Show on map
@@ -494,18 +710,17 @@ const MapPanel = memo(function MapPanel({
 
                 {availableHazardCategories.length > 1 && (
                   <div className="block">
-                    <span className="block text-[10px] text-slate-400 mb-1">Scenario type</span>
+                    <span className="block text-xs text-slate-400 mb-1">Scenario type</span>
                     <div
                       className="grid grid-cols-2 gap-1.5"
-                      role="tablist"
+                      role="group"
                       aria-label="Scenario type"
                     >
                       {availableHazardCategories.map(category => (
                         <button
                           key={category}
                           type="button"
-                          role="tab"
-                          aria-selected={activeHazardCategory === category}
+                          aria-pressed={activeHazardCategory === category}
                           onClick={() => {
                             setCategoryOverride(category);
                             const firstProduct = hazardScenarioProducts.find(
@@ -513,7 +728,7 @@ const MapPanel = memo(function MapPanel({
                             );
                             if (firstProduct) selectProduct(firstProduct);
                           }}
-                          className={`px-2 py-1.5 rounded-lg text-[10.5px] font-semibold text-center leading-tight transition-colors border ${
+                          className={`px-2 py-1.5 rounded-lg text-xs font-semibold text-center leading-tight transition-colors border ${
                             activeHazardCategory === category
                               ? category === 'observed'
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -525,7 +740,7 @@ const MapPanel = memo(function MapPanel({
                         </button>
                       ))}
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-500 leading-snug">
+                    <p className="mt-1 text-xs text-slate-400 leading-snug">
                       {activeHazardCategory === 'observed'
                         ? 'A specific storm or swell event that actually happened, on record.'
                         : 'A statistical estimate of risk at a given likelihood, not a real event.'}
@@ -534,11 +749,17 @@ const MapPanel = memo(function MapPanel({
                 )}
 
                 <label className="block">
-                  <span className="block text-[10px] text-slate-400 mb-1">Product</span>
+                  <span
+                    id="hazard-scenario-product-label"
+                    className="block text-xs text-slate-400 mb-1"
+                  >
+                    Product
+                  </span>
                   <select
+                    aria-labelledby="hazard-scenario-product-label"
                     value={selectedProduct}
                     onChange={e => selectProduct(e.target.value)}
-                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                    className="w-full text-xs bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
                   >
                     {hazardScenarioProductsInCategory.map(product => {
                       const label = HAZARD_SCENARIO_PRODUCT_LABELS[product] ?? product;
@@ -552,256 +773,284 @@ const MapPanel = memo(function MapPanel({
                   </select>
                 </label>
 
-                <label className="block">
-                  <span className="block text-[10px] text-slate-400 mb-1">Sea level rise</span>
-                  <select
-                    value={selectedSlr}
-                    onChange={e => {
-                      const slrScenarioM = Number(e.target.value);
-                      const firstMatch = pickDefaultScenarioFor(selectedProduct, slrScenarioM);
-                      if (firstMatch) {
+                {showLossCurve && hazardScenarioCurve && hazardScenarioSelection && (
+                  <LossCurveSelector
+                    curve={hazardScenarioCurve}
+                    slrScenarioM={hazardScenarioSelection.slrScenarioM}
+                    returnPeriodYears={hazardScenarioSelection.returnPeriodYears!}
+                    isAvailable={(slr, rp) =>
+                      availableScenarioKeys.has(`${selectedProduct}|${slr}|${rp}|`)
+                    }
+                    onSelect={(slr, rp) => emitHazardScenario(selectedProduct, slr, rp, null)}
+                  />
+                )}
+
+                <div className={showLossCurve ? 'grid grid-cols-2 gap-2' : 'space-y-2.5'}>
+                  <label className="block">
+                    <span
+                      id="hazard-scenario-slr-label"
+                      className="block text-xs text-slate-400 mb-1"
+                    >
+                      Sea level rise
+                    </span>
+                    <select
+                      aria-labelledby="hazard-scenario-slr-label"
+                      value={selectedSlr}
+                      onChange={e => {
+                        const slrScenarioM = Number(e.target.value);
+                        const firstMatch = pickScenarioFor(selectedProduct, slrScenarioM);
+                        if (firstMatch) {
+                          emitHazardScenario(
+                            selectedProduct,
+                            slrScenarioM,
+                            firstMatch.returnPeriodYears,
+                            firstMatch.eventLabel
+                          );
+                        }
+                      }}
+                      className="w-full text-xs bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                    >
+                      {hazardScenarioSlrOptions.map(slr => (
+                        <option key={slr} value={slr}>
+                          {slr} m
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span
+                      id="hazard-scenario-period-label"
+                      className="block text-xs text-slate-400 mb-1"
+                    >
+                      {hazardScenarioSelectorOptions[0]?.returnPeriodYears !== null
+                        ? 'Return period'
+                        : 'Event'}
+                    </span>
+                    <select
+                      aria-labelledby="hazard-scenario-period-label"
+                      value={selectedSelectorKey}
+                      onChange={e => {
+                        const [rp, ev] = e.target.value.split('|');
                         emitHazardScenario(
                           selectedProduct,
-                          slrScenarioM,
-                          firstMatch.returnPeriodYears,
-                          firstMatch.eventLabel
+                          selectedSlr,
+                          rp ? Number(rp) : null,
+                          ev || null
                         );
-                      }
-                    }}
-                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
-                  >
-                    {hazardScenarioSlrOptions.map(slr => (
-                      <option key={slr} value={slr}>
-                        {slr} m
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="block text-[10px] text-slate-400 mb-1">
-                    {hazardScenarioSelectorOptions[0]?.returnPeriodYears !== null
-                      ? 'Return period'
-                      : 'Event'}
-                  </span>
-                  <select
-                    value={selectedSelectorKey}
-                    onChange={e => {
-                      const [rp, ev] = e.target.value.split('|');
-                      emitHazardScenario(
-                        selectedProduct,
-                        selectedSlr,
-                        rp ? Number(rp) : null,
-                        ev || null
-                      );
-                    }}
-                    className="w-full text-[11px] bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
-                  >
-                    {hazardScenarioSelectorOptions.map(opt => {
-                      const key = `${opt.returnPeriodYears ?? ''}|${opt.eventLabel ?? ''}`;
-                      const label =
-                        opt.returnPeriodYears !== null
-                          ? `${opt.returnPeriodYears} yr return period`
-                          : `Event ${opt.eventLabel}`;
-                      return (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
+                      }}
+                      className="w-full text-xs bg-slate-800 border border-slate-600/50 rounded-lg px-2 py-1.5 text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+                    >
+                      {hazardScenarioSelectorOptions.map(opt => {
+                        const key = `${opt.returnPeriodYears ?? ''}|${opt.eventLabel ?? ''}`;
+                        const label =
+                          opt.returnPeriodYears !== null
+                            ? `1-in-${opt.returnPeriodYears} yr`
+                            : `Event ${opt.eventLabel}`;
+                        return (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Overlays — per-layer accordion rows */}
-        {(onCycloneLayerToggle ||
-          onWindLayerToggle ||
-          onInundationLayerToggle ||
-          onBuildingsLayerToggle ||
-          onRoadsLayerToggle) && (
-          <div className="mx-3 mt-2 space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 px-1 mb-1">
-              Overlays
-            </p>
+        {/* Overlays -per-layer accordion rows */}
+        {showOverlayRows &&
+          (onCycloneLayerToggle ||
+            onWindLayerToggle ||
+            onInundationLayerToggle ||
+            onBuildingsLayerToggle ||
+            onRoadsLayerToggle) && (
+            <div className="mx-3 mt-2 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 px-1 mb-1">
+                Overlays
+              </p>
 
-            {[
-              onCycloneLayerToggle && {
-                id: 'cyclone',
-                label: 'Tropical Cyclone',
-                icon: CloudRain,
-                checked: showCycloneLayer,
-                onToggle: onCycloneLayerToggle,
-                color: 'text-violet-400',
-              },
-              onWindLayerToggle && {
-                id: 'wind',
-                label: 'Maximum Wind',
-                icon: Wind,
-                checked: showWindLayer,
-                onToggle: onWindLayerToggle,
-                color: 'text-cyan-400',
-                unavailableMessage: windLayersAvailable
-                  ? undefined
-                  : `Wind modelling unavailable for ${
-                      countryCode ? (COUNTRIES[countryCode]?.name ?? countryCode) : 'this country'
-                    }`,
-              },
-              onInundationLayerToggle && {
-                id: 'flood',
-                label: 'Maximum Inundation',
-                icon: Waves,
-                checked: showInundationLayer,
-                onToggle: onInundationLayerToggle,
-                color: 'text-blue-400',
-              },
-              onBuildingsLayerToggle && {
-                id: 'buildings',
-                label: 'Buildings',
-                icon: Building2,
-                checked: showBuildingsLayer,
-                onToggle: onBuildingsLayerToggle,
-                color: 'text-amber-400',
-              },
-              onRoadsLayerToggle && {
-                id: 'roads',
-                label: 'Roads',
-                icon: Construction,
-                checked: showRoadsLayer,
-                onToggle: onRoadsLayerToggle,
-                color: 'text-orange-400',
-              },
-            ]
-              .filter(Boolean)
-              .map(row => {
-                const {
-                  id,
-                  label,
-                  icon: Icon,
-                  checked,
-                  onToggle,
-                  color,
-                  unavailableMessage,
-                } = row as {
-                  id: string;
-                  label: string;
-                  icon: typeof CloudRain;
-                  checked: boolean;
-                  onToggle: (v: boolean) => void;
-                  color: string;
-                  unavailableMessage?: string;
-                };
-                const isOpen = expandedOverlayId === id;
-                return (
-                  <div
-                    key={id}
-                    className="rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleOverlay(id)}
-                      aria-expanded={isOpen}
-                      aria-controls={`map-panel-overlay-${id}`}
-                      className={`${sectionTriggerClass} pr-3`}
+              {[
+                onCycloneLayerToggle && {
+                  id: 'cyclone',
+                  label: 'Tropical Cyclone',
+                  icon: CloudRain,
+                  checked: showCycloneLayer,
+                  onToggle: onCycloneLayerToggle,
+                  color: 'text-violet-400',
+                },
+                onWindLayerToggle && {
+                  id: 'wind',
+                  label: 'Maximum Wind',
+                  icon: Wind,
+                  checked: showWindLayer,
+                  onToggle: onWindLayerToggle,
+                  color: 'text-cyan-400',
+                  unavailableMessage: windLayersAvailable
+                    ? undefined
+                    : `Wind modelling unavailable for ${
+                        countryCode ? (COUNTRIES[countryCode]?.name ?? countryCode) : 'this country'
+                      }`,
+                },
+                onInundationLayerToggle && {
+                  id: 'flood',
+                  label: 'Maximum Inundation',
+                  icon: Waves,
+                  checked: showInundationLayer,
+                  onToggle: onInundationLayerToggle,
+                  color: 'text-blue-400',
+                },
+                onBuildingsLayerToggle && {
+                  id: 'buildings',
+                  label: 'Buildings',
+                  icon: Building2,
+                  checked: showBuildingsLayer,
+                  onToggle: onBuildingsLayerToggle,
+                  color: 'text-amber-400',
+                },
+                onRoadsLayerToggle && {
+                  id: 'roads',
+                  label: 'Roads',
+                  icon: Construction,
+                  checked: showRoadsLayer,
+                  onToggle: onRoadsLayerToggle,
+                  color: 'text-orange-400',
+                },
+              ]
+                .filter(Boolean)
+                .map(row => {
+                  const {
+                    id,
+                    label,
+                    icon: Icon,
+                    checked,
+                    onToggle,
+                    color,
+                    unavailableMessage,
+                  } = row as {
+                    id: string;
+                    label: string;
+                    icon: typeof CloudRain;
+                    checked: boolean;
+                    onToggle: (v: boolean) => void;
+                    color: string;
+                    unavailableMessage?: string;
+                  };
+                  const isOpen = expandedOverlayId === id;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden"
                     >
-                      <Icon className={`w-3.5 h-3.5 ${color} flex-shrink-0`} />
-                      <span className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors flex-1">
-                        {label}
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold mr-2 ${
-                          unavailableMessage
-                            ? 'text-slate-500'
-                            : checked
-                              ? 'text-slate-300'
-                              : 'text-slate-400'
-                        }`}
+                      <button
+                        type="button"
+                        onClick={() => toggleOverlay(id)}
+                        aria-expanded={isOpen}
+                        aria-controls={`map-panel-overlay-${id}`}
+                        className={`${sectionTriggerClass} pr-3`}
                       >
-                        {unavailableMessage ? 'N/A' : checked ? 'On' : 'Off'}
-                      </span>
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
-                          isOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
-                    {isOpen && (
-                      <div
-                        id={`map-panel-overlay-${id}`}
-                        className="border-t border-slate-700/40 bg-slate-900/35 px-4 py-2.5"
-                      >
-                        <div className="space-y-2.5">
-                          {unavailableMessage ? (
-                            <p className="text-[11px] text-amber-300/90 leading-snug">
-                              {unavailableMessage}. This hazard is not part of the modelled catalog
-                              for this country — not a loading error.
-                            </p>
-                          ) : (
-                            <label className="flex items-center justify-between cursor-pointer group">
-                              <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
-                                Show layer
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-semibold text-slate-400">
-                                  {checked ? 'On' : 'Off'}
+                        <Icon className={`w-3.5 h-3.5 ${color} flex-shrink-0`} />
+                        <span className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors flex-1">
+                          {label}
+                        </span>
+                        <span
+                          className={`text-[10px] font-semibold mr-2 ${
+                            unavailableMessage
+                              ? 'text-slate-500'
+                              : checked
+                                ? 'text-slate-300'
+                                : 'text-slate-400'
+                          }`}
+                        >
+                          {unavailableMessage ? 'N/A' : checked ? 'On' : 'Off'}
+                        </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
+                            isOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div
+                          id={`map-panel-overlay-${id}`}
+                          className="border-t border-slate-700/40 bg-slate-900/35 px-4 py-2.5"
+                        >
+                          <div className="space-y-2.5">
+                            {unavailableMessage ? (
+                              <p className="text-[11px] text-amber-300/90 leading-snug">
+                                {unavailableMessage}. This hazard is not part of the modelled
+                                catalog for this country -not a loading error.
+                              </p>
+                            ) : (
+                              <label className="flex items-center justify-between cursor-pointer group">
+                                <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">
+                                  Show layer
                                 </span>
-                                {id === 'cyclone' ? (
-                                  <button
-                                    type="button"
-                                    aria-pressed={checked}
-                                    aria-label={
-                                      checked ? 'Hide cyclone track' : 'Show cyclone track'
-                                    }
-                                    onClick={() => onToggle(!checked)}
-                                    className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 transition-colors border focus-visible:outline-none focus-visible:ring-1 ${
-                                      checked
-                                        ? 'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25 hover:border-blue-500/40 focus-visible:ring-blue-400'
-                                        : 'bg-slate-700/30 text-slate-300 border-slate-600/40 hover:bg-slate-700/45 hover:border-slate-500/50 focus-visible:ring-slate-400'
-                                    }`}
-                                  >
-                                    {checked ? (
-                                      <Eye className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <EyeOff className="h-3.5 w-3.5" />
-                                    )}
-                                    <span className="text-[10px] font-semibold">
-                                      {checked ? 'Visible' : 'Hidden'}
-                                    </span>
-                                  </button>
-                                ) : (
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={e => onToggle(e.target.checked)}
-                                    className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-purple-400 cursor-pointer focus:ring-1 focus:ring-purple-500/50"
-                                  />
-                                )}
-                              </div>
-                            </label>
-                          )}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-semibold text-slate-400">
+                                    {checked ? 'On' : 'Off'}
+                                  </span>
+                                  {id === 'cyclone' ? (
+                                    <button
+                                      type="button"
+                                      aria-pressed={checked}
+                                      aria-label={
+                                        checked ? 'Hide cyclone track' : 'Show cyclone track'
+                                      }
+                                      onClick={() => onToggle(!checked)}
+                                      className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 transition-colors border focus-visible:outline-none focus-visible:ring-1 ${
+                                        checked
+                                          ? 'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25 hover:border-blue-500/40 focus-visible:ring-blue-400'
+                                          : 'bg-slate-700/30 text-slate-300 border-slate-600/40 hover:bg-slate-700/45 hover:border-slate-500/50 focus-visible:ring-slate-400'
+                                      }`}
+                                    >
+                                      {checked ? (
+                                        <Eye className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <EyeOff className="h-3.5 w-3.5" />
+                                      )}
+                                      <span className="text-[10px] font-semibold">
+                                        {checked ? 'Visible' : 'Hidden'}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={e => onToggle(e.target.checked)}
+                                      className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-purple-400 cursor-pointer focus:ring-1 focus:ring-purple-500/50"
+                                    />
+                                  )}
+                                </div>
+                              </label>
+                            )}
 
-                          {id === 'cyclone' && (
-                            <p className="text-[10px] text-slate-400">
-                              Playback and timeline controls are in Advanced.
-                            </p>
-                          )}
+                            {id === 'cyclone' && (
+                              <p className="text-[10px] text-slate-400">
+                                {cycloneIsForecast
+                                  ? 'Plays the forecast track: positions and winds are forecast, not observed. '
+                                  : ''}
+                                Playback and timeline controls are in Advanced.
+                              </p>
+                            )}
 
-                          {id === 'flood' && hazardScenarioProducts.length > 0 && (
-                            <p className="text-[10px] text-slate-400">
-                              Dataset, sea-level-rise, and return-period/event controls are in the
-                              Hazard Scenario section above.
-                            </p>
-                          )}
+                            {id === 'flood' && hazardScenarioProducts.length > 0 && (
+                              <p className="text-[10px] text-slate-400">
+                                Dataset, sea-level-rise, and return-period/event controls are in the
+                                Hazard Scenario section above.
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        )}
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
 
         {showAdvancedControls && (
           <>
@@ -944,26 +1193,24 @@ const MapPanel = memo(function MapPanel({
 
             {(on3DViewToggle || onExtrusionModeChange || onExtrusionExaggerationChange) && (
               <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('view3D')}
-                  className={sectionTriggerClass}
-                >
-                  <Layers className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                  <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                    3D View
-                  </h3>
-                  {!expandedSections.view3D && (
-                    <span className="text-[10px] text-slate-400 ml-auto mr-2">
-                      {is3DView ? 'Enabled' : 'Disabled'}
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.view3D ? 'rotate-180' : ''} ${!expandedSections.view3D ? 'ml-auto' : ''}`}
-                  />
-                </button>
+                <SectionHeader
+                  controls="map-panel-section-view3D"
+                  icon={
+                    <Layers
+                      className="w-3.5 h-3.5 text-purple-400 flex-shrink-0"
+                      aria-hidden="true"
+                    />
+                  }
+                  title="3D View"
+                  summary={is3DView ? 'Enabled' : 'Disabled'}
+                  expanded={expandedSections.view3D}
+                  onToggle={() => toggleSection('view3D')}
+                />
                 {expandedSections.view3D && (
-                  <div className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35 space-y-3">
+                  <div
+                    id="map-panel-section-view3D"
+                    className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35 space-y-3"
+                  >
                     {on3DViewToggle && (
                       <label className="flex items-center justify-between cursor-pointer group rounded-lg px-2 py-1.5 hover:bg-slate-800/50 mt-3">
                         <span className="text-xs text-slate-300 group-hover:text-white">
@@ -1059,7 +1306,7 @@ const MapPanel = memo(function MapPanel({
                   onClick={() => {
                     if (
                       window.confirm(
-                        'Reset all saved preferences? You will see the basemap selection dialog again on next visit.'
+                        'Reset saved preferences? The map goes back to the Light basemap.'
                       )
                     ) {
                       onResetUserPreferences();

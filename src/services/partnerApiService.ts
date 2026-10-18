@@ -6,9 +6,17 @@ export type PartnerApiResource =
   | 'cyclone_track'
   | 'risk_information'
   | 'risk_scenario'
+  | 'risk_scenario_breakdown'
   | 'hazard_information'
   | 'citizen_science'
   | 'event';
+
+// Sector/asset-type rows hang off one RiskScenario (filtered by
+// ?risk_scenario=), not off a country, so they have no country-scoped URL.
+type CountryScopedPartnerApiResource = Exclude<
+  PartnerApiResource,
+  'country' | 'risk_scenario_breakdown'
+>;
 
 export interface PartnerApiEndpoints {
   base: string;
@@ -119,6 +127,7 @@ export function buildPartnerApiEndpoints(
       cyclone_track: `${v1}/cyclone_track/`,
       risk_information: `${v1}/risk_information/`,
       risk_scenario: `${v1}/risk_scenario/`,
+      risk_scenario_breakdown: `${v1}/risk_scenario_breakdown/`,
       hazard_information: `${v1}/hazard_information/`,
       citizen_science: `${v1}/citizen_science/`,
       event: `${v1}/event/`,
@@ -174,7 +183,7 @@ export function resolveCountryId(
 export function buildCountryScopedResourceUrls(
   countryId: number,
   baseUrl: string = getDefaultPartnerApiBase()
-): Record<Exclude<PartnerApiResource, 'country'>, string> {
+): Record<CountryScopedPartnerApiResource, string> {
   const endpoints = buildPartnerApiEndpoints(baseUrl);
 
   return {
@@ -240,7 +249,7 @@ export async function mapCountryPartnerApis(
   countryCode: CountryCode;
   countryId: number | null;
   endpoints: PartnerApiEndpoints;
-  scopedUrls: Record<Exclude<PartnerApiResource, 'country'>, string> | null;
+  scopedUrls: Record<CountryScopedPartnerApiResource, string> | null;
 }> {
   const endpoints = buildPartnerApiEndpoints(baseUrl);
   const countries = await fetchPartnerCountries(baseUrl);

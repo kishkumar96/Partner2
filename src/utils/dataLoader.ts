@@ -12,7 +12,7 @@
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 import { resolveLocalDataAlias } from '@/data/localDataAliases';
 
-// Get basePath from env — empty in dev, '/partner2' in production
+// Get basePath from env -empty in dev, '/partner2' in production
 const BASE_PATH = getConfiguredBasePath(process.env.NODE_ENV === 'production' ? '/partner2' : '');
 
 /**
@@ -69,7 +69,7 @@ export interface DataLoaderResult<T> {
 
 // Simple in-memory cache
 const dataCache = new Map<string, any>();
-// In-flight promise deduplication — prevents wasteful parallel fetches for the same URL
+// In-flight promise deduplication -prevents wasteful parallel fetches for the same URL
 const inFlight = new Map<string, Promise<DataLoaderResult<unknown>>>();
 
 /**

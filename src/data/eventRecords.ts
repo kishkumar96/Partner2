@@ -11,6 +11,21 @@ export interface EventRecord {
   backendCycloneTrackId?: string;
   backendHazardIds?: string[];
   backendRiskIds?: string[];
+  /** Event type name from the Partner API, e.g. "Tropical Cyclone", "Earthquake" */
+  eventType?: string;
+  /** Storm name from the Event's cyclone track (the event title can carry extra wording). */
+  cycloneName?: string;
+  /** Metadata supplied by the Partner API for operational forecast events. */
+  isForecast?: boolean;
+  dataSource?: string;
+  trackIssuedTime?: string;
+  modelRunStatus?: string;
+  modelRunFinishedAt?: string;
+  modelRunCreatedAt?: string;
+  /** Why a run failed or was superseded, as recorded by the middleware. */
+  modelRunError?: string;
+  /** Set when this record is one advisory's run of a storm's Event. */
+  forecastRunId?: string;
   location: {
     lat: number;
     lng: number;
@@ -202,7 +217,27 @@ export function resolveActiveEventRecord(
     selectedEventIds,
     dateRange
   );
-  return filteredRecords[0] ?? availableRecords[0] ?? getDefaultEventRecord(countryCode);
+  // With nothing chosen, a run that is pending, failed or superseded never
+  // becomes the default while a usable one exists; an explicit pick still wins.
+  const usable = (record: EventRecord) =>
+    !record.modelRunStatus || record.modelRunStatus === 'complete';
+  let pool = filteredRecords.length > 0 ? filteredRecords : availableRecords;
+  if (selectedEventIds.length === 0 && pool.some(usable)) pool = pool.filter(usable);
+  const issuedMs = (record: EventRecord) => {
+    const ms = Date.parse(record.trackIssuedTime || '');
+    return Number.isNaN(ms) ? -Infinity : ms;
+  };
+  const ranked = [...pool].sort((left, right) => {
+    // Newer storms remain the default. When forecasts and assessments share
+    // a calendar day, however, prefer the completed post-event assessment.
+    const dateOrder = (right.date || '').localeCompare(left.date || '');
+    if (dateOrder !== 0) return dateOrder;
+    const kindOrder = Number(Boolean(left.isForecast)) - Number(Boolean(right.isForecast));
+    if (kindOrder !== 0) return kindOrder;
+    // Advisories of one storm can share a day: the latest issue time leads
+    return issuedMs(right) - issuedMs(left);
+  });
+  return ranked[0] ?? getDefaultEventRecord(countryCode);
 }
 
 export function mergeEventRecords(countryCode: CountryCode, records: EventRecord[]): EventRecord[] {
@@ -225,7 +260,8 @@ export function mergeEventRecords(countryCode: CountryCode, records: EventRecord
   return Array.from(merged.values()).sort((left, right) => {
     const leftDate = left.date || '';
     const rightDate = right.date || '';
-    return rightDate.localeCompare(leftDate);
+    const dateOrder = rightDate.localeCompare(leftDate);
+    return dateOrder || Number(Boolean(left.isForecast)) - Number(Boolean(right.isForecast));
   });
 }
 

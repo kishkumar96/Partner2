@@ -8,6 +8,7 @@ import {
   buildWMSImageUrl,
   buildWMSTileUrl,
   getLayersForCountry,
+  type HazardLayerMode,
   HazardScenarioSelection,
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
@@ -27,8 +28,11 @@ import { isPartnerApiCountryEnabled, isPartnerApiEnabled } from '@/services/part
 
 const HAZARD_ID_TO_LAYER_TYPE: Record<string, string[]> = {
   'tropical-cyclone': ['cyclone', 'wind'],
-  flood: ['flood', 'inundation'],
-  inundation: ['flood', 'inundation'],
+  // 'fluvial-depth' layers (river/rainfall flood) are offered under the generic
+  // Flood hazard: the Filters panel has no separate fluvial hazard to pick, so
+  // without this they could never be shown.
+  flood: ['flood', 'inundation', 'fluvial-depth'],
+  inundation: ['flood', 'inundation', 'fluvial-depth'],
   'coastal-flooding': ['flood', 'inundation'],
   'fluvial-flooding': ['flood', 'inundation', 'fluvial-depth'],
   volcanic: [],
@@ -97,7 +101,7 @@ function countryIsExcludedByTemporalFilters(
   );
 }
 
-function getHazardTypesToShow(
+export function getHazardTypesToShow(
   selectedHazards: string[],
   showWindLayer: boolean,
   showInundationLayer: boolean
@@ -124,7 +128,7 @@ function getHazardTypesToShow(
     hazardTypesToShow.push('wind');
   }
   if (showInundationLayer) {
-    hazardTypesToShow.push('inundation', 'flood');
+    hazardTypesToShow.push('inundation', 'flood', 'fluvial-depth');
   }
   return hazardTypesToShow;
 }
@@ -142,10 +146,16 @@ interface RealDataLayersProps {
   onLoadingChange?: (isLoading: boolean) => void;
   onActiveLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
+  /** False while the dashboard's own data is loading. Hazard raster requests wait
+   * for it: a slow tile server (THREDDS decoding a large NetCDF on first use) would
+   * otherwise hold every browser connection and starve the data requests. */
+  dataReady?: boolean;
   /** Narrows a multi-scenario hazard catalog (e.g. Cook Islands) down to one
    * layer to render; undefined/null falls back to a deterministic default
    * instead of rendering every scenario combination at once. */
   hazardScenarioSelection?: HazardScenarioSelection | null;
+  /** Event layers only, planning-scenario layers only, or both */
+  hazardLayerMode?: HazardLayerMode;
   /** 0–100 scale applied to all raster layer opacities */
   layerOpacityScale?: number;
   showCycloneTrack?: boolean;
@@ -166,7 +176,9 @@ export default function RealDataLayers({
   onLoadingChange,
   onActiveLayersChange,
   partnerHazardLayers = [],
+  dataReady = true,
   hazardScenarioSelection,
+  hazardLayerMode = 'all',
   layerOpacityScale = 70,
   showCycloneTrack = true,
   cycloneTrackData = null,
@@ -445,7 +457,7 @@ export default function RealDataLayers({
               });
             }
 
-            // Cone hidden — wind swath layers in CycloneAnimationLayer replace this
+            // Cone hidden -wind swath layers in CycloneAnimationLayer replace this
             if (!map.getLayer(coneLayerId)) {
               map.addLayer(
                 {
@@ -626,7 +638,7 @@ export default function RealDataLayers({
 
   // Load real WMS hazard layers from THREDDS (with lazy loading based on zoom)
   useEffect(() => {
-    if (!map || !visible) return;
+    if (!map || !visible || !dataReady) return;
 
     // Reset loaded status when country or filters change
     wmsLayersLoaded.current = false;
@@ -840,7 +852,8 @@ export default function RealDataLayers({
               country,
               partnerHazardLayers,
               selectedEventIds,
-              hazardScenarioSelection
+              hazardScenarioSelection,
+              hazardLayerMode
             ).forEach(layer => {
               const layerId = `wms-layer-${layer.id}`;
               try {
@@ -858,7 +871,8 @@ export default function RealDataLayers({
             country,
             partnerHazardLayers,
             selectedEventIds,
-            hazardScenarioSelection
+            hazardScenarioSelection,
+            hazardLayerMode
           );
           const availableLayers = countryLayers.filter(layer =>
             hazardTypesToShow.includes(layer.hazardType)
@@ -912,7 +926,7 @@ export default function RealDataLayers({
               const addWMSLayer = () => {
                 try {
                   // Zarr-backed XYZ raster tiles (hazard_tiles endpoint) bypass all
-                  // WMS URL building entirely — the template is already ready to use.
+                  // WMS URL building entirely -the template is already ready to use.
                   if (layer.tileUrlTemplate) {
                     if (!map.getSource(sourceId)) {
                       map.addSource(sourceId, {
@@ -1197,6 +1211,21 @@ export default function RealDataLayers({
           }
         }
 
+        // Hide hazard layers added earlier that are no longer wanted: the
+        // reconcile above only reaches layers still in a country's list, so a
+        // layer that dropped out (e.g. a static fallback layer added before
+        // the Partner API catalog arrived, or an event layer when switching
+        // to planning scenarios) would otherwise stay on the map.
+        const wantedLayerIds = new Set(allActiveLayers.map(layer => `wms-layer-${layer.id}`));
+        (map.getStyle()?.layers ?? []).forEach(styleLayer => {
+          if (!styleLayer.id.startsWith('wms-layer-') || wantedLayerIds.has(styleLayer.id)) return;
+          try {
+            map.setLayoutProperty(styleLayer.id, 'visibility', 'none');
+          } catch (_e) {
+            // Layer may be mid-transition; ignore.
+          }
+        });
+
         console.log(`Real WMS hazard layers loaded`);
         wmsLayersLoaded.current = true; // Mark as loaded to prevent re-loading
 
@@ -1214,10 +1243,30 @@ export default function RealDataLayers({
     let wmsStyleLoadListener: (() => void) | null = null;
 
     if (!map.isStyleLoaded()) {
+      // MapLibre reports the style as not loaded while any source (e.g. a
+      // previous scenario's raster tiles) is still fetching. 'styledata'
+      // only fires on style edits, so also retry on 'idle'; otherwise a
+      // scenario change made while tiles load is never applied.
+      // Hide the previous hazard layers now so MapLibre stops fetching their
+      // tiles (otherwise a slow tile server keeps the map "busy" for minutes);
+      // the loader re-shows whichever layers are still wanted.
+      try {
+        (map.getStyle()?.layers ?? []).forEach(styleLayer => {
+          if (styleLayer.id.startsWith('wms-layer-')) {
+            map.setLayoutProperty(styleLayer.id, 'visibility', 'none');
+          }
+        });
+      } catch (_e) {
+        // Style mid-transition; the listener below retries.
+      }
       wmsStyleLoadListener = () => {
+        if (!map.isStyleLoaded()) return;
+        map.off('styledata', wmsStyleLoadListener!);
+        map.off('idle', wmsStyleLoadListener!);
         loadRealWMSLayers();
       };
       map.on('styledata', wmsStyleLoadListener);
+      map.on('idle', wmsStyleLoadListener);
     } else {
       // Load layers immediately if zoom is sufficient
       loadRealWMSLayers();
@@ -1234,6 +1283,7 @@ export default function RealDataLayers({
       if (wmsStyleLoadListener) {
         try {
           map.off('styledata', wmsStyleLoadListener);
+          map.off('idle', wmsStyleLoadListener);
         } catch (_e) {
           // Silently ignore if already removed
         }
@@ -1267,7 +1317,9 @@ export default function RealDataLayers({
     showWindLayer,
     showInundationLayer,
     partnerHazardLayers,
+    dataReady,
     hazardScenarioSelection,
+    hazardLayerMode,
     onActiveLayersChange,
     onLoadingChange,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
@@ -1303,7 +1355,8 @@ export default function RealDataLayers({
         country,
         partnerHazardLayers,
         selectedEventIds,
-        hazardScenarioSelection
+        hazardScenarioSelection,
+        hazardLayerMode
       ).forEach(layer => {
         const layerId = `wms-layer-${layer.id}`;
 
@@ -1334,6 +1387,7 @@ export default function RealDataLayers({
     filters,
     partnerHazardLayers,
     hazardScenarioSelection,
+    hazardLayerMode,
   ]);
 
   // Update WMS layer opacity dynamically when map mode or global opacity changes.

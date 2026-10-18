@@ -71,7 +71,7 @@ export const COUNTRIES: Record<CountryCode, Country> = {
     name: 'Cook Islands',
     fullName: 'Cook Islands',
     // Center is already Rarotonga (the only island the hazard/risk catalog
-    // actually covers) — zoom was 6, appropriate for the whole scattered
+    // actually covers) -zoom was 6, appropriate for the whole scattered
     // Cook Islands EEZ but not for a single ~6km-wide island, so both the
     // island and its flood overlay rendered as a few invisible pixels.
     center: [-159.7777, -21.2367],

@@ -71,7 +71,7 @@ beforeAll(() => {
   portalRoot.setAttribute('id', 'map-overlay-root');
   document.body.appendChild(portalRoot);
 
-  // jsdom doesn't support canvas — return a no-op 2D context
+  // jsdom doesn't support canvas -return a no-op 2D context
   HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
     clearRect: jest.fn(),
     fillRect: jest.fn(),

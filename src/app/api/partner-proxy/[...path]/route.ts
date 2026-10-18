@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://localhost:8000';
 const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
 
-// WMS responses are immutable for a given request — cache 5 minutes in the browser / CDN.
+// WMS responses are immutable for a given request -cache 5 minutes in the browser / CDN.
 const WMS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=60';
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 20000;
 const DEFAULT_PARTNER_DATA_TIMEOUT_MS = 60000;
@@ -32,7 +32,7 @@ function ensureTrailingSlash(path: string): string {
 }
 
 // Static-file endpoints under partner_api/ (e.g. hazard_tiles PNGs) have no
-// trailing slash in their Django URL pattern — appending one 404s them, so
+// trailing slash in their Django URL pattern -appending one 404s them, so
 // only DRF's list/retrieve JSON endpoints get the trailing-slash treatment.
 function looksLikeFilePath(path: string): boolean {
   return /\.[a-zA-Z0-9]+$/.test(path);
@@ -66,12 +66,16 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
     }
     forwardHeaders.set(key, value);
   }
+  // Ask the upstream for an uncompressed body. This route re-streams the
+  // response with content-encoding/length stripped; a gzip-encoded upstream
+  // body came back truncated, and Next already compresses the browser leg.
+  forwardHeaders.set('Accept-Encoding', 'identity');
   if (isPartnerDataRequest) {
     // Django's dev server (manage.py runserver) drops keep-alive connections
     // inconsistently under concurrent load, causing intermittent instant
     // ECONNRESETs when a pooled connection gets reused. Forcing a fresh
     // connection per request avoids that at the cost of one extra TCP
-    // handshake — negligible for a local/dev-only backend.
+    // handshake -negligible for a local/dev-only backend.
     forwardHeaders.set('Connection', 'close');
   }
 

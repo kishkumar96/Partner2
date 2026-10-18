@@ -346,7 +346,7 @@ export default function CountryComparisonModal({
               &quot;Scenario-linked&quot; means the economic-damage figure updates when you change
               the map&apos;s sea-level-rise / return-period selector. &quot;Map layer only&quot;
               means real flood-hazard tiles exist for that scenario, but the dollar figures shown
-              are the country&apos;s static total, not tied to it — that needs loss modeling that
+              are the country&apos;s static total, not tied to it -that needs loss modeling that
               hasn&apos;t been done for that country yet.
             </p>
           </div>

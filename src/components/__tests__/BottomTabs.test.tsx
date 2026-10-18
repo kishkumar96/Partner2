@@ -111,3 +111,105 @@ describe('BottomTabs', () => {
     }
   });
 });
+
+describe('BottomTabs with a hazard scenario selected', () => {
+  const scenario = {
+    product: 'combined',
+    slrScenarioM: 0,
+    returnPeriodYears: 10,
+    eventLabel: null,
+  };
+  const scenarioRiskSummary = { id: 4689, total_loss: 1018217, exposed_population: 1381 };
+  const scenarioBreakdown = {
+    sectors: [
+      {
+        name: 'Infra-Ports',
+        sector: '',
+        totalLoss: 600,
+        exposedCount: null,
+        exposedValue: null,
+        averageInundationDepth: null,
+      },
+      {
+        name: 'Build-Residential',
+        sector: '',
+        totalLoss: 400,
+        exposedCount: null,
+        exposedValue: null,
+        averageInundationDepth: null,
+      },
+    ],
+    assetTypes: [
+      {
+        name: 'Wharf',
+        sector: 'Infra-Ports',
+        totalLoss: 600,
+        exposedCount: 2,
+        exposedValue: 5000,
+        averageInundationDepth: 0.5,
+      },
+      {
+        name: 'Residential',
+        sector: 'Build-Residential',
+        totalLoss: 400,
+        exposedCount: 10,
+        exposedValue: 9000,
+        averageInundationDepth: 0.25,
+      },
+      {
+        name: '',
+        sector: '',
+        totalLoss: 0,
+        exposedCount: 0,
+        exposedValue: 0,
+        averageInundationDepth: null,
+      },
+    ],
+  };
+  const scenarioProps = {
+    ...minimalProps,
+    countryCode: 'CK' as const,
+    hazardScenario: scenario,
+    scenarioRiskSummary,
+    scenarioBreakdown,
+  };
+  const openTab = (text: string) =>
+    fireEvent.click(screen.getAllByRole('button').find(btn => btn.textContent?.includes(text))!);
+
+  it('marks the Impact tab as baseline and shows the scenario national totals', () => {
+    render(<BottomTabs {...scenarioProps} />);
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent(/baseline analysis/i);
+    expect(note).toHaveTextContent('Combined (TC + Swell) · SLR 0 m · 10-yr return period');
+    expect(note).toHaveTextContent('These region figures don’t change');
+    expect(note).toHaveTextContent('$1.02M loss, 1.38K people exposed');
+  });
+
+  it('shows the scenario loss by sector instead of the baseline table', () => {
+    render(<BottomTabs {...scenarioProps} />);
+    openTab('by Sector (2)');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(screen.getByText('Infrastructure · Ports')).toBeInTheDocument();
+    expect(screen.getByText('Buildings · Residential')).toBeInTheDocument();
+    expect(screen.getByText('60.0%')).toBeInTheDocument();
+  });
+
+  it('shows the scenario loss by asset type, labelling blank names', () => {
+    render(<BottomTabs {...scenarioProps} />);
+    openTab('by Asset (3)');
+    expect(screen.getByText('Wharf')).toBeInTheDocument();
+    expect(screen.getByText('0.50 m')).toBeInTheDocument();
+    expect(screen.getAllByText('Unspecified').length).toBeGreaterThan(0);
+  });
+
+  it('falls back to the baseline table with a notice when the scenario has no breakdown', () => {
+    render(<BottomTabs {...scenarioProps} scenarioBreakdown={null} />);
+    openTab('by Sector');
+    expect(screen.getByRole('note')).toHaveTextContent(/no sector breakdown/i);
+  });
+
+  it('shows no notice without a scenario', () => {
+    render(<BottomTabs {...minimalProps} />);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+});

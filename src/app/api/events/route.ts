@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { COUNTRIES, type CountryCode } from '@/types/thredds';
-import { createPartnerEventId, type EventRecord } from '@/data/eventRecords';
+import type { CountryCode } from '@/types/thredds';
+import type { EventRecord } from '@/data/eventRecords';
+import { normalizePartnerEventRecords } from '@/utils/partnerEvents';
 import {
   isPartnerApiCountryEnabled,
   isPartnerApiEnabled,
@@ -30,9 +31,14 @@ function toArrayPayload(payload: unknown): Array<Record<string, unknown>> {
   return [];
 }
 
+const FETCH_TIMEOUT_MS = 10_000;
+
 async function fetchPartnerCollection(url: string): Promise<Array<Record<string, unknown>>> {
   try {
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetch(url, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) {
       return [];
     }
@@ -52,7 +58,10 @@ async function fetchPartnerCollection(url: string): Promise<Array<Record<string,
 
     while (nextUrl && safetyCounter < 20) {
       safetyCounter += 1;
-      const nextResponse = await fetch(nextUrl, { cache: 'no-store' });
+      const nextResponse = await fetch(nextUrl, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!nextResponse.ok) {
         break;
       }
@@ -70,96 +79,6 @@ async function fetchPartnerCollection(url: string): Promise<Array<Record<string,
   } catch {
     return [];
   }
-}
-
-function normalizeDate(value: string): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function normalizePartnerEventRow(
-  countryCode: CountryCode,
-  row: Record<string, unknown>
-): EventRecord | null {
-  const country = COUNTRIES[countryCode];
-  const name =
-    (typeof row.event_name === 'string' && row.event_name.trim()) ||
-    (typeof row.name === 'string' && row.name.trim()) ||
-    (typeof row.title === 'string' && row.title.trim()) ||
-    (typeof row.cyclone_name === 'string' && row.cyclone_name.trim()) ||
-    '';
-  const explicitId =
-    (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : '') ||
-    (typeof row.id === 'string' && row.id.trim()) ||
-    (typeof row.event_id === 'string' && row.event_id.trim()) ||
-    (typeof row.eventId === 'string' && row.eventId.trim()) ||
-    (typeof row.cyclone_id === 'string' && row.cyclone_id.trim()) ||
-    '';
-  const cycloneTrackId =
-    (typeof row.cyclone_track === 'number' && Number.isFinite(row.cyclone_track)
-      ? String(row.cyclone_track)
-      : '') ||
-    (typeof row.cyclone_track === 'string' && row.cyclone_track.trim()) ||
-    '';
-  const backendHazardIds = Array.isArray(row.hazards)
-    ? row.hazards
-        .map(value =>
-          typeof value === 'number' && Number.isFinite(value)
-            ? String(value)
-            : typeof value === 'string' && value.trim()
-              ? value.trim()
-              : null
-        )
-        .filter((value): value is string => value !== null)
-    : [];
-  const backendRiskIds = Array.isArray(row.risks)
-    ? row.risks
-        .map(value =>
-          typeof value === 'number' && Number.isFinite(value)
-            ? String(value)
-            : typeof value === 'string' && value.trim()
-              ? value.trim()
-              : null
-        )
-        .filter((value): value is string => value !== null)
-    : [];
-  const date = normalizeDate(
-    (typeof row.event_datetime === 'string' && row.event_datetime.trim()) ||
-      (typeof row.event_date === 'string' && row.event_date.trim()) ||
-      (typeof row.date === 'string' && row.date.trim()) ||
-      (typeof row.issued_time === 'string' && row.issued_time.trim()) ||
-      (typeof row.timestamp === 'string' && row.timestamp.trim()) ||
-      ''
-  );
-
-  if (!name && !explicitId) {
-    return null;
-  }
-
-  return {
-    id: explicitId || createPartnerEventId(countryCode, name || country.name, date),
-    countryCode,
-    name: name || country.name,
-    date,
-    hazardId: 'tropical-cyclone',
-    backendEventId: explicitId || undefined,
-    backendCycloneTrackId: cycloneTrackId || undefined,
-    backendHazardIds,
-    backendRiskIds,
-    location: { lat: country.center[1], lng: country.center[0] },
-    bbox: [
-      country.center[0] - 1,
-      country.center[1] - 1,
-      country.center[0] + 1,
-      country.center[1] + 1,
-    ],
-    source: 'partner_api',
-  };
 }
 
 async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord[]> {
@@ -184,8 +103,7 @@ async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord
               : null;
         return rowCountryId === mapping.countryId;
       })
-      .map(row => normalizePartnerEventRow(countryCode, row))
-      .filter((record): record is EventRecord => record !== null);
+      .flatMap(row => normalizePartnerEventRecords(countryCode, row));
   } catch {
     return [];
   }

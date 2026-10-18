@@ -24,6 +24,21 @@ import {
 } from '@/utils/realDataLoader';
 import { isPartnerApiCountryEnabled, isPartnerApiEnabled } from '@/services/partnerApiService';
 import type { LegendSettings } from '@/data/realThreddsLayers';
+import { windDangerColorExpression } from '@/utils/forecastExposure';
+import { formatCount } from '@/utils/formatters';
+
+function escapePopupText(value: unknown): string {
+  return String(value ?? '').replace(
+    /[&<>"']/g,
+    character =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!
+  );
+}
+
+function formatPopupNumber(value: unknown): string {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? formatCount(parsed) : '0';
+}
 
 function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
   if (!map) return false;
@@ -107,6 +122,8 @@ interface RegionalImpactsLayerProps {
   layerOpacityScale?: number;
   // Custom legend settings
   legendSettings?: LegendSettings;
+  /** Rapid Exposure Forecast: shade by forecast wind band, not loss */
+  forecastDanger?: boolean;
 }
 
 export default function RegionalImpactsLayer({
@@ -121,6 +138,7 @@ export default function RegionalImpactsLayer({
   regionalSummaryData = [],
   layerOpacityScale = 70,
   legendSettings,
+  forecastDanger = false,
 }: RegionalImpactsLayerProps) {
   // Store event handlers as refs to enable proper cleanup
   const handlersRef = useRef<{
@@ -146,6 +164,7 @@ export default function RegionalImpactsLayer({
   const mapStyleRef = useRef(mapStyle);
   const layerOpacityScaleRef = useRef(layerOpacityScale);
   const legendSettingsRef = useRef(legendSettings);
+  const forecastDangerRef = useRef(forecastDanger);
   const regionalSummaryDataRef = useRef(regionalSummaryData);
 
   useEffect(() => {
@@ -156,7 +175,8 @@ export default function RegionalImpactsLayer({
     mapStyleRef.current = mapStyle;
     layerOpacityScaleRef.current = layerOpacityScale;
     legendSettingsRef.current = legendSettings;
-  }, [mapStyle, layerOpacityScale, legendSettings]);
+    forecastDangerRef.current = forecastDanger;
+  }, [mapStyle, layerOpacityScale, legendSettings, forecastDanger]);
 
   useEffect(() => {
     regionalSummaryDataRef.current = regionalSummaryData;
@@ -219,7 +239,14 @@ export default function RegionalImpactsLayer({
           'regional-impacts-by-sector.geojson'
         );
 
-        if (dataCache.current.geojson && dataCache.current.cachedCountry === effectiveCountry) {
+        // Data passed in from the dashboard always wins over the cache: it
+        // changes with the Hazards filter (scoped loss), and serving the
+        // cached copy would leave the map showing the previous selection.
+        if (
+          !regionalImpactsData &&
+          dataCache.current.geojson &&
+          dataCache.current.cachedCountry === effectiveCountry
+        ) {
           console.log('✅ Using cached regional impacts data');
           geojson = dataCache.current.geojson;
           sectorGeojson = dataCache.current.sectorGeojson;
@@ -383,11 +410,14 @@ export default function RegionalImpactsLayer({
                 type: 'fill',
                 source: sourceId,
                 paint: {
-                  'fill-color':
-                    currentMapStyle === 'wind' ? windColorExpression : lossColorExpression,
+                  'fill-color': forecastDangerRef.current
+                    ? (windDangerColorExpression() as maplibregl.ExpressionSpecification)
+                    : currentMapStyle === 'wind'
+                      ? windColorExpression
+                      : lossColorExpression,
                   // Use unified opacity system from colorSystem.ts
                   'fill-opacity': createRegionalFillOpacity(
-                    currentMapStyle as 'wind' | 'loss',
+                    forecastDangerRef.current ? 'wind' : (currentMapStyle as 'wind' | 'loss'),
                     currentSelectedRegion,
                     currentOpacityScale / 100
                   ) as any,
@@ -478,6 +508,28 @@ export default function RegionalImpactsLayer({
               const isAlreadySelected =
                 selectedRegionRef.current === regionId || selectedRegionRef.current === regionName;
               onRegionSelectRef.current(isAlreadySelected ? null : regionId);
+            }
+
+            // REF uses exposure columns rather than loss columns. Show an
+            // exposure-specific popup so a map click answers the same
+            // question as the forecast summary instead of displaying $0 loss.
+            if (forecastDangerRef.current) {
+              const danger = String(props.Overall_Winds ?? props.Danger ?? 'Not exposed');
+              const maxWind = Number(props.Max_WindSpeed_kmph ?? props.WindSpeed_kmph);
+              const popupContent = `
+                <div style="padding:8px;font-family:system-ui,sans-serif;font-size:12px;color:#0f172a;">
+                  <h3 style="margin:0 0 6px;font-size:14px;font-weight:700;">${escapePopupText(regionName)}</h3>
+                  <p style="margin:2px 0;"><strong>Forecast wind:</strong> ${escapePopupText(danger)}${Number.isFinite(maxWind) ? ` (${Math.round(maxWind)} km/h)` : ''}</p>
+                  <p style="margin:2px 0;"><strong>People exposed:</strong> ${formatPopupNumber(props.Exposed_Population)}</p>
+                  <p style="margin:2px 0;"><strong>Buildings exposed:</strong> ${formatPopupNumber(props.Exposed_Buildings)}</p>
+                  <p style="margin:2px 0;"><strong>Building value exposed:</strong> $${formatPopupNumber(props.Exposed_Building_Value)}</p>
+                  <p style="margin:2px 0;"><strong>In floodplains:</strong> ${formatPopupNumber(props.Population_in_Floodplains)} people</p>
+                </div>`;
+              new maplibregl.Popup({ maxWidth: '280px' })
+                .setLngLat(e.lngLat)
+                .setHTML(popupContent)
+                .addTo(map);
+              return;
             }
 
             // Get sector-specific data for this region
@@ -594,12 +646,16 @@ export default function RegionalImpactsLayer({
           console.log('✅ Map style is loaded, adding layers immediately');
           addLayers();
         } else {
-          console.log('⏳ Map style not loaded yet, waiting for "load" event');
+          // Wait for "idle", not "load": "load" fires once per map, so when
+          // this runs after it (other sources still loading, so
+          // isStyleLoaded() is false) it would wait forever and the damage
+          // shading never appears. "idle" fires whenever loading finishes.
+          console.log('⏳ Map still loading, waiting for "idle" event');
 
           // Remove any existing load listener to prevent duplicates
           if (loadEventListenerRef.current) {
             console.log('🧹 Removing previous load listener');
-            map.off('load', loadEventListenerRef.current);
+            map.off('idle', loadEventListenerRef.current);
           }
 
           // Create and store the listener
@@ -609,11 +665,11 @@ export default function RegionalImpactsLayer({
               isLoadingRef.current = false;
               return;
             }
-            console.log('🎉 Map "load" event fired, now adding layers');
+            console.log('🎉 Map "idle" event fired, now adding layers');
             addLayers();
           };
 
-          map.once('load', loadEventListenerRef.current);
+          map.once('idle', loadEventListenerRef.current);
         }
       } catch (error) {
         console.error('❌ CRITICAL ERROR loading regional impacts:', error);
@@ -633,13 +689,18 @@ export default function RegionalImpactsLayer({
     console.log(`   - Map loaded: ${map.loaded()}`);
 
     if (!safeIsStyleLoaded(map)) {
-      console.log('⏳ Map not ready, attaching styledata listener (ONCE)');
-      styleLoadListener = () => {
-        console.log('🎉 Map styledata event fired, calling loadRegionalImpacts');
+      console.log('⏳ Map not ready, waiting for styledata or idle (ONCE)');
+      // 'styledata' alone can have fired already when data arrives while
+      // other sources are still loading; 'idle' always follows
+      const listener = () => {
+        map.off('styledata', listener);
+        map.off('idle', listener);
+        console.log('🎉 Map ready, calling loadRegionalImpacts');
         loadRegionalImpacts();
       };
-      // Use 'once' instead of 'on' to prevent multiple calls
-      map.once('styledata', styleLoadListener);
+      styleLoadListener = listener;
+      map.on('styledata', listener);
+      map.on('idle', listener);
     } else {
       console.log('✅ Map is ready, calling loadRegionalImpacts immediately');
       loadRegionalImpacts();
@@ -654,11 +715,12 @@ export default function RegionalImpactsLayer({
       // Remove styledata listener if it was registered
       if (styleLoadListener) {
         map.off('styledata', styleLoadListener);
+        map.off('idle', styleLoadListener);
       }
 
       // Remove load listener if it was registered
       if (loadEventListenerRef.current) {
-        map.off('load', loadEventListenerRef.current);
+        map.off('idle', loadEventListenerRef.current);
         loadEventListenerRef.current = null;
       }
 
@@ -676,7 +738,7 @@ export default function RegionalImpactsLayer({
           map.off('mouseleave', fillLayerId, handlersRef.current.handleMouseLeave);
         }
 
-        // Remove layers and source — only when the style is still accessible.
+        // Remove layers and source -only when the style is still accessible.
         // On full page unmount the map can be partially destroyed; isStyleLoaded()
         // returns false (or throws) in that state, so we skip layer removal safely.
         if (safeIsStyleLoaded(map)) {
@@ -690,7 +752,7 @@ export default function RegionalImpactsLayer({
         // Any error here means the map was destroyed or style removed before cleanup ran.
         // MapLibre throws 'There is no style added to the map.' (a plain Error, not TypeError)
         // when isStyleLoaded() is called after the style has been torn down. This is expected
-        // on full page unmount and is not actionable — suppress all cleanup errors silently.
+        // on full page unmount and is not actionable -suppress all cleanup errors silently.
         layersAddedRef.current = false;
         isLoadingRef.current = false;
       }
@@ -709,16 +771,18 @@ export default function RegionalImpactsLayer({
 
     try {
       if (map.getLayer(fillLayerId)) {
-        const colorExpression = legendSettings
-          ? createDynamicColorExpression(
-              mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss',
-              mapStyle === 'wind' ? legendSettings.wind : legendSettings.loss
-            )
-          : mapStyle === 'wind'
-            ? createWindColorExpression()
-            : createLossColorExpression(countryCode);
+        const colorExpression = forecastDanger
+          ? (windDangerColorExpression() as maplibregl.ExpressionSpecification)
+          : legendSettings
+            ? createDynamicColorExpression(
+                mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss',
+                mapStyle === 'wind' ? legendSettings.wind : legendSettings.loss
+              )
+            : mapStyle === 'wind'
+              ? createWindColorExpression()
+              : createLossColorExpression(countryCode);
         const opacityExpression = createRegionalFillOpacity(
-          mapStyle as 'wind' | 'loss',
+          forecastDanger ? 'wind' : (mapStyle as 'wind' | 'loss'),
           selectedRegion,
           layerOpacityScale / 100
         );
@@ -755,6 +819,7 @@ export default function RegionalImpactsLayer({
     layerOpacityScale,
     countryCode,
     legendSettings,
+    forecastDanger,
   ]);
 
   return null;

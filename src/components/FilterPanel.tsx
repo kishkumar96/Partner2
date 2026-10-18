@@ -19,7 +19,6 @@ import {
 import { BASEMAP_STYLES } from '@/utils/basemaps';
 import {
   Calendar,
-  Check,
   ChevronDown,
   Database,
   Keyboard,
@@ -51,6 +50,11 @@ interface FilterPanelProps {
   accessibleDistricts?: DistrictFeature[];
   onDistrictSelect?: (districtId: string) => void;
   countryCode: CountryCode;
+  /** Hazard IDs backed by the country's map-layer catalogue, including
+   * scenario layers that do not have a named Event record. */
+  availableHazardIds?: string[];
+  /** Planning mode hides the observed-event picker (default 'event'). */
+  viewMode?: 'event' | 'planning';
 }
 
 const noopDistrictSelect = () => {};
@@ -81,6 +85,8 @@ export default function FilterPanel({
   accessibleDistricts = [],
   onDistrictSelect = noopDistrictSelect,
   countryCode,
+  availableHazardIds = [],
+  viewMode = 'event',
 }: FilterPanelProps) {
   const geographyUi = COUNTRY_CONFIGS[countryCode].ui;
   const [showClearToast, setShowClearToast] = useState(false);
@@ -109,7 +115,7 @@ export default function FilterPanel({
 
   // Accordion state for each section
   const [expandedSections, setExpandedSections] = useState({
-    hazards: false,
+    hazards: true,
     temporal: true,
     aggregation: false,
     sectors: true,
@@ -230,8 +236,21 @@ export default function FilterPanel({
       }
     });
 
+    availableHazardIds.forEach(hazardId => {
+      const normalizedHazardId = normalizeHazardId(hazardId);
+      hazardIds.add(normalizedHazardId);
+      if (normalizedHazardId === 'wind') hazardIds.add('tropical-cyclone');
+      if (
+        normalizedHazardId === 'flood' ||
+        normalizedHazardId === 'inundation' ||
+        normalizedHazardId === 'fluvial-depth'
+      ) {
+        hazardIds.add('flood');
+      }
+    });
+
     return hazardIds;
-  }, [events]);
+  }, [availableHazardIds, events]);
 
   const hazardsWithAvailability = useMemo(
     () =>
@@ -297,7 +316,9 @@ export default function FilterPanel({
             </button>
           </div>
           <p className="mt-1 text-[10px] text-slate-400">
-            {showAdvancedFilters ? 'Advanced filter options' : 'Choose which data to analyze'}
+            {showAdvancedFilters
+              ? 'Advanced filter options'
+              : 'Changes the figures and the data shown on the map'}
           </p>
         </div>
 
@@ -316,8 +337,93 @@ export default function FilterPanel({
             </p>
           </div>
 
-          {/* Temporal Filters Section - Only show when multiple events exist */}
-          {events.length > 1 && (
+          {/* Hazards are the primary analytical choice, so keep them in the
+              basic workflow rather than hiding them behind Advanced. */}
+          <div className="mx-3 mt-2 rounded-xl border border-cyan-500/30 bg-cyan-950/10 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('hazards')}
+              id={accordionIds.hazards.button}
+              aria-expanded={expandedSections.hazards}
+              aria-controls={accordionIds.hazards.panel}
+              aria-label="Hazards"
+              className={sectionTriggerClass}
+            >
+              <Wind className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+              <h3 className="text-xs font-semibold text-slate-200 group-hover:text-white transition-colors">
+                Hazards
+              </h3>
+              <span className="text-[10px] text-slate-400 ml-auto mr-2">
+                {filters.selectedHazards.length > 0
+                  ? `${filters.selectedHazards.length} selected`
+                  : 'All available'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.hazards ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {expandedSections.hazards && (
+              <div
+                id={accordionIds.hazards.panel}
+                role="region"
+                aria-labelledby={accordionIds.hazards.button}
+                className="px-3 pb-3 pt-2 border-t border-cyan-500/15 bg-slate-900/35"
+              >
+                <p className="mb-2 text-[10px] leading-snug text-slate-400">
+                  Select a hazard to filter the analysis and show its matching map layer.
+                </p>
+                <div className="space-y-1">
+                  {hazardsWithAvailability
+                    .filter(hazard => hazard.isAvailable)
+                    .map(hazard => {
+                      const HazardIcon = hazard.icon;
+                      const isSelected = filters.selectedHazards.includes(hazard.id);
+                      return (
+                        <label
+                          key={hazard.id}
+                          htmlFor={`hazard-${hazard.id}`}
+                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'border-cyan-400/50 bg-cyan-500/15'
+                              : 'border-slate-700/50 bg-slate-900/30 hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <input
+                            id={`hazard-${hazard.id}`}
+                            type="checkbox"
+                            name="hazards"
+                            value={hazard.id}
+                            aria-label={hazard.name}
+                            checked={isSelected}
+                            onChange={() => toggleHazard(hazard.id)}
+                            className="h-4 w-4 rounded border-slate-500 bg-slate-800 text-cyan-500 accent-cyan-500"
+                          />
+                          <HazardIcon className="w-4 h-4 text-cyan-300" />
+                          <span className="flex-1 text-xs font-medium text-slate-200">
+                            {hazard.name}
+                          </span>
+                          <span className="text-[9px] font-semibold text-cyan-200">
+                            {isSelected ? 'Showing' : 'Available'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
+                {hazardsWithAvailability.some(hazard => !hazard.isAvailable) && (
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    Not available for the current country or event:{' '}
+                    {hazardsWithAvailability
+                      .filter(hazard => !hazard.isAvailable)
+                      .map(hazard => hazard.name)
+                      .join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Observed-event picker: meaningless for planning scenarios, which are chosen in the Hazard Scenario section */}
+          {viewMode === 'event' && events.length > 1 && (
             <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
               <button
                 type="button"
@@ -430,99 +536,6 @@ export default function FilterPanel({
                   </h3>
                   <div className="h-px flex-1 bg-gradient-to-r from-cyan-500/0 via-cyan-500/20 to-cyan-500/0"></div>
                 </div>
-              </div>
-
-              <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('hazards')}
-                  id={accordionIds.hazards.button}
-                  aria-expanded={expandedSections.hazards}
-                  aria-controls={accordionIds.hazards.panel}
-                  aria-label="Hazards"
-                  className={sectionTriggerClass}
-                >
-                  <Wind className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                  <h3 className="text-xs font-semibold text-slate-300 group-hover:text-white transition-colors">
-                    Hazards
-                  </h3>
-                  {filters.selectedHazards.length > 0 && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-300 rounded border border-cyan-500/30">
-                      {filters.selectedHazards.length}
-                    </span>
-                  )}
-                  {!expandedSections.hazards && (
-                    <span className="text-[10px] text-slate-400 ml-auto mr-2">
-                      {filters.selectedHazards.length > 0
-                        ? `${filters.selectedHazards.length} selected`
-                        : `All ${hazardsWithAvailability.filter(h => h.isAvailable).length}`}
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expandedSections.hazards ? 'rotate-180' : ''} ${!expandedSections.hazards ? 'ml-auto' : ''}`}
-                  />
-                </button>
-                {expandedSections.hazards && (
-                  <div
-                    id={accordionIds.hazards.panel}
-                    role="region"
-                    aria-labelledby={accordionIds.hazards.button}
-                    className="px-4 pb-3 border-t border-slate-700/40 bg-slate-900/35"
-                  >
-                    {hazardsWithAvailability.length === 0 ? (
-                      <p className="text-[10px] text-slate-400 italic py-2">
-                        No hazard data available
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {hazardsWithAvailability.map(hazard => {
-                          const HazardIcon = hazard.icon;
-
-                          return (
-                            <label
-                              key={hazard.id}
-                              htmlFor={`hazard-${hazard.id}`}
-                              className={`flex items-center gap-2 group relative px-2 py-1.5 rounded-lg transition-colors ${
-                                hazard.isAvailable
-                                  ? 'cursor-pointer hover:bg-slate-800/50'
-                                  : 'cursor-not-allowed opacity-50'
-                              }`}
-                              title={!hazard.isAvailable ? 'No data available for this hazard' : ''}
-                            >
-                              <div className="relative flex items-center justify-center">
-                                <input
-                                  id={`hazard-${hazard.id}`}
-                                  type="checkbox"
-                                  name="hazards"
-                                  value={hazard.id}
-                                  checked={filters.selectedHazards.includes(hazard.id)}
-                                  onChange={() => hazard.isAvailable && toggleHazard(hazard.id)}
-                                  disabled={!hazard.isAvailable}
-                                  className="appearance-none w-4 h-4 border border-slate-500/80 rounded cursor-pointer transition-colors hover:border-cyan-400 checked:border-cyan-400 checked:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                />
-                                {filters.selectedHazards.includes(hazard.id) && (
-                                  <Check
-                                    className="absolute w-3 h-3 text-cyan-400 pointer-events-none"
-                                    strokeWidth={3}
-                                  />
-                                )}
-                              </div>
-                              <HazardIcon className="w-3.5 h-3.5 text-slate-300" />
-                              <span className="text-xs text-slate-300 group-hover:text-white flex-1 transition-colors">
-                                {hazard.name}
-                              </span>
-                              {!hazard.isAvailable && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-semibold">
-                                  No data
-                                </span>
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">

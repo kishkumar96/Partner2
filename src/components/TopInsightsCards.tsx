@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { Users, DollarSign, AlertTriangle, ChevronRight } from 'lucide-react';
-import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { formatCurrency, formatNumber, formatPercent } from '@/utils/formatters';
 import { AggregatedEventData } from '@/types';
 
 interface TopInsight {
@@ -136,12 +136,12 @@ export function createDistrictInsights(
   // Top District by Loss
   if (topByLoss && getEconomicDamage(topByLoss) > 0) {
     const lossValue = getEconomicDamage(topByLoss);
-    const lossPercent = totalLoss > 0 ? ((lossValue / totalLoss) * 100).toFixed(1) : '0.0';
+    const lossPercent = totalLoss > 0 ? formatPercent((lossValue / totalLoss) * 100) : '0.0%';
     insights.push({
       id: 'top-loss',
       label: 'Highest Economic Damage',
       value: formatCurrency(lossValue),
-      subtitle: `${topByLoss.name} (${lossPercent}% of total)`,
+      subtitle: `${topByLoss.name} (${lossPercent} of total)`,
       icon: DollarSign,
       color: 'border-red-500/40 text-slate-100',
       trend: 'up',
@@ -152,12 +152,12 @@ export function createDistrictInsights(
   // Top District by Population
   if (topByPop && getAffectedPop(topByPop) > 0) {
     const popValue = getAffectedPop(topByPop);
-    const popPercent = totalPop > 0 ? ((popValue / totalPop) * 100).toFixed(1) : '0.0';
+    const popPercent = totalPop > 0 ? formatPercent((popValue / totalPop) * 100) : '0.0%';
     insights.push({
       id: 'top-pop',
       label: 'Most Affected Population',
       value: formatNumber(popValue),
-      subtitle: `${topByPop.name} (${popPercent}% of total)`,
+      subtitle: `${topByPop.name} (${popPercent} of total)`,
       icon: Users,
       color: 'border-orange-500/40 text-slate-100',
       trend: 'up',
@@ -175,7 +175,7 @@ export function createDistrictInsights(
       id: 'high-risk-count',
       label: `High Risk ${labels.plural}`,
       value: highRiskCount,
-      subtitle: `${((highRiskCount / districts.length) * 100).toFixed(0)}% of total ${labels.plural}`,
+      subtitle: `${formatPercent((highRiskCount / districts.length) * 100, 0)} of total ${labels.plural}`,
       icon: AlertTriangle,
       color: 'border-yellow-500/40 text-slate-100',
       trend: 'neutral',

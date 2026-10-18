@@ -7,6 +7,7 @@ import {
   Province,
   AggregationLevel,
 } from '@/types';
+import { MULTI_HAZARD_ID } from './hazardLossScope';
 import { normalizeHazardId, normalizeHazardIds } from '@/utils/hazardIds';
 
 /**
@@ -91,6 +92,9 @@ function aggregateEventsFromEventData(
  */
 function matchesHazardFilter(hazardId: string, selectedHazards: string[]): boolean {
   if (selectedHazards.length === 0) return true;
+  // Risk records cover every hazard; the hazard selection scopes their
+  // values (see hazardLossScope) instead of dropping them
+  if (hazardId === MULTI_HAZARD_ID) return true;
   const normalizedHazardId = normalizeHazardId(hazardId);
   const normalizedSelectedHazards = normalizeHazardIds(selectedHazards);
   return normalizedSelectedHazards.includes(normalizedHazardId);

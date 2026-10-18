@@ -1,12 +1,12 @@
 # 🏗️ Improved State Management Architecture
 
 > **Status:** Phase 1's core problem (duplicated `computeFilteredData` calls)
-> is fixed — see `src/stores/filteredDataStore.ts`, wired into
+> is fixed -see `src/stores/filteredDataStore.ts`, wired into
 > `DashboardView.tsx`, `SummaryPanel.tsx`, and `BottomTabs.tsx` (not
 > `MapView.tsx`, which never actually called `computeFilteredData`; that
 > was a hypothetical in the original write-up below). It's a targeted
 > cache keyed by input identity, not the full `DataStore`
-> shape sketched below — this app's real `Event`/`District`/`Province`
+> shape sketched below -this app's real `Event`/`District`/`Province`
 > types (`src/types/index.ts`) don't carry per-event `lat`/`lng` at the
 > granularity the spatial-index section assumes, and no map-viewport
 > filtering requirement has actually been requested, so Phases 2-4 below

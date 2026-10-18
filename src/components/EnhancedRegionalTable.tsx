@@ -1,6 +1,6 @@
 'use client';
 
-import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { formatCurrency, formatNumber, formatPercent } from '@/utils/formatters';
 
 interface RegionalData {
   id: string;
@@ -95,13 +95,13 @@ export default function EnhancedRegionalTable({
                   {showDerivedMetrics && metrics && (
                     <>
                       <td className="p-3 text-right text-white/80">
-                        {metrics.damageRate.toFixed(1)}%
+                        {formatPercent(metrics.damageRate)}
                       </td>
                       <td className="p-3 text-right text-white/80">
                         {formatCurrency(metrics.lossPerCapita)}
                       </td>
                       <td className="p-3 text-right text-white/80">
-                        {metrics.contributionToTotal.toFixed(1)}%
+                        {formatPercent(metrics.contributionToTotal)}
                       </td>
                     </>
                   )}

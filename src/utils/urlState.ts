@@ -51,6 +51,10 @@ export interface MapURLState {
   hazardScenarioSlr?: number;
   hazardScenarioReturnPeriod?: number;
   hazardScenarioEvent?: string;
+
+  // What the dashboard shows: one event's impact, or planning scenarios.
+  // Absent means "the country's default" (see DashboardView).
+  viewMode?: 'event' | 'planning';
 }
 
 export function serializeMapState(state: MapURLState): URLSearchParams {
@@ -91,6 +95,7 @@ export function serializeMapState(state: MapURLState): URLSearchParams {
   if (state.showFilters) params.set('filters', 'true');
   if (state.showMapControls) params.set('map', 'true');
   if (state.showSummary) params.set('summary', 'true');
+  if (state.viewMode) params.set('mode', state.viewMode);
 
   if (state.hazardScenarioProduct) {
     params.set('hazProduct', state.hazardScenarioProduct);
@@ -157,6 +162,8 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
   if (params.get('filters') === 'true') state.showFilters = true;
   if (params.get('map') === 'true') state.showMapControls = true;
   if (params.get('summary') === 'true') state.showSummary = true;
+  const mode = params.get('mode');
+  if (mode === 'event' || mode === 'planning') state.viewMode = mode;
 
   const hazProduct = params.get('hazProduct');
   if (hazProduct) {

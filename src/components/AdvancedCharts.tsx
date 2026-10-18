@@ -15,6 +15,7 @@ import {
 
 import { RegionalSummary, RegionalSummaryBySector } from '@/types';
 import { SEVERITY_COLORS, UI_COLORS } from '@/theme/colors';
+import { formatMillionsUsd } from '@/utils/formatters';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -274,7 +275,7 @@ const AdvancedCharts = memo(function AdvancedCharts({
                               title={`${sector} in ${heatmapData.regions[regionIdx]}: $${value.toFixed(2)}M`}
                             >
                               <div className="font-mono font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                                {value > 0 ? `$${value.toFixed(1)}M` : '—'}
+                                {value > 0 ? formatMillionsUsd(value) : '—'}
                               </div>
                             </td>
                           ))}
@@ -416,7 +417,7 @@ function ImpactMatrixOverlay({
                         title={`${sector} in ${heatmapData.regions[regionIdx]}: $${value.toFixed(2)}M`}
                       >
                         <div className="font-mono font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                          {value > 0 ? `$${value.toFixed(1)}M` : '—'}
+                          {value > 0 ? formatMillionsUsd(value) : '—'}
                         </div>
                       </td>
                     ))}

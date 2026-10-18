@@ -61,6 +61,8 @@ export interface Event {
   date: string;
   hazardId: string;
   countryCode?: string;
+  /** Rapid Exposure Forecast event; exposure, not post-event damage. */
+  isForecast?: boolean;
   /** For expanded/regional events: the id of the master event they belong to */
   parentEventId?: string;
 

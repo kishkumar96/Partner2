@@ -29,6 +29,14 @@ import {
 import { getAreaId, getAreaName } from '@/utils/adminNormalization';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 import type { HazardScenarioSelection, RealWMSLayer } from '@/data/realThreddsLayers';
+import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
+import { buildForecastExposure } from '@/utils/forecastExposure';
+import { previousAdvisory } from '@/utils/forecastComparison';
+import {
+  normalizeDateValue,
+  normalizePartnerEventRecords,
+  scopeRiskRowsToEvent,
+} from '@/utils/partnerEvents';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -106,16 +114,6 @@ function proxyPartnerApiUrl(url: string): string {
   return withBasePath(`/api/partner-proxy${url.slice(markerIndex)}`);
 }
 
-function normalizeDateValue(dateStr: string): string {
-  if (!dateStr) return '';
-  const parsed = new Date(dateStr);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 /**
  * Deprecated compatibility export.
  * New event resolution should use event records from `src/data/eventRecords.ts`.
@@ -152,7 +150,7 @@ export const COUNTRY_CYCLONE_CONFIG = Object.fromEntries(
 /**
  * Unwraps a LineString's longitude coordinates across the antimeridian.
  * When adjacent points differ by more than 180°, adjusts by ±360° to keep
- * the path continuous — prevents MapLibre from drawing a line across the globe.
+ * the path continuous -prevents MapLibre from drawing a line across the globe.
  */
 export function unwrapAntimeridianLine(coords: [number, number][]): [number, number][] {
   if (coords.length < 2) return coords;
@@ -596,7 +594,7 @@ export function convertRegionalImpactsToRegionalImpacts(
     .filter((feature: any) => {
       // GeoJSON spec permits null geometry (feature exists but has no spatial extent).
       // RiskScape outputs sometimes include summary/total rows as null-geometry features.
-      // Silently skip these — they carry no renderable geometry.
+      // Silently skip these -they carry no renderable geometry.
       if (!feature || !feature.geometry || !feature.properties) {
         return false;
       }
@@ -712,7 +710,7 @@ export function convertRegionalImpactsToEvents(
         id: regionId,
         name: `${cycloneLabel} Impact - ${regionName}`,
         date: cycloneConfig.eventDate,
-        hazardId: 'tropical-cyclone',
+        hazardId: MULTI_HAZARD_ID,
         sectorId: 'Infrastructure', // Primary sector for regional aggregation
         districtId: regionId,
         // regionId from these files is a region/admin1 identifier, not a Vanuatu admin2 district ID.
@@ -747,7 +745,10 @@ export function convertRegionalImpactsToEvents(
  */
 export function convertRegionalImpactsBySectorToEvents(
   geojson: any,
-  countryCode: CountryCode = 'VU'
+  countryCode: CountryCode = 'VU',
+  // The event these rows belong to, so selecting it in the Events filter
+  // keeps them (defaults to the country's configured storm)
+  parentEvent?: Pick<EventRecord, 'id' | 'date'>
 ): Event[] {
   if (!geojson || !geojson.features) return [];
 
@@ -795,10 +796,10 @@ export function convertRegionalImpactsBySectorToEvents(
 
         events.push({
           id: `${regionId}-${sector.toLowerCase()}`,
-          parentEventId: cycloneConfig.eventId,
+          parentEventId: parentEvent?.id ?? cycloneConfig.eventId,
           name: `${cycloneLabel} - ${regionName} (${sector})`,
-          date: cycloneConfig.eventDate,
-          hazardId: 'tropical-cyclone',
+          date: parentEvent?.date || cycloneConfig.eventDate,
+          hazardId: MULTI_HAZARD_ID,
           sectorId: sector,
           districtId: regionId,
           // regionId from the GeoJSON IS a province-level ID (e.g. "VUT.1_1"), so use it directly.
@@ -957,7 +958,7 @@ function buildCycloneTrackFromPartnerPayload(payload: unknown): GeoJSON.FeatureC
       );
       if (hasLine) return fc;
 
-      // Partner API returns Point-per-timestep — synthesize a LineString for map rendering.
+      // Partner API returns Point-per-timestep -synthesize a LineString for map rendering.
       const rawCoords = fc.features
         .filter(f => f?.geometry?.type === 'Point')
         .map(f => (f.geometry as GeoJSON.Point).coordinates as [number, number]);
@@ -1100,98 +1101,6 @@ function selectPartnerPrimaryEvent(
   return { name, date };
 }
 
-function normalizePartnerEventRow(
-  countryCode: CountryCode,
-  row: Record<string, unknown>
-): EventRecord | null {
-  const country = COUNTRIES[countryCode];
-  const name =
-    (typeof row.event_name === 'string' && row.event_name.trim()) ||
-    (typeof row.name === 'string' && row.name.trim()) ||
-    (typeof row.title === 'string' && row.title.trim()) ||
-    (typeof row.cyclone_name === 'string' && row.cyclone_name.trim()) ||
-    (typeof row.CycloneName === 'string' && row.CycloneName.trim()) ||
-    '';
-  const date =
-    (typeof row.event_datetime === 'string' && row.event_datetime.trim()) ||
-    (typeof row.event_date === 'string' && row.event_date.trim()) ||
-    (typeof row.date === 'string' && row.date.trim()) ||
-    (typeof row.issued_time === 'string' && row.issued_time.trim()) ||
-    (typeof row.timestamp === 'string' && row.timestamp.trim()) ||
-    '';
-  const explicitId =
-    (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : '') ||
-    (typeof row.id === 'string' && row.id.trim()) ||
-    (typeof row.event_id === 'string' && row.event_id.trim()) ||
-    (typeof row.eventId === 'string' && row.eventId.trim()) ||
-    (typeof row.cyclone_id === 'string' && row.cyclone_id.trim()) ||
-    (typeof row.cycloneId === 'string' && row.cycloneId.trim()) ||
-    '';
-  const cycloneTrackId =
-    (typeof row.cyclone_track === 'number' && Number.isFinite(row.cyclone_track)
-      ? String(row.cyclone_track)
-      : '') ||
-    (typeof row.cyclone_track === 'string' && row.cyclone_track.trim()) ||
-    (typeof row.cycloneTrack === 'number' && Number.isFinite(row.cycloneTrack)
-      ? String(row.cycloneTrack)
-      : '') ||
-    (typeof row.cycloneTrack === 'string' && row.cycloneTrack.trim()) ||
-    '';
-  const backendHazardIds = Array.isArray(row.hazards)
-    ? row.hazards
-        .map(value =>
-          typeof value === 'number' && Number.isFinite(value)
-            ? String(value)
-            : typeof value === 'string' && value.trim()
-              ? value.trim()
-              : null
-        )
-        .filter((value): value is string => value !== null)
-    : [];
-  const backendRiskIds = Array.isArray(row.risks)
-    ? row.risks
-        .map(value =>
-          typeof value === 'number' && Number.isFinite(value)
-            ? String(value)
-            : typeof value === 'string' && value.trim()
-              ? value.trim()
-              : null
-        )
-        .filter((value): value is string => value !== null)
-    : [];
-
-  if (!name && !explicitId) {
-    return null;
-  }
-  const normalizedDate = normalizeDateValue(date);
-  const eventId =
-    explicitId || createPartnerEventId(countryCode, name || country.name, normalizedDate);
-
-  return {
-    id: eventId,
-    countryCode,
-    name: name || country.name,
-    date: normalizedDate,
-    hazardId: 'tropical-cyclone',
-    backendEventId: explicitId || undefined,
-    backendCycloneTrackId: cycloneTrackId || undefined,
-    backendHazardIds,
-    backendRiskIds,
-    location: { lat: country.center[1], lng: country.center[0] },
-    bbox: [
-      country.center[0] - 1,
-      country.center[1] - 1,
-      country.center[0] + 1,
-      country.center[1] + 1,
-    ],
-    aliases: [
-      ...(explicitId ? [explicitId] : []),
-      ...(cycloneTrackId ? [`cyclone-track-${cycloneTrackId}`] : []),
-    ],
-    source: 'partner_api',
-  };
-}
-
 function normalizePartnerEvents(
   countryCode: CountryCode,
   payload: unknown,
@@ -1200,9 +1109,7 @@ function normalizePartnerEvents(
   const rows = toArrayPayload(payload);
   const filtered =
     countryId != null ? rows.filter(row => toNumber(row.country) === countryId) : rows;
-  return filtered
-    .map(row => normalizePartnerEventRow(countryCode, row))
-    .filter((record): record is EventRecord => record !== null);
+  return filtered.flatMap(row => normalizePartnerEventRecords(countryCode, row));
 }
 
 function createCountryScopedEventRecord(
@@ -1237,7 +1144,37 @@ type PartnerRiskDataKey =
   | 'regionalSummary'
   | 'regionalSummaryBySector'
   | 'damagedBuildings'
-  | 'damagedRoads';
+  | 'damagedRoads'
+  // Rapid Exposure Forecast tables (see utils/forecastExposure.ts)
+  | 'forecastNational'
+  | 'forecastByWindSpeed'
+  | 'forecastByTrackDistance'
+  | 'forecastWindSwaths'
+  | 'forecastTrackDistance'
+  | 'forecastCycloneTrack'
+  | 'forecastFloodplain';
+
+// `dataset_type` is supplied by current runners/importers. Keep filename
+// detection below for legacy rows that predate the metadata contract.
+const DATASET_TYPE_TO_RISK_KEY: Record<string, PartnerRiskDataKey> = {
+  regional_impacts: 'regionalImpacts',
+  regional_impacts_by_sector: 'regionalImpactsBySector',
+  regional_summary: 'regionalSummary',
+  regional_summary_by_sector: 'regionalSummaryBySector',
+  impact_by_asset_type: 'impactByAsset',
+  impact_by_sector: 'impactBySector',
+  national_summary: 'nationalSummary',
+  exposure_by_cluster: 'exposureByCluster',
+  damaged_buildings: 'damagedBuildings',
+  damaged_roads: 'damagedRoads',
+  forecast_national: 'forecastNational',
+  forecast_by_wind_speed: 'forecastByWindSpeed',
+  forecast_by_track_distance: 'forecastByTrackDistance',
+  forecast_wind_swaths: 'forecastWindSwaths',
+  forecast_track_distance: 'forecastTrackDistance',
+  forecast_cyclone_track: 'forecastCycloneTrack',
+  forecast_floodplain: 'forecastFloodplain',
+};
 
 interface PartnerRiskBundle {
   regionalImpacts: GeoJSON.FeatureCollection | null;
@@ -1250,6 +1187,15 @@ interface PartnerRiskBundle {
   regionalSummaryBySector: Array<Record<string, unknown>>;
   damagedBuildings: GeoJSON.FeatureCollection | null;
   damagedRoads: GeoJSON.FeatureCollection | null;
+  forecastNational: Array<Record<string, unknown>>;
+  forecastByWindSpeed: Array<Record<string, unknown>>;
+  forecastByTrackDistance: Array<Record<string, unknown>>;
+  forecastWindSwaths: GeoJSON.FeatureCollection | null;
+  forecastTrackDistance: GeoJSON.FeatureCollection | null;
+  forecastCycloneTrack: GeoJSON.FeatureCollection | null;
+  // Deferred like damaged buildings: only the row id comes with the list
+  forecastFloodplain: GeoJSON.FeatureCollection | null;
+  forecastFloodplainRowId: string | null;
   // The row's own id, captured even when defer_large_assets left its
   // geometry null -- lets a caller fetch that one row's full geometry on
   // demand (fetchPartnerRiskInformationGeometry) once its map overlay is
@@ -1270,6 +1216,14 @@ function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
     regionalSummaryBySector: [],
     damagedBuildings: null,
     damagedRoads: null,
+    forecastNational: [],
+    forecastByWindSpeed: [],
+    forecastByTrackDistance: [],
+    forecastWindSwaths: null,
+    forecastTrackDistance: null,
+    forecastCycloneTrack: null,
+    forecastFloodplain: null,
+    forecastFloodplainRowId: null,
     damagedBuildingsRowId: null,
     damagedRoadsRowId: null,
   };
@@ -1298,7 +1252,17 @@ function filterPartnerRowsByCountryId(
   return rowsWithCountryField.filter(row => toNumber(row.country) === countryId);
 }
 
+const uploadFilenameCache = new WeakMap<Record<string, unknown>, string>();
+
 function getUploadFilename(row: Record<string, unknown>): string {
+  const cached = uploadFilenameCache.get(row);
+  if (cached !== undefined) return cached;
+  const filename = parseUploadFilename(row);
+  uploadFilenameCache.set(row, filename);
+  return filename;
+}
+
+function parseUploadFilename(row: Record<string, unknown>): string {
   const uploadValue = typeof row.upload === 'string' ? row.upload : '';
   if (!uploadValue) return '';
 
@@ -1326,6 +1290,13 @@ function inferLogicalDatasetTypeFromFilename(filename: string): PartnerRiskDataK
   if (lowered.includes('exposure-by-cluster')) return 'exposureByCluster';
   if (lowered.includes('damaged-buildings')) return 'damagedBuildings';
   if (lowered.includes('damaged-roads')) return 'damagedRoads';
+  if (lowered.includes('total-exposed-by-country')) return 'forecastNational';
+  if (lowered.includes('total-by-windspeed')) return 'forecastByWindSpeed';
+  if (lowered.includes('total-by-track-distance')) return 'forecastByTrackDistance';
+  if (lowered.includes('wind-swaths')) return 'forecastWindSwaths';
+  if (lowered.includes('track-distance')) return 'forecastTrackDistance';
+  if (lowered.includes('cyclone-track')) return 'forecastCycloneTrack';
+  if (lowered.includes('floodplain-exposure')) return 'forecastFloodplain';
 
   return null;
 }
@@ -1356,11 +1327,16 @@ function inferPartnerRiskKey(
   row: Record<string, unknown>,
   geometryValue: unknown
 ): PartnerRiskDataKey | null {
+  const datasetType =
+    typeof row.dataset_type === 'string' ? row.dataset_type.trim().toLowerCase() : '';
+  if (datasetType && DATASET_TYPE_TO_RISK_KEY[datasetType]) {
+    return DATASET_TYPE_TO_RISK_KEY[datasetType];
+  }
   const filename = getUploadFilename(row);
   const inferredFromFilename = inferLogicalDatasetTypeFromFilename(filename);
   if (inferredFromFilename) return inferredFromFilename;
 
-  // Title field is a secondary signal — useful when the upload path uses a
+  // Title field is a secondary signal -useful when the upload path uses a
   // hashed or non-standard filename (e.g. "regional-impacts_abc123.geojson").
   const title = typeof row.title === 'string' ? row.title.trim() : '';
   if (title) {
@@ -1430,7 +1406,11 @@ function mergePartnerRiskBundle(
     key === 'regionalImpactsBySector' ||
     key === 'exposureByCluster' ||
     key === 'damagedBuildings' ||
-    key === 'damagedRoads'
+    key === 'damagedRoads' ||
+    key === 'forecastWindSwaths' ||
+    key === 'forecastTrackDistance' ||
+    key === 'forecastCycloneTrack' ||
+    key === 'forecastFloodplain'
   ) {
     const featureCollection = extractFeatureCollectionFromValue(geometryValue);
     if (featureCollection && !next[key]) {
@@ -1457,6 +1437,9 @@ function extractPartnerRiskBundle(riskRows: Array<Record<string, unknown>>): Par
     }
     if (key === 'damagedRoads' && !next.damagedRoadsRowId && rowId) {
       return { ...next, damagedRoadsRowId: rowId };
+    }
+    if (key === 'forecastFloodplain' && !next.forecastFloodplainRowId && rowId) {
+      return { ...next, forecastFloodplainRowId: rowId };
     }
     return next;
   }, createEmptyPartnerRiskBundle());
@@ -1781,6 +1764,135 @@ export async function fetchHazardScenarioRiskSummary(
   }
 }
 
+export interface HazardScenarioCurvePoint {
+  slrScenarioM: number;
+  returnPeriodYears: number;
+  totalLoss: number;
+  exposedPopulation: number | null;
+}
+
+/** A probabilistic product's loss for every return period and SLR, plus its annual average loss. */
+export interface HazardScenarioCurve {
+  points: HazardScenarioCurvePoint[];
+  annualAverageLoss: Array<{ slrScenarioM: number; totalLoss: number }>;
+}
+
+/**
+ * Fetches every risk_scenario row of one product (risk_information parent),
+ * for drawing its loss exceedance curve. Returns null for event-based
+ * products (no return periods) or when the request fails.
+ */
+export async function fetchHazardScenarioCurve(
+  countryCode: CountryCode,
+  riskInformationId: number,
+  signal?: AbortSignal
+): Promise<HazardScenarioCurve | null> {
+  try {
+    const mapping = await mapCountryPartnerApis(countryCode);
+    if (!mapping.scopedUrls) {
+      return null;
+    }
+    const params = new URLSearchParams({
+      risk_information: String(riskInformationId),
+      page_size: '200',
+    });
+    const rows = toArrayPayload(
+      await fetchPartnerCollection(`${mapping.scopedUrls.risk_scenario}&${params}`, signal)
+    );
+
+    const points: HazardScenarioCurvePoint[] = [];
+    const annualAverageLoss: HazardScenarioCurve['annualAverageLoss'] = [];
+    rows.forEach(row => {
+      const slrScenarioM = toNumber(row.slr_scenario_m);
+      const totalLoss = toNumber(row.total_loss);
+      if (slrScenarioM === null || totalLoss === null) return;
+      const returnPeriodYears = toNumber(row.return_period_years);
+      if (row.is_annual_average_loss === true) {
+        annualAverageLoss.push({ slrScenarioM, totalLoss });
+      } else if (returnPeriodYears !== null) {
+        points.push({
+          slrScenarioM,
+          returnPeriodYears,
+          totalLoss,
+          exposedPopulation: toNumber(row.exposed_population),
+        });
+      }
+    });
+    if (points.length === 0) {
+      return null;
+    }
+    points.sort(
+      (a, b) => a.slrScenarioM - b.slrScenarioM || a.returnPeriodYears - b.returnPeriodYears
+    );
+    annualAverageLoss.sort((a, b) => a.slrScenarioM - b.slrScenarioM);
+    return { points, annualAverageLoss };
+  } catch {
+    return null;
+  }
+}
+
+/** One sector's or asset type's share of a hazard scenario's national loss. */
+export interface HazardScenarioBreakdownRow {
+  name: string;
+  /** Asset-type rows: the sector the asset type belongs to; '' for sector rows */
+  sector: string;
+  totalLoss: number;
+  /** Asset-type rows only */
+  exposedCount: number | null;
+  exposedValue: number | null;
+  averageInundationDepth: number | null;
+}
+
+export interface HazardScenarioBreakdown {
+  sectors: HazardScenarioBreakdownRow[];
+  assetTypes: HazardScenarioBreakdownRow[];
+}
+
+/**
+ * Fetches a scenario's loss by sector and by asset type (RiskScenarioBreakdown
+ * rows of the risk_scenario row fetchHazardScenarioRiskSummary returned).
+ * Returns null when the scenario has no breakdown or the request fails.
+ */
+export async function fetchHazardScenarioBreakdown(
+  countryCode: CountryCode,
+  riskScenarioId: number,
+  signal?: AbortSignal
+): Promise<HazardScenarioBreakdown | null> {
+  try {
+    const mapping = await mapCountryPartnerApis(countryCode);
+    const base = mapping.endpoints.resource.risk_scenario_breakdown;
+    const fetchDimension = async (dimension: 'sector' | 'asset_type') => {
+      const params = new URLSearchParams({
+        risk_scenario: String(riskScenarioId),
+        dimension,
+        page_size: '200',
+      });
+      const rows = toArrayPayload(await fetchPartnerCollection(`${base}?${params}`, signal));
+      return rows.map(row => ({
+        name: typeof row.name === 'string' ? row.name : 'Unknown',
+        sector: typeof row.sector === 'string' ? row.sector : '',
+        totalLoss: toNumber(row.total_loss) ?? 0,
+        exposedCount: toNumber(row.exposed_count),
+        exposedValue: toNumber(row.exposed_value),
+        averageInundationDepth: toNumber(row.average_inundation_depth),
+      }));
+    };
+
+    const [sectors, assetTypes] = await Promise.all([
+      fetchDimension('sector'),
+      fetchDimension('asset_type'),
+    ]);
+    if (sectors.length === 0 && assetTypes.length === 0) {
+      return null;
+    }
+    const byLoss = (a: HazardScenarioBreakdownRow, b: HazardScenarioBreakdownRow) =>
+      b.totalLoss - a.totalLoss || a.name.localeCompare(b.name);
+    return { sectors: sectors.sort(byLoss), assetTypes: assetTypes.sort(byLoss) };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetches one risk_information row's full geometry by id, bypassing the
  * defer_large_assets exclusion the list endpoint applies (the retrieve
@@ -1835,7 +1947,24 @@ function parsePartnerDatasetPath(urlValue: unknown): string | null {
 }
 
 function inferPartnerHazardType(row: Record<string, unknown>): RealWMSLayer['hazardType'] | null {
-  const values = [row.protocol, row.layer_name, row.style, row.url, row.hazard_type, row.hazardType]
+  const fromFields = inferHazardTypeFromText([
+    row.protocol,
+    row.layer_name,
+    row.style,
+    row.url,
+    row.hazard_type,
+    row.hazardType,
+  ]);
+  // Event hazard rows often only say what they are in their title: e.g. TC
+  // Lola's flood layer is ".../Lola/_merged.nc" with layer "Depth", titled
+  // "TC Lola Flood Hazard". Without this every event's flood footprint was
+  // dropped. Only a fallback, so rows already typed by their fields keep
+  // their type.
+  return fromFields ?? inferHazardTypeFromText([row.title]);
+}
+
+function inferHazardTypeFromText(parts: unknown[]): RealWMSLayer['hazardType'] | null {
+  const values = parts
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ')
     .toLowerCase();
@@ -1879,7 +2008,7 @@ function buildPartnerHazardLayers(
     const max = toNumber(row.max);
 
     if (row.protocol === 'xyz' && typeof row.url === 'string' && row.url.includes('{z}')) {
-      // Zarr-backed raster tile layer (hazard_tiles endpoint) — bypasses the
+      // Zarr-backed raster tile layer (hazard_tiles endpoint) -bypasses the
       // THREDDS/WMS URL parsing entirely, since it's already a ready-to-use
       // {z}/{x}/{y} tile template. The middleware returns this as an absolute
       // URL (its own host); the browser can't reach that host directly in
@@ -1888,7 +2017,7 @@ function buildPartnerHazardLayers(
       // so the literal {z}/{x}/{y} placeholders survive untouched.
       const tileUrlTemplate = proxyPartnerApiUrl(row.url);
       // layer_name is generated server-side as `{product}_slr{slr}_rp{rp}` or
-      // `{product}_slr{slr}_event{event}` (populate_hazard_catalog.py) — the
+      // `{product}_slr{slr}_event{event}` (populate_hazard_catalog.py) -the
       // product key itself (tc/combined/historical_tcs/...) isn't otherwise
       // exposed by the API, so it's recovered here rather than duplicating
       // the six-product enum on the frontend.
@@ -1992,18 +2121,31 @@ function buildPartnerHazardLayers(
         `Partner API ${hazardType} layer for ${countryCode}`,
       hazardType,
       bbox: defaultHazardBbox(countryCode),
-      styleConfig:
-        min !== null && max !== null
-          ? {
-              colorScaleRange: `${min},${max}`,
-            }
-          : undefined,
+      styleConfig: buildPartnerWmsStyleConfig(hazardType, min, max),
       source: 'partner_api',
       hazardScenario: wmsHazardScenario,
     });
   });
 
   return layers;
+}
+
+/**
+ * WMS style for a partner hazard layer. Depth-type rasters (flood, surge,
+ * fluvial) must paint nothing for dry or no-data cells: without an explicit
+ * BELOWMINCOLOR/BGCOLOR the server fills them, which draws each model grid's
+ * rectangular edge on the map. Wind keeps the server defaults.
+ */
+function buildPartnerWmsStyleConfig(
+  hazardType: RealWMSLayer['hazardType'],
+  min: number | null,
+  max: number | null
+): RealWMSLayer['styleConfig'] {
+  const range = min !== null && max !== null ? { colorScaleRange: `${min},${max}` } : {};
+  if (hazardType === 'wind') {
+    return min !== null && max !== null ? range : undefined;
+  }
+  return { ...range, belowMinColor: 'transparent', bgColor: 'transparent' };
 }
 
 async function loadPartnerApiCountryData(
@@ -2020,7 +2162,8 @@ async function loadPartnerApiCountryData(
   hazardLayers: RealWMSLayer[];
   forecastTrackUrl: string | null;
   forecastPoints: CycloneForecastPoint[] | null;
-  perEventRiskData: Map<string, PartnerRiskBundle>;
+  /** Lazily builds (and memoises) a non-primary event's risk bundle. */
+  getEventRiskData: (eventId: string) => PartnerRiskBundle | undefined;
 }> {
   if (!isPartnerApiEnabled() || !isPartnerApiCountryEnabled(countryCode)) {
     return {
@@ -2032,7 +2175,7 @@ async function loadPartnerApiCountryData(
       hazardLayers: [],
       forecastTrackUrl: null,
       forecastPoints: null,
-      perEventRiskData: new Map(),
+      getEventRiskData: () => undefined,
     };
   }
 
@@ -2049,7 +2192,7 @@ async function loadPartnerApiCountryData(
         hazardLayers: [],
         forecastTrackUrl: null,
         forecastPoints: null,
-        perEventRiskData: new Map(),
+        getEventRiskData: () => undefined,
       };
     }
 
@@ -2076,10 +2219,14 @@ async function loadPartnerApiCountryData(
     // Cook Islands catalogue is intentionally model/scenario based). In that
     // case there is no event-to-risk relationship to filter on, so retain the
     // country's API records instead of rendering an empty dashboard.
-    const scopedRiskRows =
-      (activeEventRecord.backendRiskIds?.length ?? 0) > 0
-        ? filterPartnerRowsByIds(countryRiskRows, activeEventRecord.backendRiskIds ?? [], ['id'])
-        : countryRiskRows;
+    // Rows linked to another event belong to that event, so the fallback
+    // leaves them out (e.g. a forecast run's outputs beside a country's
+    // unlinked post-event results).
+    const scopedRiskRows = scopeRiskRowsToEvent(
+      countryRiskRows,
+      activeEventRecord,
+      normalizedEventRecords
+    );
     const riskRows = dedupePartnerRiskRows(scopedRiskRows);
     const allHazardIds = normalizedEventRecords.flatMap(er => er.backendHazardIds ?? []);
     const countryHazardRows = filterPartnerRowsByCountryId(
@@ -2104,49 +2251,53 @@ async function loadPartnerApiCountryData(
       row.protocol === 'xyz' ||
       toNumber(row.slr_scenario_m) !== null ||
       toNumber(row.model_run) !== null;
+    const linkedHazardIds = new Set(allHazardIds);
     const hazardRows =
       allHazardIds.length > 0
-        ? countryHazardRows.filter(
-            row =>
-              isHazardScenarioRow(row) ||
-              filterPartnerRowsByIds([row], allHazardIds, ['id']).length > 0
-          )
+        ? countryHazardRows.filter(row => {
+            if (isHazardScenarioRow(row)) return true;
+            const raw = row.id;
+            if (typeof raw === 'number' && Number.isFinite(raw)) {
+              return linkedHazardIds.has(String(raw));
+            }
+            return typeof raw === 'string' && linkedHazardIds.has(raw.trim());
+          })
         : countryHazardRows;
     const riskData = extractPartnerRiskBundle(riskRows);
 
-    // Build per-event risk bundles for all backend events (enables multi-event metrics).
-    const perEventRiskData = new Map<string, PartnerRiskBundle>();
-    for (const eventRecord of normalizedEventRecords) {
-      if (eventRecord.id === activeEventRecord.id) {
-        perEventRiskData.set(eventRecord.id, {
-          ...riskData,
-          regionalSummary:
-            riskData.regionalSummary.length > 0
-              ? riskData.regionalSummary
-              : extractPartnerRegionalSummaryRows(riskRows),
-          impactByAsset:
-            riskData.impactByAsset.length > 0
-              ? riskData.impactByAsset
-              : extractPartnerImpactByAssetRows(riskRows),
-        });
-        continue;
-      }
+    // Per-event bundles feed the multi-event metrics. Parsing every event's
+    // GeoJSON up front is wasted work when only the active event renders, so
+    // each is built on first request and memoised. Events with no linked
+    // risks have nothing of their own to show.
+    const withFallbackTables = (
+      bundle: PartnerRiskBundle,
+      rows: Array<Record<string, unknown>>
+    ): PartnerRiskBundle => ({
+      ...bundle,
+      regionalSummary:
+        bundle.regionalSummary.length > 0
+          ? bundle.regionalSummary
+          : extractPartnerRegionalSummaryRows(rows),
+      impactByAsset:
+        bundle.impactByAsset.length > 0
+          ? bundle.impactByAsset
+          : extractPartnerImpactByAssetRows(rows),
+    });
+    const activeRiskBundle = withFallbackTables(riskData, riskRows);
+    const eventRiskCache = new Map<string, PartnerRiskBundle>();
+    const getEventRiskData = (eventId: string): PartnerRiskBundle | undefined => {
+      if (eventId === activeEventRecord.id) return activeRiskBundle;
+      const cached = eventRiskCache.get(eventId);
+      if (cached) return cached;
+      const eventRecord = normalizedEventRecords.find(record => record.id === eventId);
+      if (!eventRecord || (eventRecord.backendRiskIds?.length ?? 0) === 0) return undefined;
       const eventRiskRows = dedupePartnerRiskRows(
-        filterPartnerRowsByIds(countryRiskRows, eventRecord.backendRiskIds ?? [], ['id'])
+        scopeRiskRowsToEvent(countryRiskRows, eventRecord, normalizedEventRecords)
       );
-      const eventRiskData = extractPartnerRiskBundle(eventRiskRows);
-      perEventRiskData.set(eventRecord.id, {
-        ...eventRiskData,
-        regionalSummary:
-          eventRiskData.regionalSummary.length > 0
-            ? eventRiskData.regionalSummary
-            : extractPartnerRegionalSummaryRows(eventRiskRows),
-        impactByAsset:
-          eventRiskData.impactByAsset.length > 0
-            ? eventRiskData.impactByAsset
-            : extractPartnerImpactByAssetRows(eventRiskRows),
-      });
-    }
+      const bundle = withFallbackTables(extractPartnerRiskBundle(eventRiskRows), eventRiskRows);
+      eventRiskCache.set(eventId, bundle);
+      return bundle;
+    };
 
     const trackIds = activeEventRecord.backendCycloneTrackId
       ? [activeEventRecord.backendCycloneTrackId]
@@ -2159,7 +2310,10 @@ async function loadPartnerApiCountryData(
       for (const trackRow of trackRows) {
         const trackFileUrl =
           typeof trackRow.track_file === 'string' ? trackRow.track_file.trim() : null;
-        if (!trackFileUrl) continue;
+        // This fallback reads GeoJSON track files, which the API can't turn
+        // into geometry itself. A CSV can't parse as JSON, and the API has
+        // already converted any CSV that has track points.
+        if (!trackFileUrl || /\.csv(\?|$)/i.test(trackFileUrl)) continue;
         try {
           const normalizedUrl =
             typeof window === 'undefined'
@@ -2202,6 +2356,12 @@ async function loadPartnerApiCountryData(
     // Resolve the proxied URL of the raw forecast CSV (kept as fallback).
     const forecastTrackUrl = (() => {
       for (const row of relevantTrackRows) {
+        // Only for API responses that don't report geometry_computed. When
+        // they do, the API has already parsed this file: forecastPoints below
+        // reads its geometry, and re-parsing the CSV here finds the same
+        // fields (none, for position-only tracks like TO Harold / WS Gita, or
+        // CK Meena's deliberately header-only placeholder).
+        if (typeof row.geometry_computed === 'boolean') continue;
         const url = typeof row.track_file === 'string' ? row.track_file.trim() : null;
         if (!url) continue;
         if (typeof window === 'undefined') return url;
@@ -2223,7 +2383,7 @@ async function loadPartnerApiCountryData(
       return null;
     })();
 
-    // Parse forecast animation points from the pre-computed geometry — no extra
+    // Parse forecast animation points from the pre-computed geometry -no extra
     // HTTP request. Falls back to null so the caller can chain to the CSV path.
     const forecastPoints = (() => {
       for (const row of relevantTrackRows) {
@@ -2242,21 +2402,11 @@ async function loadPartnerApiCountryData(
         name: activeEventRecord.name,
         date: activeEventRecord.date,
       },
-      riskData: perEventRiskData.get(activeEventRecord.id) ?? {
-        ...riskData,
-        regionalSummary:
-          riskData.regionalSummary.length > 0
-            ? riskData.regionalSummary
-            : extractPartnerRegionalSummaryRows(riskRows),
-        impactByAsset:
-          riskData.impactByAsset.length > 0
-            ? riskData.impactByAsset
-            : extractPartnerImpactByAssetRows(riskRows),
-      },
+      riskData: activeRiskBundle,
       hazardLayers: buildPartnerHazardLayers(countryCode, hazardRows, normalizedEventRecords),
       forecastTrackUrl,
       forecastPoints,
-      perEventRiskData,
+      getEventRiskData,
     };
   } catch (_error) {
     // Partner API failures should not silently fall back to local event files.
@@ -2269,14 +2419,14 @@ async function loadPartnerApiCountryData(
       hazardLayers: [],
       forecastTrackUrl: null,
       forecastPoints: null,
-      perEventRiskData: new Map(),
+      getEventRiskData: () => undefined,
     };
   }
 }
 
 // loadAllRealData and loadSupplementaryRealData both need the same
 // country-scoped Partner API bundle and commonly run back-to-back for the
-// same (countryCode, selectedEventIds, dateRange) — dedupe so the second
+// same (countryCode, selectedEventIds, dateRange) -dedupe so the second
 // caller reuses the first's in-flight/just-settled request instead of
 // re-issuing all four resource fetches. Falls back to a fresh fetch whenever
 // the params actually differ, so this never changes what data a caller sees.
@@ -2554,6 +2704,7 @@ export async function loadAllRealData(
     date: activeEventRecord.date,
     hazardId: activeEventRecord.hazardId,
     countryCode,
+    isForecast: activeEventRecord.isForecast,
     totalAffectedPopulation,
     totalEconomicDamage,
     affectedRegions,
@@ -2562,10 +2713,14 @@ export async function loadAllRealData(
     regionalImpacts: regionalImpactsData,
   };
 
-  const events = eventRecords.map((eventRecord: EventRecord): Event => {
+  // Scenario catalogues can legitimately have risk and hazard data but no
+  // named Event row. Retain the country-scoped primary event in that case so
+  // the dashboard has a coherent analytical context and a usable hazard UI.
+  const eventRecordsForDashboard = eventRecords.length > 0 ? eventRecords : [activeEventRecord];
+  const events = eventRecordsForDashboard.map((eventRecord: EventRecord): Event => {
     if (eventRecord.id === primaryEvent.id) return primaryEvent;
 
-    const evtRiskData = partnerData.perEventRiskData.get(eventRecord.id);
+    const evtRiskData = partnerData.getEventRiskData(eventRecord.id);
     if (evtRiskData?.regionalImpacts) {
       const evtRegionalImpacts = convertRegionalImpactsToRegionalImpacts(
         evtRiskData.regionalImpacts,
@@ -2589,6 +2744,7 @@ export async function loadAllRealData(
         date: eventRecord.date,
         hazardId: eventRecord.hazardId,
         countryCode,
+        isForecast: eventRecord.isForecast,
         totalAffectedPopulation: evtTotalPop,
         totalEconomicDamage: evtTotalEcon,
         affectedRegions: evtRegionalImpacts.length,
@@ -2604,6 +2760,7 @@ export async function loadAllRealData(
       date: eventRecord.date,
       hazardId: eventRecord.hazardId,
       countryCode,
+      isForecast: eventRecord.isForecast,
       totalAffectedPopulation: 0,
       totalEconomicDamage: 0,
       affectedRegions: 0,
@@ -2615,7 +2772,11 @@ export async function loadAllRealData(
   // Also create sector-specific events for filtering (backward compatibility)
   // This allows sector filtering to work correctly
   const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
-    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
+    ? convertRegionalImpactsBySectorToEvents(
+        regionalImpactsBySectorGeoJSON,
+        countryCode,
+        activeEventRecord
+      )
     : [];
 
   // Convert CSV data to dashboard format
@@ -2656,9 +2817,40 @@ export async function loadAllRealData(
     }
   }
 
+  const forecastExposure = buildForecastExposure({
+    national: partnerData.riskData.forecastNational,
+    regional: regionalSummaryFromPartner,
+    byWindSpeed: partnerData.riskData.forecastByWindSpeed,
+    byTrackDistance: partnerData.riskData.forecastByTrackDistance,
+    facilities: partnerData.riskData.exposureByCluster,
+    windSwaths: partnerData.riskData.forecastWindSwaths,
+    trackDistance: partnerData.riskData.forecastTrackDistance,
+    cycloneTrack: partnerData.riskData.forecastCycloneTrack,
+    // Only the event's own linked track, never a local fallback for another storm
+    eventTrack: partnerData.cycloneTrack,
+    floodplainRowId: partnerData.riskData.forecastFloodplainRowId,
+  });
+
+  // The advisory before this one, so the dashboard can say what changed
+  const previousForecast = (() => {
+    if (!partnerApiActive || !forecastExposure || !activeEventRecord.isForecast) return null;
+    const previous = previousAdvisory(partnerData.eventRecords, activeEventRecord);
+    const bundle = previous ? partnerData.getEventRiskData(previous.id) : undefined;
+    if (!previous || !bundle) return null;
+    const exposure = buildForecastExposure({
+      national: bundle.forecastNational,
+      regional: bundle.regionalSummary,
+      byWindSpeed: bundle.forecastByWindSpeed,
+      byTrackDistance: bundle.forecastByTrackDistance,
+    });
+    return exposure ? { record: previous, exposure } : null;
+  })();
+
   return {
     cycloneTrack: effectiveCycloneTrack,
     cycloneForecast: (cycloneForecast as any) || null,
+    forecastExposure,
+    previousForecast,
     regionalImpacts: enrichedRegionalImpacts,
     exposureByCluster,
     nationalSummary: (effectiveNationalSummary || []) as any,
@@ -2685,6 +2877,7 @@ export async function loadAllRealData(
     },
     partnerHazardLayers: partnerData.hazardLayers,
     fetchedEventRecords: eventRecords,
+    activeEventRecord,
     damagedBuildingsRowId: partnerData.riskData.damagedBuildingsRowId,
     damagedRoadsRowId: partnerData.riskData.damagedRoadsRowId,
   };
@@ -2710,14 +2903,20 @@ export async function loadSupplementaryRealData(
     | 'sectorSpecificEvents'
   >
 > {
-  const { signal, countryCode = 'VU', regionalSummary } = options;
+  const { signal, countryCode = 'VU', regionalSummary, selectedEventIds = [], dateRange } = options;
   const basePath = DATA_PATH[countryCode];
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[loadSupplementaryRealData] Loading for ${countryCode} from ${basePath}`);
   }
 
-  const partnerData = await loadPartnerApiCountryDataDeduped(countryCode, signal);
+  // Same event selection as loadAllRealData, so both describe the same event
+  const partnerData = await loadPartnerApiCountryDataDeduped(
+    countryCode,
+    signal,
+    selectedEventIds,
+    dateRange
+  );
   const strictPartnerApi =
     (isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode)) ||
     isPartnerApiCountryStrict(countryCode);
@@ -2782,11 +2981,17 @@ export async function loadSupplementaryRealData(
       ? impactByAssetFromPartner
       : impactByAsset;
   const activeEventRecord = strictPartnerApi
-    ? createCountryScopedEventRecord(countryCode, partnerData.eventMeta)
+    ? partnerData.eventRecords.length > 0
+      ? resolveActiveEventRecord(countryCode, partnerData.eventRecords, selectedEventIds, dateRange)
+      : createCountryScopedEventRecord(countryCode, partnerData.eventMeta)
     : getDefaultEventRecord(countryCode);
 
   const sectorSpecificEvents = regionalImpactsBySectorGeoJSON
-    ? convertRegionalImpactsBySectorToEvents(regionalImpactsBySectorGeoJSON, countryCode)
+    ? convertRegionalImpactsBySectorToEvents(
+        regionalImpactsBySectorGeoJSON,
+        countryCode,
+        activeEventRecord
+      )
     : [];
   const exposureData = convertToExposureData(
     regionalSummaryBySector,
@@ -2892,7 +3097,7 @@ function convertToExposureData(
 
     return {
       id: `exposure-${index}`,
-      hazardId: 'tropical-cyclone',
+      hazardId: MULTI_HAZARD_ID,
       sectorId: row.Sector || 'Unknown',
       eventId: eventRecord.id,
       eventDate: eventRecord.date,
@@ -2936,7 +3141,7 @@ function convertSectorEconomicData(
 
   const converted = impactBySector.map((row, index) => ({
     id: `damage-sector-${index}`,
-    hazardId: 'tropical-cyclone',
+    hazardId: MULTI_HAZARD_ID,
     sectorId: row.Sector || 'Unknown',
     region: row.Region || 'National',
     directLoss: Number(row.Total_Wind_Loss) || 0,
@@ -2988,7 +3193,7 @@ function convertAssetEconomicData(
 
   const converted = impactByAsset.map((row, index) => ({
     id: `damage-asset-${index}`,
-    hazardId: 'tropical-cyclone',
+    hazardId: MULTI_HAZARD_ID,
     assetType: row.Asset || 'Unknown',
     sectorId: mapAssetToSector(row.Asset || 'Unknown'), // Correct sector mapping
     assetCount: Number(row.Number_Damaged) || Number(row.Number_Exposed) || 0,

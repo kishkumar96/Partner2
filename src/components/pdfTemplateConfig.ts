@@ -30,7 +30,8 @@ export const PDF_TEMPLATE_CONFIG = {
     imageHeightMm: 82,
     captionHeightMm: 14,
     captionPaddingXmm: 8,
-    captionText: 'Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.',
+    captionText:
+      'Fig. 1: Pacific Disaster Impact & Exposure Dashboard map: hazard and impact layer snapshot.',
   },
   keyFigures: {
     boxes: [
@@ -44,12 +45,12 @@ export const PDF_TEMPLATE_CONFIG = {
   },
   labels: {
     reportPrefix: 'No. 01 |',
-    branding: 'Pacific Disaster Impact & Exposure | PDIE Dashboard',
+    branding: 'Pacific Disaster Impact & Exposure Dashboard',
     keyFiguresTitle: 'KEY FIGURES',
     situationOverviewTitle: 'SITUATION OVERVIEW',
     sectorAnalysisTitle: 'SECTOR ANALYSIS',
     dataSourceNote:
-      'Source: PDIE Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
+      'Source: Pacific Disaster Impact & Exposure Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
   },
 } as const;
 

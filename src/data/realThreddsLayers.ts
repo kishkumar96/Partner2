@@ -593,8 +593,89 @@ function hazardScenarioMatches(a: HazardScenarioSelection, b: HazardScenarioSele
 // thousands of (product x SLR x return-period/event) layers. Rendering all
 // of them at once means adding thousands of map sources simultaneously, so
 // this narrows a layer set down to the layers matching a single scenario
-// selection — falling back to a deterministic default when none is chosen
+// selection -falling back to a deterministic default when none is chosen
 // yet, rather than rendering everything.
+const MONTHS: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
+/** Historical event labels look like "02-Jan-1995"; returns a sortable time, or null. */
+function parseEventDate(label: string): number | null {
+  const match = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(label.trim());
+  const month = match ? MONTHS[match[2].toLowerCase()] : undefined;
+  if (!match || month === undefined) return null;
+  return Date.UTC(Number(match[3]), month, Number(match[1]));
+}
+
+/**
+ * Orders a scenario's return period / event: return periods ascending first,
+ * then events -- dated labels chronologically, others (synthetic event ids
+ * like "361") in natural order, so "2" comes before "10".
+ */
+export function compareHazardScenarioPeriods(
+  a: Pick<HazardScenarioSelection, 'returnPeriodYears' | 'eventLabel'>,
+  b: Pick<HazardScenarioSelection, 'returnPeriodYears' | 'eventLabel'>
+): number {
+  if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
+    return a.returnPeriodYears - b.returnPeriodYears;
+  }
+  if (a.returnPeriodYears !== null) return -1;
+  if (b.returnPeriodYears !== null) return 1;
+  const labelA = a.eventLabel ?? '';
+  const labelB = b.eventLabel ?? '';
+  const dateA = parseEventDate(labelA);
+  const dateB = parseEventDate(labelB);
+  if (dateA !== null && dateB !== null && dateA !== dateB) return dateA - dateB;
+  return labelA.localeCompare(labelB, undefined, { numeric: true });
+}
+
+/**
+ * Whether the loss-curve selector can be drawn: a curve is loaded and the
+ * current selection is a return-period scenario of the product being shown.
+ * With no selection (e.g. after switching from Scenarios to Forecast) there is
+ * nothing to draw, even when no product is selected either, where
+ * `selection?.product === selectedProduct` is `undefined === undefined`.
+ */
+export function canShowLossCurve(
+  curve: unknown,
+  selection: HazardScenarioSelection | null | undefined,
+  selectedProduct: string | undefined
+): boolean {
+  return (
+    !!curve &&
+    !!selection &&
+    selection.product === selectedProduct &&
+    selection.returnPeriodYears !== null &&
+    selection.returnPeriodYears !== undefined
+  );
+}
+
+/**
+ * Whether a chosen scenario should be swapped for a default because the offered
+ * layers no longer include its product. With no layers at all the catalogue is
+ * still loading (or absent), which says nothing about the choice: acting on it
+ * threw away a scenario restored from a reload or shared link before its layers
+ * had arrived.
+ */
+export function shouldResetHazardScenario(
+  offeredLayers: RealWMSLayer[],
+  selection: HazardScenarioSelection | null | undefined
+): boolean {
+  if (!selection || offeredLayers.length === 0) return false;
+  return !offeredLayers.some(layer => layer.hazardScenario?.product === selection.product);
+}
+
 export function getDefaultHazardScenario(layers: RealWMSLayer[]): HazardScenarioSelection | null {
   const scenarioLayers = layers.filter(
     (layer): layer is RealWMSLayer & { hazardScenario: HazardScenarioSelection } =>
@@ -613,12 +694,7 @@ export function getDefaultHazardScenario(layers: RealWMSLayer[]): HazardScenario
       return a.product.localeCompare(b.product);
     }
     if (a.slrScenarioM !== b.slrScenarioM) return a.slrScenarioM - b.slrScenarioM;
-    if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
-      return a.returnPeriodYears - b.returnPeriodYears;
-    }
-    if (a.returnPeriodYears !== null) return -1;
-    if (b.returnPeriodYears !== null) return 1;
-    return (a.eventLabel ?? '').localeCompare(b.eventLabel ?? '');
+    return compareHazardScenarioPeriods(a, b);
   });
 
   return sorted[0].hazardScenario;
@@ -645,13 +721,31 @@ function narrowByHazardScenario(
   return [...nonScenarioLayers, ...matched];
 }
 
+/**
+ * Which hazard layers a view draws: 'event' = the event's own layers (never
+ * planning-scenario layers), 'planning' = only the selected scenario's
+ * layers (never the static event fallback), 'all' = both (legacy).
+ */
+export type HazardLayerMode = 'event' | 'planning' | 'all';
+
 export function getLayersForCountry(
   countryCode: CountryCode,
   dynamicLayers: RealWMSLayer[] = [],
   selectedEventIds: string[] = [],
-  hazardScenarioSelection?: HazardScenarioSelection | null
+  hazardScenarioSelection?: HazardScenarioSelection | null,
+  layerMode: HazardLayerMode = 'all'
 ): RealWMSLayer[] {
-  const partnerLayers = dynamicLayers.filter(layer => layer.countryCode === countryCode);
+  const countryPartnerLayers = dynamicLayers.filter(layer => layer.countryCode === countryCode);
+  if (layerMode === 'planning') {
+    return narrowByHazardScenario(
+      countryPartnerLayers.filter(layer => layer.hazardScenario),
+      hazardScenarioSelection
+    );
+  }
+  const partnerLayers =
+    layerMode === 'event'
+      ? countryPartnerLayers.filter(layer => !layer.hazardScenario)
+      : countryPartnerLayers;
   const filterByEventIds = (layers: RealWMSLayer[]) => {
     if (selectedEventIds.length === 0) {
       return layers;
@@ -684,6 +778,20 @@ export const HAZARD_SCENARIO_PRODUCT_LABELS: Record<string, string> = {
   rapid_impact_assessment: 'Rapid Impact Assessment Cyclones',
 };
 
+/** A scenario as short labels: product, SLR, then return period or event. */
+export function describeHazardScenario(scenario: HazardScenarioSelection): string[] {
+  const parts = [
+    HAZARD_SCENARIO_PRODUCT_LABELS[scenario.product] ?? scenario.product,
+    `SLR ${scenario.slrScenarioM} m`,
+  ];
+  if (scenario.returnPeriodYears !== null) {
+    parts.push(`${scenario.returnPeriodYears}-yr return period`);
+  } else if (scenario.eventLabel) {
+    parts.push(`event: ${scenario.eventLabel}`);
+  }
+  return parts;
+}
+
 // Two fundamentally different kinds of thing a "hazard scenario" can be,
 // which the UI must not blur together (a disaster manager reasons about a
 // real storm that happened very differently from a statistical planning
@@ -712,8 +820,8 @@ export const HAZARD_SCENARIO_PRODUCT_CATEGORY: Record<string, HazardScenarioCate
 };
 
 export const HAZARD_SCENARIO_CATEGORY_LABELS: Record<HazardScenarioCategory, string> = {
-  observed: 'Observed Historical Events',
-  planning: 'Probabilistic Planning Scenarios',
+  observed: 'Historical events',
+  planning: 'Probabilistic scenarios',
 };
 
 export const WMS_STYLES = {

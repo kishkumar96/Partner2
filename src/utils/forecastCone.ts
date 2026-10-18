@@ -14,7 +14,7 @@ const EARTH_RADIUS_KM = 6371;
 /**
  * Offset a (lon, lat) point by a compass bearing and distance (km).
  * Uses the spherical-Earth forward-azimuth formula; accurate at any latitude
- * — replaces the flat equirectangular approximation that distorted ring shapes
+ * -replaces the flat equirectangular approximation that distorted ring shapes
  * away from the equator.
  */
 function offsetLatLon(
@@ -53,10 +53,10 @@ function ringRadiusAtBearingSmooth(
 ): number {
   const b = ((bearingDeg % 360) + 360) % 360;
   const r = [
-    Math.max(0, ne || 0), // index 0 — NE centre at 45°
-    Math.max(0, se || 0), // index 1 — SE centre at 135°
-    Math.max(0, sw || 0), // index 2 — SW centre at 225°
-    Math.max(0, nw || 0), // index 3 — NW centre at 315°
+    Math.max(0, ne || 0), // index 0 -NE centre at 45°
+    Math.max(0, se || 0), // index 1 -SE centre at 135°
+    Math.max(0, sw || 0), // index 2 -SW centre at 225°
+    Math.max(0, nw || 0), // index 3 -NW centre at 315°
   ];
   // Shift so that index-0 (NE, 45°) starts the range; each quadrant spans 90°.
   const shifted = (b - 45 + 360) % 360;
@@ -95,7 +95,7 @@ function toLocalENU(points: [number, number][], lon0: number, lat0: number): [nu
  * than 180°.  Prevents antimeridian jumps (e.g. 179° → -179°) from
  * splitting rings built from different track positions into separate
  * longitude "sheets" and producing globe-spanning polygon artifacts.
- * Returns a new array — originals are not mutated.
+ * Returns a new array -originals are not mutated.
  */
 function unwrapLons(lons: number[]): number[] {
   if (lons.length < 2) return [...lons];
@@ -131,7 +131,7 @@ export function buildWindRadiusRing(
   radiusSE: number,
   radiusSW: number,
   radiusNW: number,
-  segments = 288 // 1.25° per point — smooth curves without excess vertex count
+  segments = 288 // 1.25° per point -smooth curves without excess vertex count
 ): [number, number][] {
   if ([radiusNE, radiusSE, radiusSW, radiusNW].every(r => !r || r <= 0)) return [];
 
@@ -154,11 +154,11 @@ export function buildWindRadiusRing(
  * Generate the outer wind-swath envelope for a given wind type across all
  * forecast timesteps.
  *
- * Algorithm — support-function outer boundary:
+ * Algorithm -support-function outer boundary:
  *   For each compass bearing (0°–359° at 1° resolution), find the ring whose
  *   boundary point extends farthest in that direction.  Connecting those 360
  *   "winner" points in bearing order traces the exact outer boundary of the
- *   union of all per-timestep wind rings — every vertex lies on an actual
+ *   union of all per-timestep wind rings -every vertex lies on an actual
  *   forecast ring (not a geometric approximation), and the result is smooth
  *   without convex-hull angular artefacts.
  */
@@ -177,7 +177,7 @@ export function generateWindEnvelope(
   const pts = forecastPoints.filter(pt => getRadii(pt).some(r => r > 0));
   if (pts.length === 0) return null;
 
-  // Single point — fall back to the ring polygon directly.
+  // Single point -fall back to the ring polygon directly.
   if (pts.length === 1) {
     const [ne, se, sw, nw] = getRadii(pts[0]);
     const ring = buildWindRadiusRing([pts[0].longitude, pts[0].latitude], ne, se, sw, nw);
@@ -192,7 +192,7 @@ export function generateWindEnvelope(
   // Collect actual smooth ring boundary points for all forecast positions.
   // Using real ring points (rather than recomputing from a coarse quadrant lookup)
   // ensures the support function finds the true outermost point at each bearing.
-  const RING_SEGS = 144; // 2.5° resolution — accurate without excess vertices
+  const RING_SEGS = 144; // 2.5° resolution -accurate without excess vertices
   const BEARING_STEPS = 720; // 0.5° bearing resolution
   // Unwrap center longitudes so rings from all filtered track positions share
   // the same longitude "sheet".  Without this, a track that crosses the
@@ -210,7 +210,7 @@ export function generateWindEnvelope(
   if (allPoints.length === 0) return null;
 
   // Project all ring points to a local ENU tangent plane so that the support
-  // function scores distances in metric space — eliminating longitude shrinkage
+  // function scores distances in metric space -eliminating longitude shrinkage
   // bias at non-equatorial latitudes (e.g. Southern Pacific storms).
   // We also unwrap longitudes around the anchor so tracks crossing ±180° work.
   const lat0 = allPoints.reduce((s, p) => s + p[1], 0) / allPoints.length;
@@ -252,15 +252,15 @@ export function generateWindEnvelope(
  * Incrementally accumulates wind-radius ring points as frames advance.  For
  * each frame f the support-function outer boundary is recalculated over ALL
  * ring points from frames 0 … f, producing a single, seam-free polygon that
- * smoothly grows with the animation — no stacking artefacts, no visible joins.
+ * smoothly grows with the animation -no stacking artefacts, no visible joins.
  *
- * **Complexity**: O(F × R × B) — linear in frame count.
+ * **Complexity**: O(F × R × B) -linear in frame count.
  * The previous implementation re-projected and re-scanned all accumulated
  * ring points from scratch every frame, giving O(F² × R × B).  The optimised
  * version keeps per-bearing "champion" state and only processes the *new* ring
  * added at each frame, reducing the per-frame work to O(R × B).  A fixed ENU
  * anchor (computed once from the overall track centroid) keeps ENU coordinates
- * stable so the incremental max is always comparable across frames — no need
+ * stable so the incremental max is always comparable across frames -no need
  * to re-project old points when the anchor would otherwise shift.
  *
  * @returns Array of length forecastPoints.length.  Entry f is a closed
@@ -296,7 +296,7 @@ export function buildCumulativeWindEnvelopes(
   const lat0 = forecastPoints.reduce((s, p) => s + p.latitude, 0) / forecastPoints.length;
   const cosLat0 = Math.cos((lat0 * Math.PI) / 180);
 
-  // Pre-compute sin/cos for all bearings once — avoids F × R trig calls.
+  // Pre-compute sin/cos for all bearings once -avoids F × R trig calls.
   const sinB = new Float64Array(bearingSteps);
   const cosB = new Float64Array(bearingSteps);
   for (let i = 0; i < bearingSteps; i++) {
@@ -305,7 +305,7 @@ export function buildCumulativeWindEnvelopes(
     cosB[i] = Math.cos(bRad);
   }
 
-  // Per-bearing champion state — updated incrementally each frame.
+  // Per-bearing champion state -updated incrementally each frame.
   // champScore[b] = highest ENU projection score seen so far in direction b.
   // champIdx[b]   = index into accumulated[] of the current winner.
   const champScore = new Float64Array(bearingSteps).fill(-Infinity);
@@ -334,7 +334,7 @@ export function buildCumulativeWindEnvelopes(
 
       // Project only the NEW ring's points to ENU meters and update per-bearing
       // champions.  All previously accumulated points already have their
-      // champions recorded — we never need to revisit them.
+      // champions recorded -we never need to revisit them.
       const earthRadiusM = EARTH_RADIUS_KM * 1000;
       for (let j = 0; j < newPts.length; j++) {
         const dLonRad = (normalizeDeltaLonDeg(newPts[j][0] - lon0) * Math.PI) / 180;
@@ -512,7 +512,7 @@ export function generateForecastCone(forecastPoints: CycloneForecastPoint[]): Fo
 /**
  * Calculate perpendicular offset for cone edges.
  * Applies cosLat scaling so the perpendicular direction is physically correct
- * in metric space — the old code used raw degree differences which distort the
+ * in metric space -the old code used raw degree differences which distort the
  * perpendicular angle at non-equatorial latitudes.
  *
  * @param distance  Offset in latitude-degree units (uncertainty_km / 111).
@@ -591,7 +591,7 @@ export function generateForecastConeOutline(
     rightBoundary.push([cLon + rightOffset[0], point.latitude + rightOffset[1]]);
   }
 
-  // Add final point — longitude offset corrected for cosLat so the tip of the
+  // Add final point -longitude offset corrected for cosLat so the tip of the
   // cone has the same physical half-width as the uncertainty radius implies.
   const lastPoint = forecastPoints[forecastPoints.length - 1];
   const lastUncertaintyDeg = lastPoint.uncertainty / 111;

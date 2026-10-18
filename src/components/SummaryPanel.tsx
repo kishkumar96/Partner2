@@ -35,6 +35,7 @@ import {
   Wheat,
   X,
   Maximize2,
+  Info,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import {
@@ -63,6 +64,8 @@ import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
 import { getFilteredData } from '../stores/filteredDataStore';
 import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
+import { HAZARD_LOSS_SCOPE_LABEL, type HazardLossScope } from '@/utils/hazardLossScope';
+import { describeHazardScenario, type HazardScenarioSelection } from '@/data/realThreddsLayers';
 import {
   areaMatchesSelection,
   normalizeEventAreaRows,
@@ -156,6 +159,8 @@ function formatPercent(value: number): string {
 }
 
 interface SummaryPanelProps {
+  /** Shown under the header title, e.g. a note that this assessment is for an older storm */
+  notice?: ReactNode;
   events: Event[];
   filters: FilterState;
   districts: District[];
@@ -185,6 +190,18 @@ interface SummaryPanelProps {
    * that they aren't following the selector, instead of leaving it
    * ambiguous. */
   hazardScenarioMapActive?: boolean;
+  /** Which hazard's share the risk figures show (from the Hazards filter) */
+  hazardLossScope?: HazardLossScope;
+  /** False when some risk data has no per-hazard columns */
+  hazardLossScopeComplete?: boolean;
+  /** Flood exposure adds coastal and river counts, which can overlap */
+  hazardLossMayDoubleCount?: boolean;
+  /** 'planning' shows only the selected scenario's figures (or that none exist) */
+  viewMode?: 'event' | 'planning';
+  /** The selected planning scenario, for its caption */
+  hazardScenario?: HazardScenarioSelection | null;
+  /** Shown in planning mode when no scenario loss figures exist */
+  eventName?: string;
 }
 
 function PopoutVisualization({
@@ -251,6 +268,7 @@ function PopoutVisualization({
 }
 
 export default function SummaryPanel({
+  notice,
   events,
   filters,
   districts,
@@ -267,6 +285,12 @@ export default function SummaryPanel({
   impactBySector = [],
   scenarioRiskSummary = null,
   hazardScenarioMapActive = false,
+  hazardLossScope = 'all',
+  hazardLossScopeComplete = true,
+  hazardLossMayDoubleCount = false,
+  viewMode = 'event',
+  hazardScenario = null,
+  eventName,
 }: SummaryPanelProps) {
   const geographyUi = selectedCountry
     ? COUNTRY_CONFIGS[selectedCountry].ui
@@ -303,11 +327,10 @@ export default function SummaryPanel({
     [aggregatedEventData]
   );
 
+  // Hazard selections don't need event-derived areas: the risk rows arrive
+  // already scoped to that hazard's share (see utils/hazardLossScope).
   const requiresEventDerivedAreas =
-    filters.selectedHazards.length > 0 ||
-    filters.selectedEvents.length > 0 ||
-    !!filters.dateRange.start ||
-    !!filters.dateRange.end;
+    filters.selectedEvents.length > 0 || !!filters.dateRange.start || !!filters.dateRange.end;
 
   const selectedSectorNames = useMemo(
     () =>
@@ -406,6 +429,13 @@ export default function SummaryPanel({
     if (!selectedRegion) return derivedRegionalSummary;
     return derivedRegionalSummary.filter(row => regionMatchesSelection(row, selectedRegion));
   }, [selectedRegion, derivedRegionalSummary, regionMatchesSelection]);
+
+  const scopeLabel = HAZARD_LOSS_SCOPE_LABEL[hazardLossScope];
+  const scopePrefix =
+    hazardLossScope === 'all'
+      ? ''
+      : `${scopeLabel.charAt(0).toUpperCase()}${scopeLabel.slice(1)} only · `;
+  const scopePopulationPrefix = hazardLossScope === 'all' ? '' : `Exposed to ${scopeLabel} · `;
 
   // Calculate CSV-based totals (for when CSV data is available)
   const csvTotals = useMemo(() => {
@@ -723,6 +753,64 @@ export default function SummaryPanel({
     (impactBySector && impactBySector.length > 0) ||
     (assetExposureData && Object.keys(assetExposureData).length > 0);
 
+  // Planning mode: only the selected scenario's own figures, never the
+  // event analysis -- so nothing here can disagree with the map.
+  if (viewMode === 'planning') {
+    const countryName = selectedCountry ? COUNTRIES[selectedCountry].name : 'this country';
+    return (
+      <div
+        className="w-full max-w-full h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50 md:w-80 md:max-w-[min(320px,calc(100vw-40px))]"
+        data-testid="summary-panel"
+      >
+        <div className="p-4 border-b border-borderGlow bg-surface/95 backdrop-blur-sm flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-100">Scenario Summary</h2>
+          {hazardScenario && (
+            <p className="text-xs text-slate-400 mt-1">
+              {describeHazardScenario(hazardScenario).join(' · ')}
+            </p>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
+          {scenarioTotals ? (
+            <>
+              <HeroMetric
+                label="Total Economic Damage"
+                value={formatSummaryCurrency(scenarioTotals.totalLoss)}
+                subtitle="National loss for this scenario"
+                icon={DollarSign}
+                color="red"
+              />
+              <HeroMetric
+                label="Affected Population"
+                value={formatSummaryNumber(scenarioTotals.affectedPopulation)}
+                subtitle="People exposed in this scenario"
+                icon={Users}
+                color="orange"
+              />
+              <p className="text-xs text-slate-400 leading-snug">
+                Loss by sector and asset type for this scenario is in the Data tabs.
+              </p>
+            </>
+          ) : (
+            <div
+              role="note"
+              className="rounded-lg border border-slate-600/50 bg-slate-800/40 p-4 space-y-2"
+            >
+              <p className="text-sm font-semibold text-slate-100">
+                No loss figures modelled for this scenario
+              </p>
+              <p className="text-xs leading-snug text-slate-300">
+                The map shows this scenario’s hazard. Impact modelling hasn’t been done for{' '}
+                {countryName}’s planning scenarios, so there are no loss or exposure figures for it.
+                {eventName ? ` Switch to Event to see the modelled impact of ${eventName}.` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (events.length === 0 && !hasCSVData) {
     return (
       <aside className="w-full max-w-full flex flex-col flex-shrink-0 glass-panel border-l border-white/10 h-full min-h-0 overflow-hidden md:w-80 md:max-w-[min(320px,calc(100vw-40px))]">
@@ -733,7 +821,7 @@ export default function SummaryPanel({
             <p className="text-sm text-slate-400 max-w-md mx-auto">
               {selectedCountry ? (
                 <>
-                  PDIE model outputs for{' '}
+                  Pacific Disaster Impact & Exposure model outputs for{' '}
                   <span className="font-semibold text-slate-300">
                     {COUNTRIES[selectedCountry].name}
                   </span>{' '}
@@ -777,6 +865,7 @@ export default function SummaryPanel({
                 ? `${filteredEvents.length} ${filteredEvents.length === 1 ? areaLabelSingular : areaLabelPlural}`
                 : `${filteredEvents.length} of ${events.length} ${areaLabelPlural.toLowerCase()}`}
           </p>
+          {notice && <div className="mt-2">{notice}</div>}
           {/* Active Filters Indicator */}
           {hasActiveFilters && (
             <div className="flex flex-wrap items-start gap-1.5 px-2 py-1 mt-2 bg-blue-500/10 border border-blue-500/30 rounded-md">
@@ -872,7 +961,7 @@ export default function SummaryPanel({
                   scenarioTotals
                     ? 'For the selected hazard scenario'
                     : csvTotals
-                      ? `Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                      ? `${scopePrefix}Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                       : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                 }
                 icon={DollarSign}
@@ -891,7 +980,7 @@ export default function SummaryPanel({
                   scenarioTotals
                     ? 'For the selected hazard scenario'
                     : csvTotals && csvTotals.totalPopulation > 0
-                      ? `${formatSummaryPercent(csvTotals.affectedPopulation, csvTotals.totalPopulation)} of total population`
+                      ? `${scopePopulationPrefix}${formatSummaryPercent(csvTotals.affectedPopulation, csvTotals.totalPopulation)} of total population`
                       : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
                 }
                 icon={Users}
@@ -899,13 +988,29 @@ export default function SummaryPanel({
               />
             </div>
 
+            {!scenarioTotals && hazardLossScope !== 'all' && (
+              <div
+                role="note"
+                className="flex items-start gap-2 px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg"
+              >
+                <Info className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-snug text-cyan-100">
+                  {hazardLossScopeComplete
+                    ? `Figures show ${HAZARD_LOSS_SCOPE_LABEL[hazardLossScope]} only. Clear the Hazards filter to see all hazards.`
+                    : `Some of this data isn't split by hazard, so parts of it still cover all hazards.`}
+                  {hazardLossMayDoubleCount &&
+                    ' People exposed to both coastal and river flooding may be counted twice.'}
+                </p>
+              </div>
+            )}
+
             {hazardScenarioMapActive && !scenarioRiskSummary && (
               <div className="flex items-start gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                 <Hourglass className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-snug text-amber-200">
                   The map&apos;s hazard scenario selector (sea level rise / return period) changes
                   which flood layer is shown, but the figures above don&apos;t follow it yet for
-                  this country — that needs loss modeling that hasn&apos;t been done here.
+                  this country -that needs loss modeling that hasn&apos;t been done here.
                 </p>
               </div>
             )}
@@ -1178,8 +1283,8 @@ export default function SummaryPanel({
                                   {' '}
                                   of total damage
                                   {hasEconomicDamage
-                                    ? ' — highest vulnerability'
-                                    : ' — no recorded economic loss in current view'}
+                                    ? ' -the largest share of damage'
+                                    : ' -no recorded economic loss in current view'}
                                 </span>
                               </div>
                             </div>
@@ -1197,7 +1302,7 @@ export default function SummaryPanel({
                                 <span className="text-slate-300">150% of average</span>
                                 <span className="text-slate-400">
                                   {' '}
-                                  damage — concentrated impact pattern
+                                  damage -concentrated impact pattern
                                 </span>
                               </div>
                             </div>
@@ -1211,7 +1316,7 @@ export default function SummaryPanel({
                                 <span className="text-cyan-400 font-bold font-mono">
                                   {formatCurrency(avgDamagePerArea)}
                                 </span>
-                                <span className="text-slate-400"> — use for prioritization</span>
+                                <span className="text-slate-400"> -use for prioritization</span>
                               </div>
                             </div>
                           </>
@@ -1254,7 +1359,9 @@ export default function SummaryPanel({
                         </span>
                       </div>
                       <span className="text-xs text-slate-400 ml-auto">
-                        All sectors • Complete dataset
+                        {hazardLossScope === 'all'
+                          ? 'All sectors • Complete dataset'
+                          : 'All sectors • Not split by hazard'}
                       </span>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
@@ -1321,7 +1428,9 @@ export default function SummaryPanel({
                               Agricultural Damage
                             </p>
                             <p className="text-2xl font-bold text-green-400 mt-1 tabular-nums">
-                              {formatSummaryCurrency(nationalSummary[0]?.Crop_Loss || 0)}
+                              {nationalSummary[0]?.Crop_Loss == null
+                                ? '—'
+                                : formatSummaryCurrency(nationalSummary[0].Crop_Loss)}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
                               of {formatSummaryCurrency(nationalSummary[0]?.Total_Crop_Value || 0)}{' '}
@@ -1351,7 +1460,7 @@ export default function SummaryPanel({
                             <p className="text-2xl font-bold text-cyan-400 mt-1 tabular-nums">
                               {formatSummaryNumber(nationalSummary[0]?.Max_Wind_Gusts || 0)} km/h
                             </p>
-                            <p className="text-xs text-slate-400 mt-1">Maximum recorded gusts</p>
+                            <p className="text-xs text-slate-400 mt-1">Maximum modelled gusts</p>
                           </div>
                           <div className="w-9 h-9 rounded-lg bg-cyan-400/10 text-cyan-400 flex items-center justify-center flex-shrink-0">
                             <Wind className="w-4 h-4" />

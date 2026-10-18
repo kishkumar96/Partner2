@@ -410,8 +410,10 @@ export async function loadCycloneForecastTrack(
 
     // Transform validated rows to CycloneForecastPoint format
     if (!validationResult.data || validationResult.data.length === 0) {
-      // Expected for stub/empty CSVs (e.g. countries with no cyclone data yet)
-      console.warn('No cyclone forecast data available (empty or header-only CSV)');
+      // Expected for stub CSVs and position-only tracks (no timestamps)
+      console.warn(
+        `No cyclone forecast points in ${forecastFile}: no rows with a time, latitude and longitude`
+      );
       return null;
     }
 
@@ -482,4 +484,25 @@ export function getCategoryColor(category: number): string {
  */
 export function getCategoryLabel(category: number): string {
   return getThemeCategoryLabel(category);
+}
+
+/**
+ * Which timestep the animation opens on. A forecast plays from its first
+ * advisory point; a storm that has already passed opens at the point nearest
+ * the country, so tracks that begin far off-screen (e.g. TC Harold, west of
+ * Tonga) don't open on an empty map.
+ */
+export function animationStartIndex(
+  points: Array<{ latitude?: number; longitude?: number; [key: string]: unknown }>,
+  countryCenter: [number, number],
+  isForecast: boolean
+): number {
+  if (isForecast || points.length === 0) return 0;
+  const [lng, lat] = countryCenter;
+  const distSq = (point: { latitude?: number; longitude?: number }) =>
+    ((point.longitude ?? 0) - lng) ** 2 + ((point.latitude ?? 0) - lat) ** 2;
+  return points.reduce(
+    (best, point, index) => (distSq(point) < distSq(points[best]) ? index : best),
+    0
+  );
 }

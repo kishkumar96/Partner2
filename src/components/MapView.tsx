@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
-import { HazardScenarioSelection, LegendSettings } from '@/data/realThreddsLayers';
+import { HazardLayerMode, HazardScenarioSelection, LegendSettings } from '@/data/realThreddsLayers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
 import type { BuildingProperties, RoadProperties } from '@/types/realData';
@@ -248,7 +248,15 @@ interface MapViewProps {
   onLayersLoadingChange?: (isLoading: boolean) => void;
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
+  /** Hold hazard raster requests until the dashboard data has loaded */
+  dataReady?: boolean;
   hazardScenarioSelection?: HazardScenarioSelection | null;
+  /** Shade areas by the event's modelled damage (off in planning mode) */
+  showImpactShading?: boolean;
+  /** Shade areas by Rapid Exposure Forecast wind band instead of loss */
+  forecastDanger?: boolean;
+  /** Event layers only, planning-scenario layers only, or both */
+  hazardLayerMode?: HazardLayerMode;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
   regionalImpactsData?: GeoJSON.FeatureCollection | null;
@@ -298,7 +306,11 @@ export default function MapView({
   onLayersLoadingChange,
   onActiveWmsLayersChange,
   partnerHazardLayers = [],
+  dataReady = true,
   hazardScenarioSelection,
+  showImpactShading = true,
+  forecastDanger = false,
+  hazardLayerMode = 'all',
   damagedBuildings,
   damagedRoads,
   regionalImpactsData = null,
@@ -338,6 +350,7 @@ export default function MapView({
   const mapStyleRef = useRef(mapStyle);
   const appliedBasemapStyleRef = useRef<string | StyleSpecification | null>(null);
   const skipNextCountryFlyToRef = useRef(false);
+  const lastFlownCountryRef = useRef<CountryCode | null>(null);
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -651,6 +664,15 @@ export default function MapView({
       skipNextCountryFlyToRef.current = false;
       return;
     }
+
+    // The map is created at the country's own view, so a first load has nowhere to fly to.
+    // Flying there anyway overwrote the view restored from a reload or a shared link, and the
+    // view the dashboard framed on the storm. Only a change of country needs a flight.
+    if (lastFlownCountryRef.current === null || lastFlownCountryRef.current === selectedCountry) {
+      lastFlownCountryRef.current = selectedCountry;
+      return;
+    }
+    lastFlownCountryRef.current = selectedCountry;
 
     const country = COUNTRIES[selectedCountry];
     if (country) {
@@ -1363,14 +1385,16 @@ export default function MapView({
             onLoadingChange={onLayersLoadingChange}
             onActiveLayersChange={onActiveWmsLayersChange}
             partnerHazardLayers={partnerHazardLayers}
+            dataReady={dataReady}
             hazardScenarioSelection={hazardScenarioSelection}
+            hazardLayerMode={hazardLayerMode}
             layerOpacityScale={layerOpacity}
             legendSettings={legendSettings}
           />
           <RegionalImpactsLayer
             key={`regional-impacts-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
-            visible={true}
+            visible={showImpactShading}
             mapStyle={mapStyle}
             styleChangeCounter={styleChangeCounter}
             selectedRegion={selectedRegion}
@@ -1380,6 +1404,7 @@ export default function MapView({
             regionalSummaryData={regionalSummaryData}
             legendSettings={legendSettings}
             layerOpacityScale={layerOpacity}
+            forecastDanger={forecastDanger}
           />
           <DamagedBuildingsLayer
             key={`damaged-buildings-${basemapStyle}-${styleChangeCounter}`}

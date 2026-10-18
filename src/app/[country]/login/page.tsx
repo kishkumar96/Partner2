@@ -73,7 +73,9 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-100">
-              {countryName ? `${countryName} Dashboard` : 'PDIE Dashboard'}
+              {countryName
+                ? `${countryName} Dashboard`
+                : 'Pacific Disaster Impact & Exposure Dashboard'}
             </h1>
             {countryCode && (
               <div className="mt-3 flex items-center justify-center gap-2 text-slate-300">
@@ -156,7 +158,7 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
 
           {/* Footer */}
           <p className="text-center text-xs text-slate-600 mt-6">
-            PDIE — Pacific Disaster Impact Estimation
+            Pacific Disaster Impact & Exposure
           </p>
         </div>
       </div>
