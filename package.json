@@ -21,6 +21,7 @@
     "lighthouse": "lighthouse http://localhost:3002 --view",
     "lighthouse:ci": "lighthouse http://localhost:3002 --output=json --output-path=./lighthouse-report.json",
     "perf:lighthouse": "lhci autorun --config=lighthouserc.json",
+    "warm:thredds": "node scripts/warm-thredds.mjs",
     "perf:playwright": "playwright test --config=playwright.config.ts",
     "perf:ci": "bash scripts/perf-ci.sh",
     "audit": "npm audit --audit-level=moderate",

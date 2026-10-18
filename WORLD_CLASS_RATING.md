@@ -1,4 +1,4 @@
-# Commercial-Benchmark Rating — Climate Risk Dashboard
+# Commercial-Benchmark Rating -Climate Risk Dashboard
 
 **Baseline:** Commercial risk platforms (RMS / AIR / JBA / ArcGIS Risk tooling)
 
@@ -90,7 +90,7 @@ Next move: Add structured logging, error tracking, and metrics.
 Impact: Low trust and unclear validation status.
 Next move: Publish lineage, validation methods, and update cadence for datasets and models.
 
-## Appendix — Evidence References
+## Appendix -Evidence References
 
 - `README.md`
 - `VANUATU_COMPREHENSIVE_CRITIQUE.md`

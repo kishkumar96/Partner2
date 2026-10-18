@@ -159,7 +159,7 @@ lighthouse-report.json
 reports/lighthouse/
 reports/perf/
 
-# Test/debug artifacts — regenerated locally, may contain request headers/cookies
+# Test/debug artifacts -regenerated locally, may contain request headers/cookies
 reports/
 *.har
 
