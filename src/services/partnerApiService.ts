@@ -139,6 +139,34 @@ function isMatchingCountryRecord(record: Record<string, unknown>, code: CountryC
   );
 }
 
+/** A record's canonical `code` ("CK"), upper-cased, or null when the API does not give one. */
+function recordCode(record: Record<string, unknown>): string | null {
+  const code = record.code;
+  return typeof code === 'string' && code.trim() ? code.trim().toUpperCase() : null;
+}
+
+/**
+ * Find a country's record in the /country/ payload.
+ *
+ * The record's canonical `code` is authoritative: ids and names differ between deployments (Cook Islands
+ * is id 3 on the live API and 1 locally; Tonga's short name is "Ton"), so the code is the only thing that
+ * means the same everywhere. A record that carries a different code is never matched by name, so
+ * "American Samoa" (AS) cannot be mistaken for Samoa (WS). Only records with no code, from an API that has
+ * not been migrated yet, fall back to matching names.
+ */
+export function findCountryRecord(
+  countries: Array<Record<string, unknown>>,
+  countryCode: CountryCode
+): Record<string, unknown> | null {
+  const byCode = countries.find(country => recordCode(country) === countryCode);
+  if (byCode) return byCode;
+  return (
+    countries.find(
+      country => recordCode(country) === null && isMatchingCountryRecord(country, countryCode)
+    ) ?? null
+  );
+}
+
 /**
  * Resolve a country ID from /country/ endpoint payload.
  * The server schema can vary, so this accepts common id key names.
@@ -147,7 +175,7 @@ export function resolveCountryId(
   countries: Array<Record<string, unknown>>,
   countryCode: CountryCode
 ): number | null {
-  const match = countries.find(country => isMatchingCountryRecord(country, countryCode));
+  const match = findCountryRecord(countries, countryCode);
   if (!match) return null;
 
   const rawId = match.id ?? match.pk ?? match.country_id ?? match.countryId;

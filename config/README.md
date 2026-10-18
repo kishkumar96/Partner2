@@ -56,7 +56,11 @@ the one in the release you meant to ship.
 
 ## Adding a country
 
-1. **Django:** create the country record in the Partner API (the dashboard matches it by name or code).
+1. **Django:** create the country record in the Partner API and set its **`code`** to the same two-letter code as the
+   config file (e.g. `FJ`). The dashboard finds a country's record by that code, which means the same in every
+   deployment; ids and names do not (Cook Islands is id 3 live and 1 locally, and Tonga's short name is "Ton").
+   Against an API that has no codes yet it falls back to matching names, but never matches a record that carries a
+   different code, so "American Samoa" (`AS`) cannot be taken for Samoa (`WS`).
 2. **Assets:** add the country's approved data under `public/<slug>/` if it has static files.
 3. **Config:** copy a file in `config/countries/`, rename it `<slug>.json`, fill it in, and add the
    slug to `countries` in `release.json` (its position is its place in the country list). Bump `configVersion`.
