@@ -1,3 +1,6 @@
+from io import StringIO
+
+from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from country.models import Country
@@ -38,3 +41,28 @@ class NonCycloneEventTests(APITestCase):
         self.assertIsNone(row["cyclone_track"])
         self.assertIsNone(row["cyclone_name"])
         self.assertIsNone(row["track_issued_time"])
+
+
+class ImportersFindCountriesByCodeTests(TestCase):
+    """A database whose Vanuatu row says "VUT" (as the live one does) must still be importable."""
+
+    def test_lola_event_is_added_to_the_country_with_code_vu(self):
+        import tempfile
+
+        from django.core.management import call_command
+        from django.test import override_settings
+
+        vanuatu = Country.objects.create(short_name="VUT", long_name="Vanuatu", code="VU")
+        EventType.objects.create(event_name="Tropical Cyclone")
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            call_command("import_vu_lola_event", stdout=StringIO())
+        event = Event.objects.get(title="Tropical Cyclone Lola")
+        self.assertEqual(event.country, vanuatu)
+        self.assertEqual(Country.objects.filter(long_name="Vanuatu").count(), 1)
+
+    def test_it_says_so_when_there_is_no_such_country(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        with self.assertRaisesRegex(CommandError, "Vanuatu"):
+            call_command("import_vu_lola_event", stdout=StringIO())

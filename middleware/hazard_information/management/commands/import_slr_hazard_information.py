@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 
 from django.core.management.base import BaseCommand
 
-from country.models import Country
+from country.lookup import find_country
 from hazard_information.models import HazardInformation
 
 THREDDS_BASE = "https://gemthreddshpc.spc.int/thredds"
@@ -106,9 +106,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         code = options["country"]
         short_name, subpaths = COUNTRY_CATALOG_PATHS[code]
-        country = Country.objects.filter(short_name=short_name).first()
+        country = find_country(code)
         if country is None:
-            self.stderr.write(f"Country {short_name} not found locally; run the legacy import first.")
+            self.stderr.write(f"Country {code} not found; run the legacy import first.")
             return
 
         created, skipped, unmatched = 0, 0, 0

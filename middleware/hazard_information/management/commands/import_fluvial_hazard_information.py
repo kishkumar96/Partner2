@@ -31,7 +31,7 @@ import xml.etree.ElementTree as ET
 
 from django.core.management.base import BaseCommand
 
-from country.models import Country
+from country.lookup import find_country
 from hazard_information.models import HazardInformation
 
 THREDDS_BASE = "https://gemthreddshpc.spc.int/thredds"
@@ -57,7 +57,7 @@ class Command(BaseCommand):
             return response.read()
 
     def handle(self, *args, **options):
-        country = Country.objects.filter(short_name="VU").first()
+        country = find_country("VU")
         if country is None:
             self.stderr.write("Vanuatu country row not found; run the legacy import first.")
             return

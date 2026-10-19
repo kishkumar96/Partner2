@@ -36,7 +36,7 @@ import urllib.request
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from country.models import Country
+from country.lookup import get_or_create_country
 from risk_information.models import RiskInformation
 
 SOURCE_BASE_URL = "https://pacific-disaster-api.spc.int"
@@ -117,10 +117,7 @@ class Command(BaseCommand):
 
         for code in codes:
             source_country_id, short_name, long_name = TARGET_COUNTRIES[code]
-            country, _ = Country.objects.get_or_create(
-                short_name=short_name,
-                defaults={"long_name": long_name},
-            )
+            country = get_or_create_country(code, long_name)
 
             rows = [r for r in all_rows if r.get("country") == source_country_id]
             self.stdout.write(f"{code}: {len(rows)} source rows found (country id {source_country_id}).")

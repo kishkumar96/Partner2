@@ -26,3 +26,15 @@ def find_country(identifier):
         Country.objects.filter(short_name__iexact=text).first()
         or Country.objects.filter(long_name__iexact=text).first()
     )
+
+
+def get_or_create_country(code, long_name):
+    """The Country for `code`, found by code or name, or created (with its code) when absent.
+
+    Importers used to match on short_name == "VU", which finds nothing on a database whose row says
+    "VUT" and, with get_or_create, quietly adds a second Vanuatu that nothing else points to.
+    """
+    country = find_country(code) or find_country(long_name)
+    if country is not None:
+        return country
+    return Country.objects.create(short_name=code, long_name=long_name, code=code)

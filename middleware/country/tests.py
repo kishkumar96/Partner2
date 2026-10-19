@@ -6,7 +6,7 @@ from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APITestCase
 
 from .codes import code_for, normalise_code
-from .lookup import find_country
+from .lookup import find_country, get_or_create_country
 from .models import Country
 
 
@@ -186,3 +186,22 @@ class FindCountryTests(TestCase):
     def test_an_unknown_or_blank_identifier_finds_nothing(self):
         for value in ("Narnia", "XX", "", "   ", None):
             self.assertIsNone(find_country(value), msg=repr(value))
+
+
+class GetOrCreateCountryTests(TestCase):
+    """Importers must reach the live row ("VUT"), not add a second Vanuatu beside it."""
+
+    def test_finds_the_existing_row_by_code_even_when_its_short_name_differs(self):
+        live = Country.objects.create(short_name="VUT", long_name="Vanuatu", code="VU")
+        self.assertEqual(get_or_create_country("VU", "Vanuatu"), live)
+        self.assertEqual(Country.objects.filter(long_name="Vanuatu").count(), 1)
+
+    def test_finds_a_row_with_no_code_yet_by_name(self):
+        legacy = Country.objects.create(short_name="TON", long_name="Tonga")
+        self.assertEqual(get_or_create_country("TO", "Tonga"), legacy)
+        self.assertEqual(Country.objects.filter(long_name="Tonga").count(), 1)
+
+    def test_creates_the_country_with_its_code_when_absent(self):
+        made = get_or_create_country("WS", "Samoa")
+        self.assertEqual((made.short_name, made.code), ("WS", "WS"))
+        self.assertEqual(get_or_create_country("WS", "Samoa"), made)

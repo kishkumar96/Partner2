@@ -44,7 +44,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from country.models import Country
+from country.lookup import find_country
 from risk_information.models import RiskInformation, RiskScenario, RiskScenarioBreakdown
 
 DATA_DIR = os.path.join(settings.BASE_DIR, "data", "ck_risk_analysis")
@@ -156,9 +156,9 @@ class Command(BaseCommand):
         return obj
 
     def handle(self, *args, **options):
-        country = Country.objects.filter(short_name="CK").first()
+        country = find_country("CK")
         if country is None:
-            self.stderr.write("Cook Islands country row not found (expected short_name='CK').")
+            self.stderr.write("Cook Islands country row not found (expected code 'CK').")
             return
 
         totals = defaultdict(int)

@@ -13,7 +13,7 @@ import xarray as xr
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from country.models import Country
+from country.lookup import find_country
 from hazard_tiles.views import PRODUCTS
 from hazard_type.models import HazardSource
 from hazard_information.models import HazardInformation
@@ -44,9 +44,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         base_url = options["base_url"].rstrip("/")
 
-        country = Country.objects.filter(short_name="CK").first()
+        country = find_country("CK")
         if country is None:
-            self.stderr.write("Cook Islands country row not found (expected short_name='CK').")
+            self.stderr.write("Cook Islands country row not found (expected code 'CK').")
             return
 
         created, existing = 0, 0

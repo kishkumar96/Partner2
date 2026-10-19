@@ -43,9 +43,9 @@ import datetime
 from pathlib import Path
 
 from django.core.files.base import ContentFile
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
-from country.models import Country
+from country.lookup import find_country
 from cyclone_track.models import CycloneTrack
 from event.models import Event
 from event_type.models import EventType
@@ -94,7 +94,9 @@ class Command(BaseCommand):
     help = "Import the Tropical Cyclone Meena Event for Cook Islands."
 
     def handle(self, *args, **options):
-        ck = Country.objects.get(short_name="CK")
+        ck = find_country("CK")
+        if ck is None:
+            raise CommandError("No Cook Islands country row (code CK).")
 
         if Event.objects.filter(country=ck, title=EVENT_TITLE).exists():
             self.stdout.write(self.style.WARNING(f"{EVENT_TITLE} event already exists, skipping."))

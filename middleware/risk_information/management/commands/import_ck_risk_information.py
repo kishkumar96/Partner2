@@ -24,7 +24,7 @@ import urllib.request
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from country.models import Country
+from country.lookup import find_country
 from risk_information.models import RiskInformation
 
 SOURCE_BASE_URL = "https://opmthredds.gem.spc.int"
@@ -66,9 +66,9 @@ class Command(BaseCommand):
             return json.loads(response.read().decode("utf-8"))
 
     def handle(self, *args, **options):
-        country = Country.objects.filter(short_name="CK").first()
+        country = find_country("CK")
         if country is None:
-            self.stderr.write("Cook Islands country row not found (expected short_name='CK').")
+            self.stderr.write("Cook Islands country row not found (expected code 'CK').")
             return
 
         created, skipped, failed = 0, 0, 0
