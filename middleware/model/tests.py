@@ -1293,3 +1293,100 @@ class RunnerScriptCountryTests(SimpleTestCase):
         from country.codes import _BY_LONG_NAME
 
         self.assertEqual(self.runner.COUNTRY_NAME_CODES, _BY_LONG_NAME)
+
+
+class FakeReply:
+    def __init__(self, payload=None, body=b"", status_code=200):
+        self.payload, self.status_code = payload, status_code
+        self.raw = io.BytesIO(body)
+        self.text = json.dumps(payload) if payload is not None else body.decode()
+        self.ok = status_code < 400
+
+    def json(self):
+        return self.payload
+
+
+class ScriptedRiskScape:
+    """A requests.Session stand-in that answers the calls PlatformBackend.run makes."""
+
+    RUN = "https://riskscape.nz/api/model-runs/by-id/7"
+
+    def __init__(self, name_status=200):
+        self.name_status = name_status
+        self.calls = []
+        self.auth = None
+        self.headers = {}
+
+    def request(self, method, url, **kwargs):
+        self.calls.append((method, url, kwargs))
+        if method == "POST" and url.endswith("/runs/new"):
+            return FakeReply({"id": 7, "uri": "/api/model-runs/by-id/7"})
+        if method == "GET" and url == self.RUN:
+            output = {
+                "name": "regional-summary",
+                "state": "COMPLETE",
+                "mediaType": "text/csv",
+                "uri": "/api/model-runs/by-id/7/output/regional-summary",
+            }
+            return FakeReply({"id": 7, "finished": True, "state": "COMPLETE", "outputs": [output]})
+        if method == "GET" and url.endswith("/download"):
+            return FakeReply(body=b"Region,Exposed_Population\nNiue,5\n")
+        if method == "PATCH" and url == self.RUN:
+            return FakeReply({"message": "renamed"}, status_code=self.name_status)
+        raise AssertionError(f"unexpected call {method} {url}")
+
+
+class PlatformBackendTests(SimpleTestCase):
+    MODEL = {
+        "name": "Rapid-Exposure-Forecast-GeoJSON",
+        "location": "niwa/partner/rsmc-tcwc",
+        "inputs": {"hazard": "{model_track_url}"},
+    }
+    VARIABLES = {
+        "storm": "Wati",
+        "issue_time": "2026-10-18T18:00:00Z",
+        "model_track_url": "https://api.example/partner_api/v1/cyclone_track/18/model_input/",
+    }
+
+    def run_backend(self, **session_options):
+        import tempfile
+        from pathlib import Path
+
+        runner = load_tc_runner()
+        backend = runner.PlatformBackend("https://riskscape.nz", "token", poll_seconds=0)
+        backend.session = ScriptedRiskScape(**session_options)
+        with tempfile.TemporaryDirectory() as folder:
+            url = backend.run({"id": 3}, self.MODEL, dict(self.VARIABLES), Path(folder))
+            downloaded = sorted(path.name for path in Path(folder).iterdir())
+        return backend.session.calls, url, downloaded
+
+    def test_submits_the_model_with_the_track_url_as_its_hazard(self):
+        calls, url, downloaded = self.run_backend()
+
+        method, target, kwargs = calls[0]
+        self.assertEqual((method, target), ("POST", "https://riskscape.nz/api/projects/by-full-slug/niwa/partner/rsmc-tcwc/runs/new"))
+        self.assertEqual(
+            kwargs["json"],
+            {
+                "externalModelId": "Rapid-Exposure-Forecast-GeoJSON",
+                "managed": True,
+                "parameters": {"hazard": {"value": self.VARIABLES["model_track_url"]}},
+            },
+        )
+        self.assertEqual(url, ScriptedRiskScape.RUN)
+        self.assertEqual(downloaded, ["regional-summary.csv"])
+
+    def test_names_the_run_with_a_patch_so_it_is_kept(self):
+        calls, url, _ = self.run_backend()
+
+        naming = [(m, u, k) for m, u, k in calls if m in ("PATCH", "PUT")]
+        self.assertEqual(len(naming), 1)
+        method, target, kwargs = naming[0]
+        self.assertEqual((method, target), ("PATCH", ScriptedRiskScape.RUN))
+        self.assertEqual(kwargs["json"], {"name": "Wati 2026-10-18T18:00:00Z (Partner run 3)"})
+
+    def test_a_run_that_cannot_be_named_still_succeeds(self):
+        calls, url, downloaded = self.run_backend(name_status=500)
+
+        self.assertEqual(url, ScriptedRiskScape.RUN)
+        self.assertEqual(downloaded, ["regional-summary.csv"])

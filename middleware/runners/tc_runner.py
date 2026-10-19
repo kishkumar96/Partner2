@@ -309,12 +309,12 @@ class PlatformBackend:
             with dest.open("wb") as f:
                 shutil.copyfileobj(response.raw, f)
 
-        # Platform runs are deleted after a week unless named. The results are
-        # copied to the Partner API anyway, so a failure here isn't fatal.
-        # UNVERIFIED: endpoint and body format; check against the RiskScape API docs.
+        # Platform runs are deleted after a week unless named, and a guest (share) link needs a
+        # named run. The results are copied to the Partner API anyway, so a failure here isn't
+        # fatal. PATCH with {"name": ...} on the run is how REF.sh names its runs.
         try:
             label = f"{variables['storm']} {variables['issue_time']} (Partner run {job['id']})"
-            self._call("PUT", f"{run_url}/name", data=label.encode(), headers={"Content-Type": "text/plain"})
+            self._call("PATCH", run_url, json={"name": label})
         except RunFailed as e:
             log.warning("could not name RiskScape run: %s", e)
         return run_url
