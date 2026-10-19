@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { prependBasePath } from '@/utils/basePath';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import type { CountryCode } from '@/types/thredds';
 
@@ -53,7 +54,7 @@ const STATUS_STYLE: Record<RunSummary['status'], string> = {
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { cache: 'no-store', ...init });
+  const response = await fetch(prependBasePath(path), { cache: 'no-store', ...init });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(
@@ -201,7 +202,7 @@ export default function OperatorConsole() {
   }
 
   async function signOut() {
-    await fetch('/api/operator/logout', { method: 'POST' }).catch(() => undefined);
+    await fetch(prependBasePath('/api/operator/logout'), { method: 'POST' }).catch(() => undefined);
     setSession(null);
     setOptions(null);
     setResult(null);
@@ -475,7 +476,9 @@ export default function OperatorConsole() {
               {run.event && (
                 <a
                   className="text-xs font-semibold text-cyan-300 underline"
-                  href={`/${CODE_TO_SLUG[run.event.country as CountryCode] ?? ''}?mode=event`}
+                  href={prependBasePath(
+                    `/${CODE_TO_SLUG[run.event.country as CountryCode] ?? ''}?mode=event`
+                  )}
                 >
                   View {run.event.title} on the dashboard
                 </a>

@@ -438,6 +438,16 @@ class OperatorApiTests(QueueTestCase):
         self.assertFalse(pdna["pipelines"][0]["runner"]["online"])
         self.assertIn("VU", [c["code"] for c in data["countries"]])
 
+    def test_countries_are_reported_by_code_even_when_the_legacy_short_name_differs(self):
+        # Live Tonga is short_name "Ton" with code "TO"; the dashboard routes on the code
+        self.vu.short_name = "Van"
+        self.vu.code = "VU"
+        self.vu.save()
+        data = self.client.get("/partner_api/v1/operator/pipelines/").data
+        codes = [c["code"] for c in data["countries"]]
+        self.assertIn("VU", codes)
+        self.assertNotIn("Van", codes)
+
     def test_submitting_a_best_track_queues_the_pdna_run(self):
         response = self.submit(self.best)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)

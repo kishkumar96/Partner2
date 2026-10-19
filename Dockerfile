@@ -42,6 +42,10 @@ COPY postcss.config.* ./
 COPY tailwind.config.* ./
 COPY eslint.config.* ./
 COPY scripts ./scripts
+# prebuild (npm run config:check) reads the JSON country config and formats its output with
+# the repo's Prettier settings, so both must be in the build context
+COPY config ./config
+COPY .prettierrc* .prettierignore ./
 COPY public ./public
 COPY src ./src
 

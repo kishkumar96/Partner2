@@ -22,6 +22,11 @@ from .queueing import ordered_run_models, queue_runs_for_track
 from .run_descriptions import explain_nothing_queued, pipeline_label, runner_status
 
 
+def country_code(country):
+    """The ISO code the dashboard routes on; short_name only for rows not yet coded."""
+    return country.code or country.short_name
+
+
 class IsSuperUser(BasePermission):
     message = "Only superusers can submit cyclone tracks."
 
@@ -46,7 +51,7 @@ def run_summary(run: ModelRun) -> dict:
         "external_url": run.external_url,
         "logs": [entry.logs for entry in run.logs.order_by("id")],
         "event": (
-            {"id": event.pk, "title": event.title, "country": event.country.short_name}
+            {"id": event.pk, "title": event.title, "country": country_code(event.country)}
             if event
             else None
         ),
@@ -81,7 +86,7 @@ class OperatorPipelinesView(APIView):
                     "label": pipeline_label(track_type),
                     "pipelines": [
                         {
-                            "country": trigger.country.short_name if trigger.country_id else None,
+                            "country": country_code(trigger.country) if trigger.country_id else None,
                             "models": [m.name for m in trigger.model.chain()],
                             "runner": runner_status(trigger.model.server_name),
                         }
@@ -90,7 +95,7 @@ class OperatorPipelinesView(APIView):
                 }
             )
         countries = [
-            {"id": c.pk, "code": c.short_name, "name": c.long_name}
+            {"id": c.pk, "code": country_code(c), "name": c.long_name}
             for c in Country.objects.order_by("long_name")
         ]
         return Response({"track_types": track_types, "countries": countries})
