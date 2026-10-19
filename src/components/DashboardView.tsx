@@ -62,7 +62,9 @@ import {
 } from '@/components/ForecastExposurePanels';
 import ForecastLayers from '@/components/ForecastLayers';
 import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
+import { filtersShownFor } from '@/utils/forecastFilters';
 import type { ForecastExposure } from '@/utils/forecastExposure';
+import ModeFilterPanel from '@/components/ModeFilterPanel';
 import type { EventRecord } from '@/data/eventRecords';
 import {
   assessmentGap,
@@ -1832,7 +1834,10 @@ export default function DashboardView({
     filters.selectedEvents.length === 1 &&
     isModeEventId(filters.selectedEvents[0], forecastRuns, assessmentRecord?.id) &&
     !!forecastRecord;
-  const barFilters = eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters;
+  const barFilters = filtersShownFor(
+    analysisMode,
+    eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters
+  );
 
   // A link such as ?events=12 names a mode's event. Once the records are known and the
   // country has both kinds, treat it as the mode, not as a filter.
@@ -3236,8 +3241,8 @@ export default function DashboardView({
             scenarioParts={
               effectiveHazardScenario ? describeHazardScenario(effectiveHazardScenario) : undefined
             }
-            aggregationLabel={currentAggregationLabel}
-            sectorNames={filters.selectedSectors.map(
+            aggregationLabel={analysisMode === 'forecast' ? undefined : currentAggregationLabel}
+            sectorNames={barFilters.selectedSectors.map(
               id => sectors.find(sector => sector.id === id)?.name ?? id
             )}
           />
@@ -3342,28 +3347,42 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <FilterPanel
-            viewMode={viewMode}
-            hazards={hazards}
-            sectors={sectors}
-            events={events}
-            districts={resolvedDistricts}
-            countryCode={selectedCountry}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            availableHazardIds={availableHazardIds}
-            exposureData={exposureData}
-            economicDamageData={economicDamageData}
-            accessibleDistricts={accessibleDistricts}
-            onDistrictSelect={districtId => {
-              const region = regionalSummary.find(
-                (r: any) => r.Region_ID === districtId || r.Region === districtId
-              );
-              if (region) {
-                setSelectedRegion(region.Region_ID ?? region.Region);
-              }
+          <ModeFilterPanel
+            analysisMode={analysisMode}
+            forecastSetup={{
+              runs: forecastRuns,
+              activeRunId: activeEventRecord?.id ?? null,
+              onRunSelect: setModeEventId,
+              onOpenLayers: () => {
+                openMapPanel();
+                setShowSummary(false);
+                setForecastLayersFocusKey(key => key + 1);
+              },
             }}
-          />
+          >
+            <FilterPanel
+              viewMode={viewMode}
+              hazards={hazards}
+              sectors={sectors}
+              events={events}
+              districts={resolvedDistricts}
+              countryCode={selectedCountry}
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              availableHazardIds={availableHazardIds}
+              exposureData={exposureData}
+              economicDamageData={economicDamageData}
+              accessibleDistricts={accessibleDistricts}
+              onDistrictSelect={districtId => {
+                const region = regionalSummary.find(
+                  (r: any) => r.Region_ID === districtId || r.Region === districtId
+                );
+                if (region) {
+                  setSelectedRegion(region.Region_ID ?? region.Region);
+                }
+              }}
+            />
+          </ModeFilterPanel>
         </div>
 
         {/* Map Controls Panel */}
