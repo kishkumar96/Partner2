@@ -179,26 +179,7 @@ class Command(BaseCommand):
             if model_run is None:
                 raise CommandError(f"No model run {options['model_run']}.")
 
-        outputs = {name: find_output(folder, name) for name in REF_OUTPUTS}
-        missing = [name for name, path in outputs.items() if path is None]
-        if missing:
-            raise CommandError(f"Not a REF output folder, missing: {', '.join(missing)}")
-        if track_output_is_empty(folder):
-            raise CommandError(
-                "The run's cyclone-track output has no track, so the model dropped every track point "
-                "and its empty tables mean a failed run, not zero exposure. Check the run's warnings."
-            )
-        skipped = []
-        for name in OPTIONAL_OUTPUTS:
-            path = find_output(folder, name)
-            if path is None:
-                continue
-            # An overlay with nothing in it (no floodplain for the country) is a
-            # real result; it just has nothing to draw, so don't load it
-            if is_empty_feature_collection(path):
-                skipped.append(name)
-                continue
-            outputs[name] = path
+        outputs, skipped = self.collect_outputs(folder)
 
         event_time = None
         if options["event_time"]:
@@ -261,6 +242,31 @@ class Command(BaseCommand):
                 f"{len(outputs)} outputs ({', '.join(str(r.pk) for r in event.risks.order_by('id'))})."
             )
         )
+
+    def collect_outputs(self, folder: Path):
+        """The run's outputs by file name, and the empty overlays left out; raises if it isn't a REF run."""
+        outputs = {name: find_output(folder, name) for name in REF_OUTPUTS}
+        missing = [name for name, path in outputs.items() if path is None]
+        if missing:
+            raise CommandError(f"Not a REF output folder, missing: {', '.join(missing)}")
+        if track_output_is_empty(folder):
+            raise CommandError(
+                "The run's cyclone-track output has no track, so the model dropped every track point "
+                "and its empty tables mean a failed run, not zero exposure. Check the run's warnings."
+            )
+        skipped = []
+        for name in OPTIONAL_OUTPUTS:
+            path = find_output(folder, name)
+            if path is None:
+                continue
+            # An overlay with nothing in it (no floodplain for the country) is a
+            # real result; it just has nothing to draw, so don't load it
+            if is_empty_feature_collection(path):
+                skipped.append(name)
+                continue
+            outputs[name] = path
+
+        return outputs, skipped
 
     IMPORT_MODEL_NAME = "Rapid exposure forecast (imported)"
 

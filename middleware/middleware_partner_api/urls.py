@@ -50,6 +50,7 @@ from event.views import EventListCreateView, EventRetrieveView
 from model.views import ModelRunListView
 from model.views_update import ModelRunUpdateCompletedView
 from model.views_logs import ModelLogsListCreateView
+from model.views_import import ModelRunImportView
 from model.views_queue import (
     ModelOperationsStatusView,
     ModelRunClaimView,
@@ -113,6 +114,8 @@ urlpatterns = [
     path("partner_api/v1/model_run/", ModelRunListView.as_view()),
     # Runner queue: claim the next job for a server, then report its result
     path("partner_api/v1/model_run/claim/", ModelRunClaimView.as_view()),
+    # A finished run, sent by whatever ran it (a zip of its outputs and the SPC track it used)
+    path("partner_api/v1/model_run/import/", ModelRunImportView.as_view()),
     # Operator page: superusers submit a track by hand and follow its runs
     path("partner_api/v1/operator/me/", OperatorMeView.as_view()),
     path("partner_api/v1/operator/pipelines/", OperatorPipelinesView.as_view()),

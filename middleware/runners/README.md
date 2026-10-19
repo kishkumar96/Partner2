@@ -173,3 +173,76 @@ run-name prefixes can change safely. Current types include `regional_impacts`,
 type retain filename-based compatibility. Unknown types are preserved on the
 run/event for operators, but deliberately are not plotted until a UI renderer
 exists for that kind of data.
+
+## Getting a finished RiskScape run into the dashboard: which tool
+
+| You have | Use | What it does |
+|---|---|---|
+| The run's share link (`/shared/results/<token>`) | `manage.py ingest_riskscape_run <link> --country CK` | Downloads through the link's guest session (no account needed), reprojects the GeoPackage overlays, creates the track and loads the advisory. |
+| A script that already downloaded the outputs (`REF.sh`) | `POST model_run/import/` (below) | The script sends its output folder as a zip; the server does the rest. No share link, nothing for the server to download. |
+| The run's number and a RiskScape key that can see the run | `python runners/fetch_run.py <run> <folder>`, then `import_ref_run` | Saves the outputs as RiskScape names them. The GeoPackage overlays still have to be converted to lon/lat GeoJSON, and the track created, before `import_ref_run --as-run`. |
+
+A share link can be fetched through the API: `POST /api/model-runs/guest-link/auth` with the link's
+token as a text body returns the run and a session cookie, and the outputs download with that cookie
+(`ingest_riskscape_run` does exactly this). `fetch_run.py` says a share link "cannot be fetched this
+way"; that is true for its account-key route, not for the guest route.
+
+## Loading a run that nobody ingested
+
+Runs started outside this queue (for example by another runner or by hand on RiskScape) finish on
+RiskScape without reaching the Partner API. If the run has a share link, one command loads it:
+
+```bash
+python manage.py ingest_riskscape_run https://riskscape.nz/shared/results/<token> --country CK
+```
+
+It exchanges the link for a read-only session, checks the run is complete, reads the cyclone track
+the run was given (from the run's parameters), names the advisory `<YYYYMMDDHH>_<Storm>` from the
+track's base time so that advisories of one storm share one Event, downloads the outputs (GeoPackage
+overlays are reprojected from EPSG:3832 to lon/lat GeoJSON), creates the track and calls
+`import_ref_run --as-run`. Running it again for the same run does nothing; `--replace` imports it
+again and `--dry-run` reads the run and writes nothing.
+
+- A share link is a credential for the run. The command does not store it: `--external-url` is empty
+  unless given, because that field is served by the public API.
+- RiskScape deletes unnamed runs after a week, and a share link needs the run to be named.
+- It finds nothing by itself; someone or something has to supply the link. Having the runner that
+  starts a run also post its results avoids that.
+
+## Sending a finished run to the API (`model_run/import/`)
+
+A script that ran RiskScape itself (for example `REF.sh`) can hand the run over in one request, so
+nobody has to import it:
+
+```bash
+zip -qr run.zip "${RUN_DIR}"          # the folder the outputs were downloaded into
+curl -sf -H "Authorization: Token ${PARTNER_API_TOKEN}" \
+  -F country=CK \
+  -F track_url="${TRACK_URL}" \
+  -F riskscape_run="${MODEL_RUN_URL}" \
+  -F outputs=@run.zip \
+  https://<this server>/partner_api/v1/model_run/import/
+```
+
+| Field | |
+|---|---|
+| `country` | required. Country code, e.g. `CK`. |
+| `track_url` | required. The SPC cyclone track the run was given. https only, on a host in `INGEST_TRACK_HOSTS` (default `pacific-disaster-api.spc.int`) or this server. |
+| `outputs` | required. A zip of the run's outputs. Folder names are dropped. Only `.geojson`, `.csv` and `.gpkg` are used; GeoPackages are reprojected to lon/lat GeoJSON. Limits: 40 files, 300 MB unpacked, 100 MB uploaded. |
+| `riskscape_run` | optional. The run's address (e.g. `https://riskscape.nz/api/model-runs/by-id/20515`). Share/guest links are refused: this field is served by the public API. |
+| `storm` | optional. Storm name, when the track's own name can't be read. |
+| `replace` | optional. `true` imports again an advisory that was already imported. |
+
+- **201** the advisory was loaded: `{advisory, event, run, track, outputs, skipped, shown}`; `shown`
+  says whether it is the run its Event now shows (a newer advisory keeps that).
+- **200** `{already_imported: true}`: this advisory was imported before; nothing changed. Sending a run
+  twice is safe.
+- **400** `{detail}`: the zip, the track or the outputs can't be used. Nothing is left behind: the run
+  and its track are created in one transaction.
+- **401/403**: the account needs the permissions `model.add_modelrun`, `risk_information.add_riskinformation`
+  and `cyclone_track.add_cyclonetrack`. Give a runner's account those and nothing else (a user with
+  those three in the admin, plus a token), not a superuser's token.
+
+The advisory is named `<YYYYMMDDHH>_<Storm>` from the track's first point, so advisories of one storm
+share one Event whatever the track is called at the SPC. `ingest_riskscape_run` and this endpoint
+share their code (`model/ingest_service.py`).
