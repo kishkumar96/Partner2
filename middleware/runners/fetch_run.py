@@ -3,10 +3,10 @@
 
     RISKSCAPE_TOKEN=... python runners/fetch_run.py <run> <folder> [--url https://riskscape.nz]
 
-<run> is the run's address: the API path the platform reports for it (e.g.
-/api/projects/123/runs/456), or the same path on the run's web page without /api. A shared-results
-link (/shared/results/...) is only a web page and cannot be fetched this way; use the run's own
-address instead.
+<run> is the run's number (the id in RiskScape's /api/model-runs/by-id/<id>), or its API path or
+URL. A shared-results link (/shared/results/...) is only a web page and cannot be fetched this way;
+use the run's number instead. The token's account must be allowed to see the run (guest links need
+no account, but the API does).
 
 The files are saved as the platform names them ("<run name>-regional-summary.csv"); import_ref_run
 matches by the end of the name, so the prefix is harmless.
@@ -34,13 +34,15 @@ class FetchFailed(Exception):
 
 def api_path(run: str, base_url: str) -> str:
     """The API path for a run given as a full URL, an /api path or a web-page path."""
+    if run.strip().isdigit():
+        return f"/api/model-runs/by-id/{run.strip()}"
     path = urlparse(run).path if run.startswith("http") else run
     if not path.startswith("/"):
-        raise FetchFailed(f"Expected a URL or a path starting with /, got {run!r}.")
+        raise FetchFailed(f"Expected a run number, a URL or a path starting with /, got {run!r}.")
     if path.startswith("/shared/"):
         raise FetchFailed(
-            "A shared-results link is a web page, not an API address. Open the run in RiskScape and "
-            "use the run's own address (…/runs/<id>), or ask whoever shared it for the run id."
+            "A shared-results link is a web page, not an API address. Use the run's number (the id in "
+            "/api/model-runs/by-id/<id>), which the run's owner can read from the run page."
         )
     return path if path.startswith("/api/") else f"/api{path}"
 

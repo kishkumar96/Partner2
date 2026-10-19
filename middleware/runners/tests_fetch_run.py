@@ -64,6 +64,9 @@ class FetchRunTests(unittest.TestCase):
             fetch_run.api_path("https://riskscape.nz/projects/1/runs/2", self.url), "/api/projects/1/runs/2"
         )
 
+    def test_a_bare_run_number_uses_the_model_runs_address(self):
+        self.assertEqual(fetch_run.api_path("20482", self.url), "/api/model-runs/by-id/20482")
+
     def test_an_unfinished_run_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(fetch_run.FetchFailed, "RUNNING"):
             fetch_run.fetch("/api/projects/1/runs/3", Path(tmp), self.url, "secret")
