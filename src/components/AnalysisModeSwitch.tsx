@@ -4,17 +4,29 @@ export type AnalysisMode = 'forecast' | 'assessment' | 'scenarios' | 'history';
 
 export const ANALYSIS_MODES: Record<
   AnalysisMode,
-  { label: string; question: string; status: string; active: string }
+  {
+    label: string;
+    question: string;
+    status: string;
+    active: string;
+    /** The model behind the mode, so its abbreviation can be spelled out where it is shown */
+    acronym?: string;
+    fullName?: string;
+  }
 > = {
   forecast: {
     label: 'Forecast',
-    question: 'Rapid Exposure Forecast: what may be exposed under the latest advisory?',
+    acronym: 'REF',
+    fullName: 'Rapid Exposure Forecast',
+    question: 'what may be exposed under the latest advisory?',
     status: 'Forecast exposure',
     active: 'bg-amber-500/20 text-amber-200',
   },
   assessment: {
     label: 'Assessment',
-    question: 'Post-event impact: what damage and loss occurred?',
+    acronym: 'PDIE',
+    fullName: 'Pacific Disaster Impact & Exposure',
+    question: 'post-event, what damage and loss occurred?',
     status: 'Post-event impact',
     active: 'bg-emerald-500/20 text-emerald-200',
   },
@@ -31,6 +43,12 @@ export const ANALYSIS_MODES: Record<
     active: 'bg-purple-500/20 text-purple-200',
   },
 };
+
+/** "REF · Rapid Exposure Forecast: what may be exposed…" for the modes that name a model, else the question */
+export function modeTooltip(mode: AnalysisMode): string {
+  const { acronym, fullName, question } = ANALYSIS_MODES[mode];
+  return acronym && fullName ? `${acronym} · ${fullName}: ${question}` : question;
+}
 
 const ORDER: AnalysisMode[] = ['forecast', 'assessment', 'scenarios', 'history'];
 
@@ -60,20 +78,40 @@ export default function AnalysisModeSwitch({
         aria-label="Analysis mode"
         className="hidden max-w-full rounded-lg border border-slate-600/60 bg-slate-900/50 p-0.5 sm:inline-flex"
       >
-        {modes.map(mode => (
-          <button
-            key={mode}
-            type="button"
-            aria-pressed={active === mode}
-            title={ANALYSIS_MODES[mode].question}
-            onClick={() => active !== mode && onChange(mode)}
-            className={`shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-              active === mode ? ANALYSIS_MODES[mode].active : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            {ANALYSIS_MODES[mode].label}
-          </button>
-        ))}
+        {modes.map(mode => {
+          const { label, acronym, fullName } = ANALYSIS_MODES[mode];
+          const named = acronym && fullName ? `${fullName} (${acronym})` : null;
+          return (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={active === mode}
+              aria-label={named ?? undefined}
+              title={modeTooltip(mode)}
+              onClick={() => active !== mode && onChange(mode)}
+              className={`shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                active === mode
+                  ? ANALYSIS_MODES[mode].active
+                  : 'text-slate-300 hover:bg-slate-700/50'
+              }`}
+            >
+              {named ? (
+                <>
+                  {/* The full name needs the width; below large screens it is the label and the
+                      abbreviation. The button's aria-label carries the full name either way. */}
+                  <span aria-hidden="true" className="hidden lg:inline">
+                    {named}
+                  </span>
+                  <span aria-hidden="true" className="lg:hidden">
+                    {label} ({acronym})
+                  </span>
+                </>
+              ) : (
+                label
+              )}
+            </button>
+          );
+        })}
       </div>
       <label className="sm:hidden">
         <span className="sr-only">Analysis mode</span>
@@ -83,8 +121,10 @@ export default function AnalysisModeSwitch({
           className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-2.5 py-1.5 text-xs font-semibold text-slate-100"
         >
           {modes.map(mode => (
-            <option key={mode} value={mode}>
-              {ANALYSIS_MODES[mode].label}: {ANALYSIS_MODES[mode].status}
+            <option key={mode} value={mode} title={modeTooltip(mode)}>
+              {ANALYSIS_MODES[mode].label}
+              {ANALYSIS_MODES[mode].acronym ? ` (${ANALYSIS_MODES[mode].acronym})` : ''}:{' '}
+              {ANALYSIS_MODES[mode].status}
             </option>
           ))}
         </select>

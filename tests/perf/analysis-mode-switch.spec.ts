@@ -23,6 +23,11 @@ async function visibleState(page: import('@playwright/test').Page) {
     .filter(Boolean);
 }
 
+// The Forecast and Assessment buttons are named by the model behind them
+const REF_BUTTON = 'Rapid Exposure Forecast (REF)';
+const PDIE_BUTTON = 'Pacific Disaster Impact & Exposure (PDIE)';
+const BUTTON_NAMES: Record<string, string> = { Forecast: REF_BUTTON, Assessment: PDIE_BUTTON };
+
 test.describe('Analysis mode switching', () => {
   test('Assessment after Forecast matches a fresh Assessment', async ({ page }) => {
     test.skip(
@@ -34,14 +39,14 @@ test.describe('Analysis mode switching', () => {
 
     await page
       .getByRole('group', { name: 'Analysis mode' })
-      .getByRole('button', { name: 'Forecast', exact: true })
+      .getByRole('button', { name: REF_BUTTON, exact: true })
       .click();
     await expect(page.getByText('Exposure Forecast', { exact: true })).toBeVisible({
       timeout: 30_000,
     });
     await page
       .getByRole('group', { name: 'Analysis mode' })
-      .getByRole('button', { name: 'Assessment', exact: true })
+      .getByRole('button', { name: PDIE_BUTTON, exact: true })
       .click();
     await expect(page.getByText('Summary Dashboard', { exact: true })).toBeVisible({
       timeout: 30_000,
@@ -62,11 +67,11 @@ test.describe('Analysis mode switching', () => {
     await open(page);
     await page
       .getByRole('group', { name: 'Analysis mode' })
-      .getByRole('button', { name: 'Forecast', exact: true })
+      .getByRole('button', { name: REF_BUTTON, exact: true })
       .click();
     await page
       .getByRole('group', { name: 'Analysis mode' })
-      .getByRole('button', { name: 'Assessment', exact: true })
+      .getByRole('button', { name: PDIE_BUTTON, exact: true })
       .click();
     await page.getByRole('button', { name: /open data filters/i }).click();
     await expect(page.getByText(/Selected: [1-9]/)).toHaveCount(0);
@@ -82,7 +87,9 @@ test.describe('Analysis mode switching', () => {
     );
     const overlayRows = page.locator('button[aria-controls^=map-panel-overlay]');
     const mode = (name: string) =>
-      page.getByRole('group', { name: 'Analysis mode' }).getByRole('button', { name, exact: true });
+      page
+        .getByRole('group', { name: 'Analysis mode' })
+        .getByRole('button', { name: BUTTON_NAMES[name] ?? name, exact: true });
     await open(page);
     await expect(overlayRows).toHaveCount(5);
 

@@ -2928,10 +2928,13 @@ export default function DashboardView({
                     the full "<Country> Tropical Cyclone Rapid Impact
                     Assessment Tool" wrapped to five lines and took a third of
                     the screen from the map. Still one heading for screen
-                    readers; the page title keeps the full name. */}
+                    readers; the page title keeps the full name. The small line
+                    uses the dashboard's own name (as on the login page and in
+                    reports), not "Rapid Impact Assessment": it sits above the
+                    mode switch and read as the name of the Assessment mode. */}
                 <h1 className="min-w-0">
                   <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    Tropical Cyclone Rapid Impact Assessment
+                    Pacific Disaster Impact &amp; Exposure
                   </span>{' '}
                   <span className="block text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
                     {COUNTRIES[selectedCountry].name}
