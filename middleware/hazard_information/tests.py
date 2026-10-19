@@ -48,3 +48,37 @@ class HazardInformationCountryFilterTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids = {row["id"] for row in response.data}
         self.assertEqual(ids, {self.ck_row.pk, self.vu_row.pk})
+
+
+class PopulateHazardCatalogTests(APITestCase):
+    """A store that is only partly uploaded loads what is there and reports the rest."""
+
+    def test_skips_groups_missing_from_the_store_and_stores_the_public_tile_address(self):
+        import tempfile
+        from io import StringIO
+        from unittest import mock
+
+        import numpy as np
+        import xarray as xr
+        from django.core.management import call_command
+
+        ck = Country.objects.get(code="CK")
+        before = HazardInformation.objects.filter(country=ck).count()
+        with tempfile.TemporaryDirectory() as store:
+            ds = xr.Dataset(
+                {"depth": (("slr", "return_period"), np.zeros((1, 2)))},
+                coords={"slr": [0.25], "return_period": [10, 100]},
+            )
+            ds.to_zarr(store, group="probabilistic/combined", mode="w")
+            out, err = StringIO(), StringIO()
+            with mock.patch(
+                "hazard_information.management.commands.populate_hazard_catalog.STORE_PATH", store
+            ):
+                call_command("populate_hazard_catalog", "--base-url", "https://tiles.example/", stdout=out, stderr=err)
+
+        rows = HazardInformation.objects.filter(country=ck, layer_name__startswith="combined_")
+        self.assertEqual(HazardInformation.objects.filter(country=ck).count() - before, 2)
+        self.assertEqual(rows.count(), 2)
+        self.assertTrue(all(r.url.startswith("https://tiles.example/partner_api/v1/hazard_tiles/") for r in rows))
+        self.assertIn("skipping 'swell_driven'", err.getvalue())
+        self.assertIn("Created 2", out.getvalue())

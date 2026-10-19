@@ -59,6 +59,30 @@ docker exec middleware_web python manage.py import_ck_risk_scenarios
 that output before relying on those numbers. Expect about 4,700 hazard rows and 4,700 scenarios for
 the Cook Islands.
 
+### Slow link? Upload in stages
+The scenarios need only `ck_risk_analysis/` (28 MB). Most of the 7 GB is two Zarr groups,
+`swell_driven` (4.8 GB) and `synthetic_tcs` (2.3 GB). `populate_hazard_catalog` skips a group that
+is not in the store yet and says so, so you can load what has arrived and run it again later.
+
+On the server (not your own machine), make the folder: `mkdir -p /home/divesha/middleware_partner_api/data`.
+
+```bash
+# Stage 1 (about 160 MB): scenarios, probabilistic and historical-TC hazard layers
+D=/home/kishank/middleware_partner_api/data; T=divesha@<server>:/home/divesha/middleware_partner_api/data
+rsync -a --partial --info=progress2 $D/ck_risk_analysis/ $T/ck_risk_analysis/
+rsync -a --partial --info=progress2 $D/hazard_catalog.zarr/zarr.json $T/hazard_catalog.zarr/
+rsync -a --partial --info=progress2 $D/hazard_catalog.zarr/probabilistic/ $T/hazard_catalog.zarr/probabilistic/
+rsync -a --partial --info=progress2 $D/hazard_catalog.zarr/historical_tcs/ $T/hazard_catalog.zarr/historical_tcs/
+# then run the two commands in this section; they are safe to run again
+
+# Stage 2 (when the link allows, 7 GB): the two large groups, then run populate_hazard_catalog again
+rsync -a --partial --info=progress2 $D/hazard_catalog.zarr/synthetic_tcs/ $T/hazard_catalog.zarr/synthetic_tcs/
+rsync -a --partial --info=progress2 $D/hazard_catalog.zarr/swell_driven/ $T/hazard_catalog.zarr/swell_driven/
+```
+`rsync` continues where it stopped if the connection drops: run the same command again. If your
+VPN drops mid-copy ("Network is unreachable"), reconnect first. Run it inside `tmux` or `screen`
+so closing the terminal does not stop it.
+
 ## 4. Check
 ```bash
 docker exec middleware_web python manage.py shell -c "

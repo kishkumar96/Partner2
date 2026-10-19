@@ -57,6 +57,11 @@ class Command(BaseCommand):
                 self.stderr.write(f"HazardSource '{hazard_source_name}' not found, skipping '{source}'.")
                 continue
 
+            if not os.path.isdir(os.path.join(STORE_PATH, *group.split("/"))):
+                # A partly uploaded store: load what is there now, the rest on a later run
+                self.stderr.write(f"No '{group}' group in {STORE_PATH}, skipping '{source}'.")
+                continue
+
             ds = xr.open_zarr(STORE_PATH, group=group)
             for slr in ds["slr"].values.tolist():
                 for selector in ds[dim].values.tolist():
