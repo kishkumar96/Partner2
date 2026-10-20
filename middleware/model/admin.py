@@ -1,8 +1,12 @@
 from datetime import timedelta
 
 from django.contrib import admin
-
+from django.db.models import Count
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
+
+from event.models import Event
 
 from .models import (
     Model,
@@ -14,6 +18,7 @@ from .models import (
     ModelTrigger,
     RunnerHeartbeat,
 )
+from .queueing import _event_for_storm, _results_country_id
 
 
 @admin.register(ModelDomain)
@@ -49,13 +54,48 @@ class ModelAdmin(admin.ModelAdmin):
 
 @admin.register(ModelRun)
 class ModelRunAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "status", "attempts", "claimed_by", "tc_track", "created_at", "finished_at", "failure_summary")
+    list_display = (
+        "id",
+        "name",
+        "status",
+        "tc_track",
+        "event_link",
+        "outputs",
+        "attempts",
+        "claimed_by",
+        "created_at",
+        "finished_at",
+        "failure_summary",
+    )
     list_filter = ("status", "model_domain", "priority")
     search_fields = ("name", "models__name")
     list_select_related = ("model_domain", "tc_track", "priority")
     filter_horizontal = ("models",)
-    readonly_fields = ("claimed_by", "claimed_at", "finished_at", "attempts")
+    readonly_fields = ("claimed_by", "claimed_at", "finished_at", "attempts", "event_link")
     actions = ("requeue",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(output_count=Count("risk_information", distinct=True))
+
+    @admin.display(description="Outputs", ordering="output_count")
+    def outputs(self, obj):
+        return obj.output_count
+
+    @admin.display(description="Event")
+    def event_link(self, obj):
+        """The Event this run belongs to. An Event links only the run it shows, so the others are found by storm."""
+        if obj.pk is None:
+            return "—"
+        event = Event.objects.filter(model_run=obj).first()
+        shown = event is not None
+        if event is None:
+            event = _event_for_storm(obj.tc_track, _results_country_id(obj) or obj.tc_track.country_id)
+        if event is None:
+            return "—"
+        url = reverse("partner_admin:event_event_change", args=[event.pk])
+        return format_html(
+            '<a href="{}">Event {}</a> ({})', url, event.pk, "the one it shows" if shown else "another run of this storm"
+        )
 
     @admin.display(description="Failure")
     def failure_summary(self, obj):
