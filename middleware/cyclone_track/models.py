@@ -1,6 +1,6 @@
 from django.db import models
 
-from .utils import cyclone_csv_to_geojson
+from .utils import cyclone_csv_to_geojson, geojson_track_to_points
 
 
 class CycloneTrack(models.Model):
@@ -79,8 +79,13 @@ class CycloneTrack(models.Model):
             return
 
         try:
+            parse = (
+                geojson_track_to_points
+                if str(self.track_file.name).lower().endswith((".geojson", ".json"))
+                else cyclone_csv_to_geojson
+            )
             with self.track_file.open("rb") as file_obj:
-                geojson = cyclone_csv_to_geojson(file_obj)
+                geojson = parse(file_obj)
         except Exception:
             CycloneTrack.objects.filter(pk=self.pk).update(
                 geometry=None,

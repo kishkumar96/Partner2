@@ -30,6 +30,7 @@ from django.utils.dateparse import parse_datetime
 
 from country.lookup import find_country
 from cyclone_track.models import CycloneTrack
+from cyclone_track.utils import geojson_track_to_points
 from cyclone_track_type.models import CycloneTrackType
 from event.models import Event
 from event_type.models import EventType
@@ -83,28 +84,11 @@ def find_output(folder: Path, name: str) -> Path | None:
 def track_points(path: Path) -> dict:
     """The run's track line as the point FeatureCollection the API serves for
     tracks read from CSV."""
-    data = json.loads(path.read_text(encoding="utf-8-sig"))
-    coordinates = []
-    for feature in data.get("features") or []:
-        geometry = feature.get("geometry") or {}
-        if geometry.get("type") == "LineString":
-            coordinates.extend(geometry.get("coordinates") or [])
-        elif geometry.get("type") == "MultiLineString":
-            for line in geometry.get("coordinates") or []:
-                coordinates.extend(line)
-    if not coordinates:
+    with path.open("rb") as f:
+        points = geojson_track_to_points(f)
+    if points is None:
         raise CommandError(f"{path.name} has no track line.")
-    return {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "properties": {"Latitude": lat, "Longitude": lon},
-                "geometry": {"type": "Point", "coordinates": [lon, lat]},
-            }
-            for lon, lat, *_ in coordinates
-        ],
-    }
+    return points
 
 
 def is_empty_feature_collection(path: Path) -> bool:

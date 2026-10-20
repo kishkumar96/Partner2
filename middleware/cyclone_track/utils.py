@@ -170,3 +170,53 @@ def cyclone_csv_to_geojson(file_obj) -> dict[str, Any] | None:
         "metadata": meta,
         "features": features,
     }
+
+
+def geojson_track_to_points(file_obj) -> dict[str, Any] | None:
+    """A track given as GeoJSON (e.g. a RiskScape run's cyclone-track.geojson), as the same
+    FeatureCollection of Point features the CSV parser returns.
+
+    A line becomes one point per vertex; a Point keeps its own properties. Either way each point
+    carries Latitude and Longitude. A track from a run's line has no times or wind speeds, so it
+    can draw the track but not drive the animation. None when the file has no track points.
+    """
+    import json
+
+    try:
+        data = json.loads(file_obj.read().decode("utf-8-sig", errors="replace"))
+    except ValueError:
+        return None
+    features = data.get("features") if isinstance(data, dict) else None
+    if features is None and isinstance(data, dict) and data.get("type") == "Feature":
+        features = [data]
+    points: list[dict[str, Any]] = []
+
+    def add(lon: Any, lat: Any, props: dict[str, Any] | None = None) -> None:
+        lat, lon = _to_float(lat), _to_float(lon)
+        if lat is None or lon is None:
+            return
+        lon = _normalize_longitude(lon)
+        points.append(
+            {
+                "type": "Feature",
+                "properties": {**(props or {}), "Latitude": lat, "Longitude": lon},
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            }
+        )
+
+    for feature in features or []:
+        geometry = (feature or {}).get("geometry") or {}
+        coordinates = geometry.get("coordinates") or []
+        kind = geometry.get("type")
+        if kind == "LineString":
+            for lon, lat, *_ in coordinates:
+                add(lon, lat)
+        elif kind == "MultiLineString":
+            for line in coordinates:
+                for lon, lat, *_ in line:
+                    add(lon, lat)
+        elif kind == "Point" and len(coordinates) >= 2:
+            add(coordinates[0], coordinates[1], dict((feature or {}).get("properties") or {}))
+    if not points:
+        return None
+    return {"type": "FeatureCollection", "features": points}

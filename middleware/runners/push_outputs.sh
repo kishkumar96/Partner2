@@ -5,6 +5,8 @@
 #   ./push_outputs.sh --dry-run             # show what would be sent
 #   ./push_outputs.sh                       # send every run folder in ./outputs
 #   ./push_outputs.sh outputs/2026101906_Wati_20261019T060000Z   # or just one
+#   ./push_outputs.sh --create-missing-tracks   # also create a run's track from its cyclone-track.geojson
+#                                               # when the API has no track of that name yet
 #
 # A run folder is named <track name>_<time>Z, e.g. 2026101906_Wati_20261019T060000Z. The track
 # name is looked up on the Partner API: the run must have been made from a track that exists there,
@@ -18,12 +20,14 @@ API="${PARTNER_API_URL:-https://opmthredds.gem.spc.int/partner_api/v1}"
 COUNTRY="${COUNTRY:-CK}"
 OUTPUTS_DIR="${OUTPUTS_DIR:-outputs}"
 DRY_RUN=false
+CREATE_TRACKS=false
 RUNS=()
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --create-missing-tracks) CREATE_TRACKS=true ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) RUNS+=("${arg%/}") ;;
   esac
 done
@@ -66,6 +70,52 @@ print(ids[-1] if ids else "")
   rm -f "$out"
 }
 
+
+# The id of a country on the Partner API, given its code (e.g. CK) or short name.
+country_id_for() {
+  curl -s -H "Authorization: Token ${PARTNER_API_TOKEN}" "${API}/country/" |
+    python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except ValueError:
+    sys.exit(0)
+rows = data if isinstance(data, list) else data.get("results", [])
+want = sys.argv[1].upper()
+for r in rows:
+    if want in ((r.get("code") or "").upper(), (r.get("short_name") or "").upper()):
+        print(r["id"]); break
+' "$1"
+}
+
+# Create the track for a run from the run's own cyclone-track.geojson.
+# $1 track name, $2 run folder, $3 issue time (2026-10-19T06:00:00Z). Prints the new track id, or
+# "ERROR: ..." when it could not be created.
+create_track() {
+  local name="$1" dir="$2" issued="$3" file cid resp code body
+  file=$(find "$dir" -maxdepth 1 -name '*cyclone-track.geojson' | head -1)
+  [ -n "$file" ] || { echo "ERROR: $dir has no cyclone-track.geojson"; return; }
+  cid=$(country_id_for "$COUNTRY")
+  [ -n "$cid" ] || { echo "ERROR: no country '$COUNTRY' on $API"; return; }
+  resp=$(curl -s -w '\n%{http_code}' -H "Authorization: Token ${PARTNER_API_TOKEN}" \
+    -F "cyclone_name=${name}" -F "issued_time=${issued}" -F "country=${cid}" \
+    -F "track_file=@${file};type=application/geo+json" "${API}/cyclone_track/")
+  code="${resp##*$'\n'}"; body="${resp%$'\n'*}"
+  if [[ "$code" != 2* ]]; then echo "ERROR: HTTP $code ${body:0:300}"; return; fi
+  python3 -c '
+import json, sys
+d = json.loads(sys.argv[1])
+print(d["id"], "" if d.get("geometry_computed") else "NOGEOMETRY")
+' "$body"
+}
+
+# 20261019T060000Z -> 2026-10-19T06:00:00Z, or nothing if it is not in that form
+iso_from_stamp() {
+  [[ "$1" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || return 0
+  local s="$1"
+  echo "${s:0:4}-${s:4:2}-${s:6:2}T${s:9:2}:${s:11:2}:${s:13:2}Z"
+}
+
 sent=0; failed=0
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 
@@ -80,8 +130,30 @@ for dir in "${RUNS[@]}"; do
     failed=$((failed + 1)); continue
   fi
   if [ -z "$track_id" ]; then
-    echo "[$run] no track named '$name' on $API. The run must be made from a track that exists there; skipping."
-    failed=$((failed + 1)); continue
+    if ! $CREATE_TRACKS; then
+      echo "[$run] no track named '$name' on $API. The run must be made from a track that exists there."
+      echo "        Use --create-missing-tracks to create it from this run's cyclone-track.geojson."
+      failed=$((failed + 1)); continue
+    fi
+    issued=$(iso_from_stamp "${run##*_}")
+    if [ -z "$issued" ]; then
+      echo "[$run] cannot read the issue time from the folder name (expected ..._YYYYMMDDTHHMMSSZ); skipping."
+      failed=$((failed + 1)); continue
+    fi
+    if $DRY_RUN; then
+      echo "[$run] would create track '$name' (issued $issued, country $COUNTRY) from its cyclone-track.geojson"
+      track_id="<new>"
+    else
+      created=$(create_track "$name" "$dir" "$issued")
+      if [[ "$created" == ERROR* ]]; then
+        echo "[$run] could not create the track: ${created#ERROR: }"; failed=$((failed + 1)); continue
+      fi
+      track_id="${created%% *}"
+      echo "[$run] created track $track_id '$name'"
+      if [[ "$created" == *NOGEOMETRY* ]]; then
+        echo "        warning: the server did not read the track's points. Deploy the backend update that accepts geojson tracks."
+      fi
+    fi
   fi
   track_url="${API}/cyclone_track/${track_id}/?format=json"
 
