@@ -30,14 +30,14 @@ def extension(name):
     return "csv" if name.startswith(("regional-summary", "total-")) else "geojson"
 
 
-def run_zip(run=None, prefix="outputs/Wati_run/", skip=(), extra=None):
+def run_zip(run=None, prefix="outputs/Wati_run/", skip=(), extra=None, override=None):
     """The zip REF.sh would make: every output under a folder, plus whatever else is in extra."""
     files = (run or make_run(20515))["files"]
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         for name, content in files.items():
             if name not in skip:
-                archive.writestr(f"{prefix}{name}.{extension(name)}", content)
+                archive.writestr(f"{prefix}{name}.{extension(name)}", (override or {}).get(name, content))
         for name, content in (extra or {}).items():
             archive.writestr(name, content)
     return buffer.getvalue()
@@ -122,6 +122,36 @@ class ImportEndpointTests(QueueTestCase):
         content = run_zip(extra={"outputs/.DS_Store": b"x", "outputs/run.json": b"{}", "notes.txt": b"hi"})
 
         self.assertEqual(self.send(content).status_code, 201)
+
+    # --- outputs that are empty or damaged
+
+    EMPTY_COLLECTION = b'{"type": "FeatureCollection", "features": []}'
+
+    def test_a_run_with_nothing_exposed_in_any_cluster_still_loads(self):
+        # A storm moving away, winds below gale: the model writes a cluster file with no features
+        response = self.send(run_zip(override={"exposure-by-cluster": self.EMPTY_COLLECTION}))
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.data["skipped"], ["floodplain-exposure.geojson", "exposure-by-cluster.geojson"])
+        self.assertEqual(response.data["outputs"], 8)
+        run = ModelRun.objects.get(pk=response.data["run"])
+        self.assertFalse(run.risk_information.filter(dataset_type="exposure_by_cluster").exists())
+        self.assertTrue(run.risk_information.filter(dataset_type="regional_impacts").exists())
+
+    def test_says_why_a_file_could_not_be_read(self):
+        cases = (
+            ("exposure-by-cluster", b"<html>502 Bad Gateway</html>", "isn't valid JSON"),
+            ("exposure-by-cluster", b'{"type": "FeatureCollection", "features": [{"type": "Fea', "isn't valid JSON"),
+            ("regional-impacts", self.EMPTY_COLLECTION, "has no features"),
+            ("regional-impacts", b"", "is empty"),
+        )
+        for name, content, reason in cases:
+            response = self.send(run_zip(override={name: content}))
+
+            self.assertEqual(response.status_code, 400, (name, reason))
+            self.assertIn(f"{name}.geojson {reason}", response.data["detail"])
+        # nothing half-loaded
+        self.assertEqual((CycloneTrack.objects.count(), ModelRun.objects.count(), Event.objects.count()), (0, 0, 0))
 
     # --- who may import
 

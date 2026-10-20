@@ -102,7 +102,7 @@ class Command(BaseCommand):
                 folder, country, track, advisory, replace=options["replace"], external_url=options["external_url"]
             )
         if skipped:
-            self.stdout.write(f"Skipped empty overlays: {', '.join(skipped)}.")
+            self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
         shows = "now the run the Event shows" if event.model_run_id == model_run.pk else "kept alongside a newer run"
         self.stdout.write(
             self.style.SUCCESS(

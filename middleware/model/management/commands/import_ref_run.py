@@ -58,6 +58,7 @@ OPTIONAL_OUTPUTS = (
     "floodplain-exposure.geojson",
 )
 TRACK_OUTPUT = "cyclone-track.geojson"
+CLUSTER_OUTPUT = "exposure-by-cluster.geojson"
 
 DATASET_TYPES = {
     "regional-impacts.geojson": "regional_impacts",
@@ -138,6 +139,24 @@ def track_output_is_empty(folder: Path) -> bool | None:
     return None
 
 
+def why_unreadable(path: Path) -> str:
+    """Why a downloaded output could not be loaded, in words the sender can act on."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return "isn't a text file (damaged download?)"
+    if not text.strip():
+        return "is empty (0 bytes of content; was the download cut short?)"
+    if path.suffix.lower() in (".geojson", ".json"):
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return "isn't valid JSON (truncated download, or an error page saved as the file?)"
+        if isinstance(data, dict) and data.get("type") == "FeatureCollection" and not data.get("features"):
+            return "has no features"
+    return "couldn't be read"
+
+
 class Command(BaseCommand):
     help = "Load a Rapid Exposure Forecast run's output folder as an event."
 
@@ -195,7 +214,7 @@ class Command(BaseCommand):
                 raise CommandError("--as-run needs --track: the advisory's track says which storm it belongs to.")
             event, run = self.import_as_run(options, country, outputs, title)
             if skipped:
-                self.stdout.write(f"Skipped empty overlays: {', '.join(skipped)}.")
+                self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
             shows = "now the run the Event shows" if event.model_run_id == run.pk else "kept alongside a newer run"
             self.stdout.write(
                 self.style.SUCCESS(
@@ -231,11 +250,11 @@ class Command(BaseCommand):
                 risk.upload.save(name, ContentFile(path.read_bytes()), save=True)
                 risk.refresh_from_db()
                 if not risk.geometry_computed:
-                    raise CommandError(f"{path.name} couldn't be read.")
+                    raise CommandError(f"{path.name} {why_unreadable(path)}.")
                 event.risks.add(risk)
 
         if skipped:
-            self.stdout.write(f"Skipped empty overlays: {', '.join(skipped)}.")
+            self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
         self.stdout.write(
             self.style.SUCCESS(
                 f"Event {event.pk} '{title}' for {country.short_name}: track {track.pk}, "
@@ -265,6 +284,14 @@ class Command(BaseCommand):
                 skipped.append(name)
                 continue
             outputs[name] = path
+
+        # Nothing exposed in any cluster (a storm moving away, winds below gale) writes a cluster file
+        # with no features. That is a real result; the dashboard copes without the row, so leave it out
+        # as with the empty overlays. The other tables and the track still say the run did work.
+        cluster = outputs.get(CLUSTER_OUTPUT)
+        if cluster is not None and is_empty_feature_collection(cluster):
+            del outputs[CLUSTER_OUTPUT]
+            skipped.append(CLUSTER_OUTPUT)
 
         return outputs, skipped
 
@@ -309,7 +336,7 @@ class Command(BaseCommand):
                 risk.upload.save(name, ContentFile(path.read_bytes()), save=True)
                 risk.refresh_from_db()
                 if not risk.geometry_computed:
-                    raise CommandError(f"{path.name} couldn't be read.")
+                    raise CommandError(f"{path.name} {why_unreadable(path)}.")
             event = publish_run_to_event(run, country_id=country.pk)
         return event, run
 
