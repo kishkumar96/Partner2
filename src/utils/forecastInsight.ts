@@ -187,9 +187,16 @@ function buildTrend(
     summary = `This advisory has the highest exposure so far: ${people(peak.people)}.`;
   } else {
     summary = `Exposure peaked at ${people(peak.people)} (${utcStamp(peak.issuedAt)})`;
-    if (current) summary += `; this advisory: ${people(current.people)}`;
+    if (current) {
+      summary +=
+        approximate(current.people) === approximate(peak.people)
+          ? '; this advisory is about the same'
+          : `; this advisory: ${people(current.people)}`;
+    }
     // Looking at an older advisory: say where things stand now, so it is not mistaken for the latest
-    if (current && current !== latest) summary += `; the latest advisory: ${people(latest.people)}`;
+    if (current && current !== latest) {
+      summary += `; the latest advisory: ${people(latest.people)}${latest.people === 0 ? ' in forecast winds' : ''}`;
+    }
     summary += '.';
     // A direction is only meaningful for the newest advisory, which is where the trend ends
     if (current === latest && direction !== 'steady') {

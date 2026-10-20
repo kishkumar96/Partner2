@@ -241,7 +241,7 @@ describe('buildForecastInsight, the trend across advisories', () => {
       point('3', '2026-10-19T12:00:00Z', 0),
     ];
     expect(run('2026-10-17T12:00:00Z', timeline).trend?.summary).toBe(
-      'Exposure peaked at about 14,000 people (18 Oct 18:00 UTC); this advisory: about 2,600 people; the latest advisory: no one.'
+      'Exposure peaked at about 14,000 people (18 Oct 18:00 UTC); this advisory: about 2,600 people; the latest advisory: no one in forecast winds.'
     );
   });
 
@@ -271,6 +271,17 @@ describe('buildForecastInsight, the trend across advisories', () => {
     ];
     expect(run('2026-10-18T18:00:00Z', timeline).trend?.summary).toBe(
       'This advisory has the highest exposure so far: about 14,000 people.'
+    );
+  });
+
+  it('says "about the same" when this advisory rounds to the peak, and what the latest shows', () => {
+    const timeline = [
+      point('1', '2026-10-18T12:00:00Z', 14118),
+      point('2', '2026-10-19T00:00:00Z', 14116),
+      point('3', '2026-10-19T12:00:00Z', 0),
+    ];
+    expect(run('2026-10-19T00:00:00Z', timeline).trend?.summary).toBe(
+      'Exposure peaked at about 14,000 people (18 Oct 12:00 UTC); this advisory is about the same; the latest advisory: no one in forecast winds.'
     );
   });
 

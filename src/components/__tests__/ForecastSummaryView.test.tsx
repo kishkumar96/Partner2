@@ -74,7 +74,7 @@ describe('ForecastSummaryView, when winds are forecast', () => {
 
     const trend = screen.getByTestId('summary-trend');
     expect(trend).toHaveTextContent(
-      'Exposure peaked at about 14,000 people (18 Oct 18:00 UTC); this advisory: about 2,600 people; the latest advisory: no one.'
+      'Exposure peaked at about 14,000 people (18 Oct 18:00 UTC); this advisory: about 2,600 people; the latest advisory: no one in forecast winds.'
     );
     fireEvent.click(within(trend).getByRole('button', { name: /19 Oct 12:00 UTC/ }));
     expect(h.onSelectAdvisory).toHaveBeenCalledWith('c');
