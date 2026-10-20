@@ -78,6 +78,21 @@ export function windRange(kind: WindKind): string {
     : `${category.minKmph}–${category.maxKmph} km/h`;
 }
 
+/** REF also draws the ring of strongest winds around the centre; it is an area, not a wind category. */
+export const RADIUS_OF_MAX_WINDS = 'Radius of Maximum Winds';
+
+/**
+ * Any REF wind area in plain words: "Gale Winds" -> "gale winds (63–88 km/h)",
+ * "Radius of Maximum Winds" -> "inside the radius of maximum winds". Unknown names come back as given.
+ */
+export function windAreaLabel(name: string | null | undefined): string | null {
+  if (!name) return null;
+  if (name.trim().toLowerCase() === RADIUS_OF_MAX_WINDS.toLowerCase()) {
+    return 'inside the radius of maximum winds';
+  }
+  return windBandLabel(name) ?? name.toLowerCase();
+}
+
 /** "possible gale winds (63–88 km/h)": the band by name and range, never by the band's edge speed. */
 export function windBandLabel(overallWinds: string | null | undefined): string | null {
   const band = parseWindBand(overallWinds);

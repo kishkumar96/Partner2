@@ -1,4 +1,5 @@
 import {
+  windAreaLabel,
   WIND_CATEGORIES,
   parseWindBand,
   windBandLabel,
@@ -41,5 +42,17 @@ describe('windScale', () => {
     expect(windSeverity('storm')).toBeLessThan(windSeverity('hurricane'));
     expect(WIND_CATEGORIES.gale.maxKmph! + 1).toBe(WIND_CATEGORIES.storm.minKmph);
     expect(WIND_CATEGORIES.storm.maxKmph! + 1).toBe(WIND_CATEGORIES.hurricane.minKmph);
+  });
+});
+
+describe('windAreaLabel', () => {
+  it('explains the ring of strongest winds instead of printing it as a wind category', () => {
+    expect(windAreaLabel('Radius of Maximum Winds')).toBe('inside the radius of maximum winds');
+  });
+
+  it('describes wind bands by range and passes unknown names through', () => {
+    expect(windAreaLabel('Gale Winds')).toBe('gale winds (63–88 km/h)');
+    expect(windAreaLabel('Something New')).toBe('something new');
+    expect(windAreaLabel(null)).toBeNull();
   });
 });

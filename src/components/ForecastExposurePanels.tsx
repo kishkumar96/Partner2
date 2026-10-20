@@ -37,7 +37,7 @@ import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastSummaryView from './ForecastSummaryView';
 import { buildForecastInsight } from '@/utils/forecastInsight';
 import { strongestBandLabel, type TimelinePoint } from '@/utils/forecastTimeline';
-import { windBandLabel } from '@/utils/windScale';
+import { parseWindBand, windAreaLabel } from '@/utils/windScale';
 import { compareForecasts } from '@/utils/forecastComparison';
 import type { ResponsePriority } from '@/utils/useResponsePriority';
 
@@ -350,7 +350,9 @@ export function ForecastExposureSummary({
         </div>
         <p className="text-xs text-slate-400 mt-1">
           {area ? area.name : 'National'}
-          {headerWinds ? ` · up to ${windBandLabel(headerWinds) ?? headerWinds.toLowerCase()}` : ''}
+          {headerWinds
+            ? ` · ${parseWindBand(headerWinds) ? 'up to ' : ''}${windAreaLabel(headerWinds)}`
+            : ''}
         </p>
         {region && onRegionClear && (
           <button
@@ -710,7 +712,9 @@ export function ForecastExposureTables({
     tab === 'regions'
       ? exposure.regions.map(area => ({
           label: area.name,
-          detail: area.overallWinds,
+          detail: parseWindBand(area.overallWinds)
+            ? area.overallWinds
+            : windAreaLabel(area.overallWinds),
           color: windDangerColor(area.overallWinds),
           totals: area.exposed,
         }))

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastTrendChart from './ForecastTrendChart';
+import { windAreaLabel } from '@/utils/windScale';
 import { windDangerColor } from '@/utils/forecastExposure';
 import { approximate, type ForecastInsight, type InsightArea } from '@/utils/forecastInsight';
 
@@ -26,7 +27,7 @@ const AREAS_SHOWN = 3;
 
 /** "possible gale", "storm" */
 function windsShort(area: InsightArea): string {
-  if (!area.kind) return area.winds ?? '';
+  if (!area.kind) return windAreaLabel(area.winds) ?? '';
   return `${area.possible ? 'possible ' : ''}${area.kind}`;
 }
 

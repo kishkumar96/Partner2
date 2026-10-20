@@ -110,6 +110,16 @@ describe('normalizePartnerEventRecords', () => {
     expect(new Set(records.map(r => r.id)).size).toBe(3);
   });
 
+  it("never gives a run without its own track the Event's track, which is the shown run's", () => {
+    const records = normalizePartnerEventRecords('CK', {
+      ...event,
+      forecast_runs: [event.forecast_runs[0], { ...event.forecast_runs[1], cyclone_track: null }],
+    });
+    const byTime = Object.fromEntries(records.map(r => [r.trackIssuedTime, r]));
+    expect(byTime['2026-10-17T12:00:00Z'].backendCycloneTrackId).toBeUndefined();
+    expect(byTime['2026-10-17T18:00:00Z'].backendCycloneTrackId).toBe('131');
+  });
+
   it('carries a failed run as a run with no outputs and its reason', () => {
     const failed = normalizePartnerEventRecords('CK', event).find(r => r.forecastRunId === '23');
     expect(failed?.modelRunStatus).toBe('failed');
