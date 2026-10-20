@@ -211,6 +211,12 @@ again and `--dry-run` reads the run and writes nothing.
 
 ## Sending a finished run to the API (`model_run/import/`)
 
+For a folder of finished runs (one sub-folder per run, as `REF.sh` downloads them), use
+`runners/push_outputs.sh`: it zips each folder, finds its SPC track from the cyclone name in the
+folder name (or from `<folder>/run.env`), posts it with the right `Authorization: Token` header and
+says plainly what the server answered. `--dry-run` shows what it would send; a run the server
+already has is reported as such and changes nothing.
+
 A script that ran RiskScape itself (for example `REF.sh`) can hand the run over in one request, so
 nobody has to import it:
 
