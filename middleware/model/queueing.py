@@ -249,6 +249,9 @@ def forecast_runs_for_event(event: Event) -> list[dict]:
             {
                 "id": run.pk,
                 "cyclone_track": run.tc_track_id,
+                # The run's own track, so a list of advisories can name each one; the Event only
+                # carries the name of the track it shows now
+                "cyclone_name": run.tc_track.cyclone_name,
                 "issued_time": run.tc_track.issued_time,
                 "status": run.status,
                 "finished_at": run.finished_at,

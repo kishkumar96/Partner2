@@ -575,6 +575,18 @@ class ForecastRunHistoryTests(QueueTestCase):
         self.assertEqual(runs[1]["risks"], [risk_a.pk])  # kept after the Event moved on
         self.assertEqual(runs[1]["status"], ModelRun.COMPLETE)
 
+    def test_each_advisory_run_names_its_own_track(self):
+        # The Event carries only the name of the track it shows; the list of advisories must not
+        # make every row look like the latest one
+        self.run_to_completion(self.track(utc(8, 12), name="2026040812_VAIANU"))
+        _, _, event = self.run_to_completion(self.track(utc(8, 18), name="2026040818_VAIANU"))
+
+        row = self.event_row(event)
+        self.assertEqual(row["cyclone_name"], "2026040818_VAIANU")
+        self.assertEqual(
+            [r["cyclone_name"] for r in row["forecast_runs"]], ["2026040818_VAIANU", "2026040812_VAIANU"]
+        )
+
     def test_other_storms_and_countries_are_not_listed(self):
         _, _, event = self.run_to_completion(self.track(utc(8, 12)))
         self.run_to_completion(self.track(utc(8, 13), name="2026040813_OTHER"))

@@ -131,6 +131,11 @@ export function normalizePartnerEventRecords(
       date: issued ? normalizeDateValue(issued) || base.date : base.date,
       trackIssuedTime: issued ?? base.trackIssuedTime,
       backendCycloneTrackId: toIdString(run.cyclone_track) ?? base.backendCycloneTrackId,
+      // Each advisory's own track name, not the name of the track the Event shows now
+      cycloneName:
+        typeof run.cyclone_name === 'string' && run.cyclone_name
+          ? run.cyclone_name
+          : base.cycloneName,
       backendRiskIds: toIdList(run.risks),
       modelRunStatus: typeof run.status === 'string' ? run.status : base.modelRunStatus,
       modelRunFinishedAt:
