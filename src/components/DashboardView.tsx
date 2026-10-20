@@ -64,6 +64,7 @@ import ForecastLayers from '@/components/ForecastLayers';
 import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
 import { filtersShownFor } from '@/utils/forecastFilters';
 import type { ForecastExposure } from '@/utils/forecastExposure';
+import type { TimelinePoint } from '@/utils/forecastTimeline';
 import ModeFilterPanel from '@/components/ModeFilterPanel';
 import type { EventRecord } from '@/data/eventRecords';
 import {
@@ -462,6 +463,7 @@ export default function DashboardView({
     record: EventRecord;
     exposure: ForecastExposure;
   } | null>(null);
+  const [forecastTimeline, setForecastTimeline] = useState<TimelinePoint[]>([]);
   const [forecastLayersFocusKey, setForecastLayersFocusKey] = useState(0);
   const [activeEventRecord, setActiveEventRecord] = useState<EventRecord | null>(null);
   const responsePriority = useResponsePriority(
@@ -2555,6 +2557,7 @@ export default function DashboardView({
       setRegionalImpactsGeoJSON(realData.regionalImpacts ?? null);
       setForecastExposure(realData.forecastExposure ?? null);
       setPreviousForecast(realData.previousForecast ?? null);
+      setForecastTimeline(realData.forecastTimeline ?? []);
       setActiveEventRecord(realData.activeEventRecord ?? null);
 
       if (realData.regionalSummaryBySector) {
@@ -3759,6 +3762,14 @@ export default function DashboardView({
               countryName={COUNTRIES[selectedCountry].name}
               areaLabel={countryUi.focusAreaPlural.toLowerCase()}
               previous={previousForecast}
+              summary={{
+                timeline: forecastTimeline,
+                latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
+                onSwitchToLatest: forecastRecord
+                  ? () => setModeEventId(forecastRecord.id)
+                  : undefined,
+                onSelectAdvisory: setModeEventId,
+              }}
             />
           ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
             <ForecastRunStatusPanel event={activeEventRecord} />

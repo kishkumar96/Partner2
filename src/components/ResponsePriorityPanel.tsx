@@ -23,15 +23,15 @@ function Row({ result }: { result: PriorityResult }) {
   const m = result.metrics;
   return (
     <li className="rounded border border-slate-700/50 bg-slate-900/50 p-2">
-      <div className="flex items-baseline justify-between gap-2 text-[11px]">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-slate-100">{result.name}</span>
         <span className="tabular-nums text-slate-300">{formatNumber(m.people)} people</span>
       </div>
-      <p className="text-[10px] text-slate-400">
+      <p className="text-xs text-slate-400">
         {formatNumber(m.healthFacilities)} health · {formatNumber(m.evacuationCentres)} evacuation
         centres · {formatNumber(m.peopleInFloodplains)} in floodplains
       </p>
-      <details className="mt-1 text-[10px] text-slate-300">
+      <details className="mt-1 text-xs text-slate-300">
         <summary className="cursor-pointer text-sky-300">Why this priority</summary>
         <ul className="mt-1 list-disc space-y-0.5 pl-4">
           {result.reasons.map(reason => (
@@ -44,7 +44,7 @@ function Row({ result }: { result: PriorityResult }) {
 }
 
 /**
- * "Operational priority -preliminary": where to act first, with the rules'
+ * "Operational priority — preliminary": where to act first, with the rules'
  * reasons. Supports human decisions; it does not declare an emergency.
  */
 export default function ResponsePriorityPanel({
@@ -64,6 +64,11 @@ export default function ResponsePriorityPanel({
   const amber = priority.results.filter(r => r.underlyingLevel === 'amber');
   const green = priority.results.filter(r => r.underlyingLevel === 'green');
   const shownRed = showAllRed ? red : red.slice(0, QUEUE_PREVIEW);
+  const amberNames =
+    amber
+      .slice(0, 3)
+      .map(result => result.name)
+      .join(', ') + (amber.length > 3 ? ` and ${amber.length - 3} more` : '');
 
   return (
     <section
@@ -75,9 +80,9 @@ export default function ResponsePriorityPanel({
         <div>
           <h3 className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
             <Flag className="h-3.5 w-3.5 text-sky-300" aria-hidden="true" />
-            Operational priority -preliminary
+            Operational priority — preliminary
           </h3>
-          <p className="text-[10px] leading-snug text-slate-400">
+          <p className="text-xs leading-snug text-slate-400">
             Supports decisions; it does not declare an emergency. By {areaLabel}.
           </p>
         </div>
@@ -85,7 +90,7 @@ export default function ResponsePriorityPanel({
           type="button"
           onClick={() => setEditing(value => !value)}
           aria-expanded={editing}
-          className="flex !min-h-[1.75rem] flex-shrink-0 items-center gap-1 rounded-md border border-slate-600/60 px-2 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700/50"
+          className="flex !min-h-[1.75rem] flex-shrink-0 items-center gap-1 rounded-md border border-slate-600/60 px-2 py-0.5 text-xs text-slate-200 hover:bg-slate-700/50"
         >
           <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
           Thresholds
@@ -95,7 +100,7 @@ export default function ResponsePriorityPanel({
       {stale && (
         <p
           role="note"
-          className="rounded border border-slate-500/50 bg-slate-700/40 p-2 text-[10px] leading-snug text-slate-200"
+          className="rounded border border-slate-500/50 bg-slate-700/40 p-2 text-xs leading-snug text-slate-200"
           data-testid="priority-stale"
         >
           {priority.ageHours === null
@@ -113,7 +118,7 @@ export default function ResponsePriorityPanel({
           return (
             <span
               key={level}
-              className={`inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-[10px] font-semibold ${style.text}`}
+              className={`inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold ${style.text}`}
               data-testid={`priority-count-${level}`}
             >
               <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden="true" />
@@ -124,7 +129,7 @@ export default function ResponsePriorityPanel({
         })}
         {stale && (
           <span
-            className="inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-[10px] font-semibold text-slate-300"
+            className="inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold text-slate-300"
             data-testid="priority-count-grey"
           >
             <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
@@ -135,7 +140,7 @@ export default function ResponsePriorityPanel({
 
       {red.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] font-semibold text-red-300">
+          <p className="mb-1 text-xs font-semibold text-red-300">
             RED · {red.length} priority {red.length === 1 ? 'area' : 'areas'}
           </p>
           <ol className="space-y-1.5">
@@ -147,7 +152,7 @@ export default function ResponsePriorityPanel({
             <button
               type="button"
               onClick={() => setShowAllRed(value => !value)}
-              className="mt-1 !min-h-0 text-[10px] text-sky-300 underline"
+              className="mt-1 !min-h-0 text-xs text-sky-300 underline"
             >
               {showAllRed ? 'Show fewer' : `Show all ${red.length}`}
             </button>
@@ -156,11 +161,16 @@ export default function ResponsePriorityPanel({
       )}
 
       {amber.length > 0 && (
-        <details className="text-[11px] text-slate-200">
-          <summary className="cursor-pointer font-semibold text-amber-300">
-            AMBER · {amber.length} watch {amber.length === 1 ? 'area' : 'areas'}
+        <details className="text-xs text-slate-200">
+          <summary
+            className={`cursor-pointer font-semibold ${stale ? 'text-slate-300' : 'text-amber-300'}`}
+            data-testid="priority-amber-summary"
+          >
+            {stale ? 'Rules read AMBER' : 'AMBER'} · {amber.length} watch{' '}
+            {amber.length === 1 ? 'area' : 'areas'}: {amberNames}
+            {stale ? ' (unverified)' : ''}
           </summary>
-          <p className="mt-1 text-[10px] text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Confirm readiness and local contacts; monitor advisory changes.
           </p>
           <ol className="mt-1 space-y-1.5">
@@ -172,7 +182,7 @@ export default function ResponsePriorityPanel({
       )}
 
       {green.length > 0 && (
-        <p className="text-[10px] text-slate-400">
+        <p className="text-xs text-slate-400">
           GREEN · {green.length} {green.length === 1 ? 'area' : 'areas'} to monitor: no Red or Amber
           rule met.
         </p>

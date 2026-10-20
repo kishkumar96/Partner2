@@ -357,11 +357,8 @@ export default function ForecastLayers({
 
 /** What everything drawn on the forecast map means. */
 export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> }) {
-  const [open, setOpen] = useState(true);
-  // On a phone the open legend covers a third of the map, so start it collapsed
-  useEffect(() => {
-    if (window.innerWidth < 640) setOpen(false);
-  }, []);
+  // Collapsed to start with: open, it covers the islands the forecast is about
+  const [open, setOpen] = useState(false);
 
   // Area shading is always drawn, so the wind bands are always explained.
   const bands = [...WIND_DANGER_ORDER].reverse();

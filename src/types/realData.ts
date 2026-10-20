@@ -1,3 +1,4 @@
+import type { TimelinePoint } from '@/utils/forecastTimeline';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import type { RealWMSLayer } from '@/data/realThreddsLayers';
 import type { EventRecord } from '@/data/eventRecords';
@@ -186,4 +187,6 @@ export interface RealDataLoadResult {
   forecastExposure?: ForecastExposure | null;
   /** The advisory before this one (same storm, with results), for "what changed". */
   previousForecast?: { record: EventRecord; exposure: ForecastExposure } | null;
+  /** Every advisory of this storm with results, oldest first: what the trend is drawn from. */
+  forecastTimeline?: TimelinePoint[];
 }
