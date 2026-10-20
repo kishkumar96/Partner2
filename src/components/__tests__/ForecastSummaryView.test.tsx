@@ -61,7 +61,7 @@ describe('ForecastSummaryView, when winds are forecast', () => {
     render(<ForecastSummaryView insight={forecast()} {...handlers()} />);
 
     const stats = screen.getByTestId('summary-stats');
-    expect(stats).toHaveTextContent('~2,600');
+    expect(stats).toHaveTextContent('~2.6K');
     expect(stats).toHaveTextContent('people');
     expect(stats).toHaveTextContent('28');
     expect(stats).toHaveTextContent('key facilities');

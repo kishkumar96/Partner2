@@ -31,10 +31,20 @@ function windsShort(area: InsightArea): string {
   return `${area.possible ? 'possible ' : ''}${area.kind}`;
 }
 
-/** "~2,600" for a rounded figure, "37" for an exact one */
+/** "14K" for 14,000, "2.6K" for 2,600; the panel is too narrow for five-digit tiles */
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+  if (n < 1000000) return `${Math.round(n / 1000)}K`;
+  return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+/** "~14K" for a rounded figure, "37" for an exact one; the full figure stays as the tooltip */
 function tileValue(text: string): { value: string; full: string } {
   const rounded = text.startsWith('about ');
-  return { value: rounded ? `~${text.slice(6)}` : text, full: text };
+  const n = Number((rounded ? text.slice(6) : text).replace(/,/g, ''));
+  const shown = Number.isFinite(n) ? compact(n) : text;
+  return { value: rounded ? `~${shown}` : shown, full: text };
 }
 
 /** REF's band name for the strongest winds in the forecast, for its colour */
@@ -56,10 +66,10 @@ function Stat({
   title?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-700/60 bg-slate-800/60 p-3 text-center">
+    <div className="min-w-0 rounded-xl border border-slate-700/60 bg-slate-800/60 px-1.5 py-3 text-center">
       <Icon className="mx-auto h-5 w-5 text-slate-300" aria-hidden="true" />
       <p
-        className="mt-1 text-2xl font-semibold tabular-nums leading-tight text-slate-50"
+        className="mt-1 truncate text-2xl font-semibold tabular-nums leading-tight text-slate-50"
         title={title}
       >
         {value}
