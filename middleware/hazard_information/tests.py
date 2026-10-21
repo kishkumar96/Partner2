@@ -82,3 +82,31 @@ class PopulateHazardCatalogTests(APITestCase):
         self.assertTrue(all(r.url.startswith("https://tiles.example/partner_api/v1/hazard_tiles/") for r in rows))
         self.assertIn("skipping 'swell_driven'", err.getvalue())
         self.assertIn("Created 2", out.getvalue())
+
+
+    def test_skips_a_group_whose_labels_did_not_arrive(self):
+        import tempfile
+        from io import StringIO
+        from unittest import mock
+
+        import numpy as np
+        import xarray as xr
+        from django.core.management import call_command
+
+        ck = Country.objects.get(code="CK")
+        before = HazardInformation.objects.filter(country=ck).count()
+        with tempfile.TemporaryDirectory() as store:
+            # What a half-copied group reads back: the right shape, every event label blank
+            ds = xr.Dataset(
+                {"depth": (("slr", "event"), np.zeros((1, 3)))},
+                coords={"slr": [0.0], "event": ["", "", ""]},
+            )
+            ds.to_zarr(store, group="synthetic_tcs", mode="w")
+            out, err = StringIO(), StringIO()
+            with mock.patch(
+                "hazard_information.management.commands.populate_hazard_catalog.STORE_PATH", store
+            ):
+                call_command("populate_hazard_catalog", "--base-url", "https://tiles.example", stdout=out, stderr=err)
+
+        self.assertEqual(HazardInformation.objects.filter(country=ck).count(), before)
+        self.assertIn("incomplete upload", err.getvalue())

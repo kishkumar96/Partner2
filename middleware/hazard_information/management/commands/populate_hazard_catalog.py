@@ -63,8 +63,14 @@ class Command(BaseCommand):
                 continue
 
             ds = xr.open_zarr(STORE_PATH, group=group)
+            # A group whose files only partly arrived reads back blank labels; one blank-labelled
+            # row would stand in for every combination, so skip the group until it is complete.
+            selectors = [s for s in dict.fromkeys(ds[dim].values.tolist()) if s not in ("", None)]
+            if not selectors:
+                self.stderr.write(f"'{group}' has no readable {dim} labels (incomplete upload?), skipping '{source}'.")
+                continue
             for slr in ds["slr"].values.tolist():
-                for selector in ds[dim].values.tolist():
+                for selector in selectors:
                     url = (
                         f"{base_url}/partner_api/v1/hazard_tiles/{source}/{slr}/{selector}"
                         "/{z}/{x}/{y}.png"
