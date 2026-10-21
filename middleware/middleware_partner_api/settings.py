@@ -93,6 +93,10 @@ CORS_ALLOW_ALL_ORIGINS = _getenv_bool("CORS_ALLOW_ALL_ORIGINS", False)
 CORS_ALLOWED_ORIGINS = _getenv_list("CORS_ALLOWED_ORIGINS", [])
 
 
+# Hosts the model_run/import/ endpoint will fetch a run's SPC track from (https only). Without this
+# it would fetch whatever address a caller names.
+INGEST_TRACK_HOSTS = _getenv_list("INGEST_TRACK_HOSTS", ["pacific-disaster-api.spc.int"])
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',

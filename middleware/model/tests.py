@@ -783,7 +783,7 @@ class ImportRefRunTests(QueueTestCase):
         with open(f"{self.folder.name}/{self.PREFIX}floodplain-exposure.geojson", "w", encoding="utf-8") as handle:
             handle.write('{"type":"FeatureCollection","features":[]}')
         out = self.load()
-        self.assertIn("Skipped empty overlays: floodplain-exposure.geojson", out)
+        self.assertIn("Skipped empty outputs: floodplain-exposure.geojson", out)
         event = Event.objects.get(title="TC Lola REF")
         self.assertFalse(event.risks.filter(upload__contains="floodplain-exposure").exists())
         self.assertTrue(event.risks.filter(upload__contains="regional-impacts").exists())
@@ -791,7 +791,25 @@ class ImportRefRunTests(QueueTestCase):
     def test_an_empty_required_output_still_fails(self):
         with open(f"{self.folder.name}/{self.PREFIX}regional-impacts.geojson", "w", encoding="utf-8") as handle:
             handle.write('{"type":"FeatureCollection","features":[]}')
-        with self.assertRaisesMessage(CommandError, "couldn't be read"):
+        with self.assertRaisesMessage(CommandError, "regional-impacts.geojson has no features"):
+            self.load()
+
+    def test_a_cluster_file_with_nothing_exposed_is_skipped_not_refused(self):
+        # A storm moving away writes a cluster file with no features; that is a result, not a failed run
+        with open(f"{self.folder.name}/{self.PREFIX}exposure-by-cluster.geojson", "w", encoding="utf-8") as handle:
+            handle.write('{"type":"FeatureCollection","features":[]}')
+        out = self.load()
+
+        self.assertIn("Skipped empty outputs:", out)
+        self.assertIn("exposure-by-cluster.geojson", out)
+        event = Event.objects.get(title="TC Lola REF")
+        self.assertFalse(event.risks.filter(dataset_type="exposure_by_cluster").exists())
+        self.assertTrue(event.risks.filter(dataset_type="regional_impacts").exists())
+
+    def test_a_file_that_is_not_json_says_so(self):
+        with open(f"{self.folder.name}/{self.PREFIX}exposure-by-cluster.geojson", "w", encoding="utf-8") as handle:
+            handle.write("<html>502 Bad Gateway</html>")
+        with self.assertRaisesMessage(CommandError, "exposure-by-cluster.geojson isn't valid JSON"):
             self.load()
 
     def test_map_overlays_are_optional(self):

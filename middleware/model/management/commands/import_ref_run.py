@@ -59,6 +59,7 @@ OPTIONAL_OUTPUTS = (
     "floodplain-exposure.geojson",
 )
 TRACK_OUTPUT = "cyclone-track.geojson"
+CLUSTER_OUTPUT = "exposure-by-cluster.geojson"
 
 DATASET_TYPES = {
     "regional-impacts.geojson": "regional_impacts",
@@ -122,6 +123,24 @@ def track_output_is_empty(folder: Path) -> bool | None:
     return None
 
 
+def why_unreadable(path: Path) -> str:
+    """Why a downloaded output could not be loaded, in words the sender can act on."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return "isn't a text file (damaged download?)"
+    if not text.strip():
+        return "is empty (0 bytes of content; was the download cut short?)"
+    if path.suffix.lower() in (".geojson", ".json"):
+        try:
+            data = json.loads(text)
+        except ValueError:
+            return "isn't valid JSON (truncated download, or an error page saved as the file?)"
+        if isinstance(data, dict) and data.get("type") == "FeatureCollection" and not data.get("features"):
+            return "has no features"
+    return "couldn't be read"
+
+
 class Command(BaseCommand):
     help = "Load a Rapid Exposure Forecast run's output folder as an event."
 
@@ -163,26 +182,7 @@ class Command(BaseCommand):
             if model_run is None:
                 raise CommandError(f"No model run {options['model_run']}.")
 
-        outputs = {name: find_output(folder, name) for name in REF_OUTPUTS}
-        missing = [name for name, path in outputs.items() if path is None]
-        if missing:
-            raise CommandError(f"Not a REF output folder, missing: {', '.join(missing)}")
-        if track_output_is_empty(folder):
-            raise CommandError(
-                "The run's cyclone-track output has no track, so the model dropped every track point "
-                "and its empty tables mean a failed run, not zero exposure. Check the run's warnings."
-            )
-        skipped = []
-        for name in OPTIONAL_OUTPUTS:
-            path = find_output(folder, name)
-            if path is None:
-                continue
-            # An overlay with nothing in it (no floodplain for the country) is a
-            # real result; it just has nothing to draw, so don't load it
-            if is_empty_feature_collection(path):
-                skipped.append(name)
-                continue
-            outputs[name] = path
+        outputs, skipped = self.collect_outputs(folder)
 
         event_time = None
         if options["event_time"]:
@@ -198,7 +198,7 @@ class Command(BaseCommand):
                 raise CommandError("--as-run needs --track: the advisory's track says which storm it belongs to.")
             event, run = self.import_as_run(options, country, outputs, title)
             if skipped:
-                self.stdout.write(f"Skipped empty overlays: {', '.join(skipped)}.")
+                self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
             shows = "now the run the Event shows" if event.model_run_id == run.pk else "kept alongside a newer run"
             self.stdout.write(
                 self.style.SUCCESS(
@@ -234,17 +234,50 @@ class Command(BaseCommand):
                 risk.upload.save(name, ContentFile(path.read_bytes()), save=True)
                 risk.refresh_from_db()
                 if not risk.geometry_computed:
-                    raise CommandError(f"{path.name} couldn't be read.")
+                    raise CommandError(f"{path.name} {why_unreadable(path)}.")
                 event.risks.add(risk)
 
         if skipped:
-            self.stdout.write(f"Skipped empty overlays: {', '.join(skipped)}.")
+            self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
         self.stdout.write(
             self.style.SUCCESS(
                 f"Event {event.pk} '{title}' for {country.short_name}: track {track.pk}, "
                 f"{len(outputs)} outputs ({', '.join(str(r.pk) for r in event.risks.order_by('id'))})."
             )
         )
+
+    def collect_outputs(self, folder: Path):
+        """The run's outputs by file name, and the empty overlays left out; raises if it isn't a REF run."""
+        outputs = {name: find_output(folder, name) for name in REF_OUTPUTS}
+        missing = [name for name, path in outputs.items() if path is None]
+        if missing:
+            raise CommandError(f"Not a REF output folder, missing: {', '.join(missing)}")
+        if track_output_is_empty(folder):
+            raise CommandError(
+                "The run's cyclone-track output has no track, so the model dropped every track point "
+                "and its empty tables mean a failed run, not zero exposure. Check the run's warnings."
+            )
+        skipped = []
+        for name in OPTIONAL_OUTPUTS:
+            path = find_output(folder, name)
+            if path is None:
+                continue
+            # An overlay with nothing in it (no floodplain for the country) is a
+            # real result; it just has nothing to draw, so don't load it
+            if is_empty_feature_collection(path):
+                skipped.append(name)
+                continue
+            outputs[name] = path
+
+        # Nothing exposed in any cluster (a storm moving away, winds below gale) writes a cluster file
+        # with no features. That is a real result; the dashboard copes without the row, so leave it out
+        # as with the empty overlays. The other tables and the track still say the run did work.
+        cluster = outputs.get(CLUSTER_OUTPUT)
+        if cluster is not None and is_empty_feature_collection(cluster):
+            del outputs[CLUSTER_OUTPUT]
+            skipped.append(CLUSTER_OUTPUT)
+
+        return outputs, skipped
 
     IMPORT_MODEL_NAME = "Rapid exposure forecast (imported)"
 
@@ -287,7 +320,7 @@ class Command(BaseCommand):
                 risk.upload.save(name, ContentFile(path.read_bytes()), save=True)
                 risk.refresh_from_db()
                 if not risk.geometry_computed:
-                    raise CommandError(f"{path.name} couldn't be read.")
+                    raise CommandError(f"{path.name} {why_unreadable(path)}.")
             event = publish_run_to_event(run, country_id=country.pk)
         return event, run
 
