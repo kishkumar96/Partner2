@@ -11,6 +11,8 @@ export interface GuidedTourStep {
   category?: string;
   targetLabel?: string;
   placement?: 'auto' | 'top' | 'bottom' | 'left' | 'right' | 'center';
+  tips?: string[]; // Array of tips to display as bullet points
+  keyboardShortcut?: string; // Show keyboard shortcut if applicable
 }
 
 interface GuidedTourProps {
@@ -25,6 +27,7 @@ interface GuidedTourProps {
 }
 
 type Rect = { top: number; left: number; width: number; height: number };
+type Size = { width: number; height: number };
 type CardPlacement = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'mobile';
 type CardLayout = {
   top?: number | string;
@@ -39,6 +42,8 @@ type CardLayout = {
 const CARD_WIDTH = 360;
 const VIEWPORT_PADDING = 16;
 const TARGET_PADDING = 10;
+const SIDEBAR_GUTTER = 28;
+const MIN_CARD_HEIGHT = 220;
 
 export default function GuidedTour({
   open,
@@ -52,6 +57,10 @@ export default function GuidedTour({
 }: GuidedTourProps) {
   const [mounted, setMounted] = useState(false);
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
+  const [dialogSize, setDialogSize] = useState<Size>({
+    width: CARD_WIDTH,
+    height: MIN_CARD_HEIGHT,
+  });
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const lastScrolledSelectorRef = useRef<string | undefined>(undefined);
@@ -67,9 +76,10 @@ export default function GuidedTour({
 
     let timeoutId: number | null = null;
     let frameId: number | null = null;
+    let settleTimeoutId: number | null = null;
     let isDisposed = false;
 
-    const updateRect = () => {
+    const measureRect = (attempt = 0) => {
       if (!step?.selector) {
         setTargetRect(null);
         return;
@@ -82,6 +92,13 @@ export default function GuidedTour({
       }
 
       const rect = element.getBoundingClientRect();
+      // Panels can still be mid-transition when the tour step opens. Re-measure
+      // until the rect settles to a meaningful size.
+      if ((rect.width < 120 || rect.height < 120) && attempt < 6) {
+        timeoutId = window.setTimeout(() => measureRect(attempt + 1), 80);
+        return;
+      }
+
       setTargetRect({
         top: rect.top,
         left: rect.left,
@@ -103,9 +120,10 @@ export default function GuidedTour({
         if (lastScrolledSelectorRef.current !== step.selector) {
           lastScrolledSelectorRef.current = step.selector;
           element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
-          frameId = window.requestAnimationFrame(updateRect);
+          frameId = window.requestAnimationFrame(() => measureRect());
+          settleTimeoutId = window.setTimeout(() => measureRect(), 320);
         } else {
-          updateRect();
+          measureRect();
         }
         return;
       }
@@ -116,9 +134,13 @@ export default function GuidedTour({
       }
     };
 
+    const handleViewportChange = () => {
+      measureRect();
+    };
+
     resolveTarget();
-    window.addEventListener('resize', updateRect);
-    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
     return () => {
       isDisposed = true;
       if (timeoutId !== null) {
@@ -127,8 +149,11 @@ export default function GuidedTour({
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
-      window.removeEventListener('resize', updateRect);
-      window.removeEventListener('scroll', updateRect, true);
+      if (settleTimeoutId !== null) {
+        window.clearTimeout(settleTimeoutId);
+      }
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [open, step]);
 
@@ -164,6 +189,39 @@ export default function GuidedTour({
     const timeoutId = window.setTimeout(focusDialog, 0);
     return () => window.clearTimeout(timeoutId);
   }, [open, currentStep]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const updateDialogSize = () => {
+      const rect = dialog.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      setDialogSize(prev =>
+        prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height }
+      );
+    };
+
+    updateDialogSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateDialogSize);
+      return () => window.removeEventListener('resize', updateDialogSize);
+    }
+
+    const observer = new ResizeObserver(() => updateDialogSize());
+    observer.observe(dialog);
+    window.addEventListener('resize', updateDialogSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateDialogSize);
+    };
+  }, [open, currentStep, step]);
 
   useEffect(() => {
     if (!open) return;
@@ -228,6 +286,7 @@ export default function GuidedTour({
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const cardWidth = Math.min(CARD_WIDTH, viewportWidth - VIEWPORT_PADDING * 2);
+    const cardHeight = Math.max(MIN_CARD_HEIGHT, dialogSize.height);
     const prefersMobileLayout = viewportWidth < 640;
 
     if (!targetRect || step?.placement === 'center') {
@@ -242,6 +301,7 @@ export default function GuidedTour({
         : {
             top: '50%',
             left: '50%',
+            width: cardWidth,
             transform: 'translate(-50%, -50%)',
             placement: 'center',
           };
@@ -262,20 +322,57 @@ export default function GuidedTour({
     const spaceLeft = targetRect.left;
     const spaceRight = viewportWidth - (targetRect.left + targetRect.width);
     const preferredPlacement = step?.placement ?? 'auto';
+    const isTallPanel = targetRect.height >= viewportHeight * 0.45;
+    const isLeftDocked = targetRect.left <= VIEWPORT_PADDING * 2;
+    const isRightDocked =
+      targetRect.left + targetRect.width >= viewportWidth - VIEWPORT_PADDING * 2;
 
     let placement: CardPlacement;
     if (preferredPlacement !== 'auto') {
       placement = preferredPlacement;
-    } else if (spaceBelow >= 300 || targetRect.top < 200) {
-      placement = 'bottom';
-    } else if (spaceRight >= cardWidth + 40) {
-      placement = 'right';
-    } else if (spaceLeft >= cardWidth + 40) {
-      placement = 'left';
-    } else if (spaceAbove >= 260) {
-      placement = 'top';
     } else {
-      placement = 'bottom';
+      if (isTallPanel && isLeftDocked && spaceRight >= cardWidth + 40) {
+        placement = 'right';
+      } else if (isTallPanel && isRightDocked && spaceLeft >= cardWidth + 40) {
+        placement = 'left';
+      } else if (spaceRight >= cardWidth + 40) {
+        placement = 'right';
+      } else if (spaceLeft >= cardWidth + 40) {
+        placement = 'left';
+      } else if (spaceBelow >= 300 || targetRect.top < 200) {
+        placement = 'bottom';
+      } else if (spaceAbove >= 260) {
+        placement = 'top';
+      } else {
+        placement = 'bottom';
+      }
+    }
+
+    if (placement === 'right' && isTallPanel && isLeftDocked) {
+      return {
+        top: Math.max(
+          VIEWPORT_PADDING,
+          Math.min(targetRect.top + 24, viewportHeight - cardHeight - VIEWPORT_PADDING)
+        ),
+        left: Math.min(
+          viewportWidth - cardWidth - VIEWPORT_PADDING,
+          targetRect.left + targetRect.width + SIDEBAR_GUTTER
+        ),
+        width: cardWidth,
+        placement,
+      };
+    }
+
+    if (placement === 'left' && isTallPanel && isRightDocked) {
+      return {
+        top: Math.max(
+          VIEWPORT_PADDING,
+          Math.min(targetRect.top + 24, viewportHeight - cardHeight - VIEWPORT_PADDING)
+        ),
+        left: Math.max(VIEWPORT_PADDING, targetRect.left - cardWidth - SIDEBAR_GUTTER),
+        width: cardWidth,
+        placement,
+      };
     }
 
     const unclampedLeft = targetRect.left + targetRect.width / 2 - cardWidth / 2;
@@ -287,7 +384,7 @@ export default function GuidedTour({
     if (placement === 'bottom') {
       return {
         top: Math.min(
-          viewportHeight - 240,
+          viewportHeight - cardHeight - VIEWPORT_PADDING,
           targetRect.top + targetRect.height + TARGET_PADDING + 8
         ),
         left,
@@ -298,7 +395,7 @@ export default function GuidedTour({
 
     if (placement === 'top') {
       return {
-        top: Math.max(VIEWPORT_PADDING, targetRect.top - 220 - TARGET_PADDING),
+        top: Math.max(VIEWPORT_PADDING, targetRect.top - cardHeight - TARGET_PADDING),
         left,
         width: cardWidth,
         placement,
@@ -308,8 +405,8 @@ export default function GuidedTour({
     if (placement === 'right') {
       return {
         top: Math.min(
-          Math.max(VIEWPORT_PADDING, targetRect.top + targetRect.height / 2 - 110),
-          viewportHeight - 220 - VIEWPORT_PADDING
+          Math.max(VIEWPORT_PADDING, targetRect.top + targetRect.height / 2 - cardHeight / 2),
+          viewportHeight - cardHeight - VIEWPORT_PADDING
         ),
         left: Math.min(
           viewportWidth - cardWidth - VIEWPORT_PADDING,
@@ -322,14 +419,14 @@ export default function GuidedTour({
 
     return {
       top: Math.min(
-        Math.max(VIEWPORT_PADDING, targetRect.top + targetRect.height / 2 - 110),
-        viewportHeight - 220 - VIEWPORT_PADDING
+        Math.max(VIEWPORT_PADDING, targetRect.top + targetRect.height / 2 - cardHeight / 2),
+        viewportHeight - cardHeight - VIEWPORT_PADDING
       ),
       left: Math.max(VIEWPORT_PADDING, targetRect.left - cardWidth - TARGET_PADDING - 14),
       width: cardWidth,
       placement: 'left',
     };
-  }, [targetRect, step]);
+  }, [dialogSize.height, targetRect, step]);
 
   const pointerStyle = useMemo(() => {
     if (!targetRect) return null;
@@ -346,7 +443,7 @@ export default function GuidedTour({
           ...pointerBase,
           top: -7,
           left: Math.min(
-            280,
+            dialogSize.width - 28,
             Math.max(28, targetRect.left + targetRect.width / 2 - Number(cardLayout.left ?? 0) - 7)
           ),
         };
@@ -355,7 +452,7 @@ export default function GuidedTour({
           ...pointerBase,
           bottom: -7,
           left: Math.min(
-            280,
+            dialogSize.width - 28,
             Math.max(28, targetRect.left + targetRect.width / 2 - Number(cardLayout.left ?? 0) - 7)
           ),
         };
@@ -364,7 +461,7 @@ export default function GuidedTour({
           ...pointerBase,
           left: -7,
           top: Math.min(
-            180,
+            dialogSize.height - 28,
             Math.max(28, targetRect.top + targetRect.height / 2 - Number(cardLayout.top ?? 0) - 7)
           ),
         };
@@ -373,40 +470,85 @@ export default function GuidedTour({
           ...pointerBase,
           right: -7,
           top: Math.min(
-            180,
+            dialogSize.height - 28,
             Math.max(28, targetRect.top + targetRect.height / 2 - Number(cardLayout.top ?? 0) - 7)
           ),
         };
       default:
         return null;
     }
-  }, [cardLayout, targetRect]);
+  }, [cardLayout, dialogSize.height, dialogSize.width, targetRect]);
 
   if (!mounted || !open || !step) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[120]">
-      <div
-        className={`absolute inset-0 ${targetRect ? 'bg-slate-950/16 backdrop-blur-[1px]' : 'bg-slate-950/72 backdrop-blur-[3px]'}`}
-        aria-hidden="true"
-        onClick={onClose}
-      />
+      {targetRect ? (
+        <>
+          {/* Explicit four-pane spotlight mask avoids blur/compositing bleed-through. */}
+          <div
+            className="fixed inset-x-0 top-0 bg-slate-950/85"
+            style={{
+              height: Math.max(0, targetRect.top - TARGET_PADDING),
+            }}
+            aria-hidden="true"
+            onClick={onClose}
+          />
+          <div
+            className="fixed bottom-0 left-0 bg-slate-950/85"
+            style={{
+              top: Math.max(0, targetRect.top - TARGET_PADDING),
+              width: Math.max(0, targetRect.left - TARGET_PADDING),
+              height: Math.min(window.innerHeight, targetRect.height + TARGET_PADDING * 2),
+            }}
+            aria-hidden="true"
+            onClick={onClose}
+          />
+          <div
+            className="fixed bottom-0 bg-slate-950/85"
+            style={{
+              top: Math.max(0, targetRect.top - TARGET_PADDING),
+              left: Math.min(
+                window.innerWidth,
+                targetRect.left + targetRect.width + TARGET_PADDING
+              ),
+              right: 0,
+              height: Math.min(window.innerHeight, targetRect.height + TARGET_PADDING * 2),
+            }}
+            aria-hidden="true"
+            onClick={onClose}
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 bg-slate-950/85"
+            style={{
+              top: Math.min(
+                window.innerHeight,
+                targetRect.top + targetRect.height + TARGET_PADDING
+              ),
+            }}
+            aria-hidden="true"
+            onClick={onClose}
+          />
 
-      {targetRect && (
-        <div
-          className="pointer-events-none fixed rounded-2xl border border-cyan-300/60 shadow-[0_0_0_9999px_rgba(2,6,23,0.68),0_0_0_1px_rgba(34,211,238,0.35),0_0_32px_rgba(34,211,238,0.22)] transition-all duration-300"
-          style={{
-            top: targetRect.top - TARGET_PADDING,
-            left: targetRect.left - TARGET_PADDING,
-            width: targetRect.width + TARGET_PADDING * 2,
-            height: targetRect.height + TARGET_PADDING * 2,
-          }}
-        />
+          {/* Highlight border around the focused element */}
+          <div
+            className="pointer-events-none fixed rounded-xl border-2 border-cyan-400/90 shadow-[0_0_0_1px_rgba(8,145,178,0.35),0_0_28px_rgba(34,211,238,0.24)] transition-all duration-300"
+            style={{
+              top: targetRect.top - TARGET_PADDING,
+              left: targetRect.left - TARGET_PADDING,
+              width: targetRect.width + TARGET_PADDING * 2,
+              height: targetRect.height + TARGET_PADDING * 2,
+            }}
+          />
+        </>
+      ) : (
+        /* No target - darken everything */
+        <div className="absolute inset-0 bg-slate-950/85" aria-hidden="true" onClick={onClose} />
       )}
 
       <div
         ref={dialogRef}
-        className="fixed rounded-3xl border border-slate-700/70 bg-slate-950/96 p-5 shadow-[0_30px_80px_rgba(2,6,23,0.55)]"
+        className="fixed max-h-[calc(100vh-2rem)] overflow-y-auto rounded-3xl border border-slate-700/70 bg-slate-950/96 p-5 shadow-[0_30px_80px_rgba(2,6,23,0.55)]"
         style={cardLayout}
         role="dialog"
         aria-modal="true"
@@ -439,6 +581,24 @@ export default function GuidedTour({
             <p id="guided-tour-body" className="mt-2 text-sm leading-6 text-slate-300">
               {step.body}
             </p>
+            {step.tips && step.tips.length > 0 && (
+              <ul className="mt-3 space-y-1.5 text-xs text-slate-400">
+                {step.tips.map((tip, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="mt-0.5 text-cyan-400">💡</span>
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {step.keyboardShortcut && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                <kbd className="rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-300">
+                  {step.keyboardShortcut}
+                </kbd>
+                <span>keyboard shortcut</span>
+              </div>
+            )}
             {step.targetLabel && (
               <div className="mt-3 inline-flex items-center rounded-full border border-slate-700/80 bg-slate-900/75 px-2.5 py-1 text-[11px] font-medium text-slate-300">
                 Focus: {step.targetLabel}

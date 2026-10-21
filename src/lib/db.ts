@@ -5,23 +5,27 @@
 
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
-// Database connection string from environment
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  'postgresql://postgres:climate_secure_2026@localhost:5432/climate_risk';
+import { getDatabaseUrl } from '@/lib/databaseUrl';
 
-// Create connection pool
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+// Created on first use, not at import: building the app must not need a database, and a missing
+// DATABASE_URL should surface as an error to handle where the query is made.
+let pool: Pool | null = null;
 
-// Handle pool errors
-pool.on('error', err => {
-  console.error('Unexpected database pool error:', err);
-});
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: getDatabaseUrl(),
+      max: 20, // Maximum number of clients in the pool
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+    // Handle pool errors
+    pool.on('error', err => {
+      console.error('Unexpected database pool error:', err);
+    });
+  }
+  return pool;
+}
 
 /**
  * Execute a query with automatic connection management
@@ -32,7 +36,7 @@ export async function query<T extends QueryResultRow>(
 ): Promise<QueryResult<T>> {
   const start = Date.now();
   try {
-    const result = await pool.query<T>(text, params);
+    const result = await getPool().query<T>(text, params);
     const duration = Date.now() - start;
 
     if (duration > 1000) {
@@ -50,7 +54,7 @@ export async function query<T extends QueryResultRow>(
  * Get a client from the pool for transactions
  */
 export async function getClient(): Promise<PoolClient> {
-  return await pool.connect();
+  return await getPool().connect();
 }
 
 /**
@@ -123,7 +127,7 @@ export async function queryBBox<T extends QueryResultRow>(
 
   query += ` LIMIT $5 OFFSET $6`;
 
-  return await pool.query<T>(query, [minLng, minLat, maxLng, maxLat, limit, offset]);
+  return await getPool().query<T>(query, [minLng, minLat, maxLng, maxLat, limit, offset]);
 }
 
 /**
@@ -163,7 +167,7 @@ export async function queryRadius<T extends QueryResultRow>(
 
   query += ` ORDER BY distance LIMIT $4`;
 
-  return await pool.query<T>(query, [lng, lat, radiusMeters, limit]);
+  return await getPool().query<T>(query, [lng, lat, radiusMeters, limit]);
 }
 
 /**
@@ -193,7 +197,7 @@ export async function queryStats(
     query += ` GROUP BY ${groupBy}`;
   }
 
-  const result = await pool.query(query);
+  const result = await getPool().query(query);
   return result.rows;
 }
 
@@ -202,7 +206,7 @@ export async function queryStats(
  */
 export async function healthCheck(): Promise<boolean> {
   try {
-    const result = await pool.query('SELECT NOW()');
+    const result = await getPool().query('SELECT NOW()');
     return result.rows.length > 0;
   } catch (error) {
     console.error('Database health check failed:', error);
@@ -214,11 +218,14 @@ export async function healthCheck(): Promise<boolean> {
  * Close pool connections gracefully
  */
 export async function closePool(): Promise<void> {
-  await pool.end();
+  if (!pool) return;
+  const closing = pool;
+  pool = null;
+  await closing.end();
 }
 
-// Export pool for advanced usage
-export { pool };
+// The pool, created on first use, for advanced usage
+export { getPool };
 
 // Default export
 const db = {

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import maplibregl, { type StyleSpecification } from 'maplibre-gl';
-import { LegendSettings } from '@/data/realThreddsLayers';
+import { HazardLayerMode, HazardScenarioSelection, LegendSettings } from '@/data/realThreddsLayers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Event, Hazard, FilterState, DistrictGeoProperties } from '@/types';
 import type { BuildingProperties, RoadProperties } from '@/types/realData';
@@ -21,6 +21,7 @@ import { debugLogger } from '@/utils/debugLogger';
 import { logger } from '@/utils/logger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
+import HazardScenarioBadge from './HazardScenarioBadge';
 import RealDataLayers from './RealDataLayers';
 import RegionalImpactsLayer, { type RegionalImpactsDebugState } from './RegionalImpactsLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
@@ -246,8 +247,20 @@ interface MapViewProps {
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
+  partnerHazardLayers?: RealWMSLayer[];
+  /** Hold hazard raster requests until the dashboard data has loaded */
+  dataReady?: boolean;
+  hazardScenarioSelection?: HazardScenarioSelection | null;
+  /** Shade areas by the event's modelled damage (off in planning mode) */
+  showImpactShading?: boolean;
+  /** Shade areas by Rapid Exposure Forecast wind band instead of loss */
+  forecastDanger?: boolean;
+  /** Event layers only, planning-scenario layers only, or both */
+  hazardLayerMode?: HazardLayerMode;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
   damagedRoads?: GeoJSON.FeatureCollection<GeoJSON.LineString, RoadProperties> | null;
+  regionalImpactsData?: GeoJSON.FeatureCollection | null;
+  regionalSummaryData?: Array<Record<string, unknown>>;
   cycloneTrackData?: GeoJSON.FeatureCollection | null;
   cycloneForecast?: CycloneForecastPoint[] | null;
   aggregationLevel?: string;
@@ -292,8 +305,16 @@ export default function MapView({
   showInundationLayer = true,
   onLayersLoadingChange,
   onActiveWmsLayersChange,
+  partnerHazardLayers = [],
+  dataReady = true,
+  hazardScenarioSelection,
+  showImpactShading = true,
+  forecastDanger = false,
+  hazardLayerMode = 'all',
   damagedBuildings,
   damagedRoads,
+  regionalImpactsData = null,
+  regionalSummaryData = [],
   cycloneTrackData = null,
   cycloneForecast,
   showOverlays = true,
@@ -331,9 +352,12 @@ export default function MapView({
   const mapStyleRef = useRef(mapStyle);
   const appliedBasemapStyleRef = useRef<string | StyleSpecification | null>(null);
   const skipNextCountryFlyToRef = useRef(false);
+  const lastFlownCountryRef = useRef<CountryCode | null>(null);
+  // Opt-in (?regionalDebug=1) on localhost: always-on, it covers the forecast legend
   const showRegionalDebugPanel =
     typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+    new URLSearchParams(window.location.search).has('regionalDebug');
 
   const handleStorySelect = useCallback(
     (index: number) => {
@@ -647,6 +671,15 @@ export default function MapView({
       skipNextCountryFlyToRef.current = false;
       return;
     }
+
+    // The map is created at the country's own view, so a first load has nowhere to fly to.
+    // Flying there anyway overwrote the view restored from a reload or a shared link, and the
+    // view the dashboard framed on the storm. Only a change of country needs a flight.
+    if (lastFlownCountryRef.current === null || lastFlownCountryRef.current === selectedCountry) {
+      lastFlownCountryRef.current = selectedCountry;
+      return;
+    }
+    lastFlownCountryRef.current = selectedCountry;
 
     const country = COUNTRIES[selectedCountry];
     if (country) {
@@ -1306,6 +1339,14 @@ export default function MapView({
       <div ref={mapContainer} className="w-full h-full" />
       <div id="map-overlay-root" className="absolute inset-0 z-[60] pointer-events-none" />
 
+      {showOverlays && selectedCountry && (
+        <HazardScenarioBadge
+          selection={hazardScenarioSelection ?? null}
+          countryName={COUNTRIES[selectedCountry]?.name ?? selectedCountry}
+          visible={showInundationLayer}
+        />
+      )}
+
       {showOverlays && wmsWarning && (
         <div className="absolute top-4 right-4 z-[25] max-w-[calc(100vw-2rem)] rounded-lg border border-amber-500/40 bg-slate-900/90 px-3 py-2 text-xs text-amber-200 shadow-lg backdrop-blur">
           {wmsWarning}
@@ -1360,9 +1401,9 @@ export default function MapView({
             countryCode={selectedCountry}
             visible={true}
             cycloneTrackData={cycloneTrackData}
-            // Render static track whenever it exists and animated forecast is unavailable.
-            // When animated forecast is present, CycloneAnimationLayer owns track rendering.
-            showCycloneTrack={hasStaticCycloneTrack && !hasAnimatedCycloneForecast}
+            // Always render static track when it exists (historical cyclone track)
+            // The animated forecast and historical track are independent features
+            showCycloneTrack={hasStaticCycloneTrack}
             mapStyle={mapStyle}
             basemapStyle={basemapStyle}
             styleChangeCounter={styleChangeCounter}
@@ -1371,20 +1412,27 @@ export default function MapView({
             showInundationLayer={showInundationLayer}
             onLoadingChange={onLayersLoadingChange}
             onActiveLayersChange={onActiveWmsLayersChange}
+            partnerHazardLayers={partnerHazardLayers}
+            dataReady={dataReady}
+            hazardScenarioSelection={hazardScenarioSelection}
+            hazardLayerMode={hazardLayerMode}
             layerOpacityScale={layerOpacity}
             legendSettings={legendSettings}
           />
           <RegionalImpactsLayer
             key={`regional-impacts-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
             map={mapInstance}
-            visible={true}
+            visible={showImpactShading}
             mapStyle={mapStyle}
             styleChangeCounter={styleChangeCounter}
             selectedRegion={selectedRegion}
             onRegionSelect={onRegionSelect}
             countryCode={selectedCountry}
+            regionalImpactsData={regionalImpactsData}
+            regionalSummaryData={regionalSummaryData}
             legendSettings={legendSettings}
             layerOpacityScale={layerOpacity}
+            forecastDanger={forecastDanger}
             onDebugStateChange={setRegionalImpactsDebug}
           />
           <DamagedBuildingsLayer

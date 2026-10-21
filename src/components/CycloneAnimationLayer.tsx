@@ -141,7 +141,7 @@ const SWATH_WIND_RGB: Record<'gale' | 'storm' | 'hurricane', [number, number, nu
 // consecutive segment capsules overlap in the traversed corridor, compounding opacity.
 // Target effective opacity (after ~3–4 segment stacks): gale ~14%, storm ~17%, hurricane ~18%.
 const SWATH_BASE_ALPHA: Record<'gale' | 'storm' | 'hurricane', number> = {
-  gale: 22, // outer annulus  — single polygon, no stacking
+  gale: 22, // outer annulus  -single polygon, no stacking
   storm: 35, // middle donut
   hurricane: 55, // inner fill
 };
@@ -164,9 +164,9 @@ type ZoneItem = {
   category: number;
 };
 
-// Polygon geometry — rebuilds every frame (frameIndex trigger).
+// Polygon geometry -rebuilds every frame (frameIndex trigger).
 const getZonePolygon = (d: ZoneItem) => d.polygon as unknown as [number, number][];
-// Fill colour — only rebuilt when the cyclone category changes (not every frame).
+// Fill colour -only rebuilt when the cyclone category changes (not every frame).
 const getZoneFillColor = (d: ZoneItem) => getSwathFillColor(d.category, d.windType);
 
 function unwrapTrackLongitudes(track: CycloneForecastPoint[]): number[] {
@@ -417,7 +417,7 @@ export default function CycloneAnimationLayer({
   >(new Map());
 
   // Pre-computed wind envelope polygons (one convex-hull polygon per wind type)
-  // deck.gl overlay — mounted once on the map, updated cheaply via setProps
+  // deck.gl overlay -mounted once on the map, updated cheaply via setProps
   const deckOverlayRef = useRef<MapboxOverlay | null>(null);
 
   const sanitizeDeckLayers = useCallback((layers: any[]) => {
@@ -430,7 +430,7 @@ export default function CycloneAnimationLayer({
   // polygon rings (outer boundaries of the union of all visited wind-radius rings
   // up to that frame), structured as donuts: gale minus storm hole, storm minus
   // hurricane hole, and a solid hurricane fill.  A single deck.gl polygon render
-  // call per frame — no seams, no stacking artefacts.
+  // call per frame -no seams, no stacking artefacts.
   type FrameEnvelope = {
     gale: [number, number][][] | null; // [outerRing, stormHole?]
     storm: [number, number][][] | null; // [outerRing, hurricaneHole?]
@@ -459,7 +459,7 @@ export default function CycloneAnimationLayer({
       const swathBeforeId = hasGaleRadiusLayer ? 'cyclone-gale-radius-layer' : undefined;
 
       // Three smooth polygons (gale → storm → hurricane) for this frame.
-      // Each is a single seamless boundary — no per-segment stacking.
+      // Each is a single seamless boundary -no per-segment stacking.
       // category is embedded in each item so getZoneFillColor is a pure function
       // of the datum (no closure over envelope.category), enabling Deck.gl to
       // avoid rebuilding the colour buffer unless the category actually changes.
@@ -628,7 +628,7 @@ export default function CycloneAnimationLayer({
     });
 
     // Build one smooth cumulative envelope per wind zone per frame.
-    // Each envelope is a single seamless polygon — the support-function outer
+    // Each envelope is a single seamless polygon -the support-function outer
     // boundary of all wind-radius rings visited so far (frames 0 … f).
     const galeRings = buildCumulativeWindEnvelopes(forecastTrack, 'gale');
     const stormRings = buildCumulativeWindEnvelopes(forecastTrack, 'storm');
@@ -1374,7 +1374,7 @@ export default function CycloneAnimationLayer({
         }
       }
 
-      // Draw particles — cap draw opacity to prevent screen-blend saturation
+      // Draw particles -cap draw opacity to prevent screen-blend saturation
       particlesRef.current.forEach(particle => {
         const drawOpacity = Math.min(particle.opacity * 0.55, 0.45);
         ctx.save();
@@ -1468,7 +1468,7 @@ export default function CycloneAnimationLayer({
     };
     snapPrevCyclonePos();
 
-    // Redraw on map move/zoom — also translate in-flight particles so they
+    // Redraw on map move/zoom -also translate in-flight particles so they
     // move seamlessly with the map instead of snapping after a frame delay.
     const handleMapChange = () => {
       if (!uiVisibleRef.current) return;
@@ -1580,22 +1580,22 @@ export default function CycloneAnimationLayer({
             'match',
             ['to-number', ['get', 'category']],
             5,
-            '#7C3AED', // violet  — Cat 5
+            '#7C3AED', // violet  -Cat 5
             4,
-            '#DC2626', // red     — Cat 4
+            '#DC2626', // red     -Cat 4
             3,
-            '#FB923C', // orange  — Cat 3
+            '#FB923C', // orange  -Cat 3
             2,
-            '#FACC15', // yellow  — Cat 2
+            '#FACC15', // yellow  -Cat 2
             1,
-            '#FDE047', // lt-yel  — Cat 1
-            '#7DD3FC', // sky-bl  — tropical storm fallback
-          ] as any; // MapLibre expression — runtime type is fine
+            '#FDE047', // lt-yel  -Cat 1
+            '#7DD3FC', // sky-bl  -tropical storm fallback
+          ] as any; // MapLibre expression -runtime type is fine
 
           // FeatureCollection: one LineString per consecutive point-pair (colored by departure
           // category) + one Point per timestep (for category-colored waypoint circles).
           // MapLibre's line layer auto-filters to LineString features; circle auto-filters
-          // to Point features — no explicit geometry-type filter needed.
+          // to Point features -no explicit geometry-type filter needed.
           const unwrappedLons = unwrapTrackLongitudes(forecastTrack);
           const trackFeatures: object[] = [];
           for (let i = 0; i < forecastTrack.length - 1; i++) {

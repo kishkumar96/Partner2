@@ -2,13 +2,17 @@
 """
 Import Samoa TC Gita data into PostgreSQL database
 """
+import os
 import psycopg2
 import json
 import csv
 from datetime import datetime
 import sys
 
-DATABASE_URL = "postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk"
+# No built-in fallback: a literal password in source ends up in git history
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    sys.exit("DATABASE_URL is not set. Export it first, for example:\n  export DATABASE_URL=postgresql://user:password@host:5432/dbname")
 
 def main():
     try:

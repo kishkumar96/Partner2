@@ -15,6 +15,17 @@ const HAZARD_ID_ALIASES: Record<string, string> = {
   floodwater: 'inundation',
 
   wind: 'wind',
+
+  // Other event types an Event can carry (see hazardIdForEventType)
+  earthquake: 'earthquake',
+  volcanic: 'volcanic',
+  volcano: 'volcanic',
+  volcanicactivity: 'volcanic',
+  volcaniceruption: 'volcanic',
+  tsunami: 'tsunami',
+  landslide: 'landslide',
+  drought: 'drought',
+  stormsurge: 'storm-surge',
 };
 
 export function normalizeHazardId(hazardId: string): string {
@@ -25,4 +36,14 @@ export function normalizeHazardId(hazardId: string): string {
 
 export function normalizeHazardIds(hazardIds: string[]): string[] {
   return Array.from(new Set(hazardIds.map(normalizeHazardId).filter(Boolean)));
+}
+
+/**
+ * The hazard an Event belongs to, from its event type name (the Partner API's
+ * `event_type_name`, e.g. "Tropical Cyclone", "Earthquake"). Events with no
+ * type are treated as cyclones, as every event was before types were read.
+ */
+export function hazardIdForEventType(eventType?: string | null): string {
+  const name = (eventType ?? '').trim();
+  return name ? normalizeHazardId(name) : 'tropical-cyclone';
 }

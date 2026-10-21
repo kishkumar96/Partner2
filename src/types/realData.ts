@@ -1,3 +1,7 @@
+import type { ForecastExposure } from '@/utils/forecastExposure';
+import type { RealWMSLayer } from '@/data/realThreddsLayers';
+import type { EventRecord } from '@/data/eventRecords';
+
 /**
  * Type definitions for real PDIE data structures
  *
@@ -163,5 +167,23 @@ export interface RealDataLoadResult {
     countryCode: string;
     cycloneTrackSource: 'partner_api' | 'local_files';
     eventMetadataSource: 'partner_api' | 'local_files';
+    riskDataSource?: 'partner_api' | 'local_files';
+    hazardLayerSource?: 'partner_api' | 'static_config';
   };
+  partnerHazardLayers?: RealWMSLayer[];
+  /** Full EventRecord list (including backend-only entries) for use by asset loaders. */
+  fetchedEventRecords?: EventRecord[];
+  /** The resolved event whose rows are currently shown. */
+  activeEventRecord?: EventRecord;
+  /** risk_information row id for damaged-buildings/damaged-roads, present
+   * even though damagedBuildings/damagedRoads above are null (their
+   * geometry is deferred from the list fetch) -- pass to
+   * fetchPartnerRiskInformationGeometry to load on demand. */
+  damagedBuildingsRowId?: string | null;
+  damagedRoadsRowId?: string | null;
+  /** Rapid Exposure Forecast results, when the active event has them: what is
+   * exposed to forecast winds, in place of modelled damage. */
+  forecastExposure?: ForecastExposure | null;
+  /** The advisory before this one (same storm, with results), for "what changed". */
+  previousForecast?: { record: EventRecord; exposure: ForecastExposure } | null;
 }

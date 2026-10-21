@@ -2,7 +2,10 @@
  * Types for THREDDS server data integration
  */
 
-export type CountryCode = 'VU' | 'WS' | 'TO' | 'CK';
+import { listCountries, type CountryCode as ConfiguredCountryCode } from '@/config/registry';
+
+/** The configured countries (see config/); generated, so adding one needs no edit here. */
+export type CountryCode = ConfiguredCountryCode;
 
 export interface Country {
   code: CountryCode;
@@ -44,36 +47,22 @@ export interface CycloneTrack {
   }>;
 }
 
-export const COUNTRIES: Record<CountryCode, Country> = {
-  VU: {
-    code: 'VU',
-    name: 'Vanuatu',
-    fullName: 'Republic of Vanuatu',
-    center: [166.9592, -15.3767],
-    zoom: 7,
-  },
-  WS: {
-    code: 'WS',
-    name: 'Samoa',
-    fullName: 'Independent State of Samoa',
-    center: [-172.1046, -13.759],
-    zoom: 9,
-  },
-  TO: {
-    code: 'TO',
-    name: 'Tonga',
-    fullName: 'Kingdom of Tonga',
-    center: [-175.198, -21.179],
-    zoom: 8,
-  },
-  CK: {
-    code: 'CK',
-    name: 'Cook Islands',
-    fullName: 'Cook Islands',
-    center: [-159.7777, -21.2367],
-    zoom: 6,
-  },
-};
+// Built from config/countries/*.json. A country's map viewport lives there: the Cook Islands one is
+// centred on Rarotonga, the only island the hazard/risk catalogue covers, at a zoom (11) that suits one
+// ~6 km island; the whole scattered Cook Islands EEZ (zoom 6) rendered the island and its flood overlay
+// as a few invisible pixels.
+export const COUNTRIES = Object.fromEntries(
+  listCountries().map(country => [
+    country.code,
+    {
+      code: country.code,
+      name: country.name,
+      fullName: country.fullName,
+      center: [country.viewport.center[0], country.viewport.center[1]] as [number, number],
+      zoom: country.viewport.zoom,
+    },
+  ])
+) as Record<CountryCode, Country>;
 
 export const THREDDS_CONFIG: THREDDSDataSource = {
   baseUrl: 'https://gemthreddshpc.spc.int/thredds',

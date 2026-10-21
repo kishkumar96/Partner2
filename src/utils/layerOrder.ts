@@ -42,6 +42,11 @@ export const LAYER_ORDER = {
   'wms-storm-surge-layer': 12,
   'wms-wave-height-layer': 13,
 
+  // Rapid Exposure Forecast overlays (see ForecastLayers)
+  'forecast-floodplain-fill': 32,
+  'forecast-floodplain-line': 33,
+  'forecast-wind-swaths-line': 34,
+
   // District polygons
   'districts-fill': 20,
   'districts-outline': 21,
@@ -55,9 +60,12 @@ export const LAYER_ORDER = {
   'intensity-heatmap': 35,
 
   // Cyclone tracks and forecasts
+  'forecast-track-distance-line': 39,
   'cyclone-forecast-track-line': 40,
   'cyclone-forecast-points': 41,
   'cyclone-historical-track': 42,
+  'forecast-cyclone-track-casing': 43,
+  'forecast-cyclone-track-line': 44,
 
   // Damaged infrastructure
   'damaged-roads-layer': 50,
@@ -68,6 +76,10 @@ export const LAYER_ORDER = {
   'damaged-buildings-cluster-count': 61,
   'damaged-buildings-layer': 62,
   'damaged-buildings-outline': 63,
+  'forecast-facilities': 64,
+  'forecast-priority-casing': 65,
+  'forecast-priority-line': 66,
+  'forecast-priority-hit': 67,
 
   // PDIE data layers
   'pdie-exposure-layer': 70,

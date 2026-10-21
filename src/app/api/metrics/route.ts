@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   const metrics: Metrics = {
     timestamp: new Date().toISOString(),
     application: {
-      name: process.env.NEXT_PUBLIC_APP_NAME || 'Climate Risk Dashboard',
+      name: process.env.NEXT_PUBLIC_APP_NAME || 'Tropical Cyclone Rapid Impact Assessment Tool',
       version: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
       environment: process.env.NEXT_PUBLIC_ENVIRONMENT || 'development',
       uptime: process.uptime(),

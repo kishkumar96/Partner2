@@ -214,3 +214,17 @@ export const vanuatuDistricts = [
   { id: 'VU06026', name: 'North Tanna', provinceId: 'VUT.5_1' },
   { id: 'VU06062', name: 'Middle Bush Tanna', provinceId: 'VUT.5_1' },
 ];
+
+/**
+ * The catalogue entry for a hazard id, or a neutral generic entry for an event
+ * type the catalogue doesn't list, so any event type the API carries gets a
+ * filter option instead of being dropped.
+ */
+export function resolveHazard(id: string, name?: string): Hazard {
+  const known = vanuatuHazards.find(hazard => hazard.id === id);
+  if (known) return known;
+  const label = (name || id)
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+  return { id, name: label, color: '#64748B', icon: HelpCircle };
+}

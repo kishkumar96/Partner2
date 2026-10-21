@@ -152,6 +152,17 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
     ref
   ) => {
     const useTemplate = Boolean(templatePage1Src);
+    // A sector name can wrap to multiple lines. Keep this deliberately
+    // conservative so that every row, the source note and the artwork below
+    // it have room on an A4 page. Additional rows become continuation pages
+    // rather than being clipped by the fixed-height page canvas.
+    const sectorRowsPerPage = 16;
+    const sectorRows = impactBySector ?? [];
+    const sectorPages: any[][] = sectorRows.length
+      ? Array.from({ length: Math.ceil(sectorRows.length / sectorRowsPerPage) }, (_, index) =>
+          sectorRows.slice(index * sectorRowsPerPage, (index + 1) * sectorRowsPerPage)
+        )
+      : [[]];
 
     return (
       <div
@@ -366,10 +377,7 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                       top: `${box.y}mm`,
                       width: `${box.w}mm`,
                       height: `${box.h}mm`,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      position: 'absolute',
                     }}
                   >
                     {iconSrc && (
@@ -386,23 +394,33 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                     )}
                     <div
                       style={{
+                        position: 'absolute',
+                        top: `${iconLayout.previewValueTopMm}mm`,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
                         color: 'white',
                         fontSize: '15pt',
                         fontWeight: 'bold',
                         textAlign: 'center',
-                        marginTop: iconSrc ? `${iconLayout.previewValueMarginTopMm}mm` : '0',
+                        width: '100%',
+                        padding: '0 1.5mm',
+                        lineHeight: '1',
                       }}
                     >
                       {fig.value}
                     </div>
                     <div
                       style={{
+                        position: 'absolute',
+                        top: `${iconLayout.previewLabelTopMm}mm`,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
                         color: 'white',
                         fontSize: '8pt',
                         textAlign: 'center',
-                        marginTop: '1mm',
                         textTransform: 'uppercase',
                         lineHeight: '1.15',
+                        width: '100%',
                         padding: '0 2mm',
                       }}
                     >
@@ -482,7 +500,12 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                 style={{
                   top: useTemplate ? `${PDF_TEMPLATE_CONFIG.template.situationTopMm}mm` : '100mm',
                   left: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
-                  right: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
+                  // Reserve the QR slot and the footer. This report has a fixed
+                  // A4 artboard, so unconstrained prose used to run underneath
+                  // those elements and disappear at the page boundary.
+                  right: useTemplate ? '40mm' : `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
+                  maxHeight: useTemplate ? '35mm' : '150mm',
+                  overflow: 'hidden',
                 }}
               >
                 <h2
@@ -498,8 +521,13 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
                 <p
                   style={{
                     color: PDF_TEXT_PRIMARY,
-                    fontSize: '11pt',
-                    lineHeight: '1.5',
+                    fontSize: useTemplate ? '8.5pt' : '11pt',
+                    lineHeight: useTemplate ? '1.35' : '1.5',
+                    margin: 0,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: useTemplate ? 8 : 12,
                   }}
                 >
                   {situationNarrative}
@@ -539,313 +567,322 @@ export const PDFTemplate = forwardRef<HTMLDivElement, PDFTemplateProps>(
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* PAGE 2 - SECTOR ANALYSIS TABLE */}
         {/* ═══════════════════════════════════════════════════════════ */}
-        <div
-          className="relative bg-white"
-          style={{
-            width: `${PDF_TEMPLATE_CONFIG.page.widthMm}mm`,
-            height: `${PDF_TEMPLATE_CONFIG.page.heightMm}mm`,
-            fontFamily: 'Helvetica, Arial, sans-serif',
-            pageBreakBefore: 'always',
-            boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Page 2 Template Background */}
-          {templatePage2Src && (
-            <img
-              src={templatePage2Src}
-              alt="Page 2 template"
+        {sectorPages.map((pageRows, pageIndex) => {
+          const isLastSectorPage = pageIndex === sectorPages.length - 1;
+          return (
+            <div
+              key={`sector-page-${pageIndex}`}
+              className="relative bg-white"
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
                 width: `${PDF_TEMPLATE_CONFIG.page.widthMm}mm`,
                 height: `${PDF_TEMPLATE_CONFIG.page.heightMm}mm`,
-                objectFit: 'cover',
-                zIndex: 0,
-              }}
-            />
-          )}
-
-          {/* Content container */}
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Table title */}
-            <h1
-              style={{
-                position: 'absolute',
-                top: `${PDF_TEMPLATE_CONFIG.template.page2TitleTopMm}mm`,
-                left: 0,
-                width: `${PDF_TEMPLATE_CONFIG.page.widthMm}mm`,
-                textAlign: 'center',
-                fontSize: '15pt',
-                fontWeight: 'bold',
-                color: PDF_TEXT_ACCENT,
+                fontFamily: 'Helvetica, Arial, sans-serif',
+                pageBreakBefore: 'always',
+                boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
+                overflow: 'hidden',
               }}
             >
-              {PDF_TEMPLATE_CONFIG.labels.sectorAnalysisTitle}
-            </h1>
-
-            {/* Table */}
-            <div
-              style={{
-                position: 'absolute',
-                top: `${PDF_TEMPLATE_CONFIG.template.page2TableTopMm}mm`,
-                left: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
-                right: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
-              }}
-            >
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  backgroundColor: 'white',
-                }}
-              >
-                {/* Table header */}
-                <thead>
-                  <tr>
-                    <th
-                      style={{
-                        backgroundColor: 'rgb(0, 70, 173)',
-                        color: 'white',
-                        padding: '4mm 2mm',
-                        fontSize: '10.5pt',
-                        fontWeight: 'bold',
-                        textAlign: 'left',
-                        border: 'none',
-                      }}
-                    >
-                      Sector
-                    </th>
-                    <th
-                      style={{
-                        backgroundColor: 'rgb(0, 70, 173)',
-                        color: 'white',
-                        padding: '4mm 2mm',
-                        fontSize: '10.5pt',
-                        fontWeight: 'bold',
-                        textAlign: 'left',
-                        borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                      }}
-                    >
-                      Exposed
-                      <br />
-                      Buildings
-                    </th>
-                    <th
-                      style={{
-                        backgroundColor: 'rgb(0, 70, 173)',
-                        color: 'white',
-                        padding: '4mm 2mm',
-                        fontSize: '10.5pt',
-                        fontWeight: 'bold',
-                        textAlign: 'left',
-                        borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                      }}
-                    >
-                      Damaged
-                      <br />
-                      Buildings
-                    </th>
-                    <th
-                      style={{
-                        backgroundColor: 'rgb(0, 70, 173)',
-                        color: 'white',
-                        padding: '4mm 2mm',
-                        fontSize: '10.5pt',
-                        fontWeight: 'bold',
-                        textAlign: 'left',
-                        borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                      }}
-                    >
-                      Building Loss
-                      <br />
-                      (USD)
-                    </th>
-                    <th
-                      style={{
-                        backgroundColor: 'rgb(0, 70, 173)',
-                        color: 'white',
-                        padding: '4mm 2mm',
-                        fontSize: '10.5pt',
-                        fontWeight: 'bold',
-                        textAlign: 'left',
-                        borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                      }}
-                    >
-                      Total Loss (USD)
-                    </th>
-                  </tr>
-                </thead>
-                {/* Table body */}
-                <tbody>
-                  {impactBySector && impactBySector.length > 0 ? (
-                    impactBySector.map((row: any, idx: number) => (
-                      <tr key={idx}>
-                        <td
-                          style={{
-                            backgroundColor: 'rgb(241, 248, 252)',
-                            color: PDF_TEXT_PRIMARY,
-                            padding: '2mm 2mm',
-                            fontSize: '7pt',
-                            borderTop: '0.35mm solid rgb(98, 211, 241)',
-                          }}
-                        >
-                          {row.Sector || '—'}
-                        </td>
-                        <td
-                          style={{
-                            backgroundColor: 'rgb(241, 248, 252)',
-                            color: PDF_TEXT_PRIMARY,
-                            padding: '2mm 2mm',
-                            fontSize: '7pt',
-                            borderTop: '0.35mm solid rgb(98, 211, 241)',
-                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                          }}
-                        >
-                          {formatNumber(Number(row.Number_Exposed_Buildings || 0))}
-                        </td>
-                        <td
-                          style={{
-                            backgroundColor: 'rgb(241, 248, 252)',
-                            color: PDF_TEXT_PRIMARY,
-                            padding: '2mm 2mm',
-                            fontSize: '7pt',
-                            borderTop: '0.35mm solid rgb(98, 211, 241)',
-                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                          }}
-                        >
-                          {formatNumber(Number(row.Number_Damaged_Buildings || 0))}
-                        </td>
-                        <td
-                          style={{
-                            backgroundColor: 'rgb(241, 248, 252)',
-                            color: PDF_TEXT_PRIMARY,
-                            padding: '2mm 2mm',
-                            fontSize: '7pt',
-                            borderTop: '0.35mm solid rgb(98, 211, 241)',
-                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                          }}
-                        >
-                          {formatCurrency(Number(row.Building_Loss || 0))}
-                        </td>
-                        <td
-                          style={{
-                            backgroundColor: 'rgb(241, 248, 252)',
-                            color: PDF_TEXT_PRIMARY,
-                            padding: '2mm 2mm',
-                            fontSize: '7pt',
-                            borderTop: '0.35mm solid rgb(98, 211, 241)',
-                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                          }}
-                        >
-                          {formatCurrency(Number(row.Total_Loss || 0))}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        style={{
-                          padding: '10mm',
-                          textAlign: 'center',
-                          color: PDF_TEXT_MUTED,
-                          fontSize: '10pt',
-                        }}
-                      >
-                        No sector data available
-                      </td>
-                    </tr>
-                  )}
-                  {/* Total row */}
-                  {impactBySector && impactBySector.length > 0 && (
-                    <tr>
-                      <td
-                        style={{
-                          backgroundColor: 'rgb(157, 211, 231)',
-                          color: PDF_TEXT_PRIMARY,
-                          padding: '2mm 2mm',
-                          fontSize: '7pt',
-                          fontWeight: 'bold',
-                          borderTop: '0.35mm solid rgb(98, 211, 241)',
-                        }}
-                      >
-                        TOTAL
-                      </td>
-                      <td
-                        style={{
-                          backgroundColor: 'rgb(157, 211, 231)',
-                          borderTop: '0.35mm solid rgb(98, 211, 241)',
-                          borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                        }}
-                      ></td>
-                      <td
-                        style={{
-                          backgroundColor: 'rgb(157, 211, 231)',
-                          borderTop: '0.35mm solid rgb(98, 211, 241)',
-                          borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                        }}
-                      ></td>
-                      <td
-                        style={{
-                          backgroundColor: 'rgb(157, 211, 231)',
-                          borderTop: '0.35mm solid rgb(98, 211, 241)',
-                          borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                        }}
-                      ></td>
-                      <td
-                        style={{
-                          backgroundColor: 'rgb(157, 211, 231)',
-                          color: PDF_TEXT_PRIMARY,
-                          padding: '2mm 2mm',
-                          fontSize: '7pt',
-                          fontWeight: 'bold',
-                          borderTop: '0.35mm solid rgb(98, 211, 241)',
-                          borderLeft: '0.35mm solid rgb(98, 211, 241)',
-                        }}
-                      >
-                        {formatCurrency(
-                          impactBySector.reduce(
-                            (sum, row) => sum + (Number(row.Total_Loss) || 0),
-                            0
-                          )
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              {/* Data source note */}
-              <p
-                style={{
-                  marginTop: '3mm',
-                  textAlign: 'center',
-                  fontSize: '6.5pt',
-                  fontStyle: 'italic',
-                  color: PDF_TEXT_PRIMARY,
-                }}
-              >
-                {PDF_TEMPLATE_CONFIG.labels.dataSourceNote}
-              </p>
-
-              {tableFooterBannerSrc && (
+              {/* Page 2 Template Background */}
+              {templatePage2Src && (
                 <img
-                  src={tableFooterBannerSrc}
-                  alt="About the project"
+                  src={templatePage2Src}
+                  alt="Page 2 template"
                   style={{
-                    display: 'block',
-                    width: `${getPdfContentWidthMm()}mm`,
-                    height: `${(getPdfContentWidthMm() * 1153) / 2480}mm`,
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: `${PDF_TEMPLATE_CONFIG.page.widthMm}mm`,
+                    height: `${PDF_TEMPLATE_CONFIG.page.heightMm}mm`,
                     objectFit: 'cover',
-                    marginTop: '4mm',
+                    zIndex: 0,
                   }}
                 />
               )}
+
+              {/* Content container */}
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                {/* Table title */}
+                <h1
+                  style={{
+                    position: 'absolute',
+                    top: `${PDF_TEMPLATE_CONFIG.template.page2TitleTopMm}mm`,
+                    left: 0,
+                    width: `${PDF_TEMPLATE_CONFIG.page.widthMm}mm`,
+                    textAlign: 'center',
+                    fontSize: '15pt',
+                    fontWeight: 'bold',
+                    color: PDF_TEXT_ACCENT,
+                  }}
+                >
+                  {PDF_TEMPLATE_CONFIG.labels.sectorAnalysisTitle}
+                  {sectorPages.length > 1 ? ` · ${pageIndex + 1}/${sectorPages.length}` : ''}
+                </h1>
+
+                {/* Table */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: `${PDF_TEMPLATE_CONFIG.template.page2TableTopMm}mm`,
+                    left: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
+                    right: `${PDF_TEMPLATE_CONFIG.page.horizontalMarginMm}mm`,
+                  }}
+                >
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    {/* Table header */}
+                    <thead>
+                      <tr>
+                        <th
+                          style={{
+                            backgroundColor: 'rgb(0, 70, 173)',
+                            color: 'white',
+                            padding: '4mm 2mm',
+                            fontSize: '10.5pt',
+                            fontWeight: 'bold',
+                            textAlign: 'left',
+                            border: 'none',
+                          }}
+                        >
+                          Sector
+                        </th>
+                        <th
+                          style={{
+                            backgroundColor: 'rgb(0, 70, 173)',
+                            color: 'white',
+                            padding: '4mm 2mm',
+                            fontSize: '10.5pt',
+                            fontWeight: 'bold',
+                            textAlign: 'left',
+                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                          }}
+                        >
+                          Exposed
+                          <br />
+                          Buildings
+                        </th>
+                        <th
+                          style={{
+                            backgroundColor: 'rgb(0, 70, 173)',
+                            color: 'white',
+                            padding: '4mm 2mm',
+                            fontSize: '10.5pt',
+                            fontWeight: 'bold',
+                            textAlign: 'left',
+                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                          }}
+                        >
+                          Damaged
+                          <br />
+                          Buildings
+                        </th>
+                        <th
+                          style={{
+                            backgroundColor: 'rgb(0, 70, 173)',
+                            color: 'white',
+                            padding: '4mm 2mm',
+                            fontSize: '10.5pt',
+                            fontWeight: 'bold',
+                            textAlign: 'left',
+                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                          }}
+                        >
+                          Building Loss
+                          <br />
+                          (USD)
+                        </th>
+                        <th
+                          style={{
+                            backgroundColor: 'rgb(0, 70, 173)',
+                            color: 'white',
+                            padding: '4mm 2mm',
+                            fontSize: '10.5pt',
+                            fontWeight: 'bold',
+                            textAlign: 'left',
+                            borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                          }}
+                        >
+                          Total Loss (USD)
+                        </th>
+                      </tr>
+                    </thead>
+                    {/* Table body */}
+                    <tbody>
+                      {pageRows.length > 0 ? (
+                        pageRows.map((row: any, idx: number) => (
+                          <tr key={idx}>
+                            <td
+                              style={{
+                                backgroundColor: 'rgb(241, 248, 252)',
+                                color: PDF_TEXT_PRIMARY,
+                                padding: '2mm 2mm',
+                                fontSize: '7pt',
+                                borderTop: '0.35mm solid rgb(98, 211, 241)',
+                              }}
+                            >
+                              {row.Sector || '—'}
+                            </td>
+                            <td
+                              style={{
+                                backgroundColor: 'rgb(241, 248, 252)',
+                                color: PDF_TEXT_PRIMARY,
+                                padding: '2mm 2mm',
+                                fontSize: '7pt',
+                                borderTop: '0.35mm solid rgb(98, 211, 241)',
+                                borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                              }}
+                            >
+                              {formatNumber(Number(row.Number_Exposed_Buildings || 0))}
+                            </td>
+                            <td
+                              style={{
+                                backgroundColor: 'rgb(241, 248, 252)',
+                                color: PDF_TEXT_PRIMARY,
+                                padding: '2mm 2mm',
+                                fontSize: '7pt',
+                                borderTop: '0.35mm solid rgb(98, 211, 241)',
+                                borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                              }}
+                            >
+                              {formatNumber(Number(row.Number_Damaged_Buildings || 0))}
+                            </td>
+                            <td
+                              style={{
+                                backgroundColor: 'rgb(241, 248, 252)',
+                                color: PDF_TEXT_PRIMARY,
+                                padding: '2mm 2mm',
+                                fontSize: '7pt',
+                                borderTop: '0.35mm solid rgb(98, 211, 241)',
+                                borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                              }}
+                            >
+                              {row.Building_Loss == null
+                                ? '—'
+                                : formatCurrency(Number(row.Building_Loss || 0))}
+                            </td>
+                            <td
+                              style={{
+                                backgroundColor: 'rgb(241, 248, 252)',
+                                color: PDF_TEXT_PRIMARY,
+                                padding: '2mm 2mm',
+                                fontSize: '7pt',
+                                borderTop: '0.35mm solid rgb(98, 211, 241)',
+                                borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                              }}
+                            >
+                              {formatCurrency(Number(row.Total_Loss || 0))}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            style={{
+                              padding: '10mm',
+                              textAlign: 'center',
+                              color: PDF_TEXT_MUTED,
+                              fontSize: '10pt',
+                            }}
+                          >
+                            No sector data available
+                          </td>
+                        </tr>
+                      )}
+                      {/* Total row */}
+                      {isLastSectorPage && sectorRows.length > 0 && (
+                        <tr>
+                          <td
+                            style={{
+                              backgroundColor: 'rgb(157, 211, 231)',
+                              color: PDF_TEXT_PRIMARY,
+                              padding: '2mm 2mm',
+                              fontSize: '7pt',
+                              fontWeight: 'bold',
+                              borderTop: '0.35mm solid rgb(98, 211, 241)',
+                            }}
+                          >
+                            TOTAL
+                          </td>
+                          <td
+                            style={{
+                              backgroundColor: 'rgb(157, 211, 231)',
+                              borderTop: '0.35mm solid rgb(98, 211, 241)',
+                              borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                            }}
+                          ></td>
+                          <td
+                            style={{
+                              backgroundColor: 'rgb(157, 211, 231)',
+                              borderTop: '0.35mm solid rgb(98, 211, 241)',
+                              borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                            }}
+                          ></td>
+                          <td
+                            style={{
+                              backgroundColor: 'rgb(157, 211, 231)',
+                              borderTop: '0.35mm solid rgb(98, 211, 241)',
+                              borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                            }}
+                          ></td>
+                          <td
+                            style={{
+                              backgroundColor: 'rgb(157, 211, 231)',
+                              color: PDF_TEXT_PRIMARY,
+                              padding: '2mm 2mm',
+                              fontSize: '7pt',
+                              fontWeight: 'bold',
+                              borderTop: '0.35mm solid rgb(98, 211, 241)',
+                              borderLeft: '0.35mm solid rgb(98, 211, 241)',
+                            }}
+                          >
+                            {formatCurrency(
+                              sectorRows.reduce(
+                                (sum, row) => sum + (Number(row.Total_Loss) || 0),
+                                0
+                              )
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Data source note */}
+                  <p
+                    style={{
+                      marginTop: '3mm',
+                      textAlign: 'center',
+                      fontSize: '6.5pt',
+                      fontStyle: 'italic',
+                      color: PDF_TEXT_PRIMARY,
+                    }}
+                  >
+                    {PDF_TEMPLATE_CONFIG.labels.dataSourceNote}
+                  </p>
+
+                  {isLastSectorPage && tableFooterBannerSrc && (
+                    <img
+                      src={tableFooterBannerSrc}
+                      alt="About the project"
+                      style={{
+                        display: 'block',
+                        width: `${getPdfContentWidthMm()}mm`,
+                        height: `${(getPdfContentWidthMm() * 1153) / 2480}mm`,
+                        objectFit: 'cover',
+                        marginTop: '4mm',
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
     );
   }

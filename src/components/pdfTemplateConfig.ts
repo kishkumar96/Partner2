@@ -30,7 +30,8 @@ export const PDF_TEMPLATE_CONFIG = {
     imageHeightMm: 82,
     captionHeightMm: 14,
     captionPaddingXmm: 8,
-    captionText: 'Fig. 1: PDIE Dashboard map — hazard and impact layer snapshot.',
+    captionText:
+      'Fig. 1: Pacific Disaster Impact & Exposure Dashboard map: hazard and impact layer snapshot.',
   },
   keyFigures: {
     boxes: [
@@ -44,12 +45,12 @@ export const PDF_TEMPLATE_CONFIG = {
   },
   labels: {
     reportPrefix: 'No. 01 |',
-    branding: 'Pacific Disaster Impact & Exposure | PDIE Dashboard',
+    branding: 'Pacific Disaster Impact & Exposure Dashboard',
     keyFiguresTitle: 'KEY FIGURES',
     situationOverviewTitle: 'SITUATION OVERVIEW',
     sectorAnalysisTitle: 'SECTOR ANALYSIS',
     dataSourceNote:
-      'Source: PDIE Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
+      'Source: Pacific Disaster Impact & Exposure Dashboard / SPC. Loss values shown in USD. Data derived from hazard modelling.',
   },
 } as const;
 
@@ -69,9 +70,10 @@ export function getPdfKeyFigureIconLayout(index: number) {
     iconSizeMm: usesTightLayout ? 11 : 14,
     previewMarginTopMm: usesTightLayout ? -20 : -5,
     previewMarginBottomMm: usesTightLayout ? -7 : 1,
-    previewValueMarginTopMm: usesTightLayout ? 12 : 1,
+    previewValueTopMm: 2.4,
+    previewLabelTopMm: 8.6,
     exportIconOffsetYmm: usesTightLayout ? -20 : -19,
-    exportValueOffsetYmm: usesTightLayout ? 11.8 : 4.6,
-    exportLabelBottomInsetMm: usesTightLayout ? 2.2 : 3.8,
+    exportValueOffsetYmm: 6.6,
+    exportLabelTopOffsetMm: 8.8,
   };
 }

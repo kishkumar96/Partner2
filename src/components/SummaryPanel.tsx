@@ -35,6 +35,7 @@ import {
   Wheat,
   X,
   Maximize2,
+  Info,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import {
@@ -61,8 +62,10 @@ import {
 } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
-import { computeFilteredData } from '../utils/filteredData';
+import { getFilteredData } from '../stores/filteredDataStore';
 import { COUNTRY_CONFIGS } from '@/data/countryConfigs';
+import { HAZARD_LOSS_SCOPE_LABEL, type HazardLossScope } from '@/utils/hazardLossScope';
+import { describeHazardScenario, type HazardScenarioSelection } from '@/data/realThreddsLayers';
 import {
   areaMatchesSelection,
   normalizeEventAreaRows,
@@ -85,7 +88,79 @@ ChartJS.register(
   Filler
 );
 
+function formatSummaryNumber(value: number | string | undefined | null): string {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return '0';
+  }
+
+  // For whole numbers (counts, integers), don't show decimal places
+  // For decimals, show up to 2 decimal places
+  const isWholeNumber = Number.isInteger(numericValue);
+
+  return numericValue.toLocaleString('en-US', {
+    minimumFractionDigits: isWholeNumber ? 0 : 0,
+    maximumFractionDigits: isWholeNumber ? 0 : 2,
+  });
+}
+
+function formatSummaryCurrency(value: number | string | undefined | null): string {
+  return `$${formatSummaryNumber(value)}`;
+}
+
+function formatSummaryPercent(
+  numerator: number | string | undefined | null,
+  denominator: number | string | undefined | null
+): string {
+  const numeratorValue = Number(numerator);
+  const denominatorValue = Number(denominator);
+
+  if (
+    !Number.isFinite(numeratorValue) ||
+    !Number.isFinite(denominatorValue) ||
+    denominatorValue === 0
+  ) {
+    return '0%';
+  }
+
+  return `${formatPercent((numeratorValue / denominatorValue) * 100)}%`;
+}
+
+// Format number with at least 2 decimal places
+function formatDecimal(value: number, minDecimals: number = 1, maxDecimals: number = 2): string {
+  if (!Number.isFinite(value)) {
+    return '0.00';
+  }
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: minDecimals,
+    maximumFractionDigits: maxDecimals,
+  });
+}
+
+// Format percentages for UI display without overwhelming precision.
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '0';
+  }
+
+  const absoluteValue = Math.abs(value);
+  let maximumFractionDigits = 2;
+
+  if (absoluteValue > 0 && absoluteValue < 0.1) {
+    maximumFractionDigits = 4;
+  } else if (absoluteValue < 1) {
+    maximumFractionDigits = 3;
+  }
+
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  });
+}
+
 interface SummaryPanelProps {
+  /** Shown under the header title, e.g. a note that this assessment is for an older storm */
+  notice?: ReactNode;
   events: Event[];
   filters: FilterState;
   districts: District[];
@@ -100,6 +175,33 @@ interface SummaryPanelProps {
   regionalSummary?: RegionalSummary[];
   regionalSummaryBySector?: RegionalSummaryBySector[];
   impactBySector?: any[];
+  /** National-level loss/exposure totals (RiskScenario) for the hazard
+   * scenario currently selected on the map, e.g. { total_loss,
+   * exposed_population, ... }. When present, takes priority over the
+   * static csvTotals for the headline figures -- it has no per-region
+   * breakdown, so the district count/label falls back to the existing
+   * regional data rather than being replaced. */
+  scenarioRiskSummary?: Record<string, unknown> | null;
+  /** True when the map's "Hazard scenario" selector (SLR/return-period) has
+   * a scenario picked for this country. Some countries only have the map
+   * layer wired up (real WMS flood tiles) without RiskScenario rows behind
+   * it, so scenarioRiskSummary stays null even though the selector is
+   * live -- this flags that case so the headline figures can say plainly
+   * that they aren't following the selector, instead of leaving it
+   * ambiguous. */
+  hazardScenarioMapActive?: boolean;
+  /** Which hazard's share the risk figures show (from the Hazards filter) */
+  hazardLossScope?: HazardLossScope;
+  /** False when some risk data has no per-hazard columns */
+  hazardLossScopeComplete?: boolean;
+  /** Flood exposure adds coastal and river counts, which can overlap */
+  hazardLossMayDoubleCount?: boolean;
+  /** 'planning' shows only the selected scenario's figures (or that none exist) */
+  viewMode?: 'event' | 'planning';
+  /** The selected planning scenario, for its caption */
+  hazardScenario?: HazardScenarioSelection | null;
+  /** Shown in planning mode when no scenario loss figures exist */
+  eventName?: string;
 }
 
 function PopoutVisualization({
@@ -166,6 +268,7 @@ function PopoutVisualization({
 }
 
 export default function SummaryPanel({
+  notice,
   events,
   filters,
   districts,
@@ -180,6 +283,14 @@ export default function SummaryPanel({
   regionalSummary = [],
   regionalSummaryBySector = [],
   impactBySector = [],
+  scenarioRiskSummary = null,
+  hazardScenarioMapActive = false,
+  hazardLossScope = 'all',
+  hazardLossScopeComplete = true,
+  hazardLossMayDoubleCount = false,
+  viewMode = 'event',
+  hazardScenario = null,
+  eventName,
 }: SummaryPanelProps) {
   const geographyUi = selectedCountry
     ? COUNTRY_CONFIGS[selectedCountry].ui
@@ -202,7 +313,7 @@ export default function SummaryPanel({
 
   const { filteredEvents, aggregatedEventData } = useMemo(
     () =>
-      computeFilteredData({
+      getFilteredData({
         events,
         filters,
         districts,
@@ -216,11 +327,10 @@ export default function SummaryPanel({
     [aggregatedEventData]
   );
 
+  // Hazard selections don't need event-derived areas: the risk rows arrive
+  // already scoped to that hazard's share (see utils/hazardLossScope).
   const requiresEventDerivedAreas =
-    filters.selectedHazards.length > 0 ||
-    filters.selectedEvents.length > 0 ||
-    !!filters.dateRange.start ||
-    !!filters.dateRange.end;
+    filters.selectedEvents.length > 0 || !!filters.dateRange.start || !!filters.dateRange.end;
 
   const selectedSectorNames = useMemo(
     () =>
@@ -320,6 +430,13 @@ export default function SummaryPanel({
     return derivedRegionalSummary.filter(row => regionMatchesSelection(row, selectedRegion));
   }, [selectedRegion, derivedRegionalSummary, regionMatchesSelection]);
 
+  const scopeLabel = HAZARD_LOSS_SCOPE_LABEL[hazardLossScope];
+  const scopePrefix =
+    hazardLossScope === 'all'
+      ? ''
+      : `${scopeLabel.charAt(0).toUpperCase()}${scopeLabel.slice(1)} only · `;
+  const scopePopulationPrefix = hazardLossScope === 'all' ? '' : `Exposed to ${scopeLabel} · `;
+
   // Calculate CSV-based totals (for when CSV data is available)
   const csvTotals = useMemo(() => {
     // If region is selected, sum from filtered regional data
@@ -350,6 +467,23 @@ export default function SummaryPanel({
 
     return null;
   }, [selectedRegion, regionFilteredData, nationalSummary, regionalSummary]);
+
+  // National totals for the currently-selected hazard scenario (SLR x
+  // return-period/event), when RiskScenario data exists for it. Takes
+  // priority over csvTotals for the headline figures below -- it's
+  // national-only (no per-region breakdown), so it's ignored once a
+  // specific region is selected, where the regional csvTotals is more
+  // relevant than one fixed national number.
+  const scenarioTotals = useMemo(() => {
+    if (!scenarioRiskSummary || selectedRegion) return null;
+    const totalLoss = Number(scenarioRiskSummary.total_loss);
+    const affectedPopulation = Number(scenarioRiskSummary.exposed_population);
+    if (!Number.isFinite(totalLoss) && !Number.isFinite(affectedPopulation)) return null;
+    return {
+      totalLoss: Number.isFinite(totalLoss) ? totalLoss : 0,
+      affectedPopulation: Number.isFinite(affectedPopulation) ? affectedPopulation : 0,
+    };
+  }, [scenarioRiskSummary, selectedRegion]);
 
   // Check if filters are active (Tier 3)
   const hasActiveFilters = useMemo(
@@ -422,7 +556,7 @@ export default function SummaryPanel({
 
       if (validSectors.length === 0) return null;
 
-      const total = validSectors.reduce((sum, s) => sum + (s[valueField] || 0), 0);
+      const total = validSectors.reduce((sum, s) => sum + (Number(s[valueField]) || 0), 0);
 
       return {
         labels: validSectors.map(s => s.Sector),
@@ -619,6 +753,64 @@ export default function SummaryPanel({
     (impactBySector && impactBySector.length > 0) ||
     (assetExposureData && Object.keys(assetExposureData).length > 0);
 
+  // Planning mode: only the selected scenario's own figures, never the
+  // event analysis -- so nothing here can disagree with the map.
+  if (viewMode === 'planning') {
+    const countryName = selectedCountry ? COUNTRIES[selectedCountry].name : 'this country';
+    return (
+      <div
+        className="w-full max-w-full h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50 md:w-80 md:max-w-[min(320px,calc(100vw-40px))]"
+        data-testid="summary-panel"
+      >
+        <div className="p-4 border-b border-borderGlow bg-surface/95 backdrop-blur-sm flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-100">Scenario Summary</h2>
+          {hazardScenario && (
+            <p className="text-xs text-slate-400 mt-1">
+              {describeHazardScenario(hazardScenario).join(' · ')}
+            </p>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
+          {scenarioTotals ? (
+            <>
+              <HeroMetric
+                label="Total Economic Damage"
+                value={formatSummaryCurrency(scenarioTotals.totalLoss)}
+                subtitle="National loss for this scenario"
+                icon={DollarSign}
+                color="red"
+              />
+              <HeroMetric
+                label="Affected Population"
+                value={formatSummaryNumber(scenarioTotals.affectedPopulation)}
+                subtitle="People exposed in this scenario"
+                icon={Users}
+                color="orange"
+              />
+              <p className="text-xs text-slate-400 leading-snug">
+                Loss by sector and asset type for this scenario is in the Data tabs.
+              </p>
+            </>
+          ) : (
+            <div
+              role="note"
+              className="rounded-lg border border-slate-600/50 bg-slate-800/40 p-4 space-y-2"
+            >
+              <p className="text-sm font-semibold text-slate-100">
+                No loss figures modelled for this scenario
+              </p>
+              <p className="text-xs leading-snug text-slate-300">
+                The map shows this scenario’s hazard. Impact modelling hasn’t been done for{' '}
+                {countryName}’s planning scenarios, so there are no loss or exposure figures for it.
+                {eventName ? ` Switch to Event to see the modelled impact of ${eventName}.` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (events.length === 0 && !hasCSVData) {
     return (
       <aside className="w-full max-w-full flex flex-col flex-shrink-0 glass-panel border-l border-white/10 h-full min-h-0 overflow-hidden md:w-80 md:max-w-[min(320px,calc(100vw-40px))]">
@@ -629,7 +821,7 @@ export default function SummaryPanel({
             <p className="text-sm text-slate-400 max-w-md mx-auto">
               {selectedCountry ? (
                 <>
-                  PDIE model outputs for{' '}
+                  Pacific Disaster Impact & Exposure model outputs for{' '}
                   <span className="font-semibold text-slate-300">
                     {COUNTRIES[selectedCountry].name}
                   </span>{' '}
@@ -660,6 +852,7 @@ export default function SummaryPanel({
     <div
       className="w-full max-w-full h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50 md:w-80 md:max-w-[min(320px,calc(100vw-40px))]"
       data-testid="summary-panel"
+      data-tour="summary-panel"
     >
       {/* Header */}
       <div className="p-4 space-y-3 border-b border-borderGlow bg-surface/95 backdrop-blur-sm flex-shrink-0">
@@ -672,6 +865,7 @@ export default function SummaryPanel({
                 ? `${filteredEvents.length} ${filteredEvents.length === 1 ? areaLabelSingular : areaLabelPlural}`
                 : `${filteredEvents.length} of ${events.length} ${areaLabelPlural.toLowerCase()}`}
           </p>
+          {notice && <div className="mt-2">{notice}</div>}
           {/* Active Filters Indicator */}
           {hasActiveFilters && (
             <div className="flex flex-wrap items-start gap-1.5 px-2 py-1 mt-2 bg-blue-500/10 border border-blue-500/30 rounded-md">
@@ -760,11 +954,15 @@ export default function SummaryPanel({
               {/* Total Economic Damage */}
               <HeroMetric
                 label="Total Economic Damage"
-                value={formatCurrency(csvTotals?.totalLoss ?? stats.totalEconomicDamage)}
+                value={formatSummaryCurrency(
+                  scenarioTotals?.totalLoss ?? csvTotals?.totalLoss ?? stats.totalEconomicDamage
+                )}
                 subtitle={
-                  csvTotals
-                    ? `Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
-                    : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                  scenarioTotals
+                    ? 'For the selected hazard scenario'
+                    : csvTotals
+                      ? `${scopePrefix}Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                      : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                 }
                 icon={DollarSign}
                 color="red"
@@ -773,16 +971,49 @@ export default function SummaryPanel({
               {/* Affected Population */}
               <HeroMetric
                 label="Affected Population"
-                value={formatNumber(csvTotals?.affectedPopulation ?? stats.totalAffectedPopulation)}
+                value={formatSummaryNumber(
+                  scenarioTotals?.affectedPopulation ??
+                    csvTotals?.affectedPopulation ??
+                    stats.totalAffectedPopulation
+                )}
                 subtitle={
-                  csvTotals && csvTotals.totalPopulation > 0
-                    ? `${((csvTotals.affectedPopulation / csvTotals.totalPopulation) * 100 || 0).toFixed(1)}% of total population`
-                    : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
+                  scenarioTotals
+                    ? 'For the selected hazard scenario'
+                    : csvTotals && csvTotals.totalPopulation > 0
+                      ? `${scopePopulationPrefix}${formatSummaryPercent(csvTotals.affectedPopulation, csvTotals.totalPopulation)} of total population`
+                      : `${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()} affected`
                 }
                 icon={Users}
                 color="orange"
               />
             </div>
+
+            {!scenarioTotals && hazardLossScope !== 'all' && (
+              <div
+                role="note"
+                className="flex items-start gap-2 px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg"
+              >
+                <Info className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-snug text-cyan-100">
+                  {hazardLossScopeComplete
+                    ? `Figures show ${HAZARD_LOSS_SCOPE_LABEL[hazardLossScope]} only. Clear the Hazards filter to see all hazards.`
+                    : `Some of this data isn't split by hazard, so parts of it still cover all hazards.`}
+                  {hazardLossMayDoubleCount &&
+                    ' People exposed to both coastal and river flooding may be counted twice.'}
+                </p>
+              </div>
+            )}
+
+            {hazardScenarioMapActive && !scenarioRiskSummary && (
+              <div className="flex items-start gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <Hourglass className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-snug text-amber-200">
+                  The map&apos;s hazard scenario selector (sea level rise / return period) changes
+                  which flood layer is shown, but the figures above don&apos;t follow it yet for
+                  this country -that needs loss modeling that hasn&apos;t been done here.
+                </p>
+              </div>
+            )}
 
             {/* Sector Breakdown - Doughnut Charts */}
             {(exposureDoughnutData || damageDoughnutData) && (
@@ -822,8 +1053,8 @@ export default function SummaryPanel({
                                       const value = context.parsed || 0;
                                       const total = exposureDoughnutData.total;
                                       const percentage =
-                                        total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-                                      return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                                        total > 0 ? formatPercent((value / total) * 100) : '0.00';
+                                      return `${label}: $${formatDecimal(value)}M (${percentage}%)`;
                                     },
                                   },
                                 },
@@ -832,7 +1063,7 @@ export default function SummaryPanel({
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <span className="text-3xl font-bold text-white">
-                              ${exposureDoughnutData.total.toFixed(0)}M
+                              ${formatDecimal(exposureDoughnutData.total)}M
                             </span>
                             <span className="text-xs text-slate-400 mt-1">Total Exposed</span>
                           </div>
@@ -843,8 +1074,8 @@ export default function SummaryPanel({
                             const value = exposureDoughnutData.datasets[0].data[idx];
                             const percentage =
                               exposureDoughnutData.total > 0
-                                ? ((value / exposureDoughnutData.total) * 100).toFixed(1)
-                                : '0';
+                                ? formatPercent((value / exposureDoughnutData.total) * 100)
+                                : '0.00';
                             const color = exposureDoughnutData.datasets[0].backgroundColor[idx];
                             return (
                               <div key={idx} className="group">
@@ -861,7 +1092,7 @@ export default function SummaryPanel({
                                   </div>
                                   <div className="flex items-baseline gap-1.5">
                                     <span className="text-slate-300 font-semibold">
-                                      ${value.toFixed(1)}M
+                                      ${formatDecimal(value)}M
                                     </span>
                                     <span className="text-slate-400 text-[10px]">•</span>
                                     <span className="text-cyan-400 font-bold">{percentage}%</span>
@@ -914,8 +1145,8 @@ export default function SummaryPanel({
                                       const value = context.parsed || 0;
                                       const total = damageDoughnutData.total;
                                       const percentage =
-                                        total > 0 ? ((value / total) * 100).toFixed(1) : '0';
-                                      return `${label}: $${value.toFixed(1)}M (${percentage}%)`;
+                                        total > 0 ? formatPercent((value / total) * 100) : '0.00';
+                                      return `${label}: $${formatDecimal(value)}M (${percentage}%)`;
                                     },
                                   },
                                 },
@@ -924,7 +1155,7 @@ export default function SummaryPanel({
                           />
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <span className="text-3xl font-bold text-white">
-                              ${damageDoughnutData.total.toFixed(0)}M
+                              ${formatDecimal(damageDoughnutData.total)}M
                             </span>
                             <span className="text-xs text-slate-400 mt-1">Total Damage</span>
                           </div>
@@ -935,8 +1166,8 @@ export default function SummaryPanel({
                             const value = damageDoughnutData.datasets[0].data[idx];
                             const percentage =
                               damageDoughnutData.total > 0
-                                ? ((value / damageDoughnutData.total) * 100).toFixed(1)
-                                : '0';
+                                ? formatPercent((value / damageDoughnutData.total) * 100)
+                                : '0.00';
                             const color = damageDoughnutData.datasets[0].backgroundColor[idx];
                             return (
                               <div key={idx} className="group">
@@ -953,7 +1184,7 @@ export default function SummaryPanel({
                                   </div>
                                   <div className="flex items-baseline gap-1.5">
                                     <span className="text-slate-300 font-semibold">
-                                      ${value.toFixed(1)}M
+                                      ${formatDecimal(value)}M
                                     </span>
                                     <span className="text-slate-400 text-[10px]">•</span>
                                     <span className="text-cyan-400 font-bold">{percentage}%</span>
@@ -1046,14 +1277,14 @@ export default function SummaryPanel({
                                 </span>
                                 <span className="text-slate-400"> accounts for </span>
                                 <span className="text-red-400 font-bold">
-                                  {topDistrictShare.toFixed(1)}%
+                                  {formatPercent(topDistrictShare)}%
                                 </span>
                                 <span className="text-slate-400">
                                   {' '}
                                   of total damage
                                   {hasEconomicDamage
-                                    ? ' — highest vulnerability'
-                                    : ' — no recorded economic loss in current view'}
+                                    ? ' -the largest share of damage'
+                                    : ' -no recorded economic loss in current view'}
                                 </span>
                               </div>
                             </div>
@@ -1071,7 +1302,7 @@ export default function SummaryPanel({
                                 <span className="text-slate-300">150% of average</span>
                                 <span className="text-slate-400">
                                   {' '}
-                                  damage — concentrated impact pattern
+                                  damage -concentrated impact pattern
                                 </span>
                               </div>
                             </div>
@@ -1085,7 +1316,7 @@ export default function SummaryPanel({
                                 <span className="text-cyan-400 font-bold font-mono">
                                   {formatCurrency(avgDamagePerArea)}
                                 </span>
-                                <span className="text-slate-400"> — use for prioritization</span>
+                                <span className="text-slate-400"> -use for prioritization</span>
                               </div>
                             </div>
                           </>
@@ -1128,7 +1359,9 @@ export default function SummaryPanel({
                         </span>
                       </div>
                       <span className="text-xs text-slate-400 ml-auto">
-                        All sectors • Complete dataset
+                        {hazardLossScope === 'all'
+                          ? 'All sectors • Complete dataset'
+                          : 'All sectors • Not split by hazard'}
                       </span>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
@@ -1139,18 +1372,18 @@ export default function SummaryPanel({
                               Households Affected
                             </p>
                             <p className="text-2xl font-bold text-blue-400 mt-1 tabular-nums">
-                              {formatNumber(nationalSummary[0]?.Exposed_Households || 0)}
+                              {formatSummaryNumber(nationalSummary[0]?.Exposed_Households || 0)}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
-                              of {formatNumber(nationalSummary[0]?.Total_Households || 0)} total
+                              of {formatSummaryNumber(nationalSummary[0]?.Total_Households || 0)}{' '}
+                              total
                               <span className="text-blue-400 font-semibold ml-1">
                                 (
-                                {(
-                                  (nationalSummary[0]?.Exposed_Households /
-                                    nationalSummary[0]?.Total_Households) *
-                                    100 || 0
-                                ).toFixed(1)}
-                                %)
+                                {formatSummaryPercent(
+                                  nationalSummary[0]?.Exposed_Households,
+                                  nationalSummary[0]?.Total_Households
+                                )}
+                                )
                               </span>
                             </p>
                           </div>
@@ -1167,19 +1400,18 @@ export default function SummaryPanel({
                               Roads Damaged
                             </p>
                             <p className="text-2xl font-bold text-orange-400 mt-1 tabular-nums">
-                              {Number(nationalSummary[0]?.Damaged_Road_km || 0).toFixed(1)} km
+                              {formatSummaryNumber(nationalSummary[0]?.Damaged_Road_km || 0)} km
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
-                              of {Number(nationalSummary[0]?.Total_Road_km || 0).toFixed(1)} km
+                              of {formatSummaryNumber(nationalSummary[0]?.Total_Road_km || 0)} km
                               total
                               <span className="text-orange-400 font-semibold ml-1">
                                 (
-                                {(
-                                  (nationalSummary[0]?.Damaged_Road_km /
-                                    nationalSummary[0]?.Total_Road_km) *
-                                    100 || 0
-                                ).toFixed(1)}
-                                %)
+                                {formatSummaryPercent(
+                                  nationalSummary[0]?.Damaged_Road_km,
+                                  nationalSummary[0]?.Total_Road_km
+                                )}
+                                )
                               </span>
                             </p>
                           </div>
@@ -1196,18 +1428,20 @@ export default function SummaryPanel({
                               Agricultural Damage
                             </p>
                             <p className="text-2xl font-bold text-green-400 mt-1 tabular-nums">
-                              {formatCurrency(nationalSummary[0]?.Crop_Loss || 0)}
+                              {nationalSummary[0]?.Crop_Loss == null
+                                ? '—'
+                                : formatSummaryCurrency(nationalSummary[0].Crop_Loss)}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
-                              of {formatCurrency(nationalSummary[0]?.Total_Crop_Value || 0)} value
+                              of {formatSummaryCurrency(nationalSummary[0]?.Total_Crop_Value || 0)}{' '}
+                              value
                               <span className="text-green-400 font-semibold ml-1">
                                 (
-                                {(
-                                  (nationalSummary[0]?.Crop_Loss /
-                                    nationalSummary[0]?.Total_Crop_Value) *
-                                    100 || 0
-                                ).toFixed(1)}
-                                %)
+                                {formatSummaryPercent(
+                                  nationalSummary[0]?.Crop_Loss,
+                                  nationalSummary[0]?.Total_Crop_Value
+                                )}
+                                )
                               </span>
                             </p>
                           </div>
@@ -1224,9 +1458,9 @@ export default function SummaryPanel({
                               Peak Wind Speed
                             </p>
                             <p className="text-2xl font-bold text-cyan-400 mt-1 tabular-nums">
-                              {Number(nationalSummary[0]?.Max_Wind_Gusts || 0).toFixed(0)} km/h
+                              {formatSummaryNumber(nationalSummary[0]?.Max_Wind_Gusts || 0)} km/h
                             </p>
-                            <p className="text-xs text-slate-400 mt-1">Maximum recorded gusts</p>
+                            <p className="text-xs text-slate-400 mt-1">Maximum modelled gusts</p>
                           </div>
                           <div className="w-9 h-9 rounded-lg bg-cyan-400/10 text-cyan-400 flex items-center justify-center flex-shrink-0">
                             <Wind className="w-4 h-4" />
@@ -1253,7 +1487,7 @@ export default function SummaryPanel({
                       0
                     );
                     const top5Share =
-                      nationalTotal > 0 ? ((top5Total / nationalTotal) * 100).toFixed(1) : '0.0';
+                      nationalTotal > 0 ? formatPercent((top5Total / nationalTotal) * 100) : '0.00';
 
                     return (
                       <div className="glass-panel rounded-xl p-3 border border-slate-700/50 animate-fadeSlide">
@@ -1281,8 +1515,10 @@ export default function SummaryPanel({
                           {top5Districts.map((district, idx) => {
                             const shareOfTotal =
                               nationalTotal > 0
-                                ? ((district.totalEconomicDamage / nationalTotal) * 100).toFixed(1)
-                                : '0.0';
+                                ? formatPercent(
+                                    (district.totalEconomicDamage / nationalTotal) * 100
+                                  )
+                                : '0.00';
 
                             return (
                               <div
@@ -1798,7 +2034,7 @@ export default function SummaryPanel({
                         {formatNumber(damagedBuildings)}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {((damagedBuildings / totalBuildings) * 100).toFixed(1)}%
+                        {formatPercent((damagedBuildings / totalBuildings) * 100)}%
                       </div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
@@ -1807,7 +2043,7 @@ export default function SummaryPanel({
                         {formatNumber(exposedBuildings)}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {((exposedBuildings / totalBuildings) * 100).toFixed(1)}%
+                        {formatPercent((exposedBuildings / totalBuildings) * 100)}%
                       </div>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
@@ -1876,7 +2112,7 @@ export default function SummaryPanel({
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                        <span>{((exposedValue / totalValue) * 100).toFixed(1)}% of total</span>
+                        <span>{formatPercent((exposedValue / totalValue) * 100)}% of total</span>
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-2">
                         <div
@@ -1894,8 +2130,8 @@ export default function SummaryPanel({
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                        <span>{((totalLoss / totalValue) * 100).toFixed(2)}% of total</span>
-                        <span>{((totalLoss / exposedValue) * 100).toFixed(1)}% of exposed</span>
+                        <span>{formatPercent((totalLoss / totalValue) * 100)}% of total</span>
+                        <span>{formatPercent((totalLoss / exposedValue) * 100)}% of exposed</span>
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-2">
                         <div

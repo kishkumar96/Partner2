@@ -2,7 +2,7 @@ name: Ollama AI Tasks
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, Updates]
     types: [opened, synchronize, reopened]
 
 jobs:

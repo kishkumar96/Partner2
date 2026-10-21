@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { formatCurrency, formatNumber } from '@/utils/formatters';
+import { formatCurrency, formatNumber, formatPercent } from '@/utils/formatters';
 import { BarChart3, AlertTriangle } from 'lucide-react';
 
 interface ComparativeAnalyticsProps {
@@ -187,7 +187,7 @@ export default function ComparativeAnalytics({
                         {formatCurrency(region.totalLoss)}
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {percentage.toFixed(1)}% of max
+                        {formatPercent(percentage)} of max
                       </div>
                     </div>
                   </div>
@@ -237,13 +237,13 @@ export default function ComparativeAnalytics({
             <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
               <div className="text-sm text-red-600 dark:text-red-400 mb-1">Wind Damage</div>
               <div className="text-2xl font-bold text-red-900 dark:text-red-100">
-                {sectorStats.windProportion.toFixed(1)}%
+                {formatPercent(sectorStats.windProportion)}
               </div>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
               <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Flood Damage</div>
               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                {sectorStats.floodProportion.toFixed(1)}%
+                {formatPercent(sectorStats.floodProportion)}
               </div>
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
@@ -286,7 +286,7 @@ export default function ComparativeAnalytics({
                         <div className="text-sm text-gray-600 dark:text-gray-400">
                           {formatNumber(sector.buildingsDamaged)}/
                           {formatNumber(sector.buildingsExposed)} buildings damaged (
-                          {damageRate.toFixed(1)}%)
+                          {formatPercent(damageRate)})
                         </div>
                       </div>
                     </div>
@@ -306,13 +306,13 @@ export default function ComparativeAnalytics({
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-red-500 rounded"></div>
                       <span className="text-gray-600 dark:text-gray-400">
-                        Wind: {windProportion.toFixed(1)}%
+                        Wind: {formatPercent(windProportion)}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-blue-500 rounded"></div>
                       <span className="text-gray-600 dark:text-gray-400">
-                        Flood: {floodProportion.toFixed(1)}%
+                        Flood: {formatPercent(floodProportion)}
                       </span>
                     </div>
                   </div>

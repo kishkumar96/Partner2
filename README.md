@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
-**A world-class WebGIS platform for real-time climate risk assessment and disaster impact analysis**
+**A WebGIS platform for climate risk assessment and disaster impact analysis**
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Demo](#-demo) • [Contributing](#-contributing)
 
@@ -486,7 +486,7 @@ WCAG 2.1 AA compliant:
 
 ## 🚀 Deployment
 
-### Option 1 — Vercel (Recommended)
+### Option 1 -Vercel (Recommended)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kishkumar96/Partner2)
 
@@ -498,7 +498,7 @@ WCAG 2.1 AA compliant:
 > A `vercel.json` is included in the repository with sensible build defaults.
 > Configure `NEXT_PUBLIC_APP_URL` in your Vercel project environment variables.
 
-### Option 2 — Docker
+### Option 2 -Docker
 
 ```bash
 # Create production env file and set NEXT_PUBLIC_APP_URL with /partner2

@@ -300,7 +300,7 @@ self.onmessage = (event: MessageEvent<WindGlowToWorker>): void => {
         physicsTick++;
         // Throttle physics to ~30 Hz on balanced quality (maxParticles ≤ 500).
         // The canvas still receives a freshly composed bitmap every vsync (60 Hz)
-        // so motion appears smooth — only the velocity recalculation is halved.
+        // so motion appears smooth -only the velocity recalculation is halved.
         const isBalanced = msg.quality.maxParticles <= 500;
         if (!isBalanced || physicsTick % 2 === 0) {
           if (particles.length < msg.quality.maxParticles) {
@@ -336,7 +336,7 @@ self.onmessage = (event: MessageEvent<WindGlowToWorker>): void => {
         msg.beatInfo
       );
 
-      // Zero-copy GPU transfer — the bitmap is a Transferable; the existing
+      // Zero-copy GPU transfer -the bitmap is a Transferable; the existing
       // OffscreenCanvas backbuffer is released and cleared ready for next frame.
       const bitmap = canvas.transferToImageBitmap();
       (self as unknown as Worker).postMessage({ type: 'bitmap', bitmap, seq: msg.seq }, [

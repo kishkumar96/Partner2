@@ -13,11 +13,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 import { resolveCountryCode } from '@/lib/countryAuth';
+import { DatabaseNotConfiguredError, getDatabaseUrl } from '@/lib/databaseUrl';
 import { ensureCountryApiAccessEnhanced } from '@/lib/countryApiAuth';
 import type { CountryCode } from '@/types/thredds';
-
-const DATABASE_URL =
-  process.env.DATABASE_URL || 'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
 
 const DB_CONNECT_TIMEOUT_MS = 500;
 const DB_QUERY_TIMEOUT_MS = 5000;
@@ -33,6 +31,7 @@ function isDbConnectivityError(error: unknown): boolean {
   const message = (err?.message || '').toLowerCase();
 
   return (
+    error instanceof DatabaseNotConfiguredError ||
     code === 'ETIMEDOUT' ||
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
@@ -71,7 +70,9 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-    const [minLng, minLat, maxLng, maxLat] = bbox;
+    const eventId = searchParams.get('event_id');
+    const dateStart = searchParams.get('date_start');
+    const dateEnd = searchParams.get('date_end');
 
     // Parse pagination
     const limit = Math.min(parseInt(searchParams.get('limit') || '1000'), 5000);
@@ -82,6 +83,9 @@ export async function GET(request: NextRequest) {
     if (!countryCode) {
       return NextResponse.json({ error: 'Invalid country code' }, { status: 400 });
     }
+
+    const effectiveBbox = bbox;
+    const [effectiveMinLng, effectiveMinLat, effectiveMaxLng, effectiveMaxLat] = effectiveBbox;
 
     // If DB recently failed, short-circuit to avoid repeated timeouts and log spam.
     if (Date.now() < dbUnavailableUntil) {
@@ -112,7 +116,7 @@ export async function GET(request: NextRequest) {
     if (authResponse) return authResponse;
 
     const client = new Client({
-      connectionString: DATABASE_URL,
+      connectionString: getDatabaseUrl(),
       connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
       query_timeout: DB_QUERY_TIMEOUT_MS,
       statement_timeout: DB_QUERY_TIMEOUT_MS,
@@ -138,7 +142,15 @@ export async function GET(request: NextRequest) {
            AND latitude BETWEEN $4 AND $5
          ORDER BY wind_loss DESC NULLS LAST
          LIMIT $6 OFFSET $7`,
-        [countryCode, minLng, maxLng, minLat, maxLat, limit, offset]
+        [
+          countryCode,
+          effectiveMinLng,
+          effectiveMaxLng,
+          effectiveMinLat,
+          effectiveMaxLat,
+          limit,
+          offset,
+        ]
       );
 
       // Transform to GeoJSON
@@ -162,8 +174,11 @@ export async function GET(request: NextRequest) {
         type: 'FeatureCollection',
         features,
         count: features.length,
-        bbox,
+        bbox: effectiveBbox,
         country: countryCode,
+        event_id: eventId ?? undefined,
+        date_start: dateStart ?? undefined,
+        date_end: dateEnd ?? undefined,
       };
 
       return NextResponse.json(response);

@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "fullName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "viewport": {
+      "type": "object",
+      "properties": {
+        "center": {
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          ],
+          "additionalItems": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "zoom": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 22
+        }
+      },
+      "required": ["center", "zoom"],
+      "additionalProperties": false
+    },
+    "partnerApi": {
+      "type": "object",
+      "properties": {
+        "aliases": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z .'-]*$"
+          }
+        }
+      },
+      "required": ["aliases"],
+      "additionalProperties": false
+    },
+    "terminology": {
+      "type": "object",
+      "properties": {
+        "focusAreaSingular": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "focusAreaPlural": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "broaderAreaSingular": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "broaderAreaPlural": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "nationalLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "focusAreaSingular",
+        "focusAreaPlural",
+        "broaderAreaSingular",
+        "broaderAreaPlural",
+        "nationalLabel"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": ["code", "slug", "name", "fullName", "viewport", "partnerApi", "terminology"],
+  "additionalProperties": false
+}

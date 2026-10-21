@@ -2,10 +2,15 @@
 
 import { useRef, useState } from 'react';
 import { FileDown, FileSpreadsheet } from 'lucide-react';
+import type { ForecastExposure } from '@/utils/forecastExposure';
+import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
+import { buildForecastBrief, type ForecastBriefContext } from '@/utils/forecastBrief';
+import REFPDFTemplate from './REFPDFTemplate';
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types';
 import QRCode from 'qrcode';
 import { getCountrySlugFromCode } from '@/utils/countrySlug';
 import { logger } from '@/utils/logger';
+import { HazardScenarioSelection, describeHazardScenario } from '@/data/realThreddsLayers';
 import PDFPreviewModal, { PDFTemplate } from './PDFPreviewModal';
 import {
   PDF_TEMPLATE_CONFIG,
@@ -35,6 +40,15 @@ const pdfAsset = (path: string) => {
   if (!path.startsWith('/')) return path;
   return `${BASE_PATH}${path}`;
 };
+
+// Mirrors HazardScenarioBadge's on-screen fields (dataset, SLR, return
+// period/event) as a single caption line -- see the note on the
+// `hazardScenario` prop above for why this can't just ride along in the
+// captured map image.
+function formatHazardScenarioCaption(scenario: HazardScenarioSelection | null): string | null {
+  if (!scenario) return null;
+  return `Scenario: ${describeHazardScenario(scenario).join(' | ')}`;
+}
 
 // OCHA colour palette (RGB tuples)
 const OCHA_BLUE: [number, number, number] = [0, 124, 224];
@@ -67,7 +81,7 @@ const MAP_CAPTURE_TIMEOUT_MS = 1500;
 const ASSET_FETCH_TIMEOUT_MS = 10000; // Increased for large SVGs in production
 const LARGE_SVG_TIMEOUT_MS = 15000; // Extra time for template backgrounds
 
-/** Minimal map type — avoids importing all of maplibre-gl into this module */
+/** Minimal map type -avoids importing all of maplibre-gl into this module */
 type MapLike = {
   getCanvas: () => HTMLCanvasElement;
   once?: (event: string, callback: () => void) => void;
@@ -130,6 +144,19 @@ interface ExportButtonsProps {
   mapInstance?: MapLike;
   reportLocale?: string;
   includeMapInPdf?: boolean;
+  // Modelled hazard scenario currently shown on the map (dataset, sea-level-rise
+  // assumption, return period/event) -- printed alongside the map caption so a
+  // report retains the same decision-record provenance the on-screen badge
+  // gives a live viewer. The map image itself is a raw canvas grab (see
+  // captureMapCanvas) that can't include the HTML overlay, so this is drawn
+  // as its own text block rather than relying on the screenshot to carry it.
+  hazardScenario?: HazardScenarioSelection | null;
+  /** A Rapid Exposure Forecast is showing: CSV exports its exposure tables (framed as a
+   * planning signal) and the damage-based PDF report is unavailable. */
+  forecastExposure?: ForecastExposure | null;
+  forecastMeta?: ForecastExportMeta;
+  /** With a forecast showing, the PDF is the two-page exposure brief built from this */
+  forecastBrief?: ForecastBriefContext;
 }
 
 export default function ExportButtons({
@@ -148,13 +175,28 @@ export default function ExportButtons({
   mapInstance = null,
   reportLocale,
   includeMapInPdf = true,
+  hazardScenario = null,
+  forecastExposure = null,
+  forecastMeta,
+  forecastBrief,
 }: ExportButtonsProps) {
+  // The damage/loss PDF can't describe a forecast. With one showing, the PDF button
+  // opens the dedicated exposure brief; without brief data it is unavailable.
+  const isForecastBrief = !!forecastExposure && !!forecastBrief;
+  const pdfUnavailableForForecast = !!forecastExposure && !forecastBrief;
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingCSV, setIsExportingCSV] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const previewTemplateRef = useRef<HTMLDivElement>(null);
+  const briefTemplateRef = useRef<HTMLDivElement>(null);
+  const [briefPreview, setBriefPreview] = useState<{
+    model: ReturnType<typeof buildForecastBrief>;
+    mapImageUrl?: string;
+    qrCodeSrc?: string;
+    activeLayers: string[];
+  } | null>(null);
   const pdfExportInFlightRef = useRef(false);
   const csvExportInFlightRef = useRef(false);
 
@@ -342,8 +384,11 @@ export default function ExportButtons({
     }
   };
 
-  const downloadPDFFromPreview = async () => {
-    const templateRoot = previewTemplateRef.current;
+  const downloadPDFFromPreview = async (
+    rootRef: React.RefObject<HTMLDivElement | null> = previewTemplateRef,
+    filename: string = buildPdfFilename()
+  ) => {
+    const templateRoot = rootRef.current;
     if (!templateRoot) {
       logger.warn('downloadPDFFromPreview: previewTemplateRef.current is null');
       return false;
@@ -369,8 +414,6 @@ export default function ExportButtons({
 
       for (let index = 0; index < pageNodes.length; index += 1) {
         const pageNode = pageNodes[index];
-        logger.info(`downloadPDFFromPreview: capturing page ${index + 1}/${pageNodes.length}`);
-
         const canvas = await html2canvas(pageNode, {
           backgroundColor: '#ffffff',
           scale: 2,
@@ -387,8 +430,7 @@ export default function ExportButtons({
         doc.addImage(imageData, 'PNG', 0, 0, PW, PH, undefined, 'FAST');
       }
 
-      logger.info('downloadPDFFromPreview: saving PDF from preview (high-quality)');
-      doc.save(buildPdfFilename());
+      doc.save(filename);
       return true;
     } catch (error) {
       logger.error('downloadPDFFromPreview failed, will fall back to legacy rendering:', error);
@@ -396,8 +438,71 @@ export default function ExportButtons({
     }
   };
 
+  // ─── Forecast brief (Rapid Exposure Forecast) ──────────────────────────────
+  const openBriefPreview = async () => {
+    if (!forecastExposure || !forecastBrief || pdfExportInFlightRef.current) return;
+    pdfExportInFlightRef.current = true;
+    setIsExportingPDF(true);
+    try {
+      setExportError(null);
+      let mapImageUrl: string | undefined;
+      if (includeMapInPdf && mapInstance) {
+        try {
+          mapImageUrl = (await captureMapCanvas(mapInstance))?.toDataURL('image/png');
+        } catch (error) {
+          logger.warn('Map capture skipped for forecast brief:', error);
+        }
+      }
+      const dashboardUrl = typeof window !== 'undefined' ? window.location.href : undefined;
+      const qrCodeSrc = dashboardUrl
+        ? await QRCode.toDataURL(dashboardUrl, { width: 256, margin: 1 })
+        : undefined;
+      setBriefPreview({
+        model: buildForecastBrief({
+          ...forecastBrief,
+          exposure: forecastExposure,
+          generatedAt: new Date(),
+          dashboardUrl,
+        }),
+        mapImageUrl,
+        qrCodeSrc,
+        activeLayers: forecastBrief.activeLayers,
+      });
+    } catch (error) {
+      logger.error('Forecast brief preview failed:', error);
+      setExportError('Failed to prepare the forecast brief. Please try again.');
+      setTimeout(() => setExportError(null), 5000);
+    } finally {
+      pdfExportInFlightRef.current = false;
+      setIsExportingPDF(false);
+    }
+  };
+
+  const downloadBrief = async () => {
+    const safeCountry = sanitizeFilenamePart(countryName || 'country');
+    const isoDate = new Date().toISOString().split('T')[0];
+    setIsExportingPDF(true);
+    try {
+      await downloadPDFFromPreview(
+        briefTemplateRef,
+        `Rapid-Exposure-Forecast-Brief-${safeCountry}-${isoDate}.pdf`
+      );
+    } catch (error) {
+      logger.error('Forecast brief download failed:', error);
+      setExportError('Failed to download the forecast brief. Please try again.');
+      setTimeout(() => setExportError(null), 5000);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   // ─── Open PDF Preview Modal ────────────────────────────────────────────────
   const openPDFPreview = async () => {
+    if (isForecastBrief) {
+      await openBriefPreview();
+      return;
+    }
+    if (pdfUnavailableForForecast) return;
     if (disabled) {
       setExportError('No data available to export');
       setTimeout(() => setExportError(null), 3000);
@@ -543,7 +648,7 @@ export default function ExportButtons({
         (totalLoss > 0
           ? `Total estimated economic losses amount to ${formatCompactUsd(totalLoss)}. `
           : '') +
-        `This Situation Report was generated from the PDIE (Pacific Disaster Impact & Exposure) ` +
+        `This Situation Report was generated from the Pacific Disaster Impact & Exposure (PDIE) ` +
         `Dashboard using satellite-derived and modelled hazard and exposure data provided by SPC.`;
 
       const countrySlug = countryCode ? getCountrySlugFromCode(countryCode) : null;
@@ -712,10 +817,10 @@ export default function ExportButtons({
       const useTemplateBackground = Boolean(templatePage1Src && templatePage2Src);
 
       doc.setProperties({
-        title: `PDIE Situation Report - ${cFull}`,
+        title: `Pacific Disaster Impact & Exposure Situation Report - ${cFull}`,
         subject: eventName,
         author: 'SPC / OCHA Pacific',
-        creator: 'PDIE Dashboard',
+        creator: 'Pacific Disaster Impact & Exposure Dashboard',
         keywords: 'PDIE, disaster, exposure, impact, sitrep',
       });
 
@@ -906,6 +1011,10 @@ export default function ExportButtons({
           doc.setFont('helvetica', 'italic');
           doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, MX, mapY + 7 + mapH + 3);
+          const scenarioCaption = formatHazardScenarioCaption(hazardScenario);
+          if (scenarioCaption) {
+            doc.text(scenarioCaption, MX, mapY + 7 + mapH + 7);
+          }
         }
       } else {
         // When using template, add dynamic text overlays
@@ -1007,6 +1116,11 @@ export default function ExportButtons({
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(...OCHA_DARK);
           doc.text(PDF_TEMPLATE_CONFIG.map.captionText, PW / 2, y + h + 3, { align: 'center' });
+          const scenarioCaption = formatHazardScenarioCaption(hazardScenario);
+          if (scenarioCaption) {
+            doc.setFontSize(7);
+            doc.text(scenarioCaption, PW / 2, y + h + 6.5, { align: 'center' });
+          }
         }
       }
 
@@ -1073,12 +1187,7 @@ export default function ExportButtons({
           const iconY = box.y + iconLayout.exportIconOffsetYmm;
           const valueY = box.y + iconLayout.exportValueOffsetYmm;
           const labelLines = doc.splitTextToSize(fig.label.toUpperCase(), box.w - 3);
-          const labelLineHeight = 2.3;
-          const labelStartY =
-            box.y +
-            box.h -
-            iconLayout.exportLabelBottomInsetMm -
-            labelLineHeight * Math.max(0, labelLines.length - 1);
+          const labelStartY = box.y + iconLayout.exportLabelTopOffsetMm;
 
           if (iconSrc) {
             doc.addImage(
@@ -1162,7 +1271,7 @@ export default function ExportButtons({
         (totalLoss > 0
           ? `Total estimated economic losses amount to ${formatUsd(totalLoss)}. `
           : '') +
-        `This Situation Report was generated from the PDIE (Pacific Disaster Impact & Exposure) ` +
+        `This Situation Report was generated from the Pacific Disaster Impact & Exposure (PDIE) ` +
         `Dashboard using satellite-derived and modelled hazard and exposure data provided by SPC.`;
 
       doc.setFontSize(11);
@@ -1296,7 +1405,8 @@ export default function ExportButtons({
           row.Sector || '—',
           formatInteger(Number(row.Number_Exposed_Buildings || 0)),
           formatInteger(Number(row.Number_Damaged_Buildings || 0)),
-          formatUsd(Number(row.Building_Loss) || 0),
+          // Cleared to null when a single hazard is selected (not split by hazard)
+          row.Building_Loss == null ? '—' : formatUsd(Number(row.Building_Loss) || 0),
           formatUsd(sLoss),
         ];
         cells.forEach((cell, i) => {
@@ -1401,6 +1511,21 @@ export default function ExportButtons({
     try {
       setExportError(null);
       const { saveAs } = await import('file-saver');
+
+      if (forecastExposure) {
+        const forecastRows = forecastCsvRows(forecastExposure, {
+          ...forecastMeta,
+          exportedAt: new Date().toISOString(),
+        });
+        const forecastCsv = forecastRows
+          .map(row => row.map(cell => toCsvCell(cell)).join(','))
+          .join('\n');
+        saveAs(
+          new Blob([forecastCsv], { type: 'text/csv;charset=utf-8' }),
+          `forecast-exposure-${(countryCode ?? 'country').toLowerCase()}.csv`
+        );
+        return;
+      }
 
       const rows: string[][] = [
         [
@@ -1518,15 +1643,29 @@ export default function ExportButtons({
         )}
         <button
           onClick={openPDFPreview}
-          disabled={disabled || isExportingPDF}
-          aria-label="Export data as PDF report"
+          disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
+          aria-label={isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'}
           className={`group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
-            disabled
+            disabled || pdfUnavailableForForecast
               ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
-              : 'bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-red-300/70'
+              : isForecastBrief
+                ? 'bg-gradient-to-br from-amber-500/90 to-blue-700/90 border-amber-300/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-amber-300/70'
+                : 'bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-red-300/70'
           }`}
-          style={!disabled ? { boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)' } : undefined}
-          title={disabled ? 'No data available to export' : 'Preview & Export PDF'}
+          style={
+            !disabled && !pdfUnavailableForForecast
+              ? { boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)' }
+              : undefined
+          }
+          title={
+            isForecastBrief
+              ? 'Preview the two-page forecast exposure brief (not a damage report)'
+              : pdfUnavailableForForecast
+                ? 'The PDF report covers damage and loss, which a forecast does not have. Use CSV or Map PNG for forecast exposure.'
+                : disabled
+                  ? 'No data available to export'
+                  : 'Preview & Export PDF'
+          }
         >
           <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
             <FileDown className="w-3.5 h-3.5" />
@@ -1543,7 +1682,13 @@ export default function ExportButtons({
               : 'bg-gradient-to-br from-emerald-500/90 to-teal-600/90 border-emerald-300/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-emerald-300/70'
           }`}
           style={!disabled ? { boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)' } : undefined}
-          title={disabled ? 'No data available to export' : 'Export as CSV'}
+          title={
+            disabled
+              ? 'No data available to export'
+              : forecastExposure
+                ? 'Export forecast exposure as CSV (planning signal, not a damage estimate)'
+                : 'Export as CSV'
+          }
         >
           <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
             <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1551,6 +1696,24 @@ export default function ExportButtons({
           <span className="hidden xl:inline">{isExportingCSV ? 'Exporting' : 'Export'}</span> CSV
         </button>
       </div>
+
+      {briefPreview && (
+        <PDFPreviewModal
+          isOpen
+          onClose={() => setBriefPreview(null)}
+          onDownload={downloadBrief}
+          title="Forecast Exposure Brief Preview"
+          isGenerating={isExportingPDF}
+        >
+          <REFPDFTemplate
+            ref={briefTemplateRef}
+            brief={briefPreview.model}
+            mapImageUrl={briefPreview.mapImageUrl}
+            qrCodeSrc={briefPreview.qrCodeSrc}
+            activeLayers={briefPreview.activeLayers}
+          />
+        </PDFPreviewModal>
+      )}
 
       {/* PDF Preview Modal */}
       {showPreview && previewData && (

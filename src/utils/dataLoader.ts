@@ -9,19 +9,26 @@
  * - Caching support
  */
 
-// Get basePath from env — empty in dev, '/partner2' in production
-const BASE_PATH =
-  process.env.NODE_ENV === 'production'
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? '/partner2')
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import { resolveLocalDataAlias } from '@/data/localDataAliases';
+
+// Get basePath from env -empty in dev, '/partner2' in production
+const BASE_PATH = getConfiguredBasePath(process.env.NODE_ENV === 'production' ? '/partner2' : '');
 
 /**
  * Add basePath to URL if needed
  */
 function getFullUrl(url: string): string {
+  const aliasedUrl = resolveLocalDataAlias(url);
+  if (aliasedUrl) {
+    const fullAliasedUrl = prependBasePath(aliasedUrl, BASE_PATH);
+    console.log(`[Debug] getFullUrl remapped "${url}" to "${fullAliasedUrl}"`);
+    return fullAliasedUrl;
+  }
+
   // If URL is relative and starts with /, prepend basePath
-  if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
-    const newUrl = `${BASE_PATH}${url}`;
+  if (url.startsWith('/')) {
+    const newUrl = prependBasePath(url, BASE_PATH);
     console.log(`[Debug] getFullUrl transforming "${url}" to "${newUrl}"`);
     return newUrl;
   }
@@ -62,7 +69,7 @@ export interface DataLoaderResult<T> {
 
 // Simple in-memory cache
 const dataCache = new Map<string, any>();
-// In-flight promise deduplication — prevents wasteful parallel fetches for the same URL
+// In-flight promise deduplication -prevents wasteful parallel fetches for the same URL
 const inFlight = new Map<string, Promise<DataLoaderResult<unknown>>>();
 
 /**

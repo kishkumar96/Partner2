@@ -86,7 +86,7 @@ const sampleEvents: Event[] = [
 function renderPanel(
   filterOverrides: Partial<FilterState> = {},
   onFilterChange = jest.fn(),
-  options?: { events?: Event[]; hazards?: Hazard[] }
+  options?: { events?: Event[]; hazards?: Hazard[]; viewMode?: 'event' | 'planning' }
 ) {
   const filters = { ...EMPTY_FILTERS, ...filterOverrides };
   render(
@@ -99,6 +99,7 @@ function renderPanel(
       filters={filters}
       onFilterChange={onFilterChange}
       exposureData={sampleExposureData}
+      viewMode={options?.viewMode}
     />
   );
   return { onFilterChange };
@@ -109,19 +110,25 @@ function renderPanel(
 describe('FilterPanel Component', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('shows the Events & Time section for observed events but not for planning scenarios', () => {
+    renderPanel();
+    expect(screen.getByRole('button', { name: /temporal filters/i })).toBeInTheDocument();
+  });
+
+  it('hides the Events & Time section in planning mode', () => {
+    renderPanel({}, jest.fn(), { viewMode: 'planning' });
+    expect(screen.queryByRole('button', { name: /temporal filters/i })).not.toBeInTheDocument();
+  });
+
   // 1. Basic render
   it('renders the filter panel container', () => {
     renderPanel();
     expect(screen.getByRole('heading', { level: 2, name: /filters/i })).toBeInTheDocument();
   });
 
-  // 2. Real options rendered from props (hazards are in the advanced section)
+  // 2. Real options rendered from props (hazards are in the basic workflow)
   it('displays hazard options sourced from the hazards prop', () => {
     renderPanel();
-    // Expand advanced filters first
-    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
-    // Expand hazards section (collapsed by default)
-    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     // Both hazard NAMES must appear as checkbox labels.
     // Use anchored regex so we match "Flood" (hazard label) but not
     // "Select Flood 2024" (event checkbox aria-label).
@@ -140,9 +147,6 @@ describe('FilterPanel Component', () => {
   it('calls onFilterChange with the checked hazard when a hazard checkbox is toggled on', () => {
     const { onFilterChange } = renderPanel({ selectedHazards: [] });
 
-    // Expand advanced filters and hazards section
-    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
-    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -155,9 +159,6 @@ describe('FilterPanel Component', () => {
     // Start with TC already selected
     const { onFilterChange } = renderPanel({ selectedHazards: ['tropical-cyclone'] });
 
-    // Expand advanced filters and hazards section
-    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
-    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /tropical cyclone/i }));
 
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -251,11 +252,25 @@ describe('FilterPanel Component', () => {
 
     renderPanel({}, jest.fn(), { events: aliasEvents });
 
-    // Expand advanced filters and hazards section
-    fireEvent.click(screen.getByRole('button', { name: /show advanced filters/i }));
-    fireEvent.click(screen.getByRole('button', { name: /hazards/i }));
-
     const floodCheckbox = screen.getByRole('checkbox', { name: /^flood$/i });
     expect(floodCheckbox).not.toBeDisabled();
+  });
+
+  it('keeps a catalogued hazard available when it has no named event', () => {
+    render(
+      <FilterPanel
+        hazards={sampleHazards}
+        sectors={sampleSectors}
+        events={[]}
+        districts={[]}
+        countryCode="CK"
+        filters={EMPTY_FILTERS}
+        onFilterChange={jest.fn()}
+        availableHazardIds={['flood']}
+      />
+    );
+
+    expect(screen.getByRole('checkbox', { name: /^flood$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /tropical cyclone/i })).not.toBeInTheDocument();
   });
 });

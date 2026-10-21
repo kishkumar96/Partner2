@@ -66,8 +66,6 @@ interface UnifiedMapLegendProps {
   temporalScope?: string;
   // Data-driven legend breaks
   dataValues?: number[];
-  // Sidebar state for responsive positioning
-  isLeftPanelOpen?: boolean;
   // Custom legend settings
   legendSettings?: LegendSettings;
   // Active layers visibility
@@ -156,7 +154,6 @@ export default function UnifiedMapLegend({
   dataSource = 'Real Data',
   temporalScope = 'Event Total',
   dataValues = [],
-  isLeftPanelOpen = false,
   showBuildings = false,
   showRoads = false,
   showCyclone = false,
@@ -300,13 +297,14 @@ export default function UnifiedMapLegend({
 
   return (
     <div
-      className={`fixed bottom-8 z-50 transition-all duration-300 ease-in-out 
+      // Anchored in the bottom-left of the map area (above the scale bar),
+      // the same slot the forecast legend uses, so it follows the side panels
+      // instead of assuming their width.
+      className={`absolute bottom-10 left-2 z-[5] transition-all duration-300 ease-in-out
         pointer-events-auto
-        max-h-[calc(100vh-180px)]
+        max-h-[calc(100%-3.5rem)]
         overflow-y-auto overflow-x-visible overscroll-contain
-        ${isLeftPanelOpen ? 'left-[336px]' : 'left-8'}
-        max-md:left-4 max-md:bottom-20
-        ${isExpanded ? 'w-[clamp(280px,calc(100vw-2rem),340px)]' : 'w-14'}
+        ${isExpanded ? 'w-[clamp(240px,calc(100%-1rem),340px)]' : 'w-14'}
       `}
       role="region"
       aria-label="Map legend"

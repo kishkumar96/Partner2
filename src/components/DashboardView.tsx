@@ -10,6 +10,7 @@ import {
   ChevronDown,
   LogOut,
   BarChart3,
+  Table2,
   DollarSign,
   Layers,
   MapPin,
@@ -18,41 +19,93 @@ import {
   Loader2,
   Wind,
   Compass,
+  Scale,
+  SlidersHorizontal,
+  ClipboardList,
 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
-import ReactCountryFlag from 'react-country-flag';
 import ActiveFilters from '@/components/ActiveFilters';
+import CountryFlag from '@/components/CountryFlag';
 import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
+import ViewStatusLine from '@/components/ViewStatusLine';
+import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
+import { resolveHazard } from '@/data/vanuatuHazards';
+import ToolsMenu from '@/components/ToolsMenu';
+import { FORECAST_SIGNAL } from '@/utils/forecastBriefing';
+import { useForecastLayers } from '@/utils/useForecastLayers';
+import { useResponsePriority } from '@/utils/useResponsePriority';
+import AnalysisModeSwitch, {
+  ANALYSIS_MODES,
+  type AnalysisMode,
+} from '@/components/AnalysisModeSwitch';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import {
   RealWMSLayer,
   createDefaultLegendSettings,
+  getLayersForCountry,
+  getDefaultHazardScenario,
+  shouldResetHazardScenario,
+  describeHazardScenario,
+  HazardScenarioSelection,
+  HAZARD_SCENARIO_PRODUCT_CATEGORY,
+  HAZARD_SCENARIO_PRODUCT_LABELS,
   LegendSettings,
 } from '@/data/realThreddsLayers';
-import { COUNTRY_CONFIGS, getAggregationLabel, getCountryAppName } from '@/data/countryConfigs';
+import { COUNTRY_CONFIGS, getAggregationLabel } from '@/data/countryConfigs';
 import {
-  COUNTRY_CYCLONE_CONFIG,
+  ForecastExposureSummary,
+  ForecastRunStatusPanel,
+  ForecastExposureTables,
+} from '@/components/ForecastExposurePanels';
+import ForecastLayers from '@/components/ForecastLayers';
+import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
+import type { ForecastExposure } from '@/utils/forecastExposure';
+import type { EventRecord } from '@/data/eventRecords';
+import {
+  assessmentGap,
+  defaultForecastRecord,
+  isModeEventId,
+  listForecastRuns,
+} from '@/utils/forecastRuns';
+import AssessmentPendingNotice from '@/components/AssessmentPendingNotice';
+import { LoadingDataWorkspace, LoadingSummaryPanel } from '@/components/LoadingPanels';
+import {
   loadAllRealData,
   loadSupplementaryRealData,
   expandEventsToRegionalEntries,
   loadDamagedBuildings,
   loadDamagedRoads,
+  fetchHazardScenarioBreakdown,
+  fetchHazardScenarioCurve,
+  fetchHazardScenarioRiskSummary,
+  type HazardScenarioBreakdown,
+  type HazardScenarioCurve,
+  fetchPartnerRiskInformationGeometry,
 } from '@/utils/realDataLoader';
-import { computeFilteredData } from '@/utils/filteredData';
+import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
 import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { normalizeHazardIds } from '@/utils/hazardIds';
 import {
-  hasBasemapPreference,
+  getHazardLossScope,
+  scopeEconomicRecords,
+  scopeRiskFeatures,
+  scopeRiskRows,
+} from '@/utils/hazardLossScope';
+import { DEFAULT_BASEMAP_STYLE } from '@/utils/basemaps';
+import {
   getInitialBasemap,
   saveBasemapPreference,
   resetBasemapPreference,
 } from '@/utils/userPreferences';
+import { animationStartIndex } from '@/utils/cycloneAnimationLoader';
+import NewAdvisoryBanner from '@/components/NewAdvisoryBanner';
+import { useNewAdvisory } from '@/utils/useNewAdvisory';
 
 function haveSameItems(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
@@ -116,10 +169,23 @@ const Toast = dynamic(() => import('@/components/Toast'), {
   loading: () => null,
 });
 
-const BasemapPreferenceModal = dynamic(() => import('@/components/BasemapPreferenceModal'), {
+const CountryComparisonModal = dynamic(() => import('@/components/CountryComparisonModal'), {
   ssr: false,
-  loading: () => null,
 });
+
+// Which hazard each planning-scenario product belongs to, for the Hazards
+// filter in planning mode ('all' = only offered when no single hazard is picked)
+const SCENARIO_PRODUCT_HAZARD: Record<string, 'wind' | 'flood' | 'all'> = {
+  tc: 'wind',
+  historical_tcs: 'wind',
+  synthetic_tcs: 'wind',
+  rapid_impact_assessment: 'wind',
+  swell: 'flood',
+  swell_driven: 'flood',
+  coastal_flood: 'flood',
+  fluvial_flood: 'flood',
+  combined: 'all',
+};
 
 interface DashboardViewProps {
   countryCode: CountryCode;
@@ -140,7 +206,6 @@ export default function DashboardView({
   allowCountrySwitch = true,
   showLogout = true,
 }: DashboardViewProps) {
-  const [deferHeavyUiReady, setDeferHeavyUiReady] = useState(false);
   // Next.js router for URL state management
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -173,8 +238,7 @@ export default function DashboardView({
   const [extrusionMode, setExtrusionMode] = useState<'none' | 'loss' | 'wind'>('none');
   const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
   const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
-  const [showBasemapPreferenceModal, setShowBasemapPreferenceModal] = useState(false);
-  const [isBasemapPreferenceResolved, setIsBasemapPreferenceResolved] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
     initialHazards.has('tropical-cyclone') || initialHazards.has('wind')
@@ -185,17 +249,41 @@ export default function DashboardView({
       initialHazards.has('inundation') ||
       initialHazards.has('storm-surge')
   );
+  // The scenario's own "Show on map" switch. Assessment's Maximum Inundation overlay is a
+  // different thing; sharing one switch let a choice in one mode silently change the other.
+  const [showScenarioLayer, setShowScenarioLayer] = useState(true);
   const [showBuildingsLayer, setShowBuildingsLayer] = useState(false);
   const [showRoadsLayer, setShowRoadsLayer] = useState(false);
   const [layerOpacity, setLayerOpacity] = useState(82);
   const [activeWmsLayers, setActiveWmsLayers] = useState<RealWMSLayer[]>([]);
-  const initialShowMapControls = urlState.showMapControls ?? false;
+  const [partnerHazardLayers, setPartnerHazardLayers] = useState<RealWMSLayer[]>([]);
+  // Explicit user pick of one scenario out of a multi-scenario hazard catalog
+  // (SLR x return-period/event, currently only Cook Islands). null = no
+  // override yet, so getLayersForCountry falls back to a deterministic
+  // default rather than rendering every scenario combination at once.
+  const [hazardScenarioSelection, setHazardScenarioSelection] =
+    useState<HazardScenarioSelection | null>(
+      urlState.hazardScenarioProduct
+        ? {
+            product: urlState.hazardScenarioProduct,
+            slrScenarioM: urlState.hazardScenarioSlr ?? 0,
+            returnPeriodYears: urlState.hazardScenarioReturnPeriod ?? null,
+            eventLabel: urlState.hazardScenarioEvent ?? null,
+          }
+        : null
+    );
+  // Explicit Event / Planning choice from the header (or a shared link);
+  // null means the country's default (see viewMode below)
+  const [viewModeChoice, setViewModeChoice] = useState<'event' | 'planning' | null>(
+    urlState.viewMode ?? null
+  );
+  const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
-    initialShowMapControls ? false : (urlState.showFilters ?? true)
+    initialShowMapControls ? false : (urlState.showFilters ?? false)
   );
   const [showMapControls, setShowMapControls] = useState(initialShowMapControls);
-  const [showSummary, setShowSummary] = useState(urlState.showSummary ?? false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showSummary, setShowSummary] = useState(urlState.showSummary ?? true);
+  const [showAnalytics, setShowAnalytics] = useState(true);
   const [legendSettings, setLegendSettings] = useState<LegendSettings>(() =>
     createDefaultLegendSettings(countryCode)
   );
@@ -230,34 +318,6 @@ export default function DashboardView({
     setCycloneControlsHost(node);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    let timeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
-    let idleHandle: number | null = null;
-
-    const complete = () => {
-      if (!cancelled) {
-        setDeferHeavyUiReady(true);
-      }
-    };
-
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleHandle = window.requestIdleCallback(complete);
-    } else if (typeof window !== 'undefined') {
-      timeoutHandle = globalThis.setTimeout(complete, 600);
-    }
-
-    return () => {
-      cancelled = true;
-      if (timeoutHandle !== null) {
-        globalThis.clearTimeout(timeoutHandle);
-      }
-      if (idleHandle !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleHandle);
-      }
-    };
-  }, []);
-
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
 
@@ -273,12 +333,53 @@ export default function DashboardView({
     setShowAnalytics(false);
   }, []);
 
-  // Show basemap preference modal on first visit (if no preference saved and no URL state)
+  // A hazard choice is the user's primary intent. Keep the corresponding
+  // raster visible so choosing Flood or Tropical Cyclone cannot silently
+  // produce an empty map because an expert display toggle was off.
+  const handleFilterChange = useCallback(
+    (nextFilters: FilterState) => {
+      const newlySelectedHazards = nextFilters.selectedHazards.filter(
+        hazardId => !filters.selectedHazards.includes(hazardId)
+      );
+
+      if (newlySelectedHazards.some(id => id === 'tropical-cyclone' || id === 'wind')) {
+        setShowWindLayer(true);
+      }
+      if (
+        newlySelectedHazards.some(
+          id =>
+            id === 'flood' || id === 'inundation' || id === 'storm-surge' || id === 'fluvial-depth'
+        )
+      ) {
+        setShowInundationLayer(true);
+      }
+
+      // The user picking events themselves takes over from the mode's event
+      if (nextFilters.selectedEvents.join(',') !== filters.selectedEvents.join(',')) {
+        setModeEventId(null);
+      }
+      setFilters(nextFilters);
+    },
+    [filters.selectedHazards, filters.selectedEvents]
+  );
+
+  // Phones show the side panels and the data tabs as overlays on top of the
+  // map, so opening with them up hides the map entirely. Start phones on the
+  // map unless the link asked for a panel explicitly.
   useEffect(() => {
-    const shouldShowBasemapPreferenceModal = !hasBasemapPreference() && !urlState.basemap;
-    setShowBasemapPreferenceModal(shouldShowBasemapPreferenceModal);
-    setIsBasemapPreferenceResolved(!shouldShowBasemapPreferenceModal);
-  }, [urlState.basemap]);
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      if (urlState.showMapControls === undefined) setShowMapControls(false);
+      if (urlState.showSummary === undefined) setShowSummary(false);
+      setShowAnalytics(false);
+    } else if (window.matchMedia('(max-width: 1279px)').matches) {
+      // Below 1280px both side panels leave the map a narrow strip; keep the
+      // summary figures and start with Map Controls closed
+      if (urlState.showMapControls === undefined) setShowMapControls(false);
+    }
+    // Only on first mount: later panel toggles are the user's
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync legend settings when country changes
   useEffect(() => {
@@ -351,17 +452,59 @@ export default function DashboardView({
   const [nationalSummary, setNationalSummary] = useState<any[] | undefined>();
   const [damagedBuildings, setDamagedBuildings] = useState<any>(null);
   const [damagedRoads, setDamagedRoads] = useState<any>(null);
+  const [regionalImpactsGeoJSON, setRegionalImpactsGeoJSON] =
+    useState<GeoJSON.FeatureCollection | null>(null);
+  // Set when the active event is a Rapid Exposure Forecast (exposure, no loss)
+  const [forecastExposure, setForecastExposure] = useState<ForecastExposure | null>(null);
+  const [previousForecast, setPreviousForecast] = useState<{
+    record: EventRecord;
+    exposure: ForecastExposure;
+  } | null>(null);
+  const [forecastLayersFocusKey, setForecastLayersFocusKey] = useState(0);
+  const [activeEventRecord, setActiveEventRecord] = useState<EventRecord | null>(null);
+  const responsePriority = useResponsePriority(
+    forecastExposure,
+    regionalImpactsGeoJSON,
+    activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
+    selectedCountry
+  );
+  const forecastLayerControls = useForecastLayers(
+    forecastExposure,
+    selectedCountry,
+    responsePriority?.features ?? null
+  );
   const [isLoadingDamage, setIsLoadingDamage] = useState({ buildings: false, roads: false });
   const [damageLoadError, setDamageLoadError] = useState<string | null>(null);
   const isLoadingDamageRef = useRef(isLoadingDamage);
+  // Choosing Forecast or Assessment opens that mode's event. That is the mode,
+  // not a filter the user applied, so it lives here and not in filters.selectedEvents:
+  // the tables and summary treat a selected event as a filter and would drop the
+  // regional data for event-by-event figures.
+  const [modeEventId, setModeEventId] = useState<string | null>(null);
+  const effectiveEventKey = modeEventId ?? filters.selectedEvents.join(',');
+  const effectiveEventIds = useMemo(
+    () => (modeEventId ? [modeEventId] : filters.selectedEvents),
+    // keyed on the contents so an unchanged selection keeps the same identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveEventKey]
+  );
+  const effectiveEventIdsRef = useRef(effectiveEventIds);
+  const filtersRef = useRef(filters);
   const damagedBuildingsRef = useRef<any>(null);
   const damagedRoadsRef = useRef<any>(null);
+  // Partner-API risk_information row id for damaged buildings/roads, whose
+  // geometry the initial load deliberately skips (defer_large_assets) --
+  // loadDamageLayer fetches it by id on demand when set, instead of the
+  // local-DB fallback path.
+  const damagedBuildingsRowIdRef = useRef<string | null>(null);
+  const damagedRoadsRowIdRef = useRef<string | null>(null);
   const damageAutoLoadRequestedRef = useRef<{ buildings: boolean; roads: boolean }>({
     buildings: false,
     roads: false,
   });
   const [regionalSummary, setRegionalSummary] = useState<any[]>([]);
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
+  const [cycloneTrackData, setCycloneTrackData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
   const derivedRegions = useMemo(() => {
     if (regionalSummary.length === 0) {
@@ -408,9 +551,12 @@ export default function DashboardView({
           })),
     [derivedRegions, provinces]
   );
-  const activeCycloneName =
-    events[0]?.name || COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventName || 'Tropical Cyclone';
-  const platformName = getCountryAppName(selectedCountry);
+  // The event whose data is on screen. events[0] is just the newest listed
+  // event, which can be a different record (e.g. a forecast listed beside the
+  // completed assessment the dashboard defaults to).
+  const shownEventName = activeEventRecord?.name || events[0]?.name;
+  const activeCycloneName = shownEventName || 'Tropical Cyclone';
+  const hasNamedEvent = !!shownEventName && shownEventName !== COUNTRIES[selectedCountry]?.name;
   const storyBeats = useMemo(
     () => (cycloneForecast ? detectStoryBeats(cycloneForecast, selectedCountry) : []),
     [cycloneForecast, selectedCountry]
@@ -498,7 +644,7 @@ export default function DashboardView({
           region: selectedRegion,
           hazards: filters.selectedHazards,
           sectors: filters.selectedSectors,
-          events: filters.selectedEvents,
+          events: effectiveEventIds,
           dateStart: filters.dateRange.start || undefined,
           dateEnd: filters.dateRange.end || undefined,
           aggregation:
@@ -510,6 +656,11 @@ export default function DashboardView({
           showFilters,
           showMapControls,
           showSummary,
+          hazardScenarioProduct: hazardScenarioSelection?.product,
+          hazardScenarioSlr: hazardScenarioSelection?.slrScenarioM,
+          hazardScenarioReturnPeriod: hazardScenarioSelection?.returnPeriodYears ?? undefined,
+          hazardScenarioEvent: hazardScenarioSelection?.eventLabel ?? undefined,
+          viewMode: viewModeChoice ?? undefined,
           // Merge with any partial updates
           ...state,
         };
@@ -533,6 +684,7 @@ export default function DashboardView({
       mapInstance,
       selectedRegion,
       filters,
+      effectiveEventIds,
       mapStyle,
       basemapStyle,
       currentCycloneIndex,
@@ -540,6 +692,8 @@ export default function DashboardView({
       showFilters,
       showMapControls,
       showSummary,
+      hazardScenarioSelection,
+      viewModeChoice,
       pathname,
       router,
     ]
@@ -557,6 +711,9 @@ export default function DashboardView({
     filters.selectedHazards,
     filters.selectedSectors,
     filters.aggregationLevel,
+    effectiveEventIds,
+    hazardScenarioSelection,
+    viewModeChoice,
     updateUrl,
   ]);
 
@@ -639,19 +796,13 @@ export default function DashboardView({
       const bounds = getGeoJsonBounds(data);
       if (!bounds) return;
 
-      const fit = () => {
-        mapInstance.fitBounds(bounds, {
-          padding: 80,
-          maxZoom: 14,
-          duration: 900,
-        });
-      };
-
-      if (mapInstance.isStyleLoaded()) {
-        fit();
-      } else {
-        mapInstance.once('load', fit);
-      }
+      // A camera move doesn't need the style loaded. Waiting on isStyleLoaded() and then on
+      // 'load' never fires when tiles are still arriving, because 'load' already happened.
+      mapInstance.fitBounds(bounds, {
+        padding: 80,
+        maxZoom: 14,
+        duration: 900,
+      });
     },
     [mapInstance, getGeoJsonBounds]
   );
@@ -661,7 +812,7 @@ export default function DashboardView({
       if (isLoadingDamageRef.current[type]) return null;
       if (type === 'buildings' && damagedBuildingsRef.current) return damagedBuildingsRef.current;
       if (type === 'roads' && damagedRoadsRef.current) return damagedRoadsRef.current;
-      setIsLoadingDamage(prev => ({ ...prev, [type]: true }));
+      setIsLoadingDamage(prev => (prev[type] ? prev : { ...prev, [type]: true }));
       setDamageLoadError(null);
 
       const controller = new AbortController();
@@ -671,13 +822,35 @@ export default function DashboardView({
       damageLoadAbortRef.current[type] = controller;
 
       try {
-        const data =
-          type === 'buildings'
+        // A known partner-API row id means this country's damaged
+        // buildings/roads live in risk_information with their geometry
+        // deliberately deferred from the initial load -- fetch that one
+        // row by id instead of the local-DB fallback path, which has
+        // nothing for partner-API-only countries.
+        const partnerRowId =
+          type === 'buildings' ? damagedBuildingsRowIdRef.current : damagedRoadsRowIdRef.current;
+
+        const data = partnerRowId
+          ? await fetchPartnerRiskInformationGeometry(
+              selectedCountry,
+              partnerRowId,
+              controller.signal
+            )
+          : type === 'buildings'
             ? await loadDamagedBuildings({
                 signal: controller.signal,
                 countryCode: selectedCountry,
+                selectedEventIds: effectiveEventIdsRef.current,
+                dateRange: filtersRef.current.dateRange,
+                eventRecords: fetchedEventRecordsRef.current,
               })
-            : await loadDamagedRoads({ signal: controller.signal, countryCode: selectedCountry });
+            : await loadDamagedRoads({
+                signal: controller.signal,
+                countryCode: selectedCountry,
+                selectedEventIds: effectiveEventIdsRef.current,
+                dateRange: filtersRef.current.dateRange,
+                eventRecords: fetchedEventRecordsRef.current,
+              });
 
         if (controller.signal.aborted) return null;
 
@@ -698,15 +871,30 @@ export default function DashboardView({
         if (damageLoadAbortRef.current[type] === controller) {
           damageLoadAbortRef.current[type] = null;
         }
-        setIsLoadingDamage(prev => ({ ...prev, [type]: false }));
+        setIsLoadingDamage(prev => (prev[type] ? { ...prev, [type]: false } : prev));
       }
     },
     [selectedCountry]
   );
 
+  const handleRequestDamageData = useCallback(
+    (type: 'buildings' | 'roads') => {
+      void loadDamageLayer(type);
+    },
+    [loadDamageLayer]
+  );
+
   useEffect(() => {
     isLoadingDamageRef.current = isLoadingDamage;
   }, [isLoadingDamage]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    effectiveEventIdsRef.current = effectiveEventIds;
+  }, [effectiveEventIds]);
 
   useEffect(() => {
     damagedBuildingsRef.current = damagedBuildings;
@@ -885,59 +1073,157 @@ export default function DashboardView({
     []
   );
 
-  const tourSteps = useMemo<GuidedTourStep[]>(
-    () => [
+  const tourSteps = useMemo<GuidedTourStep[]>(() => {
+    const baseSteps: GuidedTourStep[] = [
       {
-        title: 'Welcome to the Risk Intelligence Dashboard',
+        title: `Welcome to the ${process.env.NEXT_PUBLIC_APP_NAME || 'Tropical Cyclone Rapid Impact Assessment Tool'}`,
         body: 'This overview bar gives you the current country context, the active dashboard lens, and the fastest path into the rest of the workflow.',
         selector: '[data-tour="dashboard-hero"]',
         category: 'Overview',
         targetLabel: 'Dashboard header',
         placement: 'bottom',
+        tips: [
+          'Click the country name to switch between Pacific Island nations',
+          'The event timestamp shows when disaster data was captured',
+        ],
       },
       {
         title: 'Filter Your Data',
         body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
-        selector: '[data-tour="filter-panel-toggle"]',
+        selector: '[data-tour="filter-primary-controls"]',
         category: 'Inputs',
-        targetLabel: 'Filter panel',
-        placement: 'bottom',
+        targetLabel: 'Filter controls',
+        placement: 'right',
+        tips: [
+          'Start by selecting an event to see available disasters',
+          'Combine hazard and sector filters for targeted analysis',
+          'The map updates automatically as you apply filters',
+        ],
       },
       {
         title: 'Control the Map View',
-        body: 'Map controls change the visual story: shading mode, visible overlays, opacity, cyclone playback, and other presentation settings live here.',
-        selector: '[data-tour="map-panel-toggle"]',
+        body: 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
+        selector: '[data-tour="tools-menu"]',
         category: 'Map',
-        targetLabel: 'Map controls',
+        targetLabel: 'Tools menu',
         placement: 'bottom',
+        tips: [
+          'Switch between Loss (damage) and Wind (intensity) visualization modes',
+          'Adjust layer opacity to see through overlays to the basemap',
+          'Toggle individual layers on/off to focus on specific data',
+        ],
+        keyboardShortcut: 'M',
       },
-      {
-        title: 'Dive into the Data',
-        body: 'The workspace holds the detailed tables and charts. This is where you move from visual scanning into actual evidence and ranked impacts.',
-        selector: '[data-tour="data-workspace-toggle"]',
+    ];
+
+    // Add map visualization mode step (if map controls available)
+    baseSteps.push({
+      title: 'Map Visualization Modes',
+      body: 'Switch between Loss mode (showing damage patterns) and Wind mode (showing wind speed intensity). Each mode reveals different aspects of disaster impacts.',
+      selector: '[data-tour="map-style-selector"]',
+      category: 'Map',
+      targetLabel: 'Visualization mode',
+      placement: 'right',
+      tips: [
+        'Loss mode: Best for seeing damaged buildings and infrastructure',
+        'Wind mode: Displays wind speed shading from THREDDS server data',
+      ],
+    });
+
+    // Add layer opacity step
+    baseSteps.push({
+      title: 'Adjust Layer Transparency',
+      body: 'Control the opacity of overlay layers to balance visibility between disaster data and the underlying basemap.',
+      selector: '[data-tour="opacity-control"]',
+      category: 'Map',
+      targetLabel: 'Layer opacity',
+      placement: 'right',
+      tips: [
+        'Lower opacity helps see street names and basemap features',
+        'Higher opacity emphasizes the disaster impact visualization',
+      ],
+    });
+
+    baseSteps.push({
+      title: 'Dive into the Data',
+      body: 'The workspace holds detailed tables and charts where you move from visual scanning into actual evidence.',
+      selector: '[data-tour="data-workspace-panel"]',
+      category: 'Analysis',
+      targetLabel: 'Data workspace',
+      placement: 'top',
+      tips: [
+        'Regional Impacts: District-level summaries with sortable columns',
+        'Buildings & Roads: Asset-level damage with coordinates',
+        'Analytics: Comparison charts across regions and sectors',
+      ],
+    });
+
+    // Conditionally add asset damage steps if data is available
+    if (damagedBuildings || damagedRoads) {
+      baseSteps.push({
+        title: 'Inspect Asset-Level Damage',
+        body: 'View individual damaged buildings and road segments with severity ratings, precise coordinates, and damage classifications.',
+        selector: '[data-tour="asset-tabs"]',
         category: 'Analysis',
-        targetLabel: 'Data workspace',
+        targetLabel: 'Asset inspection',
         placement: 'top',
-      },
-      {
-        title: 'Get the Big Picture',
-        body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
-        selector: '[data-tour="summary-panel-toggle"]',
-        category: 'Summary',
-        targetLabel: 'Summary panel',
-        placement: 'bottom',
-      },
-      {
-        title: 'Share & Export Your Findings',
-        body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
-        selector: '[data-tour="export-controls"]',
-        category: 'Output',
-        targetLabel: 'Export controls',
-        placement: 'bottom',
-      },
-    ],
-    [cycloneForecast] // Re-create tour if cyclone data becomes available
-  );
+        tips: [
+          'Click any row to zoom the map to that asset location',
+          'Use search and sort to find specific damage patterns',
+          'Export filtered results for detailed field assessments',
+        ],
+      });
+    }
+
+    baseSteps.push({
+      title: 'Get the Big Picture',
+      body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
+      selector: '[data-tour="summary-panel"]',
+      category: 'Summary',
+      targetLabel: 'Summary panel',
+      placement: 'left',
+      tips: [
+        'Headline numbers update instantly as you filter data',
+        'Charts show impact distribution across regions and sectors',
+        'Perfect for creating executive summaries',
+      ],
+    });
+
+    // Conditionally add cyclone animation step if forecast data exists
+    if (cycloneForecast && cycloneForecast.length > 0) {
+      baseSteps.push({
+        title: 'Cyclone Track Animation',
+        body: 'Watch the cyclone evolution over time with animated wind swaths, intensity changes, and forecast prediction cone.',
+        selector: '[data-tour="story-mode-button"]',
+        category: 'Map',
+        targetLabel: 'Animation controls',
+        placement: 'right',
+        tips: [
+          'Play/pause to control the animation timeline',
+          'Click any timestep to jump to that moment',
+          "Wind glow effects show the storm's intensity visually",
+        ],
+        keyboardShortcut: 'Space',
+      });
+    }
+
+    baseSteps.push({
+      title: 'Share & Export Your Findings',
+      body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
+      selector: '[data-tour="export-controls"]',
+      category: 'Output',
+      targetLabel: 'Export controls',
+      placement: 'bottom',
+      tips: [
+        'Map Export: High-res PNG with current filters applied',
+        'PDF Preview: Full report with maps, charts, and tables',
+        'Data Export: CSV/Excel for further analysis in other tools',
+      ],
+      keyboardShortcut: 'E',
+    });
+
+    return baseSteps;
+  }, [cycloneForecast, damagedBuildings, damagedRoads]);
 
   useEffect(() => {
     if (!isTourOpen) return;
@@ -951,21 +1237,46 @@ export default function DashboardView({
         setShowMapControls(false);
         setShowSummary(false);
         break;
-      case '[data-tour="filter-panel-toggle"]':
+      case '[data-tour="filter-primary-controls"]':
         openFilterPanel('filters');
         setShowSummary(false);
         break;
-      case '[data-tour="map-panel-toggle"]':
+      case '[data-tour="tools-menu"]':
         openMapPanel();
         setShowSummary(false);
         break;
-      case '[data-tour="summary-panel-toggle"]':
+      case '[data-tour="map-style-selector"]':
+        // Keep map panel open to show the visualization mode selector
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="opacity-control"]':
+        // Keep map panel open to show opacity slider
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="summary-panel"]':
         openSummaryPanel();
         break;
-      case '[data-tour="data-workspace-toggle"]':
+      case '[data-tour="data-workspace-panel"]':
         setShowAnalytics(true);
         setShowFilters(false);
         setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="asset-tabs"]':
+        // Ensure analytics workspace is open and visible
+        setShowAnalytics(true);
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="story-mode-button"]':
+        // Keep cyclone controls visible if available
+        if (cycloneForecast && cycloneForecast.length > 0) {
+          openMapPanel();
+          setShowCycloneControls(true);
+        }
         setShowSummary(false);
         break;
       case '[data-tour="export-controls"]':
@@ -976,7 +1287,15 @@ export default function DashboardView({
       default:
         break;
     }
-  }, [isTourOpen, tourStepIndex, tourSteps, openFilterPanel, openMapPanel, openSummaryPanel]);
+  }, [
+    isTourOpen,
+    tourStepIndex,
+    tourSteps,
+    openFilterPanel,
+    openMapPanel,
+    openSummaryPanel,
+    cycloneForecast,
+  ]);
 
   const encodeCanvasToBlob = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob> => {
     if (typeof canvas.toBlob === 'function') {
@@ -1030,28 +1349,20 @@ export default function DashboardView({
     });
   }, []);
 
-  // Basemap preference modal handlers
-  const handleBasemapSelect = useCallback((style: string) => {
+  // Basemap choice from Map Controls; saved so the next visit starts on it
+  const handleBasemapChange = useCallback((style: string) => {
     setBasemapStyle(style);
     saveBasemapPreference(style);
-    setShowBasemapPreferenceModal(false);
-    setIsBasemapPreferenceResolved(true);
   }, []);
-
-  const handleBasemapSkip = useCallback(() => {
-    // Save that preference has been set (even if skipped) to avoid showing modal again
-    saveBasemapPreference(basemapStyle);
-    setShowBasemapPreferenceModal(false);
-    setIsBasemapPreferenceResolved(true);
-  }, [basemapStyle]);
 
   const handleResetUserPreferences = useCallback(() => {
     resetBasemapPreference();
-    showToastNotification(
-      'Preferences reset. Reload the page to see the basemap selection dialog again.',
-      'success'
-    );
+    setBasemapStyle(DEFAULT_BASEMAP_STYLE);
+    showToastNotification('Preferences reset.', 'success');
   }, []);
+
+  // Whether a forecast is showing (set once the view mode is known, below)
+  const forecastFramingRef = useRef(false);
 
   const handleDownloadMap = useCallback(async () => {
     if (!mapInstance || isDownloadingMap) {
@@ -1137,9 +1448,15 @@ export default function DashboardView({
           : 'All';
       const exportedAt = new Date();
       const timestampText = exportedAt.toLocaleString();
-      const headerText = `${COUNTRIES[selectedCountry].name} Disaster Risk Map`;
-      const contextText = `${mapStyle.toUpperCase()} view | Hazards: ${selectedHazardNames} | Opacity: ${layerOpacity}%`;
-      const attributionText = 'Data: PDIE/THREDDS | Basemap: OpenStreetMap contributors';
+      const forecastFraming = forecastFramingRef.current;
+      const headerText = forecastFraming
+        ? `${COUNTRIES[selectedCountry].name} Forecast Exposure Map`
+        : `${COUNTRIES[selectedCountry].name} Disaster Risk Map`;
+      const contextText = forecastFraming
+        ? `${FORECAST_SIGNAL} | Track issued: ${activeEventRecord?.trackIssuedTime || activeEventRecord?.date || 'unknown'}`
+        : `${mapStyle.toUpperCase()} view | Hazards: ${selectedHazardNames} | Opacity: ${layerOpacity}%`;
+      const attributionText =
+        'Data: Pacific Disaster Impact & Exposure / THREDDS | Basemap: OpenStreetMap contributors';
 
       const leftX = Math.max(16, Math.round(compositeCanvas.width * 0.015));
       const bottomY = exportedCanvas.height + footerHeight;
@@ -1212,6 +1529,7 @@ export default function DashboardView({
     isDownloadingMap,
     showToastNotification,
     waitForMapIdle,
+    activeEventRecord,
     filters.selectedHazards,
     allHazards,
     selectedCountry,
@@ -1253,11 +1571,8 @@ export default function DashboardView({
   const loadRequestVersion = useRef(0);
   const dataLoadAbortRef = useRef<AbortController | null>(null);
   const supplementaryLoadAbortRef = useRef<AbortController | null>(null);
-  const supplementaryLoadKeyRef = useRef<string | null>(null);
-  const supplementarySeedRef = useRef<{
-    countryCode: CountryCode;
-    regionalSummary: Array<Record<string, unknown>>;
-  } | null>(null);
+  const fetchedEventRecordsRef = useRef<import('@/data/eventRecords').EventRecord[]>([]);
+  const [countryEventRecords, setCountryEventRecords] = useState<EventRecord[]>([]);
   const damageLoadAbortRef = useRef<{
     buildings: AbortController | null;
     roads: AbortController | null;
@@ -1292,18 +1607,486 @@ export default function DashboardView({
     return filtered;
   }, [expandedEvents, selectedCountry, selectedRegion]);
 
+  // Selectable event ids: the events themselves (what the Events filter
+  // lists) as well as their per-region entries
   const countryScopedEventIds = useMemo(
-    () =>
-      expandedEvents.filter(event => event.countryCode === selectedCountry).map(event => event.id),
-    [expandedEvents, selectedCountry]
+    () => [
+      ...events.filter(event => event.countryCode === selectedCountry).map(event => event.id),
+      ...expandedEvents
+        .filter(event => event.countryCode === selectedCountry)
+        .flatMap(event => [event.id, event.parentEventId].filter((id): id is string => !!id)),
+    ],
+    [events, expandedEvents, selectedCountry]
   );
+
+  const countryHazardScenarioLayers = useMemo(
+    () =>
+      partnerHazardLayers.filter(
+        layer => layer.countryCode === selectedCountry && layer.hazardScenario
+      ),
+    [partnerHazardLayers, selectedCountry]
+  );
+
+  // Whether the active country's own hazard catalog actually contains a wind
+  // layer (true for VU/TO/WS today, false for CK -- its catalog is
+  // inundation-only). Drives an explicit "not modelled" message on the Wind
+  // toggle instead of a toggle that silently does nothing when switched on --
+  // see CK_RISK_ANALYSIS_ASSESSMENT.md's still-open "confirm wind hazard is
+  // genuinely out of scope for CK" item. Only meaningful once this
+  // country's own partner-API catalog has loaded; defaults to available so
+  // it never falsely claims "unavailable" while data is still in flight.
+  const countryHasWindLayers = useMemo(() => {
+    const countryLayers = partnerHazardLayers.filter(
+      layer => layer.countryCode === selectedCountry
+    );
+    if (countryLayers.length === 0) return true;
+    return countryLayers.some(layer => layer.hazardType === 'wind');
+  }, [partnerHazardLayers, selectedCountry]);
+
+  // Availability comes from the layer catalogue as well as named events.
+  // Scenario-driven datasets (notably Cook Islands) may have no Event row,
+  // but must still be discoverable through the primary hazard controls.
+  const availableHazardIds = useMemo(() => {
+    const layerTypes = new Set(
+      getLayersForCountry(selectedCountry, partnerHazardLayers).map(layer => layer.hazardType)
+    );
+    const ids = new Set<string>();
+    if (layerTypes.has('wind')) ids.add('tropical-cyclone');
+    if (
+      layerTypes.has('flood') ||
+      layerTypes.has('inundation') ||
+      layerTypes.has('fluvial-depth')
+    ) {
+      ids.add('flood');
+    }
+    return Array.from(ids);
+  }, [partnerHazardLayers, selectedCountry]);
+
+  // The scenario actually rendered on the map: the user's explicit pick, or
+  // a deterministic default so the map always shows exactly one scenario
+  // instead of every SLR x return-period/event combination at once.
+  const effectiveHazardScenario = useMemo(
+    () => hazardScenarioSelection ?? getDefaultHazardScenario(countryHazardScenarioLayers),
+    [hazardScenarioSelection, countryHazardScenarioLayers]
+  );
+
+  // One context at a time: the dashboard shows either an event's modelled
+  // impact (track, its hazard footprint, the impact analysis) or planning
+  // scenarios (scenario layer, scenario figures) -- never figures from one
+  // next to a map of the other. Default: the event when the country has an
+  // impact analysis, otherwise planning.
+  const hasEventImpact = (nationalSummary?.length ?? 0) > 0 || regionalSummary.length > 0;
+  const hasPlanningScenarios = countryHazardScenarioLayers.length > 0;
+  // While the country's data is still loading, neither flag is known yet:
+  // keep an explicit choice and default to event, so the map doesn't load
+  // one set of layers and then switch to the other.
+  const viewMode: 'event' | 'planning' =
+    viewModeChoice === 'planning' && (hasPlanningScenarios || isLoadingData)
+      ? 'planning'
+      : viewModeChoice === 'event' || isLoadingData || hasEventImpact || !hasPlanningScenarios
+        ? 'event'
+        : 'planning';
+  const isPlanningMode = viewMode === 'planning';
+  forecastFramingRef.current = !isPlanningMode && !!forecastExposure;
+
+  // In planning mode the Hazards filter picks which scenario products are
+  // offered (cyclone vs flood-type); with nothing or both selected, all are.
+  // Falls back to every product when the country has none of that type.
+  // The catalogue's dated, real events (e.g. the Cook Islands' historical
+  // cyclones and swell events). They are browsed with the scenario selector,
+  // so Observed mode offers a shortcut to them.
+  const historicalScenarioLayers = useMemo(
+    () =>
+      countryHazardScenarioLayers.filter(
+        layer => HAZARD_SCENARIO_PRODUCT_CATEGORY[layer.hazardScenario!.product] === 'observed'
+      ),
+    [countryHazardScenarioLayers]
+  );
+
+  // Which kind of scenario is selected: a dated, observed event (History) or a
+  // probabilistic planning figure (Scenarios). Each mode offers only its own.
+  const scenarioCategory =
+    (effectiveHazardScenario &&
+      HAZARD_SCENARIO_PRODUCT_CATEGORY[effectiveHazardScenario.product]) ||
+    'planning';
+
+  const planningScenarioLayers = useMemo(() => {
+    const inCategory = countryHazardScenarioLayers.filter(
+      layer =>
+        (HAZARD_SCENARIO_PRODUCT_CATEGORY[layer.hazardScenario!.product] ?? 'planning') ===
+        scenarioCategory
+    );
+    const pool = inCategory.length > 0 ? inCategory : countryHazardScenarioLayers;
+    const scope = getHazardLossScope(filters.selectedHazards);
+    if (scope === 'all') return pool;
+    const matching = pool.filter(
+      layer => SCENARIO_PRODUCT_HAZARD[layer.hazardScenario!.product] === scope
+    );
+    return matching.length > 0 ? matching : pool;
+  }, [countryHazardScenarioLayers, filters.selectedHazards, scenarioCategory]);
+
+  useEffect(() => {
+    if (!isPlanningMode) return;
+    if (shouldResetHazardScenario(planningScenarioLayers, effectiveHazardScenario)) {
+      setHazardScenarioSelection(getDefaultHazardScenario(planningScenarioLayers));
+    }
+  }, [isPlanningMode, effectiveHazardScenario, planningScenarioLayers]);
+
+  // ---- Analysis mode: the one first decision (see AnalysisModeSwitch) ----
+  const scenarioLayersByCategory = useMemo(
+    () => ({
+      planning: countryHazardScenarioLayers.filter(
+        layer =>
+          (HAZARD_SCENARIO_PRODUCT_CATEGORY[layer.hazardScenario!.product] ?? 'planning') ===
+          'planning'
+      ),
+      observed: historicalScenarioLayers,
+    }),
+    [countryHazardScenarioLayers, historicalScenarioLayers]
+  );
+  const newestRecord = (records: EventRecord[]) =>
+    [...records].sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+  const forecastRecord = useMemo(
+    () =>
+      defaultForecastRecord(
+        countryEventRecords.filter(
+          record => record.countryCode === selectedCountry && record.isForecast
+        )
+      ),
+    [countryEventRecords, selectedCountry]
+  );
+  const forecastRuns = useMemo(
+    () => listForecastRuns(countryEventRecords, selectedCountry),
+    [countryEventRecords, selectedCountry]
+  );
+  const assessmentRecord = useMemo(
+    () =>
+      newestRecord(
+        countryEventRecords.filter(
+          record => record.countryCode === selectedCountry && !record.isForecast
+        )
+      ),
+    [countryEventRecords, selectedCountry]
+  );
+  const availableAnalysisModes = useMemo(() => {
+    const modes: AnalysisMode[] = [];
+    if (forecastRecord) modes.push('forecast');
+    if (assessmentRecord || hasEventImpact) modes.push('assessment');
+    if (scenarioLayersByCategory.planning.length > 0) modes.push('scenarios');
+    if (scenarioLayersByCategory.observed.length > 0) modes.push('history');
+    return modes;
+  }, [forecastRecord, assessmentRecord, hasEventImpact, scenarioLayersByCategory]);
+  const analysisMode: AnalysisMode = isPlanningMode
+    ? scenarioCategory === 'observed'
+      ? 'history'
+      : 'scenarios'
+    : activeEventRecord?.isForecast || forecastExposure
+      ? 'forecast'
+      : 'assessment';
+
+  const assessmentGapInfo = useMemo(
+    () =>
+      assessmentGap(
+        forecastRecord,
+        activeEventRecord?.isForecast ? assessmentRecord : activeEventRecord
+      ),
+    [forecastRecord, assessmentRecord, activeEventRecord]
+  );
+
+  // Frame the forecast when one opens: the country's default view can be well
+  // away from the storm, which reads as "no storm on the map". A shared link
+  // that names a view keeps it, and a run is framed once so panning is never undone.
+  const framedForecastRef = useRef<string | null>(null);
+  const respectUrlViewRef = useRef(Boolean(urlState.center && urlState.zoom));
+  useEffect(() => {
+    if (!forecastExposure || isPlanningMode || !mapInstance) return;
+    const focus = forecastFocusCollection(forecastExposure);
+    const key = activeEventRecord?.id ?? '';
+    if (!focus || framedForecastRef.current === key) return;
+    framedForecastRef.current = key;
+    if (respectUrlViewRef.current) {
+      respectUrlViewRef.current = false;
+      return;
+    }
+    zoomToData(focus);
+  }, [forecastExposure, isPlanningMode, mapInstance, activeEventRecord?.id, zoomToData]);
+
+  // Choosing an area moves the map to it, so the click visibly does something
+  const zoomedRegionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedRegion) {
+      zoomedRegionRef.current = null;
+      return;
+    }
+    if (!forecastExposure || isPlanningMode || zoomedRegionRef.current === selectedRegion) return;
+    const area = featuresForRegion(regionalImpactsGeoJSON, selectedRegion);
+    if (!area) return;
+    zoomedRegionRef.current = selectedRegion;
+    zoomToData(area);
+  }, [selectedRegion, forecastExposure, isPlanningMode, regionalImpactsGeoJSON, zoomToData]);
+
+  // Choosing Forecast or Assessment names that mode's event. That is the mode,
+  // not a filter the user applied, so it is kept out of the Active filters bar
+  // (whose "Clear all" would otherwise silently switch the mode).
+  const eventSelectionIsMode =
+    filters.selectedEvents.length === 1 &&
+    isModeEventId(filters.selectedEvents[0], forecastRuns, assessmentRecord?.id) &&
+    !!forecastRecord;
+  const barFilters = eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters;
+
+  // A link such as ?events=12 names a mode's event. Once the records are known and the
+  // country has both kinds, treat it as the mode, not as a filter.
+  useEffect(() => {
+    if (eventSelectionIsMode && modeEventId === null) {
+      setModeEventId(filters.selectedEvents[0]);
+      setFilters(prev => ({ ...prev, selectedEvents: [] }));
+    }
+  }, [eventSelectionIsMode, modeEventId, filters.selectedEvents]);
+
+  // The overlays (cyclone track, hazard rasters, damaged buildings and roads) are the
+  // post-event assessment's. Forecast has its own layers; Scenarios its own scenario layer.
+  // Their switches keep their values, so coming back to Assessment finds them as left.
+  const isAssessmentMode = analysisMode === 'assessment';
+  // The cyclone animation plays the track as forecast or as it happened, so it belongs to
+  // both event modes; Scenarios and History have no storm to play.
+  // Until the first load returns there is no event, so the mode is a guess (it reads as Assessment).
+  // Showing that guess flashed "No Impact Data Available" before the real view replaced it.
+  const modeUnresolved = isLoadingData && !activeEventRecord && !isPlanningMode;
+  const canAnimateCyclone =
+    !modeUnresolved && (analysisMode === 'assessment' || analysisMode === 'forecast');
+
+  // An advisory issued while the page is open: offered, never forced
+  const { advisory: newAdvisory, dismiss: dismissNewAdvisory } = useNewAdvisory({
+    countryCode: selectedCountry,
+    known: countryEventRecords,
+    enabled: !isLoadingData && !modeUnresolved,
+  });
+
+  const windLayerOn = showWindLayer && isAssessmentMode;
+  const inundationLayerOn = isAssessmentMode
+    ? showInundationLayer
+    : isPlanningMode
+      ? showScenarioLayer
+      : false;
+
+  // A user's scenario pick is remembered per kind, so switching away and back
+  // restores it rather than replacing it with a default.
+  const lastScenarioByCategory = useRef<
+    Partial<Record<'planning' | 'observed', HazardScenarioSelection>>
+  >({});
+  useEffect(() => {
+    if (isPlanningMode && effectiveHazardScenario) {
+      lastScenarioByCategory.current[scenarioCategory as 'planning' | 'observed'] =
+        effectiveHazardScenario;
+    }
+  }, [isPlanningMode, effectiveHazardScenario, scenarioCategory]);
+
+  const handleAnalysisModeChange = useCallback(
+    (mode: AnalysisMode) => {
+      if (mode === 'forecast' || mode === 'assessment') {
+        setViewModeChoice('event');
+        const target = mode === 'forecast' ? forecastRecord : assessmentRecord;
+        // Name the event only when the country has more than one kind to tell
+        // apart; otherwise the default already shows the right one. This is the
+        // mode, not a filter, so it is kept out of filters.selectedEvents.
+        setModeEventId(target && forecastRecord ? target.id : null);
+        // An event selection that was only ever a mode's event (e.g. arrived in a
+        // link) is not the user's filter: drop it so it can't leak into the tables.
+        const isModeEvent = (id: string) => isModeEventId(id, forecastRuns, assessmentRecord?.id);
+        setFilters(prev =>
+          prev.selectedEvents.length > 0 && prev.selectedEvents.every(isModeEvent)
+            ? { ...prev, selectedEvents: [] }
+            : prev
+        );
+        return;
+      }
+      const category = mode === 'history' ? 'observed' : 'planning';
+      setViewModeChoice('planning');
+      setHazardScenarioSelection(
+        lastScenarioByCategory.current[category] ??
+          getDefaultHazardScenario(scenarioLayersByCategory[category])
+      );
+    },
+    [forecastRecord, forecastRuns, assessmentRecord, scenarioLayersByCategory]
+  );
+
+  // The header's "Active event context" and the Metadata chip both used to
+  // read activeCycloneName unconditionally -- for a country like Cook
+  // Islands with no real Event record, that's just the generic "Tropical
+  // Cyclone" fallback, completely disconnected from whichever historical/
+  // synthetic/swell event is actually selected in the Hazard Scenario
+  // section. When the active scenario is itself a real, dated/named
+  // observed event (not a statistical planning figure), prefer showing
+  // that -- it's more specific and it's what the map and risk figures
+  // actually reflect.
+  const activeEventContextLabel = useMemo(() => {
+    if (
+      effectiveHazardScenario &&
+      HAZARD_SCENARIO_PRODUCT_CATEGORY[effectiveHazardScenario.product] === 'observed' &&
+      effectiveHazardScenario.eventLabel
+    ) {
+      const productLabel =
+        HAZARD_SCENARIO_PRODUCT_LABELS[effectiveHazardScenario.product] ??
+        effectiveHazardScenario.product;
+      return `${productLabel} -${effectiveHazardScenario.eventLabel}`;
+    }
+    return activeCycloneName;
+  }, [effectiveHazardScenario, activeCycloneName]);
+
+  // National-level loss/exposure totals for the scenario currently shown on
+  // the map, so the risk summary panel matches the selected SLR x
+  // return-period/event instead of one fixed, scenario-independent figure.
+  // Only populated where RiskScenario data has actually been ingested
+  // (currently CK only) -- null elsewhere, falling back to the existing
+  // static totals.
+  const [hazardScenarioRiskSummary, setHazardScenarioRiskSummary] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+
+  useEffect(() => {
+    if (!effectiveHazardScenario) {
+      setHazardScenarioRiskSummary(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchHazardScenarioRiskSummary(selectedCountry, effectiveHazardScenario, controller.signal)
+      .then(summary => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioRiskSummary(summary);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioRiskSummary(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedCountry, effectiveHazardScenario]);
+
+  // The same scenario's loss by sector and by asset type, for the bottom
+  // panel's economic damage tabs. Keyed on the risk_scenario row id, so it
+  // follows the selector exactly as the summary totals above do.
+  const [hazardScenarioBreakdown, setHazardScenarioBreakdown] =
+    useState<HazardScenarioBreakdown | null>(null);
+  const hazardScenarioRiskSummaryId =
+    typeof hazardScenarioRiskSummary?.id === 'number' ? hazardScenarioRiskSummary.id : null;
+
+  useEffect(() => {
+    if (hazardScenarioRiskSummaryId === null) {
+      setHazardScenarioBreakdown(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetchHazardScenarioBreakdown(selectedCountry, hazardScenarioRiskSummaryId, controller.signal)
+      .then(breakdown => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioBreakdown(breakdown);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioBreakdown(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedCountry, hazardScenarioRiskSummaryId]);
+
+  // The selected product's whole loss curve (every return period x SLR, plus
+  // annual average loss) for the Hazard Scenario section's curve selector.
+  // Keyed on the product's risk_information parent, so it's fetched once per
+  // product rather than on every return period / SLR change. Event-based
+  // products have no curve.
+  const [hazardScenarioCurve, setHazardScenarioCurve] = useState<HazardScenarioCurve | null>(null);
+  const hazardScenarioCurveSourceId =
+    effectiveHazardScenario?.returnPeriodYears != null &&
+    typeof hazardScenarioRiskSummary?.risk_information === 'number'
+      ? hazardScenarioRiskSummary.risk_information
+      : null;
+
+  useEffect(() => {
+    if (hazardScenarioCurveSourceId === null) {
+      setHazardScenarioCurve(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetchHazardScenarioCurve(selectedCountry, hazardScenarioCurveSourceId, controller.signal)
+      .then(curve => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioCurve(curve);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setHazardScenarioCurve(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedCountry, hazardScenarioCurveSourceId]);
+
+  // The Hazards filter scopes risk figures to one hazard's share (wind or
+  // flooding) instead of dropping rows: every risk row carries per-hazard
+  // loss and exposure columns. Scoping here, once, means the summary,
+  // tables, map shading and exports all follow. See utils/hazardLossScope.
+  const hazardLossScope = getHazardLossScope(filters.selectedHazards);
+  const scopedRisk = useMemo(() => {
+    const national = scopeRiskRows(nationalSummary, hazardLossScope);
+    const regional = scopeRiskRows(regionalSummary, hazardLossScope);
+    const regionalBySector = scopeRiskRows(regionalSummaryBySector, hazardLossScope);
+    const bySector = scopeRiskRows(impactBySector, hazardLossScope);
+    const byAsset = scopeRiskRows(impactByAssetType, hazardLossScope);
+    const regionalImpacts = scopeRiskFeatures(regionalImpactsGeoJSON, hazardLossScope);
+    return {
+      nationalSummary: national.rows,
+      regionalSummary: regional.rows,
+      regionalSummaryBySector: regionalBySector.rows,
+      impactBySector: bySector.rows,
+      impactByAssetType: byAsset.rows,
+      regionalImpactsGeoJSON: regionalImpacts.collection ?? null,
+      sectorEconomicData: scopeEconomicRecords(sectorEconomicData, hazardLossScope),
+      assetEconomicData: scopeEconomicRecords(assetEconomicData, hazardLossScope),
+      // False when some dataset has no per-hazard columns, so its figures
+      // are still all hazards
+      complete:
+        national.complete &&
+        regional.complete &&
+        regionalBySector.complete &&
+        bySector.complete &&
+        byAsset.complete &&
+        regionalImpacts.complete,
+      mayDoubleCount: national.mayDoubleCount || regional.mayDoubleCount,
+    };
+  }, [
+    hazardLossScope,
+    nationalSummary,
+    regionalSummary,
+    regionalSummaryBySector,
+    impactBySector,
+    impactByAssetType,
+    regionalImpactsGeoJSON,
+    sectorEconomicData,
+    assetEconomicData,
+  ]);
 
   // Filter hazards and sectors based on what data we actually have
   const hazards = useMemo(() => {
-    // allHazards from COUNTRY_CONFIGS already contains only the hazards with WMS data
-    // (tropical-cyclone and flood) for all countries that have THREDDS layers.
-    return allHazards;
-  }, [allHazards]);
+    // allHazards from COUNTRY_CONFIGS holds the hazards with WMS data
+    // (tropical-cyclone and flood). Events of other types (earthquake,
+    // volcanic, ...) add their own hazard so they can be filtered to.
+    const known = new Set(allHazards.map(hazard => hazard.id));
+    const extra: typeof allHazards = [];
+    events.forEach(event => {
+      const id = event.hazardId;
+      if (!id || id === MULTI_HAZARD_ID || known.has(id)) return;
+      known.add(id);
+      extra.push(resolveHazard(id));
+    });
+    return extra.length > 0 ? [...allHazards, ...extra] : allHazards;
+  }, [allHazards, events]);
 
   const sectors = useMemo(() => {
     // Dynamically extract sectors that exist in the actual loaded data for this country
@@ -1336,7 +2119,8 @@ export default function DashboardView({
   useEffect(() => {
     const validHazardIds = new Set(hazards.map(hazard => hazard.id));
     const validSectorIds = new Set(sectors.map(sector => sector.id));
-    const validEventIds = new Set(countryScopedEventIds);
+    // A forecast advisory is a mode's event, so a link to an older run keeps its id
+    const validEventIds = new Set([...countryScopedEventIds, ...forecastRuns.map(run => run.id)]);
     const validRegionIds = new Set([
       ...resolvedDistricts.map((district: any) => district.id),
       ...resolvedDistricts.map((district: any) => district.name),
@@ -1351,7 +2135,12 @@ export default function DashboardView({
       const nextSectors = prevFilters.selectedSectors.filter(sectorId =>
         validSectorIds.has(sectorId)
       );
-      const nextEvents = prevFilters.selectedEvents.filter(eventId => validEventIds.has(eventId));
+      // Before events load there's nothing to check against; keep the
+      // selection (e.g. from a shared link) instead of clearing it
+      const nextEvents =
+        validEventIds.size === 0
+          ? prevFilters.selectedEvents
+          : prevFilters.selectedEvents.filter(eventId => validEventIds.has(eventId));
 
       if (
         haveSameItems(nextHazards, prevFilters.selectedHazards) &&
@@ -1375,7 +2164,7 @@ export default function DashboardView({
       }
       return null;
     });
-  }, [hazards, sectors, countryScopedEventIds, resolvedDistricts, resolvedProvinces]);
+  }, [hazards, sectors, countryScopedEventIds, forecastRuns, resolvedDistricts, resolvedProvinces]);
 
   // Keep exports aligned with the active filter pipeline used in analytics panels.
   const {
@@ -1385,15 +2174,23 @@ export default function DashboardView({
     aggregatedEventData,
   } = useMemo(
     () =>
-      computeFilteredData({
+      getFilteredData({
         events: countryEvents,
         exposureData,
-        economicDamageData,
+        economicDamageData: scopeEconomicRecords(economicDamageData, hazardLossScope),
         filters,
         districts: resolvedDistricts,
         provinces: resolvedProvinces,
       }),
-    [countryEvents, exposureData, economicDamageData, filters, resolvedDistricts, resolvedProvinces]
+    [
+      countryEvents,
+      exposureData,
+      economicDamageData,
+      hazardLossScope,
+      filters,
+      resolvedDistricts,
+      resolvedProvinces,
+    ]
   );
 
   const exportEvents = filteredDashboardEvents;
@@ -1448,8 +2245,7 @@ export default function DashboardView({
   }, [filters.selectedHazards, hazards, activeWmsLayers.length]);
 
   const activeContextDate = useMemo(() => {
-    const configuredDate = COUNTRY_CYCLONE_CONFIG[selectedCountry]?.eventDate;
-    const eventDate = events[0]?.date || configuredDate;
+    const eventDate = events[0]?.date;
     if (!eventDate) return 'Not available';
 
     const parsed = new Date(eventDate);
@@ -1506,8 +2302,12 @@ export default function DashboardView({
     const activeLayersCount =
       filters.selectedHazards.length > 0
         ? filters.selectedHazards.length
-        : [showWindLayer, showInundationLayer, showBuildingsLayer, showRoadsLayer].filter(Boolean)
-            .length;
+        : [
+            windLayerOn,
+            inundationLayerOn,
+            showBuildingsLayer && isAssessmentMode,
+            showRoadsLayer && isAssessmentMode,
+          ].filter(Boolean).length;
 
     return [
       {
@@ -1551,8 +2351,9 @@ export default function DashboardView({
     countryUi.broaderAreaSingular,
     selectedCountry,
     filters.selectedHazards.length,
-    showWindLayer,
-    showInundationLayer,
+    windLayerOn,
+    inundationLayerOn,
+    isAssessmentMode,
     showBuildingsLayer,
     showRoadsLayer,
     currentAggregationLabel,
@@ -1582,110 +2383,12 @@ export default function DashboardView({
     }
   }, []);
 
-  const loadSupplementaryData = useCallback(() => {
-    const seed = supplementarySeedRef.current;
-    if (!seed) {
-      return;
-    }
-
-    const currentVersion = loadRequestVersion.current;
-    const loadKey = `${currentVersion}:${seed.countryCode}`;
-    if (supplementaryLoadKeyRef.current === loadKey || supplementaryLoadAbortRef.current) {
-      return;
-    }
-
-    const supplementaryController = new AbortController();
-    supplementaryLoadAbortRef.current = supplementaryController;
-    supplementaryLoadKeyRef.current = loadKey;
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DashboardView] Starting supplementary load for ${seed.countryCode}`);
-    }
-
-    void loadSupplementaryRealData({
-      signal: supplementaryController.signal,
-      countryCode: seed.countryCode,
-      regionalSummary: seed.regionalSummary,
-    })
-      .then(supplementary => {
-        if (
-          supplementaryController.signal.aborted ||
-          currentVersion !== loadRequestVersion.current
-        ) {
-          return;
-        }
-
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[DashboardView] Supplementary load complete for ${seed.countryCode}`, {
-            sectorEconomicData: supplementary.sectorEconomicData?.length || 0,
-            assetEconomicData: supplementary.assetEconomicData?.length || 0,
-          });
-        }
-
-        if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
-        if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
-        if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
-        if (supplementary.regionalSummaryBySector) {
-          setRegionalSummaryBySector(supplementary.regionalSummaryBySector);
-        }
-        if (supplementary.exposureData) setExposureData(supplementary.exposureData);
-        if (supplementary.economicDamageData) {
-          setEconomicDamageData(supplementary.economicDamageData);
-        }
-        if (supplementary.sectorEconomicData) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log(
-              `[DashboardView] Setting sectorEconomicData: ${supplementary.sectorEconomicData.length} rows`
-            );
-          }
-          setSectorEconomicData(supplementary.sectorEconomicData);
-        }
-        if (supplementary.assetEconomicData) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log(
-              `[DashboardView] Setting assetEconomicData: ${supplementary.assetEconomicData.length} rows`
-            );
-          }
-          setAssetEconomicData(supplementary.assetEconomicData);
-        }
-        if (supplementary.assetExposureData) {
-          setAssetExposureData(supplementary.assetExposureData);
-        }
-        if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
-          setExpandedEvents(supplementary.sectorSpecificEvents);
-        }
-      })
-      .catch(error => {
-        if (supplementaryController.signal.aborted) {
-          return;
-        }
-
-        supplementaryLoadKeyRef.current = null;
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[DashboardView] Supplementary data loading failed:', error);
-        }
-      })
-      .finally(() => {
-        if (supplementaryLoadAbortRef.current === supplementaryController) {
-          supplementaryLoadAbortRef.current = null;
-        }
-      });
-  }, []);
-
   // Story mode side effects: pause playback and show controls on entry
   useEffect(() => {
     if (storyMode && isCyclonePlaying) {
       setIsCyclonePlaying(false);
     }
   }, [storyMode, isCyclonePlaying]);
-
-  useEffect(() => {
-    if (!showAnalytics && !showSummary) {
-      return;
-    }
-
-    loadSupplementaryData();
-  }, [showAnalytics, showSummary, loadSupplementaryData]);
 
   // Stabilized loadData with useCallback to prevent stale closures
   const loadData = useCallback(async () => {
@@ -1715,18 +2418,20 @@ export default function DashboardView({
     setNationalSummary(undefined);
     setRegionalSummary([]);
     setRegionalSummaryBySector([]);
+    setCycloneTrackData(null);
     setCycloneForecast(null);
     setExpandedEvents([]);
     setEvents([]);
+    setPartnerHazardLayers([]);
     damageAutoLoadRequestedRef.current = { buildings: false, roads: false };
-    supplementarySeedRef.current = null;
-    supplementaryLoadKeyRef.current = null;
     try {
       const realData = await loadAllRealData({
         signal: controller.signal,
-        includeDamagedAssets: false,
-        includeSupplementaryData: false,
+        includeDamagedAssets: true,
+        includeSupplementaryData: true,
         countryCode: selectedCountry,
+        selectedEventIds: effectiveEventIds,
+        dateRange: filters.dateRange,
       });
 
       // Check if this request is still current (not superseded by a newer request)
@@ -1734,6 +2439,14 @@ export default function DashboardView({
         console.log('Ignoring stale data load response');
         return;
       }
+
+      if (realData.fetchedEventRecords && realData.fetchedEventRecords.length > 0) {
+        fetchedEventRecordsRef.current = realData.fetchedEventRecords;
+        setCountryEventRecords(realData.fetchedEventRecords);
+      }
+
+      damagedBuildingsRowIdRef.current = realData.damagedBuildingsRowId ?? null;
+      damagedRoadsRowIdRef.current = realData.damagedRoadsRowId ?? null;
 
       if (realData.events && realData.events.length > 0) {
         setEvents(realData.events);
@@ -1760,10 +2473,39 @@ export default function DashboardView({
           realData.dataSourceInfo.eventMetadataSource === 'partner_api'
             ? 'Partner API'
             : 'Local Files';
-        setDevDataSourceLabel(`Track: ${trackSource} | Event: ${eventSource}`);
+        const riskSource =
+          realData.dataSourceInfo.riskDataSource === 'partner_api' ? 'Partner API' : 'Local Files';
+        const hazardSource =
+          realData.dataSourceInfo.hazardLayerSource === 'partner_api'
+            ? 'Partner API'
+            : 'Static Config';
+        setDevDataSourceLabel(
+          `Track: ${trackSource} | Event: ${eventSource} | Risk: ${riskSource} | Hazards: ${hazardSource}`
+        );
       } else {
-        setDevDataSourceLabel('Track: Local Files | Event: Local Files');
+        setDevDataSourceLabel(
+          'Track: Local Files | Event: Local Files | Risk: Local Files | Hazards: Static Config'
+        );
       }
+
+      setPartnerHazardLayers(realData.partnerHazardLayers || []);
+      // Drop the user's scenario pick if it no longer exists in the freshly
+      // loaded layer set (e.g. switching away from a multi-scenario country)
+      // so the selector falls back to a valid default instead of pointing at
+      // a scenario that will never render.
+      setHazardScenarioSelection(prev => {
+        if (!prev) return prev;
+        const layers = realData.partnerHazardLayers || [];
+        const stillValid = layers.some(
+          layer =>
+            layer.hazardScenario &&
+            layer.hazardScenario.product === prev.product &&
+            layer.hazardScenario.slrScenarioM === prev.slrScenarioM &&
+            layer.hazardScenario.returnPeriodYears === prev.returnPeriodYears &&
+            layer.hazardScenario.eventLabel === prev.eventLabel
+        );
+        return stillValid ? prev : null;
+      });
 
       if (realData.exposureData && realData.exposureData.length > 0) {
         setExposureData(realData.exposureData);
@@ -1800,14 +2542,15 @@ export default function DashboardView({
 
       if (realData.regionalSummary) {
         setRegionalSummary(realData.regionalSummary);
-        supplementarySeedRef.current = {
-          countryCode: selectedCountry,
-          regionalSummary: realData.regionalSummary as Array<Record<string, unknown>>,
-        };
         if (process.env.NODE_ENV !== 'production') {
           console.log(`Loaded ${realData.regionalSummary.length} regional summaries`);
         }
       }
+
+      setRegionalImpactsGeoJSON(realData.regionalImpacts ?? null);
+      setForecastExposure(realData.forecastExposure ?? null);
+      setPreviousForecast(realData.previousForecast ?? null);
+      setActiveEventRecord(realData.activeEventRecord ?? null);
 
       if (realData.regionalSummaryBySector) {
         setRegionalSummaryBySector(realData.regionalSummaryBySector);
@@ -1816,27 +2559,28 @@ export default function DashboardView({
         }
       }
 
+      if (realData.cycloneTrack) {
+        setCycloneTrackData(realData.cycloneTrack);
+      }
+
+      if (realData.damagedRoads) {
+        setDamagedRoads(realData.damagedRoads);
+      }
+
+      if (realData.damagedBuildings) {
+        setDamagedBuildings(realData.damagedBuildings);
+      }
+
       if (realData.cycloneForecast) {
         setCycloneForecast(realData.cycloneForecast);
 
         // Start playback at the timestep nearest the selected country's center.
         // This avoids an "empty/broken" feel for tracks that begin far off-screen
         // (e.g., TC Harold starts west of Tonga before approaching the islands).
-        const [countryLng, countryLat] = COUNTRIES[selectedCountry].center;
-        const nearestIndex = realData.cycloneForecast.reduce(
-          (bestIndex: number, point: any, index: number, arr: any[]) => {
-            const dx = (point.longitude ?? 0) - countryLng;
-            const dy = (point.latitude ?? 0) - countryLat;
-            const distSq = dx * dx + dy * dy;
-
-            const bestPoint = arr[bestIndex];
-            const bestDx = (bestPoint?.longitude ?? 0) - countryLng;
-            const bestDy = (bestPoint?.latitude ?? 0) - countryLat;
-            const bestDistSq = bestDx * bestDx + bestDy * bestDy;
-
-            return distSq < bestDistSq ? index : bestIndex;
-          },
-          0
+        const nearestIndex = animationStartIndex(
+          realData.cycloneForecast,
+          COUNTRIES[selectedCountry].center,
+          !!(realData.forecastExposure || realData.activeEventRecord?.isForecast)
         );
         setCurrentCycloneIndex(nearestIndex);
 
@@ -1844,6 +2588,80 @@ export default function DashboardView({
           console.log(`Loaded ${realData.cycloneForecast.length} cyclone forecast timesteps`);
         }
       }
+
+      // Load supplementary analytics data in the background.
+      const supplementaryController = new AbortController();
+      supplementaryLoadAbortRef.current = supplementaryController;
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DashboardView] Starting supplementary load for ${selectedCountry}`);
+      }
+      void loadSupplementaryRealData({
+        signal: supplementaryController.signal,
+        countryCode: selectedCountry,
+        selectedEventIds: effectiveEventIds,
+        dateRange: filters.dateRange,
+        regionalSummary: (realData.regionalSummary || []) as Array<Record<string, unknown>>,
+      })
+        .then(supplementary => {
+          if (
+            supplementaryController.signal.aborted ||
+            currentVersion !== loadRequestVersion.current
+          ) {
+            return;
+          }
+
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`[DashboardView] Supplementary load complete for ${selectedCountry}`, {
+              sectorEconomicData: supplementary.sectorEconomicData?.length || 0,
+              assetEconomicData: supplementary.assetEconomicData?.length || 0,
+            });
+          }
+
+          if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
+          if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
+          if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
+          if (supplementary.regionalSummaryBySector) {
+            setRegionalSummaryBySector(supplementary.regionalSummaryBySector);
+          }
+          if (supplementary.exposureData) setExposureData(supplementary.exposureData);
+          if (supplementary.economicDamageData) {
+            setEconomicDamageData(supplementary.economicDamageData);
+          }
+          if (supplementary.sectorEconomicData) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `[DashboardView] Setting sectorEconomicData: ${supplementary.sectorEconomicData.length} rows`
+              );
+            }
+            setSectorEconomicData(supplementary.sectorEconomicData);
+          }
+          if (supplementary.assetEconomicData) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `[DashboardView] Setting assetEconomicData: ${supplementary.assetEconomicData.length} rows`
+              );
+            }
+            setAssetEconomicData(supplementary.assetEconomicData);
+          }
+          if (supplementary.assetExposureData)
+            setAssetExposureData(supplementary.assetExposureData);
+          if (supplementary.sectorSpecificEvents && supplementary.sectorSpecificEvents.length > 0) {
+            setExpandedEvents(supplementary.sectorSpecificEvents);
+          }
+        })
+        .catch(error => {
+          if (supplementaryController.signal.aborted) {
+            return;
+          }
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('[DashboardView] Supplementary data loading failed:', error);
+          }
+        })
+        .finally(() => {
+          if (supplementaryLoadAbortRef.current === supplementaryController) {
+            supplementaryLoadAbortRef.current = null;
+          }
+        });
     } catch (error) {
       if (controller.signal.aborted) {
         return;
@@ -1888,9 +2706,9 @@ export default function DashboardView({
         dataLoadAbortRef.current = null;
       }
     }
-  }, [selectedCountry]);
+  }, [selectedCountry, effectiveEventIds, filters.dateRange]);
 
-  // Load real data on mount and when selectedCountry changes
+  // Load real data on mount and when country/event temporal context changes
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -2001,37 +2819,21 @@ export default function DashboardView({
   const hazardsLoadingLabel = 'Loading hazard layers...';
   const hazardMinZoom = 6;
   const hazardZoomBlocked =
-    (showWindLayer || showInundationLayer) && mapZoom !== null && mapZoom < hazardMinZoom;
+    (windLayerOn || inundationLayerOn) && mapZoom !== null && mapZoom < hazardMinZoom;
 
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(320px,1.05fr)_minmax(460px,0.95fr)_auto] xl:items-start">
-          <div className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2 md:hidden">
-              <button
-                onClick={() => {
-                  openFilterPanel('filters');
-                  setShowSummary(false);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
-                  showFilters
-                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
-                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
-                }`}
-                aria-label="Open filters panel"
-                aria-pressed={showFilters}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Filters
-              </button>
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:gap-x-4 xl:items-center xl:gap-4">
+          <div className="flex min-w-0 flex-col gap-3 xl:min-w-[26rem] xl:flex-1">
+            <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 md:hidden">
               <button
                 onClick={() => {
                   openMapPanel();
                   setShowSummary(false);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showMapControls
                     ? 'bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2043,8 +2845,24 @@ export default function DashboardView({
                 Map
               </button>
               <button
+                onClick={() => {
+                  openFilterPanel('filters');
+                  setShowSummary(false);
+                }}
+                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showFilters
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
+                aria-label="Open filters panel"
+                aria-pressed={showFilters}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Filters
+              </button>
+              <button
                 onClick={openSummaryPanel}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showSummary
                     ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2055,13 +2873,32 @@ export default function DashboardView({
                 <BarChart3 className="w-3.5 h-3.5" />
                 Summary
               </button>
-              {!!cycloneForecast && (
+              <button
+                onClick={() => {
+                  // The data tabs overlay the map on phones; close the side panels
+                  setShowAnalytics(current => !current);
+                  setShowSummary(false);
+                  setShowMapControls(false);
+                  setShowFilters(false);
+                }}
+                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  showAnalytics
+                    ? 'bg-blue-500/20 text-blue-200 border-blue-500/40 shadow-sm'
+                    : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
+                }`}
+                aria-label={showAnalytics ? 'Hide data tables' : 'Show data tables'}
+                aria-pressed={showAnalytics}
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                Data
+              </button>
+              {canAnimateCyclone && !!cycloneForecast && (
                 <button
                   onClick={() => {
                     openFilterPanel('cyclone');
                     setShowSummary(false);
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                     showFilters && filterPanelTab === 'cyclone'
                       ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
                       : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2075,263 +2912,264 @@ export default function DashboardView({
               )}
             </div>
             <div
-              className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-700/40 bg-slate-900/35 px-3 py-3 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)] sm:px-4"
+              className="flex min-w-0 items-start gap-3 px-1 py-1 sm:gap-4"
               data-tour="dashboard-hero"
             >
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-slate-800/95 via-slate-700/80 to-slate-900/95 shadow-[0_12px_30px_rgba(15,23,42,0.28)]">
-                <ReactCountryFlag
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/55">
+                <CountryFlag
                   countryCode={selectedCountry}
-                  svg={false}
                   aria-label={COUNTRIES[selectedCountry].name}
                   title={COUNTRIES[selectedCountry].name}
-                  style={{ fontSize: '1.9rem', lineHeight: 1 }}
+                  className="h-5 w-7 rounded-[4px]"
                 />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/85 sm:text-[11px] sm:tracking-[0.28em]">
-                  National Risk Intelligence
-                </p>
-                <h1 className="truncate text-lg font-bold tracking-tight text-white sm:text-[1.7rem] sm:leading-[1.05]">
-                  {platformName}
+                {/* The product name is the small line, the country the big one:
+                    the full "<Country> Tropical Cyclone Rapid Impact
+                    Assessment Tool" wrapped to five lines and took a third of
+                    the screen from the map. Still one heading for screen
+                    readers; the page title keeps the full name. */}
+                <h1 className="min-w-0">
+                  <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Tropical Cyclone Rapid Impact Assessment
+                  </span>{' '}
+                  <span className="block text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
+                    {COUNTRIES[selectedCountry].name}
+                  </span>
                 </h1>
-                <p className="truncate pt-1 text-xs text-slate-400 sm:text-sm">
-                  {isLoadingData
-                    ? `Loading ${COUNTRIES[selectedCountry].name} operational view...`
-                    : `Active event context: ${activeCycloneName}`}
-                </p>
+                {isLoadingData ? (
+                  <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+                    {`Loading ${COUNTRIES[selectedCountry].name} operational view...`}
+                  </p>
+                ) : (
+                  <AnalysisModeSwitch
+                    available={availableAnalysisModes}
+                    active={analysisMode}
+                    onChange={handleAnalysisModeChange}
+                  />
+                )}
               </div>
             </div>
           </div>
 
-          <div className="hidden min-w-0 md:flex xl:justify-center">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]">
-              <button
-                onClick={() => openFilterPanel('filters')}
-                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                  showFilters && filterPanelTab === 'filters'
-                    ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
-                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
-                }`}
-                aria-pressed={showFilters && filterPanelTab === 'filters'}
-                aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
-                data-tour="filter-panel-toggle"
-              >
-                <Layers className="h-4 w-4" />
-                <span>Filters</span>
-              </button>
-              <button
-                onClick={openMapPanel}
-                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                  showMapControls
-                    ? 'border border-purple-500/35 bg-purple-500/15 text-purple-200'
-                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
-                }`}
-                aria-pressed={showMapControls}
-                aria-label={showMapControls ? 'Map controls panel open' : 'Open map controls'}
-                data-tour="map-panel-toggle"
-              >
-                <MapIcon className="h-4 w-4" />
-                <span>Map</span>
-              </button>
-              <button
-                onClick={() => setShowAnalytics(current => !current)}
-                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                  showAnalytics
-                    ? 'border border-blue-500/35 bg-blue-500/15 text-blue-200'
-                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
-                }`}
-                aria-pressed={showAnalytics}
-                aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
-                data-tour="data-workspace-toggle"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>Data</span>
-              </button>
-              <button
-                onClick={() => setShowSummary(current => !current)}
-                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                  showSummary
-                    ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
-                    : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
-                }`}
-                aria-pressed={showSummary}
-                aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
-                data-tour="summary-panel-toggle"
-              >
-                <Layers className="h-4 w-4" />
-                <span>Summary</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="min-w-0 xl:justify-self-end">
-            <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
-              <div
-                className="flex min-w-max items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]"
-                data-tour="export-controls"
-              >
+          {/* Nav + actions wrap together and stay right-aligned */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-x-4 xl:flex-[3] xl:basis-0 xl:justify-end">
+            <div className="hidden min-w-0 md:flex xl:shrink-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]">
                 <button
-                  onClick={() => setShowMetadata(current => !current)}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 transition-colors hover:border-cyan-500/45 hover:bg-cyan-500/15 sm:min-h-12 sm:text-sm"
-                  aria-expanded={showMetadata}
-                  aria-controls="dashboard-metadata"
-                  aria-label={showMetadata ? 'Hide metadata' : 'Show metadata'}
+                  onClick={() => openFilterPanel('filters')}
+                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    showFilters && filterPanelTab === 'filters'
+                      ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
+                      : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
+                  }`}
+                  aria-pressed={showFilters && filterPanelTab === 'filters'}
+                  aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
+                  data-tour="filter-panel-toggle"
                 >
-                  <span>Metadata</span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform duration-300 ${
-                      showMetadata ? 'rotate-0' : 'rotate-180'
-                    }`}
-                  />
+                  <SlidersHorizontal className="h-4 w-4" />
+                  <span>Filters</span>
                 </button>
+                <button
+                  onClick={() => setShowAnalytics(current => !current)}
+                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    showAnalytics
+                      ? 'border border-blue-500/35 bg-blue-500/15 text-blue-200'
+                      : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
+                  }`}
+                  aria-pressed={showAnalytics}
+                  aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
+                  data-tour="data-workspace-toggle"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Data</span>
+                </button>
+                <button
+                  onClick={() => setShowSummary(current => !current)}
+                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    showSummary
+                      ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
+                      : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
+                  }`}
+                  aria-pressed={showSummary}
+                  aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
+                  data-tour="summary-panel-toggle"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  <span>Summary</span>
+                </button>
+              </div>
+            </div>
 
-                {allowCountrySwitch ? (
+            <div className="min-w-0 xl:shrink-0">
+              <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+                <div
+                  className="flex min-w-max items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]"
+                  data-tour="export-controls"
+                >
+                  <ShareLinkButton
+                    path={`/${CODE_TO_SLUG[selectedCountry]}`}
+                    mapState={{
+                      center: mapInstance
+                        ? {
+                            lat: mapInstance.getCenter().lat,
+                            lng: mapInstance.getCenter().lng,
+                          }
+                        : undefined,
+                      zoom: mapInstance?.getZoom(),
+                      region: selectedRegion,
+                      hazards: filters.selectedHazards,
+                      sectors: filters.selectedSectors,
+                      events: filters.selectedEvents,
+                      dateStart: filters.dateRange.start || undefined,
+                      dateEnd: filters.dateRange.end || undefined,
+                      aggregation:
+                        filters.aggregationLevel === 'national'
+                          ? undefined
+                          : filters.aggregationLevel,
+                      mapStyle,
+                      basemap: basemapStyle,
+                      cycloneIndex: currentCycloneIndex,
+                      storyMode,
+                      showSummary,
+                      showFilters,
+                      hazardScenarioProduct: hazardScenarioSelection?.product,
+                      hazardScenarioSlr: hazardScenarioSelection?.slrScenarioM,
+                      hazardScenarioReturnPeriod:
+                        hazardScenarioSelection?.returnPeriodYears ?? undefined,
+                      hazardScenarioEvent: hazardScenarioSelection?.eventLabel ?? undefined,
+                      viewMode: viewModeChoice ?? undefined,
+                    }}
+                    compact
+                    className="min-h-11 rounded-xl border-slate-600/60 bg-slate-700/35 px-3 py-2 hover:bg-slate-700/55 sm:min-h-12"
+                  />
+
                   <button
-                    onClick={() => setShowCountrySelector(!showCountrySelector)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/35 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/55 sm:min-h-12 sm:text-sm"
-                    aria-label={
-                      selectedCountry
-                        ? `Current country: ${COUNTRIES[selectedCountry].name}. Click to change country`
-                        : 'Select country'
-                    }
-                    aria-expanded={showCountrySelector}
-                    aria-haspopup="dialog"
-                    aria-controls="country-selector-panel"
-                    title="Select country"
+                    onClick={() => void handleDownloadMap()}
+                    disabled={isDownloadingMap}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:text-sm"
+                    aria-label="Download map as PNG"
+                    title="Download current map view as PNG image"
                   >
-                    {selectedCountry ? (
+                    {isDownloadingMap ? (
                       <>
-                        <ReactCountryFlag
-                          countryCode={selectedCountry}
-                          svg={false}
-                          aria-label={COUNTRIES[selectedCountry].name}
-                          title={COUNTRIES[selectedCountry].name}
-                          style={{ fontSize: '1rem', lineHeight: 1 }}
-                        />
-                        <span className="font-medium max-[420px]:hidden">
-                          {COUNTRIES[selectedCountry].name}
-                        </span>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Exporting...</span>
                       </>
                     ) : (
                       <>
-                        <MapIcon className="h-4 w-4" />
-                        <span>Region</span>
+                        <Download className="h-4 w-4" />
+                        <span>Map PNG</span>
                       </>
                     )}
                   </button>
-                ) : selectedCountry ? (
-                  <div
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/40 px-3 py-2 text-xs text-slate-300 sm:min-h-12 sm:text-sm"
-                    aria-label={`Country: ${COUNTRIES[selectedCountry].name}`}
-                  >
-                    <ReactCountryFlag
-                      countryCode={selectedCountry}
-                      svg={false}
-                      aria-label={COUNTRIES[selectedCountry].name}
-                      title={COUNTRIES[selectedCountry].name}
-                      style={{ fontSize: '1rem', lineHeight: 1 }}
-                    />
-                    <span className="font-medium max-[420px]:hidden">
-                      {COUNTRIES[selectedCountry].name}
-                    </span>
-                  </div>
-                ) : null}
 
-                <button
-                  onClick={startTour}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/35 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/55 sm:min-h-12 sm:text-sm"
-                  aria-label="Start guided tour"
-                  title="Start Guided Tour"
-                >
-                  <Compass className="h-4 w-4" />
-                  <span className="font-medium">Tour</span>
-                </button>
-
-                {showLogout && (
-                  <button
-                    onClick={() => void handleLogout()}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-700/30 px-3 py-2 text-xs text-slate-300 transition-colors hover:bg-slate-700/50 sm:min-h-12 sm:text-sm"
-                    aria-label="Log out of country dashboard"
-                    title="Log out"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Logout</span>
-                  </button>
-                )}
-
-                <ShareLinkButton
-                  path={`/${CODE_TO_SLUG[selectedCountry]}`}
-                  mapState={{
-                    center: mapInstance
-                      ? {
-                          lat: mapInstance.getCenter().lat,
-                          lng: mapInstance.getCenter().lng,
-                        }
-                      : undefined,
-                    zoom: mapInstance?.getZoom(),
-                    region: selectedRegion,
-                    hazards: filters.selectedHazards,
-                    sectors: filters.selectedSectors,
-                    events: filters.selectedEvents,
-                    dateStart: filters.dateRange.start || undefined,
-                    dateEnd: filters.dateRange.end || undefined,
-                    aggregation:
-                      filters.aggregationLevel === 'national'
-                        ? undefined
-                        : filters.aggregationLevel,
-                    mapStyle,
-                    basemap: basemapStyle,
-                    cycloneIndex: currentCycloneIndex,
-                    storyMode,
-                    showSummary,
-                    showFilters,
-                  }}
-                  compact
-                  className="min-h-11 rounded-xl border-slate-600/60 bg-slate-700/35 px-3 py-2 hover:bg-slate-700/55 sm:min-h-12"
-                />
-
-                <button
-                  onClick={() => void handleDownloadMap()}
-                  disabled={isDownloadingMap}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:text-sm"
-                  aria-label="Download map as PNG"
-                  title="Download current map view as PNG image"
-                >
-                  {isDownloadingMap ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Exporting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4" />
-                      <span>Map PNG</span>
-                    </>
-                  )}
-                </button>
-
-                {deferHeavyUiReady ? (
                   <ExportButtons
                     events={exportEvents}
                     exposureData={exportExposureData}
                     economicDamageData={exportEconomicDamageData}
                     hazards={hazards}
                     sectors={sectors}
-                    disabled={isExportDisabled}
+                    disabled={isExportDisabled && !(forecastExposure && !isPlanningMode)}
                     countryName={COUNTRIES[selectedCountry].name}
                     fullCountryName={COUNTRIES[selectedCountry].fullName}
                     countryCode={selectedCountry}
                     cycloneEventName={exportEvents[0]?.name || countryEvents[0]?.name}
-                    impactBySector={impactBySector}
-                    nationalSummary={nationalSummary}
+                    impactBySector={scopedRisk.impactBySector}
+                    nationalSummary={scopedRisk.nationalSummary}
                     mapInstance={mapInstance}
+                    hazardScenario={
+                      isPlanningMode && inundationLayerOn ? effectiveHazardScenario : null
+                    }
+                    forecastExposure={!isPlanningMode ? forecastExposure : null}
+                    forecastBrief={
+                      !isPlanningMode && forecastExposure
+                        ? {
+                            countryName: COUNTRIES[selectedCountry].name,
+                            eventName: activeEventRecord?.name ?? 'Forecast',
+                            issuedAt: activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
+                            runCompletedAt: activeEventRecord?.modelRunFinishedAt,
+                            modelRunStatus: activeEventRecord?.modelRunStatus,
+                            layerSummary: forecastLayerControls?.summary ?? 'none',
+                            activeLayers: forecastLayerControls
+                              ? forecastLayerControls.options
+                                  .filter(option => forecastLayerControls.shown[option.id])
+                                  .map(option => option.id)
+                              : [],
+                            areaLabel: countryUi.focusAreaPlural.toLowerCase(),
+                            regionLabel: countryUi.broaderAreaPlural.toLowerCase(),
+                            priority: responsePriority
+                              ? {
+                                  results: responsePriority.results,
+                                  counts: responsePriority.counts,
+                                  isCustom: responsePriority.isCustom,
+                                  staleAfterHours: responsePriority.thresholds.staleAfterHours,
+                                  ageHours: responsePriority.ageHours,
+                                }
+                              : null,
+                          }
+                        : undefined
+                    }
+                    forecastMeta={{
+                      eventName: activeEventRecord?.name,
+                      issuedAt: activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
+                      runCompletedAt: activeEventRecord?.modelRunFinishedAt,
+                    }}
                   />
-                ) : (
-                  <div
-                    className="h-11 w-28 rounded-xl bg-slate-700/30 sm:h-12"
-                    aria-hidden="true"
+
+                  <ToolsMenu
+                    items={[
+                      {
+                        id: 'map',
+                        label: 'Map controls',
+                        hint: 'Basemap, shading, overlays and hazard scenario',
+                        icon: <MapIcon className="h-4 w-4" />,
+                        pressed: showMapControls,
+                        onSelect: () => {
+                          openMapPanel();
+                          setShowSummary(false);
+                        },
+                      },
+                      {
+                        id: 'metadata',
+                        label: showMetadata ? 'Hide metadata' : 'Show metadata',
+                        hint: 'Data sources, resolution and reference date',
+                        icon: <ChevronDown className="h-4 w-4" />,
+                        pressed: showMetadata,
+                        onSelect: () => setShowMetadata(current => !current),
+                      },
+                      {
+                        id: 'compare',
+                        label: 'Compare countries',
+                        icon: <Scale className="h-4 w-4" />,
+                        onSelect: () => setShowCompareModal(true),
+                      },
+                      {
+                        id: 'country',
+                        label: 'Change country',
+                        hint: selectedCountry
+                          ? `Now: ${COUNTRIES[selectedCountry].name}`
+                          : undefined,
+                        icon: <MapPin className="h-4 w-4" />,
+                        hidden: !allowCountrySwitch,
+                        onSelect: () => setShowCountrySelector(true),
+                      },
+                      {
+                        id: 'tour',
+                        label: 'Guided tour',
+                        icon: <Compass className="h-4 w-4" />,
+                        onSelect: startTour,
+                      },
+                      {
+                        id: 'logout',
+                        label: 'Log out',
+                        icon: <LogOut className="h-4 w-4" />,
+                        hidden: !showLogout,
+                        onSelect: () => void handleLogout(),
+                      },
+                    ]}
                   />
-                )}
+                </div>
               </div>
             </div>
           </div>
@@ -2354,7 +3192,7 @@ export default function DashboardView({
                   Country: {COUNTRIES[selectedCountry].name}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
-                  Event: {activeCycloneName}
+                  Event: {activeEventContextLabel}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Hazards: {metadataHazardSummary}
@@ -2363,7 +3201,7 @@ export default function DashboardView({
                   Resolution: {currentAggregationLabel}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
-                  Source: {devDataSourceLabel || 'PDIE local dataset'}
+                  Source: {devDataSourceLabel || 'Pacific Disaster Impact & Exposure local dataset'}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Reference date: {activeContextDate}
@@ -2380,67 +3218,95 @@ export default function DashboardView({
           <TopInsightsCards insights={headlineMetrics} className="mt-2" />
         )}
 
-        {/* Active Filters Bar - Single line with horizontal scroll */}
-        <div className="mt-1 pt-1.5 border-t border-slate-800/60">
-          <ActiveFilters
-            filters={filters}
-            hazards={hazards}
-            sectors={sectors}
-            onClearFilter={(type, id) => {
-              setFilters(prevFilters => {
-                if (type === 'all') {
-                  return {
-                    selectedHazards: [],
-                    selectedSectors: [],
-                    selectedEvents: [],
-                    dateRange: { start: '', end: '' },
-                    aggregationLevel: 'district',
-                  };
-                }
-
-                if (type === 'hazard') {
-                  if (!id) {
-                    return {
-                      ...prevFilters,
-                      selectedHazards: [],
-                    };
-                  }
-                  return {
-                    ...prevFilters,
-                    selectedHazards: prevFilters.selectedHazards.filter(
-                      hazardId => hazardId !== id
-                    ),
-                  };
-                }
-
-                if (type === 'sector') {
-                  if (!id) {
-                    return {
-                      ...prevFilters,
-                      selectedSectors: [],
-                    };
-                  }
-                  return {
-                    ...prevFilters,
-                    selectedSectors: prevFilters.selectedSectors.filter(
-                      sectorId => sectorId !== id
-                    ),
-                  };
-                }
-
-                if (type === 'event') {
-                  return {
-                    ...prevFilters,
-                    selectedEvents: [],
-                  };
-                }
-
-                return prevFilters;
-              });
+        {/* What the dashboard is showing right now, in one line */}
+        {!isLoadingData && (
+          <ViewStatusLine
+            mode={viewMode}
+            modeLabel={ANALYSIS_MODES[analysisMode].status}
+            onChangeScenario={() => {
+              openMapPanel();
+              setShowSummary(false);
             }}
-            className="w-full"
+            isForecast={!!forecastExposure}
+            issuedAt={activeEventRecord?.trackIssuedTime}
+            eventName={hasNamedEvent ? activeCycloneName : undefined}
+            scenarioParts={
+              effectiveHazardScenario ? describeHazardScenario(effectiveHazardScenario) : undefined
+            }
+            aggregationLabel={currentAggregationLabel}
+            sectorNames={filters.selectedSectors.map(
+              id => sectors.find(sector => sector.id === id)?.name ?? id
+            )}
           />
-        </div>
+        )}
+
+        {/* Active Filters Bar - only while something is filtered */}
+        {(barFilters.selectedHazards.length > 0 ||
+          barFilters.selectedSectors.length > 0 ||
+          barFilters.selectedEvents.length > 0 ||
+          !!barFilters.dateRange.start ||
+          !!barFilters.dateRange.end) && (
+          <div className="mt-1 pt-1.5 border-t border-slate-800/60">
+            <ActiveFilters
+              filters={barFilters}
+              hazards={hazards}
+              sectors={sectors}
+              onClearFilter={(type, id) => {
+                setFilters(prevFilters => {
+                  if (type === 'all') {
+                    return {
+                      selectedHazards: [],
+                      selectedSectors: [],
+                      selectedEvents: [],
+                      dateRange: { start: '', end: '' },
+                      aggregationLevel: 'district',
+                    };
+                  }
+
+                  if (type === 'hazard') {
+                    if (!id) {
+                      return {
+                        ...prevFilters,
+                        selectedHazards: [],
+                      };
+                    }
+                    return {
+                      ...prevFilters,
+                      selectedHazards: prevFilters.selectedHazards.filter(
+                        hazardId => hazardId !== id
+                      ),
+                    };
+                  }
+
+                  if (type === 'sector') {
+                    if (!id) {
+                      return {
+                        ...prevFilters,
+                        selectedSectors: [],
+                      };
+                    }
+                    return {
+                      ...prevFilters,
+                      selectedSectors: prevFilters.selectedSectors.filter(
+                        sectorId => sectorId !== id
+                      ),
+                    };
+                  }
+
+                  if (type === 'event') {
+                    return {
+                      ...prevFilters,
+                      selectedEvents: [],
+                    };
+                  }
+
+                  return prevFilters;
+                });
+              }}
+              className="w-full"
+            />
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -2474,13 +3340,15 @@ export default function DashboardView({
             </button>
           </div>
           <FilterPanel
+            viewMode={viewMode}
             hazards={hazards}
             sectors={sectors}
             events={events}
             districts={resolvedDistricts}
             countryCode={selectedCountry}
             filters={filters}
-            onFilterChange={setFilters}
+            onFilterChange={handleFilterChange}
+            availableHazardIds={availableHazardIds}
             exposureData={exposureData}
             economicDamageData={economicDamageData}
             accessibleDistricts={accessibleDistricts}
@@ -2512,42 +3380,69 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          {showMapControls && (
-            <MapPanel
-              mapStyle={mapStyle}
-              onMapStyleChange={setMapStyle}
-              is3DView={is3DView}
-              on3DViewToggle={setIs3DView}
-              extrusionMode={extrusionMode}
-              onExtrusionModeChange={setExtrusionMode}
-              extrusionExaggeration={extrusionExaggeration}
-              onExtrusionExaggerationChange={setExtrusionExaggeration}
-              showWindLayer={showWindLayer}
-              showInundationLayer={showInundationLayer}
-              onWindLayerToggle={setShowWindLayer}
-              onInundationLayerToggle={setShowInundationLayer}
-              showBuildingsLayer={showBuildingsLayer}
-              showRoadsLayer={showRoadsLayer}
-              onBuildingsLayerToggle={handleBuildingsLayerToggle}
-              onRoadsLayerToggle={handleRoadsLayerToggle}
-              showCycloneLayer={showCycloneControls}
-              onCycloneLayerToggle={handleCycloneVisibilityChange}
-              hasCycloneData={!!cycloneForecast}
-              isCyclonePlaying={isCyclonePlaying}
-              onToggleCyclonePlaying={setIsCyclonePlaying}
-              cycloneControlsHostRef={cycloneControlsHostRef}
-              storyMode={storyMode}
-              layerOpacity={layerOpacity}
-              onLayerOpacityChange={setLayerOpacity}
-              legendSettings={legendSettings}
-              onLegendSettingsChange={setLegendSettings}
-              countryCode={selectedCountry}
-              isMapDataLoading={isMapDataLoading}
-              isHazardsLoading={isHazardsLoading}
-              hazardZoomBlocked={hazardZoomBlocked}
-              onResetUserPreferences={handleResetUserPreferences}
-            />
-          )}
+          <MapPanel
+            forecastRuns={!isPlanningMode && activeEventRecord?.isForecast ? forecastRuns : []}
+            activeForecastRunId={activeEventRecord?.id ?? null}
+            onForecastRunSelect={setModeEventId}
+            forecastLayers={!isPlanningMode ? forecastLayerControls : null}
+            forecastLayersFocusKey={forecastLayersFocusKey}
+            mapStyle={mapStyle}
+            // A forecast is shaded by wind band; there's no damage to choose
+            onMapStyleChange={
+              modeUnresolved || (!isPlanningMode && forecastExposure) ? undefined : setMapStyle
+            }
+            is3DView={is3DView}
+            on3DViewToggle={setIs3DView}
+            extrusionMode={extrusionMode}
+            onExtrusionModeChange={setExtrusionMode}
+            extrusionExaggeration={extrusionExaggeration}
+            onExtrusionExaggerationChange={setExtrusionExaggeration}
+            // Forecast mode gets only the cyclone row (the animation); the other overlays
+            // belong to the post-event assessment
+            showOverlayRows={canAnimateCyclone}
+            showWindLayer={showWindLayer}
+            showInundationLayer={isPlanningMode ? showScenarioLayer : showInundationLayer}
+            windLayersAvailable={countryHasWindLayers}
+            onWindLayerToggle={isAssessmentMode ? setShowWindLayer : undefined}
+            onInundationLayerToggle={
+              isPlanningMode
+                ? setShowScenarioLayer
+                : isAssessmentMode
+                  ? setShowInundationLayer
+                  : undefined
+            }
+            showBuildingsLayer={showBuildingsLayer}
+            showRoadsLayer={showRoadsLayer}
+            onBuildingsLayerToggle={isAssessmentMode ? handleBuildingsLayerToggle : undefined}
+            onRoadsLayerToggle={isAssessmentMode ? handleRoadsLayerToggle : undefined}
+            showCycloneLayer={showCycloneControls}
+            onCycloneLayerToggle={
+              isAssessmentMode || (canAnimateCyclone && !!cycloneForecast)
+                ? handleCycloneVisibilityChange
+                : undefined
+            }
+            hasCycloneData={!!cycloneForecast}
+            cycloneIsForecast={!isPlanningMode && !isAssessmentMode}
+            isCyclonePlaying={isCyclonePlaying}
+            onToggleCyclonePlaying={setIsCyclonePlaying}
+            cycloneControlsHostRef={cycloneControlsHostRef}
+            storyMode={storyMode}
+            layerOpacity={layerOpacity}
+            onLayerOpacityChange={setLayerOpacity}
+            legendSettings={legendSettings}
+            onLegendSettingsChange={setLegendSettings}
+            countryCode={selectedCountry}
+            isMapDataLoading={isMapDataLoading}
+            isHazardsLoading={isHazardsLoading}
+            hazardZoomBlocked={hazardZoomBlocked && !modeUnresolved}
+            onResetUserPreferences={handleResetUserPreferences}
+            basemapStyle={basemapStyle}
+            onBasemapChange={handleBasemapChange}
+            hazardScenarioLayers={isPlanningMode ? planningScenarioLayers : []}
+            hazardScenarioSelection={effectiveHazardScenario}
+            hazardScenarioCurve={hazardScenarioCurve}
+            onHazardScenarioChange={setHazardScenarioSelection}
+          />
         </div>
 
         {/* Center Map + Bottom Tabs */}
@@ -2560,18 +3455,18 @@ export default function DashboardView({
 
               return (
                 <>
-                  {showMapOverlays && (
+                  {/* The $ loss legend doesn't apply to a forecast, which has its own legend */}
+                  {showMapOverlays && !(forecastExposure && !isPlanningMode) && (
                     <UnifiedMapLegend
                       mode={mapStyle}
                       visible={true}
                       hasSelection={hasSelection}
-                      dataSource="PDIE Real Data"
+                      dataSource="Pacific Disaster Impact & Exposure data"
                       temporalScope="Cumulative"
                       dataValues={legendDataValues}
-                      isLeftPanelOpen={showFilters}
-                      showBuildings={showBuildingsLayer && !!damagedBuildings}
-                      showRoads={showRoadsLayer && !!damagedRoads}
-                      showCyclone={showCycloneControls && !!cycloneForecast}
+                      showBuildings={showBuildingsLayer && isAssessmentMode && !!damagedBuildings}
+                      showRoads={showRoadsLayer && isAssessmentMode && !!damagedRoads}
+                      showCyclone={showCycloneControls && canAnimateCyclone && !!cycloneForecast}
                       onZoomToBuildings={handleZoomToBuildings}
                       onZoomToRoads={handleZoomToRoads}
                       activeWmsLayers={activeWmsLayers}
@@ -2589,54 +3484,84 @@ export default function DashboardView({
               );
             })()}
 
-            {isBasemapPreferenceResolved && !showBasemapPreferenceModal ? (
-              <MapView
-                events={countryEvents}
-                hazards={hazards}
-                filters={filters}
-                onEventSelect={setSelectedEvent}
-                selectedRegion={selectedRegion}
-                onRegionSelect={setSelectedRegion}
-                selectedCountry={selectedCountry}
-                mapStyle={mapStyle}
-                basemapStyle={basemapStyle}
-                is3DView={is3DView}
-                extrusionMode={extrusionMode}
-                extrusionExaggeration={extrusionExaggeration}
-                showWindLayer={showWindLayer}
-                showInundationLayer={showInundationLayer}
-                onLayersLoadingChange={setIsLoadingLayers}
-                onActiveWmsLayersChange={setActiveWmsLayers}
-                layerOpacity={layerOpacity}
-                legendSettings={legendSettings}
-                damagedBuildings={showBuildingsLayer ? damagedBuildings : null}
-                damagedRoads={showRoadsLayer ? damagedRoads : null}
-                cycloneForecast={cycloneForecast}
-                aggregationLevel={filters.aggregationLevel}
-                showOverlays={showMapOverlays}
-                onCycloneTimestepChange={handleCycloneTimestepChange}
-                showCycloneAnimation={showCycloneControls}
-                onCycloneAnimationChange={handleCycloneVisibilityChange}
-                isCyclonePlaying={isCyclonePlaying}
-                onCyclonePlayingChange={setIsCyclonePlaying}
-                showCycloneToggle={false}
-                cycloneControlsHost={cycloneControlsHost}
-                isLeftPanelOpen={showFilters}
-                isRightPanelOpen={showSummary}
-                storyMode={storyMode}
-                storyBeats={stableStoryBeats}
-                currentCycloneIndex={currentCycloneIndex}
-                onStoryModeChange={setStoryMode}
-                onStoryIndexChange={setCurrentCycloneIndex}
-                onMapReady={setMapInstance}
+            <MapView
+              dataReady={!isLoadingData}
+              events={countryEvents}
+              hazards={hazards}
+              filters={filters}
+              onEventSelect={setSelectedEvent}
+              selectedRegion={selectedRegion}
+              onRegionSelect={setSelectedRegion}
+              selectedCountry={selectedCountry}
+              mapStyle={mapStyle}
+              basemapStyle={basemapStyle}
+              is3DView={is3DView}
+              extrusionMode={extrusionMode}
+              extrusionExaggeration={extrusionExaggeration}
+              showWindLayer={windLayerOn}
+              showInundationLayer={inundationLayerOn}
+              onLayersLoadingChange={setIsLoadingLayers}
+              onActiveWmsLayersChange={setActiveWmsLayers}
+              partnerHazardLayers={partnerHazardLayers}
+              hazardLayerMode={viewMode}
+              hazardScenarioSelection={isPlanningMode ? effectiveHazardScenario : null}
+              showImpactShading={!isPlanningMode}
+              forecastDanger={!isPlanningMode && !!forecastExposure}
+              layerOpacity={layerOpacity}
+              legendSettings={legendSettings}
+              damagedBuildings={showBuildingsLayer && isAssessmentMode ? damagedBuildings : null}
+              damagedRoads={showRoadsLayer && isAssessmentMode ? damagedRoads : null}
+              regionalImpactsData={scopedRisk.regionalImpactsGeoJSON}
+              regionalSummaryData={scopedRisk.regionalSummary}
+              // REF's input track is rendered by ForecastLayers, exactly as
+              // saved with the run, rather than falling back to the general
+              // cyclone-track record.
+              cycloneTrackData={isPlanningMode || forecastExposure ? null : cycloneTrackData}
+              cycloneForecast={isPlanningMode ? null : cycloneForecast}
+              aggregationLevel={filters.aggregationLevel}
+              showOverlays={showMapOverlays}
+              onCycloneTimestepChange={handleCycloneTimestepChange}
+              showCycloneAnimation={showCycloneControls && canAnimateCyclone}
+              onCycloneAnimationChange={handleCycloneVisibilityChange}
+              isCyclonePlaying={isCyclonePlaying}
+              onCyclonePlayingChange={setIsCyclonePlaying}
+              showCycloneToggle={false}
+              cycloneControlsHost={cycloneControlsHost}
+              isLeftPanelOpen={showFilters}
+              isRightPanelOpen={showSummary}
+              storyMode={storyMode}
+              storyBeats={stableStoryBeats}
+              currentCycloneIndex={currentCycloneIndex}
+              onStoryModeChange={setStoryMode}
+              onStoryIndexChange={setCurrentCycloneIndex}
+              onMapReady={setMapInstance}
+            />
+
+            {!isPlanningMode && forecastExposure && forecastLayerControls && (
+              <ForecastLayers
+                map={mapInstance}
+                controls={forecastLayerControls}
+                // The animation draws the same track; two copies would only thicken the line
+                hiddenOverlays={
+                  showCycloneControls && canAnimateCyclone && cycloneForecast ? ['track'] : []
+                }
+                onOpenControls={() => {
+                  openMapPanel();
+                  setShowSummary(false);
+                  setForecastLayersFocusKey(key => key + 1);
+                }}
               />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <p className="text-sm text-slate-400">Preparing map...</p>
-                </div>
-              </div>
+            )}
+
+            {newAdvisory && (
+              <NewAdvisoryBanner
+                advisory={newAdvisory}
+                onShow={() => {
+                  handleAnalysisModeChange('forecast');
+                  setModeEventId(newAdvisory.id);
+                }}
+                onDismiss={dismissNewAdvisory}
+              />
             )}
 
             {/* Loading Overlay */}
@@ -2705,7 +3630,6 @@ export default function DashboardView({
                     selectedCountry={selectedCountry}
                     onCountryChange={newCountry => {
                       const params = new URLSearchParams(searchParams.toString());
-                      params.delete('country');
                       const query = params.toString();
                       router.push(`/${CODE_TO_SLUG[newCountry]}${query ? `?${query}` : ''}`);
                       setShowCountrySelector(false);
@@ -2736,30 +3660,46 @@ export default function DashboardView({
             )}
           </div>
 
-          {showAnalytics && deferHeavyUiReady && (
+          {showAnalytics && !isPlanningMode && forecastExposure && (
+            <ForecastExposureTables
+              exposure={forecastExposure}
+              areaLabel={countryUi.broaderAreaSingular}
+              selectedRegion={selectedRegion}
+              onRegionSelect={region =>
+                setSelectedRegion(current => (current === region ? null : region))
+              }
+            />
+          )}
+          {showAnalytics && modeUnresolved && <LoadingDataWorkspace />}
+          {showAnalytics && !modeUnresolved && (isPlanningMode || !forecastExposure) && (
             <BottomTabs
               events={countryEvents}
               hazards={hazards}
               sectors={sectors}
               exposureData={exposureData}
               economicDamageData={economicDamageData}
-              sectorEconomicData={sectorEconomicData}
-              assetEconomicData={assetEconomicData}
+              sectorEconomicData={scopedRisk.sectorEconomicData}
+              assetEconomicData={scopedRisk.assetEconomicData}
               filters={filters}
               districts={resolvedDistricts}
               provinces={resolvedProvinces}
               selectedRegion={selectedRegion}
-              impactByAssetType={impactByAssetType}
-              impactBySector={impactBySector || []}
-              regionalSummary={regionalSummary}
-              regionalSummaryBySector={regionalSummaryBySector}
+              impactByAssetType={scopedRisk.impactByAssetType}
+              impactBySector={scopedRisk.impactBySector}
+              regionalSummary={scopedRisk.regionalSummary}
+              regionalSummaryBySector={scopedRisk.regionalSummaryBySector}
+              regionalImpacts={scopedRisk.regionalImpactsGeoJSON}
+              hazardLossScope={hazardLossScope}
+              hazardLossScopeComplete={scopedRisk.complete}
               damagedBuildings={damagedBuildings}
               damagedRoads={damagedRoads}
               onZoomToAsset={handleZoomToAsset}
-              onRequestDamageData={type => {
-                void loadDamageLayer(type);
-              }}
+              onRequestDamageData={handleRequestDamageData}
               countryCode={selectedCountry}
+              hazardScenario={isPlanningMode ? effectiveHazardScenario : null}
+              scenarioRiskSummary={isPlanningMode ? hazardScenarioRiskSummary : null}
+              scenarioBreakdown={isPlanningMode ? hazardScenarioBreakdown : null}
+              viewMode={viewMode}
             />
           )}
         </div>
@@ -2784,8 +3724,33 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          {showSummary && (
+          {modeUnresolved ? (
+            <LoadingSummaryPanel countryName={COUNTRIES[selectedCountry].name} />
+          ) : !isPlanningMode && forecastExposure ? (
+            <ForecastExposureSummary
+              exposure={forecastExposure}
+              event={activeEventRecord}
+              areaFeatures={regionalImpactsGeoJSON}
+              selectedRegion={selectedRegion}
+              onRegionClear={() => setSelectedRegion(null)}
+              priority={responsePriority}
+              countryName={COUNTRIES[selectedCountry].name}
+              areaLabel={countryUi.focusAreaPlural.toLowerCase()}
+              previous={previousForecast}
+            />
+          ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
+            <ForecastRunStatusPanel event={activeEventRecord} />
+          ) : (
             <SummaryPanel
+              notice={
+                analysisMode === 'assessment' && assessmentGapInfo ? (
+                  <AssessmentPendingNotice
+                    forecastStorm={assessmentGapInfo.forecastStorm}
+                    assessmentName={assessmentGapInfo.assessmentName}
+                    onShowForecast={() => handleAnalysisModeChange('forecast')}
+                  />
+                ) : undefined
+              }
               events={countryEvents}
               filters={filters}
               districts={resolvedDistricts}
@@ -2796,10 +3761,18 @@ export default function DashboardView({
               selectedRegion={selectedRegion}
               onRegionClear={() => setSelectedRegion(null)}
               assetExposureData={assetExposureData}
-              nationalSummary={nationalSummary || []}
-              regionalSummary={regionalSummary}
-              regionalSummaryBySector={regionalSummaryBySector}
-              impactBySector={impactBySector || []}
+              nationalSummary={scopedRisk.nationalSummary}
+              regionalSummary={scopedRisk.regionalSummary}
+              regionalSummaryBySector={scopedRisk.regionalSummaryBySector}
+              impactBySector={scopedRisk.impactBySector}
+              hazardLossScope={hazardLossScope}
+              hazardLossScopeComplete={scopedRisk.complete}
+              hazardLossMayDoubleCount={scopedRisk.mayDoubleCount}
+              scenarioRiskSummary={isPlanningMode ? hazardScenarioRiskSummary : null}
+              hazardScenarioMapActive={false}
+              viewMode={viewMode}
+              hazardScenario={effectiveHazardScenario}
+              eventName={hasEventImpact ? activeCycloneName : undefined}
             />
           )}
         </div>
@@ -2815,10 +3788,7 @@ export default function DashboardView({
         />
       )}
 
-      {/* Basemap Preference Modal - First Visit */}
-      {showBasemapPreferenceModal && BasemapPreferenceModal && (
-        <BasemapPreferenceModal onSelect={handleBasemapSelect} onSkip={handleBasemapSkip} />
-      )}
+      <CountryComparisonModal open={showCompareModal} onClose={() => setShowCompareModal(false)} />
 
       <GuidedTour
         open={isTourOpen}

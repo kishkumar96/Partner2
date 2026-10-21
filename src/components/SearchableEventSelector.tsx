@@ -221,8 +221,13 @@ export default function SearchableEventSelector({
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-slate-200 group-hover:text-white truncate transition-colors">
-                      {event.name}
+                    <div className="flex items-center gap-2 font-bold text-sm text-slate-200 group-hover:text-white truncate transition-colors">
+                      <span className="truncate">{event.name}</span>
+                      {event.isForecast && (
+                        <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-sky-200">
+                          Forecast
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-400 mt-1 font-medium">{metadata}</div>
                   </div>

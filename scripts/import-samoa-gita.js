@@ -15,8 +15,15 @@ const { parse } = require('csv-parse/sync');
 process.removeAllListeners('warning');
 
 // Database connection - use port 5435 for actual database
-const DATABASE_URL = process.env.DATABASE_URL || 
-  'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  // No built-in fallback: a literal password in source ends up in git history
+  console.error(
+    'DATABASE_URL is not set. Export it first, for example:\n' +
+      '  export DATABASE_URL=postgresql://user:password@host:5432/dbname'
+  );
+  process.exit(1);
+}
 
 // Data file paths
 const DATA_DIR = path.join(__dirname, '..', 'public', 'samoa');

@@ -1,6 +1,8 @@
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
 import { getLossSequentialColors, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSystem';
 import { CountryCode } from '@/types/thredds';
+import { getStaticLayerCatalog, listCountryCodes } from '@/config/registry';
+import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 
 // Get basePath from env — empty in dev, '/partner2' in production
 const BASE_PATH =
@@ -131,6 +133,7 @@ export interface WMSStyleConfig {
 
 export interface RealWMSLayer {
   id: string;
+  eventId?: string;
   name: string;
   countryCode: CountryCode;
   ncFile: string;
@@ -140,21 +143,47 @@ export interface RealWMSLayer {
   bbox: [number, number, number, number];
   maxNativeZoom?: number;
   styleConfig?: WMSStyleConfig;
+  datasetPath?: string;
+  source?: 'static' | 'partner_api';
+  /** Raster XYZ tile URL template (e.g. Zarr-backed hazard tiles), containing
+   * literal {z}/{x}/{y} placeholders. When set, this layer is rendered as a
+   * plain raster tile source instead of going through the WMS URL builders. */
+  tileUrlTemplate?: string;
+  /** Scenario dimensions for multi-scenario hazard catalogs (currently only
+   * Cook Islands' Zarr-backed xyz layers). One catalog can contain thousands
+   * of (product x SLR x return-period/event) combinations, so a UI selector
+   * narrows these down to a single layer to render rather than rendering
+   * every combination as its own map source at once. */
+  hazardScenario?: {
+    /** hazard_tiles product key, e.g. 'combined' | 'tc' | 'swell' |
+     * 'historical_tcs' | 'synthetic_tcs' | 'swell_driven'. */
+    product: string;
+    slrScenarioM: number;
+    returnPeriodYears: number | null;
+    eventLabel: string | null;
+  };
 }
 
 const DEFAULT_STYLE = 'default-scalar/default';
 const DEFAULT_WMS_VERSION: NonNullable<WMSStyleConfig['wmsVersion']> = '1.3.0';
 const DEFAULT_CRS: NonNullable<WMSStyleConfig['crs']> = 'EPSG:3857';
+const NEXT_PUBLIC_BASE_PATH = getConfiguredBasePath(
+  process.env.NODE_ENV === 'production' ? '/partner2' : ''
+);
 
-const COUNTRY_DATASET_BASE_PATH: Record<CountryCode, string> = {
-  VU: '/POP/Partner2/case_study2/hazard/vu_hazard/TC/Lola',
-  WS: '/POP/Partner2/case_study2/hazard/ws_hazard/TC/Gita',
-  TO: '/POP/Partner2/case_study2/Harold_TO',
-  CK: '/POP/Partner2/case_study2/hazard/ck_hazard/TC/Meena',
-};
+// Each country's dataset base path, and its static layers, live in config/layers/<country>.json.
 
 function buildDatasetPath(layer: RealWMSLayer): string {
-  return `${COUNTRY_DATASET_BASE_PATH[layer.countryCode]}/${layer.ncFile}`;
+  if (layer.datasetPath) {
+    return layer.datasetPath;
+  }
+  const basePath = getStaticLayerCatalog(layer.countryCode)?.datasetBasePath;
+  if (!basePath) {
+    throw new Error(
+      `Layer ${layer.id} has no dataset path: ${layer.countryCode} has no datasetBasePath in config/layers`
+    );
+  }
+  return `${basePath}/${layer.ncFile}`;
 }
 
 const WEB_MERCATOR_MAX_LAT = 85.05112878;
@@ -231,240 +260,21 @@ function createBaseWmsParams(options: {
   });
 }
 
-export const REAL_WMS_LAYERS: RealWMSLayer[] = [
-  {
-    id: 'vu-tc-lola-wind',
-    name: 'TC Lola Wind Hazard',
-    countryCode: 'VU',
-    ncFile: 'local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Lola (local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [166.54033818684763, -20.264667548114673, 170.24232553831496, -13.059866369838865],
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'vu-tc-lola-inundation',
-    name: 'TC Lola Flood Hazard',
-    countryCode: 'VU',
-    ncFile: '_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Lola (_merged.nc)',
-    hazardType: 'flood',
-    bbox: [166.54033818684763, -20.264667548114673, 170.24232553831496, -13.059866369838865],
-    maxNativeZoom: 15,
-    styleConfig: {
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0,4',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'vu-tc-lola-flood-depth',
-    name: 'TC Lola Flood Depth (South Santo)',
-    countryCode: 'VU',
-    ncFile: 'Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM.nc',
-    layerName: 'Depth',
-    description: 'Flood depth from TC Lola - Pluvial and Fluvial flooding (South Santo)',
-    hazardType: 'fluvial-depth',
-    bbox: [166.5, -16.0, 167.5, -15.0],
-    styleConfig: {
-      styles: 'default-scalar/seq-Blues',
-      colorScaleRange: '0,5',
-      numColorBands: 8,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ws-tc-gita-wind',
-    name: 'TC Gita Wind Hazard',
-    countryCode: 'WS',
-    ncFile: 'SA_savaii_upolu_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Gita',
-    hazardType: 'wind',
-    bbox: [-172.80922022199999, -14.079136103075408, -171.3973987012869, -13.434475695],
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:4326',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,47.79',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ws-tc-gita-inundation',
-    name: 'TC Gita Flood Hazard',
-    countryCode: 'WS',
-    ncFile: 'WS_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Gita (WS_merged.nc)',
-    hazardType: 'flood',
-    bbox: [-172.80922022199999, -14.079136103075408, -171.3973987012869, -13.434475695],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.01,5',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-  {
-    id: 'to-tc-harold-wind',
-    name: 'TC Harold Wind Hazard',
-    countryCode: 'TO',
-    ncFile: 'local_wind_merged.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Harold (local_wind_merged.nc)',
-    hazardType: 'wind',
-    bbox: [-176.5, -23.5, -173.0, -15.0],
-    styleConfig: {
-      wmsVersion: '1.3.0',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '27.54,59.99',
-      numColorBands: 250,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'to-tc-harold-inundation',
-    name: 'TC Harold Flood Hazard',
-    countryCode: 'TO',
-    ncFile: 'best.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Harold (best.nc)',
-    hazardType: 'flood',
-    bbox: [-176.5, -23.5, -173.0, -15.0],
-    maxNativeZoom: 12,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.0586,1.899',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'extend',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-wind-subdomain-1',
-    name: 'TC Meena Wind Hazard (Subdomain 1)',
-    countryCode: 'CK',
-    ncFile: '_CK_subdomain_1_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Meena (_CK_subdomain_1_local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [-166.24347222222224, -13.386527777777781, -157.24347222222212, -8.38652777777778],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-wind-subdomain-2',
-    name: 'TC Meena Wind Hazard (Subdomain 2)',
-    countryCode: 'CK',
-    ncFile: '_CK_subdomain_2_local_wind.nc',
-    layerName: 'Depth',
-    description: 'Wind hazard from TC Meena (_CK_subdomain_2_local_wind.nc)',
-    hazardType: 'wind',
-    bbox: [-160.60208333348902, -22.813472222378515, -156.60208333319275, -18.813472222156314],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.1,65.74',
-      numColorBands: 50,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'extend',
-      logScale: false,
-    },
-  },
-  {
-    id: 'ck-tc-meena-inundation',
-    name: 'TC Meena Flood Hazard',
-    countryCode: 'CK',
-    ncFile: 'CK_merged.nc',
-    layerName: 'Depth',
-    description: 'Flood/inundation hazard from TC Meena (CK_merged.nc)',
-    hazardType: 'flood',
-    bbox: [-163.19974846337783, -21.95943031456599, -157.32122955564233, -17.986887908850672],
-    maxNativeZoom: 15,
-    styleConfig: {
-      wmsVersion: '1.1.1',
-      crs: 'EPSG:3857',
-      styles: 'default-scalar/x-Sst',
-      time: '2022-06-14T00:00:00.000Z',
-      colorScaleRange: '0.01,5',
-      numColorBands: 20,
-      aboveMaxColor: 'extend',
-      belowMinColor: 'transparent',
-      bgColor: 'transparent',
-      logScale: false,
-    },
-  },
-];
+export const REAL_WMS_LAYERS: RealWMSLayer[] = listCountryCodes().flatMap(countryCode =>
+  (getStaticLayerCatalog(countryCode)?.layers ?? []).map(layer => ({ ...layer, countryCode }))
+);
+
+function withBasePath(path: string): string {
+  return prependBasePath(path, NEXT_PUBLIC_BASE_PATH);
+}
 
 function wmsBaseUrl(): string {
-  const defaultPath = '/api/partner-proxy/thredds/wms';
-  const url = process.env.NEXT_PUBLIC_THREDDS_WMS_URL ?? defaultPath;
-
-  // Prepend BASE_PATH if URL is relative and doesn't already have it
-  if (url.startsWith('/') && !url.startsWith(BASE_PATH)) {
-    return `${BASE_PATH}${url}`;
+  const configuredUrl = process.env.NEXT_PUBLIC_THREDDS_WMS_URL;
+  if (configuredUrl) {
+    return configuredUrl.startsWith('/') ? withBasePath(configuredUrl) : configuredUrl;
   }
 
-  return url;
+  return withBasePath('/api/partner-proxy/thredds/wms');
 }
 
 export function buildRealWMSUrl(
@@ -546,9 +356,251 @@ export function buildWMSImageUrl(
   return `${baseUrl}${datasetPath}?${params.toString()}`;
 }
 
-export function getLayersForCountry(countryCode: CountryCode): RealWMSLayer[] {
-  return REAL_WMS_LAYERS.filter(layer => layer.countryCode === countryCode);
+export type HazardScenarioSelection = NonNullable<RealWMSLayer['hazardScenario']>;
+
+function hazardScenarioMatches(a: HazardScenarioSelection, b: HazardScenarioSelection): boolean {
+  return (
+    a.product === b.product &&
+    a.slrScenarioM === b.slrScenarioM &&
+    a.returnPeriodYears === b.returnPeriodYears &&
+    a.eventLabel === b.eventLabel
+  );
 }
+
+// A multi-scenario catalog (currently only Cook Islands) can contain
+// thousands of (product x SLR x return-period/event) layers. Rendering all
+// of them at once means adding thousands of map sources simultaneously, so
+// this narrows a layer set down to the layers matching a single scenario
+// selection -falling back to a deterministic default when none is chosen
+// yet, rather than rendering everything.
+const MONTHS: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
+/** Historical event labels look like "02-Jan-1995"; returns a sortable time, or null. */
+function parseEventDate(label: string): number | null {
+  const match = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(label.trim());
+  const month = match ? MONTHS[match[2].toLowerCase()] : undefined;
+  if (!match || month === undefined) return null;
+  return Date.UTC(Number(match[3]), month, Number(match[1]));
+}
+
+/**
+ * Orders a scenario's return period / event: return periods ascending first,
+ * then events -- dated labels chronologically, others (synthetic event ids
+ * like "361") in natural order, so "2" comes before "10".
+ */
+export function compareHazardScenarioPeriods(
+  a: Pick<HazardScenarioSelection, 'returnPeriodYears' | 'eventLabel'>,
+  b: Pick<HazardScenarioSelection, 'returnPeriodYears' | 'eventLabel'>
+): number {
+  if (a.returnPeriodYears !== null && b.returnPeriodYears !== null) {
+    return a.returnPeriodYears - b.returnPeriodYears;
+  }
+  if (a.returnPeriodYears !== null) return -1;
+  if (b.returnPeriodYears !== null) return 1;
+  const labelA = a.eventLabel ?? '';
+  const labelB = b.eventLabel ?? '';
+  const dateA = parseEventDate(labelA);
+  const dateB = parseEventDate(labelB);
+  if (dateA !== null && dateB !== null && dateA !== dateB) return dateA - dateB;
+  return labelA.localeCompare(labelB, undefined, { numeric: true });
+}
+
+/**
+ * Whether the loss-curve selector can be drawn: a curve is loaded and the
+ * current selection is a return-period scenario of the product being shown.
+ * With no selection (e.g. after switching from Scenarios to Forecast) there is
+ * nothing to draw, even when no product is selected either, where
+ * `selection?.product === selectedProduct` is `undefined === undefined`.
+ */
+export function canShowLossCurve(
+  curve: unknown,
+  selection: HazardScenarioSelection | null | undefined,
+  selectedProduct: string | undefined
+): boolean {
+  return (
+    !!curve &&
+    !!selection &&
+    selection.product === selectedProduct &&
+    selection.returnPeriodYears !== null &&
+    selection.returnPeriodYears !== undefined
+  );
+}
+
+/**
+ * Whether a chosen scenario should be swapped for a default because the offered
+ * layers no longer include its product. With no layers at all the catalogue is
+ * still loading (or absent), which says nothing about the choice: acting on it
+ * threw away a scenario restored from a reload or shared link before its layers
+ * had arrived.
+ */
+export function shouldResetHazardScenario(
+  offeredLayers: RealWMSLayer[],
+  selection: HazardScenarioSelection | null | undefined
+): boolean {
+  if (!selection || offeredLayers.length === 0) return false;
+  return !offeredLayers.some(layer => layer.hazardScenario?.product === selection.product);
+}
+
+export function getDefaultHazardScenario(layers: RealWMSLayer[]): HazardScenarioSelection | null {
+  const scenarioLayers = layers.filter(
+    (layer): layer is RealWMSLayer & { hazardScenario: HazardScenarioSelection } =>
+      !!layer.hazardScenario
+  );
+  if (scenarioLayers.length === 0) {
+    return null;
+  }
+
+  const sorted = [...scenarioLayers].sort((layerA, layerB) => {
+    const a = layerA.hazardScenario;
+    const b = layerB.hazardScenario;
+    if (a.product !== b.product) {
+      if (a.product === 'combined') return -1;
+      if (b.product === 'combined') return 1;
+      return a.product.localeCompare(b.product);
+    }
+    if (a.slrScenarioM !== b.slrScenarioM) return a.slrScenarioM - b.slrScenarioM;
+    return compareHazardScenarioPeriods(a, b);
+  });
+
+  return sorted[0].hazardScenario;
+}
+
+function narrowByHazardScenario(
+  layers: RealWMSLayer[],
+  selection?: HazardScenarioSelection | null
+): RealWMSLayer[] {
+  const scenarioLayers = layers.filter(layer => layer.hazardScenario);
+  if (scenarioLayers.length === 0) {
+    return layers;
+  }
+
+  const nonScenarioLayers = layers.filter(layer => !layer.hazardScenario);
+  const effectiveSelection = selection ?? getDefaultHazardScenario(scenarioLayers);
+  if (!effectiveSelection) {
+    return nonScenarioLayers;
+  }
+
+  const matched = scenarioLayers.filter(layer =>
+    hazardScenarioMatches(layer.hazardScenario as HazardScenarioSelection, effectiveSelection)
+  );
+  return [...nonScenarioLayers, ...matched];
+}
+
+/**
+ * Which hazard layers a view draws: 'event' = the event's own layers (never
+ * planning-scenario layers), 'planning' = only the selected scenario's
+ * layers (never the static event fallback), 'all' = both (legacy).
+ */
+export type HazardLayerMode = 'event' | 'planning' | 'all';
+
+export function getLayersForCountry(
+  countryCode: CountryCode,
+  dynamicLayers: RealWMSLayer[] = [],
+  selectedEventIds: string[] = [],
+  hazardScenarioSelection?: HazardScenarioSelection | null,
+  layerMode: HazardLayerMode = 'all'
+): RealWMSLayer[] {
+  const countryPartnerLayers = dynamicLayers.filter(layer => layer.countryCode === countryCode);
+  if (layerMode === 'planning') {
+    return narrowByHazardScenario(
+      countryPartnerLayers.filter(layer => layer.hazardScenario),
+      hazardScenarioSelection
+    );
+  }
+  const partnerLayers =
+    layerMode === 'event'
+      ? countryPartnerLayers.filter(layer => !layer.hazardScenario)
+      : countryPartnerLayers;
+  const filterByEventIds = (layers: RealWMSLayer[]) => {
+    if (selectedEventIds.length === 0) {
+      return layers;
+    }
+
+    const hasEventScopedLayers = layers.some(layer => typeof layer.eventId === 'string');
+    if (!hasEventScopedLayers) {
+      return layers;
+    }
+
+    return layers.filter(layer => !layer.eventId || selectedEventIds.includes(layer.eventId));
+  };
+
+  if (partnerLayers.length > 0) {
+    return filterByEventIds(narrowByHazardScenario(partnerLayers, hazardScenarioSelection));
+  }
+
+  return filterByEventIds(REAL_WMS_LAYERS.filter(layer => layer.countryCode === countryCode));
+}
+
+export const HAZARD_SCENARIO_PRODUCT_LABELS: Record<string, string> = {
+  combined: 'Combined (TC + Swell)',
+  tc: 'Tropical Cyclone (probabilistic)',
+  swell: 'Swell (probabilistic)',
+  historical_tcs: 'Historical Cyclones',
+  synthetic_tcs: 'Synthetic Cyclones',
+  swell_driven: 'Historical Swell Events',
+  coastal_flood: 'Coastal Flood (Sea Level Rise)',
+  fluvial_flood: 'Fluvial / Pluvial Flood (Rainfall & River)',
+  rapid_impact_assessment: 'Rapid Impact Assessment Cyclones',
+};
+
+/** A scenario as short labels: product, SLR, then return period or event. */
+export function describeHazardScenario(scenario: HazardScenarioSelection): string[] {
+  const parts = [
+    HAZARD_SCENARIO_PRODUCT_LABELS[scenario.product] ?? scenario.product,
+    `SLR ${scenario.slrScenarioM} m`,
+  ];
+  if (scenario.returnPeriodYears !== null) {
+    parts.push(`${scenario.returnPeriodYears}-yr return period`);
+  } else if (scenario.eventLabel) {
+    parts.push(`event: ${scenario.eventLabel}`);
+  }
+  return parts;
+}
+
+// Two fundamentally different kinds of thing a "hazard scenario" can be,
+// which the UI must not blur together (a disaster manager reasons about a
+// real storm that happened very differently from a statistical planning
+// figure): whether a product is real, dated history, or a synthetic/
+// statistical construct used to estimate risk. Not derivable from the
+// event/return_period selector dimension alone -- synthetic_tcs shares the
+// "event" selector with historical_tcs/swell_driven despite being
+// statistically generated, never observed, storms (see
+// hazard_tiles/views.py's PRODUCTS mapping in the middleware repo).
+export type HazardScenarioCategory = 'observed' | 'planning';
+
+export const HAZARD_SCENARIO_PRODUCT_CATEGORY: Record<string, HazardScenarioCategory> = {
+  historical_tcs: 'observed',
+  swell_driven: 'observed',
+  // A rapid_impact_assessment row is a RiskScape run against one specific,
+  // real cyclone forecast (see model.ModelRun) -- an actual event being
+  // assessed, not a statistical planning figure -- even though no country's
+  // catalog uses this product yet.
+  rapid_impact_assessment: 'observed',
+  combined: 'planning',
+  tc: 'planning',
+  swell: 'planning',
+  synthetic_tcs: 'planning',
+  coastal_flood: 'planning',
+  fluvial_flood: 'planning',
+};
+
+export const HAZARD_SCENARIO_CATEGORY_LABELS: Record<HazardScenarioCategory, string> = {
+  observed: 'Historical events',
+  planning: 'Probabilistic scenarios',
+};
 
 export const WMS_STYLES = {
   DEFAULT: 'default-scalar/default',

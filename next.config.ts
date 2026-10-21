@@ -1,14 +1,44 @@
 import type { NextConfig } from "next";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// The country slugs come from config/release.json (checked by `npm run config:check`),
+// so adding a country needs no edit here.
+const COUNTRY_SLUGS: string[] = JSON.parse(
+  readFileSync(join(process.cwd(), "config/release.json"), "utf8")
+).countries;
+
+function normalizeBasePath(basePath: string | undefined): string {
+  const trimmed = (basePath ?? '').trim();
+  if (!trimmed || trimmed === '/' || trimmed.toLowerCase() === 'root') {
+    return '';
+  }
+
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : withLeadingSlash;
+}
 
 const dataVersion =
   process.env.NEXT_PUBLIC_DATA_VERSION ??
   process.env.NEXT_PUBLIC_APP_VERSION ??
   `${Date.now()}`;
 
+const configuredBasePath = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH);
+const basePath =
+  process.env.NODE_ENV === 'production'
+    ? configuredBasePath || '/partner2'
+    : configuredBasePath;
+
 const nextConfig: NextConfig = {
   // Base path for subdirectory deployment (disabled in dev for convenience)
-  // Use NEXT_PUBLIC_BASE_PATH env var to override, or default to '/partner2' in production
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? (process.env.NODE_ENV === 'production' ? '/partner2' : ''),
+  basePath,
+
+  // Dev-mode build indicator defaults to bottom-left, which sits directly
+  // under Map Controls' hazard-scenario dropdowns once that panel scrolls
+  // far enough -- moved out of the way rather than fixing the panel around it.
+  devIndicators: {
+    position: 'bottom-right',
+  },
 
   env: {
     NEXT_PUBLIC_DATA_VERSION: dataVersion,
@@ -74,7 +104,7 @@ const nextConfig: NextConfig = {
       // Cache country data files with shorter TTL.
       // These assets live under /public/<country> and are served at /<country>/...
       {
-        source: '/:country(vanuatu|samoa|tonga|cook-islands)/:file*\\.(csv|geojson|gpkg)',
+        source: `/:country(${COUNTRY_SLUGS.join('|')})/:file*\\.(csv|geojson|gpkg)`,
         headers: [
           {
             key: 'Cache-Control',
@@ -84,6 +114,21 @@ const nextConfig: NextConfig = {
                 : 'no-store, must-revalidate',
           },
         ],
+      },
+    ];
+  },
+
+  async redirects() {
+    if (!basePath) {
+      return [];
+    }
+
+    return [
+      {
+        source: '/favicon.ico',
+        destination: `${basePath}/favicon.ico`,
+        permanent: false,
+        basePath: false,
       },
     ];
   },
@@ -187,7 +232,7 @@ const nextConfig: NextConfig = {
             // Export libraries - lazy load only when needed (no preload)
             exports: {
               name: 'exports',
-              test: /[\\/]node_modules[\\/](exceljs|jspdf|html2canvas|file-saver|dompurify|canvg)[\\/]/,
+              test: /[\\/]node_modules[\\/](jspdf|html2canvas|file-saver|dompurify|canvg)[\\/]/,
               chunks: 'async',
               priority: 40,
               enforce: true,

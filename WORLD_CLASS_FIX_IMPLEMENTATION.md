@@ -13,7 +13,7 @@ The current implementation has **architectural issues**:
 
 ## ✨ World-Class Solution: Data Normalization Layer
 
-Created `src/utils/csvDataNormalizer.ts` — a **type-safe, validated, self-documenting data layer**.
+Created `src/utils/csvDataNormalizer.ts` -a **type-safe, validated, self-documenting data layer**.
 
 ### Key Features
 
@@ -68,7 +68,7 @@ getAggregatedTotals(filterSectors?, filterRegion?): {
 
 ## 📊 Usage Example
 
-### Before (Current — Fragile)
+### Before (Current -Fragile)
 ```typescript
 // ❌ Manual Number() wrapping everywhere
 const totalValue = filteredImpactBySector.reduce(
@@ -84,7 +84,7 @@ const totalPopulation = regionTotals.reduce(
 // ❌ Scattered logic
 ```
 
-### After (World-Class — Robust)
+### After (World-Class -Robust)
 ```typescript
 // In page.tsx or data loader
 import { initializeNormalizedData, getDataNormalizer } from '@/utils/csvDataNormalizer';
@@ -162,7 +162,7 @@ if (report.warnings.length > 0) {
 ## 🔧 Quick Integration Example
 
 ```typescript
-// src/app/page.tsx — Initialize on data load
+// src/app/page.tsx -Initialize on data load
 useEffect(() => {
   async function loadData() {
     const realData = await loadRealData();
@@ -183,7 +183,7 @@ useEffect(() => {
 ```
 
 ```typescript
-// src/components/SummaryPanel.tsx — Use normalized data
+// src/components/SummaryPanel.tsx -Use normalized data
 import { getDataNormalizer } from '@/utils/csvDataNormalizer';
 
 function SummaryPanel({ filters, selectedRegion, ... }) {
@@ -218,8 +218,8 @@ function SummaryPanel({ filters, selectedRegion, ... }) {
 
 ## 🎯 Bottom Line
 
-**Current Fix (Applied ✅)**: Band-aid — adds `Number()` wraps and population lookup
+**Current Fix (Applied ✅)**: Band-aid -adds `Number()` wraps and population lookup
 
-**World-Class Fix (Proposed 🚀)**: Architecture upgrade — type-safe, validated, maintainable, performant
+**World-Class Fix (Proposed 🚀)**: Architecture upgrade -type-safe, validated, maintainable, performant
 
 The normalization layer is production-ready and waiting to be integrated. It solves the root cause, not just symptoms.

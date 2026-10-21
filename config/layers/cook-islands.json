@@ -1,0 +1,91 @@
+{
+  "$schema": "../layers.schema.json",
+  "country": "CK",
+  "datasetBasePath": "/POP/Partner2/case_study2/hazard/ck_hazard/TC/Meena",
+  "layers": [
+    {
+      "id": "ck-tc-meena-wind-subdomain-1",
+      "eventId": "tc-ck-event",
+      "name": "TC Meena Wind Hazard (Subdomain 1)",
+      "ncFile": "_CK_subdomain_1_local_wind.nc",
+      "layerName": "Depth",
+      "description": "Wind hazard from TC Meena (_CK_subdomain_1_local_wind.nc)",
+      "hazardType": "wind",
+      "bbox": [
+        -166.24347222222224,
+        -13.386527777777781,
+        -157.24347222222212,
+        -8.38652777777778
+      ],
+      "maxNativeZoom": 15,
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:3857",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.1,65.74",
+        "numColorBands": 50,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "extend",
+        "logScale": false
+      }
+    },
+    {
+      "id": "ck-tc-meena-wind-subdomain-2",
+      "eventId": "tc-ck-event",
+      "name": "TC Meena Wind Hazard (Subdomain 2)",
+      "ncFile": "_CK_subdomain_2_local_wind.nc",
+      "layerName": "Depth",
+      "description": "Wind hazard from TC Meena (_CK_subdomain_2_local_wind.nc)",
+      "hazardType": "wind",
+      "bbox": [
+        -160.60208333348902,
+        -22.813472222378515,
+        -156.60208333319275,
+        -18.813472222156314
+      ],
+      "maxNativeZoom": 15,
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:3857",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.1,65.74",
+        "numColorBands": 50,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "extend",
+        "logScale": false
+      }
+    },
+    {
+      "id": "ck-tc-meena-inundation",
+      "eventId": "tc-ck-event",
+      "name": "TC Meena Flood Hazard",
+      "ncFile": "CK_merged.nc",
+      "layerName": "Depth",
+      "description": "Flood/inundation hazard from TC Meena (CK_merged.nc)",
+      "hazardType": "flood",
+      "bbox": [
+        -163.19974846337783,
+        -21.95943031456599,
+        -157.32122955564233,
+        -17.986887908850672
+      ],
+      "maxNativeZoom": 15,
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:3857",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.01,5",
+        "numColorBands": 20,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "transparent",
+        "logScale": false
+      }
+    }
+  ]
+}

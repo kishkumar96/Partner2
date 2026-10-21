@@ -4,12 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3002",
+    "prebuild": "npm run config:check",
     "build": "next build",
     "build:production": "cross-env NODE_ENV=production next build",
     "start": "next start --port ${PORT:-3002}",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "type-check": "tsc --noEmit",
+    "type-check": "npm run config:check && tsc --noEmit",
+    "config:validate": "node scripts/config.mjs validate",
+    "config:generate": "node scripts/config.mjs generate",
+    "config:check": "node scripts/config.mjs check",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "test": "jest",
@@ -21,6 +25,7 @@
     "lighthouse": "lighthouse http://localhost:3002 --view",
     "lighthouse:ci": "lighthouse http://localhost:3002 --output=json --output-path=./lighthouse-report.json",
     "perf:lighthouse": "lhci autorun --config=lighthouserc.json",
+    "warm:thredds": "node scripts/warm-thredds.mjs",
     "perf:playwright": "playwright test --config=playwright.config.ts",
     "perf:ci": "bash scripts/perf-ci.sh",
     "audit": "npm audit --audit-level=moderate",
@@ -36,21 +41,20 @@
     "ollama:check": "node scripts/ollama-check.js"
   },
   "dependencies": {
-    "@deck.gl/extensions": "^9.2.11",
-    "@deck.gl/mapbox": "^9.2.11",
+    "@deck.gl/extensions": "^9.3.1",
+    "@deck.gl/mapbox": "^9.3.1",
     "@sentry/nextjs": "^10.38.0",
     "@types/qrcode": "^1.5.6",
     "chart.js": "^4.5.1",
-    "deck.gl": "^9.2.11",
-    "exceljs": "^4.4.0",
+    "deck.gl": "^9.3.1",
     "file-saver": "^2.0.5",
     "georaster": "^1.6.0",
     "geotiff": "^3.0.0",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.2",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.554.0",
     "maplibre-gl": "^5.13.0",
-    "next": "16.0.4",
+    "next": "16.2.12",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
@@ -85,27 +89,21 @@
     "jest-environment-jsdom": "^29.7.0",
     "jest-junit": "^16.0.0",
     "lighthouse": "^12.2.1",
-    "prettier": "^3.4.2",
+    "prettier": "3.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4.5.4"
   },
   "engines": {
     "node": ">=20.9.0",
     "npm": ">=10.0.0"
   },
-  "browserslist": [
-    "last 2 Chrome versions",
-    "last 2 Edge versions",
-    "last 2 Safari versions",
-    "last 2 Firefox versions",
-    "not dead",
-    "not IE 11",
-    "not op_mini all"
-  ],
   "overrides": {
     "@typescript-eslint/eslint-plugin": "8.54.0",
     "@typescript-eslint/parser": "8.54.0",
     "@typescript-eslint/typescript-estree": "8.54.0",
-    "@typescript-eslint/utils": "8.54.0"
+    "@typescript-eslint/utils": "8.54.0",
+    "sharp": "^0.35.4",
+    "eslint-plugin-react-hooks": "7.0.1"
   }
 }

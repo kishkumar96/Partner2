@@ -1,9 +1,33 @@
 # ── Stage 1: install dependencies ────────────────────────────────────────────
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
+# Temporarily use HTTP to avoid certificate issues, then switch back to HTTPS
+RUN sed -i 's/https/http/g' /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache ca-certificates libc6-compat \
+    && sed -i 's/http:/https:/g' /etc/apk/repositories
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# Install with increased timeout and retry logic
+RUN npm config set fetch-timeout 600000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci --prefer-offline --no-audit
+
+# ── Stage 1b: development runner ────────────────────────────────────────────
+FROM node:20-alpine AS dev
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3002
+ENV HOSTNAME="0.0.0.0"
+
+EXPOSE 3002
+
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3002"]
 
 # ── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -18,8 +42,25 @@ COPY postcss.config.* ./
 COPY tailwind.config.* ./
 COPY eslint.config.* ./
 COPY scripts ./scripts
+# prebuild (npm run config:check) reads the JSON country config and formats its output with
+# the repo's Prettier settings, so both must be in the build context
+COPY config ./config
+COPY .prettierrc* .prettierignore ./
 COPY public ./public
 COPY src ./src
+
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time.
+# Pass them as build args so they are available during `npm run build`
+# without needing to copy .env files into the image.
+ARG NEXT_PUBLIC_ENABLE_PARTNER_API=true
+ARG NEXT_PUBLIC_PARTNER_API_COUNTRIES=VU,WS,TO,CK
+ARG NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES=VU
+ARG NEXT_PUBLIC_BASE_PATH=/partner2
+
+ENV NEXT_PUBLIC_ENABLE_PARTNER_API=$NEXT_PUBLIC_ENABLE_PARTNER_API
+ENV NEXT_PUBLIC_PARTNER_API_COUNTRIES=$NEXT_PUBLIC_PARTNER_API_COUNTRIES
+ENV NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES=$NEXT_PUBLIC_PARTNER_API_STRICT_COUNTRIES
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
 # Produce a standalone Next.js bundle (see next.config.ts output:'standalone')
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -34,6 +75,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV AUTH_REQUIRE_REDIS=false
 # Port the server will listen on inside the container
 ENV PORT=3112
 ENV HOSTNAME="0.0.0.0"
@@ -57,6 +99,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 
 EXPOSE 3112
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -q --spider "http://127.0.0.1:${PORT}/partner2" || exit 1
 
 # NOTE: The app is served under the /partner2 base-path in production.
 # Access it at http://localhost:3112/partner2

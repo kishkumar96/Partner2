@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: middleware_web
+    restart: unless-stopped
+    command: >
+      sh -c "python /code/manage.py collectstatic --noinput &&
+             python /code/manage.py runserver 0.0.0.0:8000"
+    env_file: .env
+    volumes:
+      - .:/code
+      - static_volume:/code/staticfiles
+      - media_volume:/code/media
+    ports:
+      - "${DJANGO_LOCAL_PORT:-8000}:8000"
+    depends_on:
+      - db
+    networks:
+      default:
+        # Django's Host-header validation rejects the underscore in the
+        # container_name "middleware_web" (not a valid RFC 1034/1035
+        # hostname), so other containers reach this one via this alias.
+        aliases:
+          - middleware-api
+  # Works the model queue: claims runs the API queued when a track arrived, runs them on the
+  # RiskScape platform, and publishes the results. Its own container so a web restart cannot lose a
+  # run in progress. Needs RISKSCAPE_TOKEN (and optionally PARTNER_API_URL) in .env.
+  runner:
+    build: .
+    container_name: middleware_runner
+    restart: unless-stopped
+    command: python /code/manage.py run_model_queue --server-name riskscape.nz
+    env_file: .env
+    volumes:
+      - .:/code
+      - media_volume:/code/media
+    depends_on:
+      - db
+  db:
+    image: postgres:14
+    container_name: middleware_db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+      # Temporarily disabled: db.sql's stale django_migrations history blocks
+      # migrations from running. Re-enable once that's cleaned up separately.
+      # - ./db.sql:/docker-entrypoint-initdb.d/00_restore.sql:ro
+    env_file: .env
+    environment:
+      - POSTGRES_USER=$POSTGRESDB_USER
+      - POSTGRES_PASSWORD=$POSTGRESDB_ROOT_PASSWORD
+      - POSTGRES_DB=$POSTGRESDB_DATABASE
+    ports:
+      - "$POSTGRESDB_LOCAL_PORT:$POSTGRESDB_DOCKER_PORT"
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    volumes:
+      - static_volume:/code/staticfiles
+      - media_volume:/code/media
+    ports:
+      - 8089:80
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:

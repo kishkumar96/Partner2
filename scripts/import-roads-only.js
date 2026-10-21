@@ -6,8 +6,15 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const DATABASE_URL = process.env.DATABASE_URL || 
-  'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  // No built-in fallback: a literal password in source ends up in git history
+  console.error(
+    'DATABASE_URL is not set. Export it first, for example:\n' +
+      '  export DATABASE_URL=postgresql://user:password@host:5432/dbname'
+  );
+  process.exit(1);
+}
 
 async function main() {
   const client = new Client({

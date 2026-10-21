@@ -15,8 +15,15 @@ const path = require('path');
 const { Client } = require('pg');
 
 // Database connection
-const connectionString = process.env.DATABASE_URL || 
-  'postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  // No built-in fallback: a literal password in source ends up in git history
+  console.error(
+    'DATABASE_URL is not set. Export it first, for example:\n' +
+      '  export DATABASE_URL=postgresql://user:password@host:5432/dbname'
+  );
+  process.exit(1);
+}
 
 async function importRegionalImpacts() {
   const client = new Client({ connectionString });

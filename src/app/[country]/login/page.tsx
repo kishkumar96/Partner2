@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Globe2, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import ReactCountryFlag from 'react-country-flag';
+import CountryFlag from '@/components/CountryFlag';
 import { SLUG_TO_CODE } from '@/utils/countrySlug';
 import { COUNTRIES } from '@/types/thredds';
 
@@ -73,13 +73,14 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-100">
-              {countryName ? `${countryName} Dashboard` : 'PDIE Dashboard'}
+              {countryName
+                ? `${countryName} Dashboard`
+                : 'Pacific Disaster Impact & Exposure Dashboard'}
             </h1>
             {countryCode && (
               <div className="mt-3 flex items-center justify-center gap-2 text-slate-300">
-                <ReactCountryFlag
+                <CountryFlag
                   countryCode={countryCode}
-                  svg={false}
                   aria-label={COUNTRIES[countryCode].name}
                   title={COUNTRIES[countryCode].name}
                   style={{ fontSize: '1.25rem', lineHeight: 1 }}
@@ -157,7 +158,7 @@ export default function CountryLoginPage({ params }: LoginPageProps) {
 
           {/* Footer */}
           <p className="text-center text-xs text-slate-600 mt-6">
-            PDIE — Pacific Disaster Impact Estimation
+            Pacific Disaster Impact & Exposure
           </p>
         </div>
       </div>

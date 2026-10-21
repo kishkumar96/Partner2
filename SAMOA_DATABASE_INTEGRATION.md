@@ -191,7 +191,7 @@ Make sure these are set in `.env.local`:
 
 ```bash
 # Database Connection
-DATABASE_URL=postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk
+DATABASE_URL=postgresql://kishank:<your-password>@localhost:5435/climate_risk
 
 # Feature Flags (enable database usage)
 NEXT_PUBLIC_USE_DATABASE=true
@@ -237,7 +237,7 @@ For super-fast map rendering:
 docker ps | grep postgres
 
 # Test connection
-psql postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk -c "SELECT version();"
+psql postgresql://kishank:<your-password>@localhost:5435/climate_risk -c "SELECT version();"
 ```
 
 ### API Not
@@ -253,7 +253,7 @@ npm run dev
 ### Data Not Loading
 ```bash
 # Verify data exists in database
-psql postgresql://kishank:Dcrp2024%40@localhost:5435/climate_risk \
+psql postgresql://kishank:<your-password>@localhost:5435/climate_risk \
   -c "SELECT cyclone_id, COUNT(*) FROM cyclone_track GROUP BY cyclone_id;"
 ```
 

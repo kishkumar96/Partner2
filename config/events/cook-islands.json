@@ -1,0 +1,27 @@
+{
+  "$schema": "../events.schema.json",
+  "country": "CK",
+  "events": [
+    {
+      "id": "tc-ck-event",
+      "name": "Tropical Cyclone Event",
+      "date": "2024-01-01",
+      "hazardId": "tropical-cyclone",
+      "location": {
+        "lat": -21.2367,
+        "lng": -159.7777
+      },
+      "bbox": [
+        -161,
+        -23,
+        -157,
+        -18
+      ],
+      "trackFile": "cyclone-track.geojson",
+      "isDefault": true,
+      "aliases": [
+        "cook islands tropical cyclone"
+      ]
+    }
+  ]
+}
