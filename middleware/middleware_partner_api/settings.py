@@ -250,6 +250,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Hazard catalogue Zarr store behind the hazard_tiles endpoint. Empty means the folder
+# data/hazard_catalog.zarr; set an s3://bucket/name.zarr address to read it from Wasabi (see
+# hazard_tiles/store.py for the keys it needs). The cache folder keeps fetched chunks on local disk.
+HAZARD_CATALOG_STORE = os.environ.get("HAZARD_CATALOG_STORE", "")
+HAZARD_CATALOG_CACHE_DIR = os.environ.get("HAZARD_CATALOG_CACHE_DIR", "")
+# How long browsers and proxies may keep the Zarr objects the hazard_zarr endpoint hands out
+HAZARD_ZARR_CACHE_SECONDS = int(os.environ.get("HAZARD_ZARR_CACHE_SECONDS", "3600"))
+
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

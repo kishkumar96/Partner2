@@ -44,7 +44,7 @@ from risk_information.views import (
     RiskScenarioRetrieveView,
 )
 from hazard_information.views import HazardInformationListView, HazardInformationRetrieveView
-from hazard_tiles.views import hazard_tile
+from hazard_tiles.views import hazard_tile, hazard_zarr
 from citizen_science.views import CitizenScienceListCreateView
 from event.views import EventListCreateView, EventRetrieveView
 from model.views import ModelRunListView
@@ -105,6 +105,7 @@ urlpatterns = [
         "partner_api/v1/hazard_tiles/<str:source>/<str:slr>/<str:selector>/<int:z>/<int:x>/<int:y>.png",
         hazard_tile,
     ),
+    path("partner_api/v1/hazard_zarr/<path:key>", hazard_zarr),
     path("partner_api/v1/citizen_science/", CitizenScienceListCreateView.as_view()),
     path("partner_api/v1/event/", EventListCreateView.as_view()),
     path("partner_api/v1/event/<int:pk>", EventRetrieveView.as_view()),

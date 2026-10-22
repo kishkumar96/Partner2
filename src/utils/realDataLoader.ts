@@ -38,6 +38,8 @@ import {
   scopeRiskRowsToEvent,
 } from '@/utils/partnerEvents';
 import { listCountryCodes } from '@/config/registry';
+import { parseHazardTileUrl } from '@/utils/hazardZarr';
+import { loadZarrHazardLayers, mergeHazardLayers } from '@/utils/hazardZarrCatalog';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -2001,6 +2003,8 @@ function buildPartnerHazardLayers(
   });
 
   hazardRows.forEach((row, index) => {
+    // a Zarr store pointer: its scenarios become layers from the store itself (loadZarrHazardLayers)
+    if (String(row.protocol ?? '').toLowerCase() === 'zarr') return;
     const layerName = (typeof row.layer_name === 'string' && row.layer_name.trim()) || 'Depth';
     const layerIdBase =
       (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : `${index}`) ||
@@ -2056,6 +2060,7 @@ function buildPartnerHazardLayers(
             : undefined,
         source: 'partner_api',
         tileUrlTemplate,
+        zarrScenario: parseHazardTileUrl(tileUrlTemplate) ?? undefined,
         hazardScenario,
       });
       return;
@@ -2250,6 +2255,8 @@ async function loadPartnerApiCountryData(
     // event's set.
     const isHazardScenarioRow = (row: Record<string, unknown>): boolean =>
       row.protocol === 'xyz' ||
+      // a row that names a Zarr store: the store holds the whole scenario catalogue
+      String(row.protocol ?? '').toLowerCase() === 'zarr' ||
       toNumber(row.slr_scenario_m) !== null ||
       toNumber(row.model_run) !== null;
     const linkedHazardIds = new Set(allHazardIds);
@@ -2404,7 +2411,10 @@ async function loadPartnerApiCountryData(
         date: activeEventRecord.date,
       },
       riskData: activeRiskBundle,
-      hazardLayers: buildPartnerHazardLayers(countryCode, hazardRows, normalizedEventRecords),
+      hazardLayers: mergeHazardLayers(
+        buildPartnerHazardLayers(countryCode, hazardRows, normalizedEventRecords),
+        await loadZarrHazardLayers(countryCode, COUNTRIES[countryCode].name, hazardRows)
+      ),
       forecastTrackUrl,
       forecastPoints,
       getEventRiskData,

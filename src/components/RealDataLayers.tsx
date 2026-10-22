@@ -13,6 +13,8 @@ import {
   RealWMSLayer,
 } from '@/data/realThreddsLayers';
 import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
+import { hazardZarrEnabled } from '@/utils/hazardZarr';
+import { addHazardZarrLayer } from '@/utils/hazardZarrMapLayer';
 import {
   loadCycloneTrackData,
   DATA_PATH,
@@ -184,6 +186,9 @@ export default function RealDataLayers({
   cycloneTrackData = null,
   legendSettings,
 }: RealDataLayersProps) {
+  // Hazard layers the map still wants. A scenario read from the Zarr store arrives after the pass that
+  // asked for it, so it checks here whether it should be visible by the time it is ready.
+  const wantedHazardLayerIdsRef = useRef<Set<string>>(new Set());
   const loadingStateRef = useRef<{
     cycloneTracks: boolean;
     hazards: boolean;
@@ -927,42 +932,82 @@ export default function RealDataLayers({
                 try {
                   // Zarr-backed XYZ raster tiles (hazard_tiles endpoint) bypass all
                   // WMS URL building entirely -the template is already ready to use.
-                  if (layer.tileUrlTemplate) {
-                    if (!map.getSource(sourceId)) {
-                      map.addSource(sourceId, {
-                        type: 'raster',
-                        tiles: [layer.tileUrlTemplate],
-                        tileSize: 256,
-                        maxzoom: layer.maxNativeZoom ?? 12,
-                      });
-                    }
-                    if (!map.getLayer(layerId)) {
-                      let tileBeforeId: string | undefined;
-                      if (map.getLayer('damaged-buildings-clusters')) {
-                        tileBeforeId = 'damaged-buildings-clusters';
-                      } else if (map.getLayer('cyclone-forecast-track-line')) {
-                        tileBeforeId = 'cyclone-forecast-track-line';
-                      } else {
-                        tileBeforeId = map
-                          .getStyle()
-                          ?.layers?.find(existingLayer => existingLayer.type === 'symbol')?.id;
+                  if (layer.tileUrlTemplate || (layer.zarrScenario && hazardZarrEnabled())) {
+                    const tileTemplate = layer.tileUrlTemplate;
+                    // The server-drawn tiles: what the catalogue row describes, and the fallback
+                    // when a scenario cannot be read straight from the Zarr store.
+                    const addTileLayer = () => {
+                      if (!tileTemplate) {
+                        // a layer that comes only from the Zarr store has no server tiles to fall back on
+                        console.warn(
+                          `Hazard layer ${layerId} has no server tiles to fall back on.`
+                        );
+                        return;
                       }
-                      const rasterLayer: maplibregl.AddLayerObject = {
-                        id: layerId,
-                        type: 'raster',
-                        source: sourceId,
-                        paint: { 'raster-opacity': 0.85 },
-                      };
-                      if (tileBeforeId) {
-                        map.addLayer(rasterLayer, tileBeforeId);
-                      } else {
-                        map.addLayer(rasterLayer);
+                      if (!map.getSource(sourceId)) {
+                        map.addSource(sourceId, {
+                          type: 'raster',
+                          tiles: [tileTemplate],
+                          tileSize: 256,
+                          maxzoom: layer.maxNativeZoom ?? 12,
+                        });
                       }
-                    }
-                    loadingStateRef.current = {
-                      ...loadingStateRef.current,
-                      layers: { ...loadingStateRef.current.layers, [layer.id]: false },
+                      if (!map.getLayer(layerId)) {
+                        let tileBeforeId: string | undefined;
+                        if (map.getLayer('damaged-buildings-clusters')) {
+                          tileBeforeId = 'damaged-buildings-clusters';
+                        } else if (map.getLayer('cyclone-forecast-track-line')) {
+                          tileBeforeId = 'cyclone-forecast-track-line';
+                        } else {
+                          tileBeforeId = map
+                            .getStyle()
+                            ?.layers?.find(existingLayer => existingLayer.type === 'symbol')?.id;
+                        }
+                        const rasterLayer: maplibregl.AddLayerObject = {
+                          id: layerId,
+                          type: 'raster',
+                          source: sourceId,
+                          paint: { 'raster-opacity': 0.85 },
+                        };
+                        if (tileBeforeId) {
+                          map.addLayer(rasterLayer, tileBeforeId);
+                        } else {
+                          map.addLayer(rasterLayer);
+                        }
+                      }
                     };
+                    const markLoaded = () => {
+                      loadingStateRef.current = {
+                        ...loadingStateRef.current,
+                        layers: { ...loadingStateRef.current.layers, [layer.id]: false },
+                      };
+                    };
+
+                    if (layer.zarrScenario && hazardZarrEnabled()) {
+                      // Read the scenario's depth raster straight from the Zarr store and lay it
+                      // on the map as one picture; the server's tiles are the fallback.
+                      wantedHazardLayerIdsRef.current.add(layerId);
+                      const tileBeforeId = [
+                        'damaged-buildings-clusters',
+                        'cyclone-forecast-track-line',
+                      ].find(existingId => map.getLayer(existingId));
+                      void addHazardZarrLayer(map, {
+                        sourceId,
+                        layerId,
+                        scenario: layer.zarrScenario,
+                        beforeId: tileBeforeId,
+                        isWanted: () => wantedHazardLayerIdsRef.current.has(layerId),
+                        onFallback: addTileLayer,
+                      })
+                        .catch(error =>
+                          console.warn(`Hazard layer ${layerId} failed to load:`, error)
+                        )
+                        .finally(markLoaded);
+                      return;
+                    }
+
+                    addTileLayer();
+                    markLoaded();
                     return;
                   }
 
@@ -1217,6 +1262,7 @@ export default function RealDataLayers({
         // the Partner API catalog arrived, or an event layer when switching
         // to planning scenarios) would otherwise stay on the map.
         const wantedLayerIds = new Set(allActiveLayers.map(layer => `wms-layer-${layer.id}`));
+        wantedHazardLayerIdsRef.current = wantedLayerIds;
         (map.getStyle()?.layers ?? []).forEach(styleLayer => {
           if (!styleLayer.id.startsWith('wms-layer-') || wantedLayerIds.has(styleLayer.id)) return;
           try {

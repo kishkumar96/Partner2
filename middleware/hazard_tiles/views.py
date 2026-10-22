@@ -10,15 +10,20 @@ for historical_tcs/swell_driven, a numeric ID for synthetic_tcs).
 
 import io
 import os
+import re
 
 import numpy as np
 import xarray as xr
 from django.conf import settings
 from django.http import Http404, HttpResponse
+from django.views.decorators.http import require_http_methods
 from PIL import Image
 from pyproj import Transformer
 
-STORE_PATH = os.path.join(settings.BASE_DIR, "data", "hazard_catalog.zarr")
+from hazard_tiles import store
+
+# A folder, or an s3:// address when HAZARD_CATALOG_STORE is set (see hazard_tiles.store)
+STORE_PATH = store.store_location()
 TILE_SIZE = 256
 WEB_MERCATOR_R = 6378137.0
 
@@ -41,7 +46,7 @@ def _get_dataset(source: str) -> xr.Dataset:
         raise Http404(f"unknown hazard source '{source}'")
     if source not in _dataset_cache:
         group, _ = PRODUCTS[source]
-        _dataset_cache[source] = xr.open_zarr(STORE_PATH, group=group)
+        _dataset_cache[source] = store.open_group(group, STORE_PATH)
     return _dataset_cache[source]
 
 
@@ -130,3 +135,62 @@ def hazard_tile(request, source: str, slr: str, selector: str, z: int, x: int, y
         f.write(png_bytes)
 
     return HttpResponse(png_bytes, content_type="image/png")
+
+
+# --- Direct access to the Zarr store -------------------------------------------------------------
+# The frontend can read the catalogue's Zarr store itself (a browser Zarr reader fetching metadata
+# and chunk files), the way it reads every other result the API holds. This hands those objects over
+# read-only, with byte ranges, so the storage keys stay on the server and the bucket stays private.
+
+_METADATA_NAMES = {".zmetadata", ".zgroup", ".zarray", ".zattrs", "zarr.json"}
+_NAME = re.compile(r"^[A-Za-z0-9_\-]+$")
+_CHUNK = re.compile(r"^\d+(\.\d+)*$")
+_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def _store_key(key: str) -> str:
+    """A Zarr object name that is safe to read: group/array folders, then metadata or a chunk index."""
+    parts = key.split("/")
+    *folders, last = parts
+    if not (last in _METADATA_NAMES or _CHUNK.match(last)):
+        raise Http404("not a Zarr object")
+    if not all(_NAME.match(part) for part in folders):
+        raise Http404("not a Zarr object")
+    return key
+
+
+@require_http_methods(["GET", "HEAD"])
+def hazard_zarr(request, key: str):
+    key = _store_key(key)
+    size = store.object_size(key, STORE_PATH)
+    if size is None:
+        raise Http404("no such object in the hazard store")
+
+    start, end, status = None, None, 200
+    header = request.headers.get("Range")
+    if header:
+        match = _RANGE.match(header.strip())
+        if not match or (match.group(1) == "" and match.group(2) == ""):
+            return HttpResponse(status=416, headers={"Content-Range": f"bytes */{size}"})
+        if match.group(1) == "":  # the last N bytes
+            first, last = max(size - int(match.group(2)), 0), size - 1
+        else:
+            first = int(match.group(1))
+            last = min(int(match.group(2)), size - 1) if match.group(2) else size - 1
+        if first >= size or first > last:
+            return HttpResponse(status=416, headers={"Content-Range": f"bytes */{size}"})
+        start, end, status = first, last + 1, 206
+
+    body = b"" if request.method == "HEAD" else store.read_object(key, start, end, STORE_PATH)
+    length = (end - start) if status == 206 else size
+    response = HttpResponse(
+        body,
+        status=status,
+        content_type="application/json" if key.rsplit("/", 1)[-1] in _METADATA_NAMES else "application/octet-stream",
+    )
+    response["Content-Length"] = str(length)
+    response["Accept-Ranges"] = "bytes"
+    response["Cache-Control"] = f"public, max-age={getattr(settings, 'HAZARD_ZARR_CACHE_SECONDS', 3600)}"
+    if status == 206:
+        response["Content-Range"] = f"bytes {start}-{end - 1}/{size}"
+    return response

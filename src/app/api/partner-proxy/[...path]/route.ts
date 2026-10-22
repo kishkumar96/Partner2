@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { partnerTargetPath } from '@/utils/partnerProxyPath';
 
 const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://localhost:8000';
 const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
@@ -27,24 +28,10 @@ function backoffMsForAttempt(attempt: number): number {
   return 250 * attempt;
 }
 
-function ensureTrailingSlash(path: string): string {
-  return path.endsWith('/') ? path : `${path}/`;
-}
-
-// Static-file endpoints under partner_api/ (e.g. hazard_tiles PNGs) have no
-// trailing slash in their Django URL pattern -appending one 404s them, so
-// only DRF's list/retrieve JSON endpoints get the trailing-slash treatment.
-function looksLikeFilePath(path: string): boolean {
-  return /\.[a-zA-Z0-9]+$/.test(path);
-}
-
 async function proxyRequest(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
   const rawTargetPath = path.join('/');
-  const targetPath =
-    rawTargetPath.startsWith('partner_api/') && !looksLikeFilePath(rawTargetPath)
-      ? ensureTrailingSlash(rawTargetPath)
-      : rawTargetPath;
+  const targetPath = partnerTargetPath(rawTargetPath);
 
   // THREDDS WMS lives on a different host from the partner API
   const targetBase = targetPath.startsWith('thredds/') ? THREDDS_BASE : PARTNER_API_BASE;

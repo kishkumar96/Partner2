@@ -48,6 +48,7 @@
     "chart.js": "^4.5.1",
     "deck.gl": "^9.3.1",
     "file-saver": "^2.0.5",
+    "fzstd": "^0.1.1",
     "georaster": "^1.6.0",
     "geotiff": "^3.0.0",
     "html2canvas": "^1.4.1",

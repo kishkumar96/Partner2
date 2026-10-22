@@ -175,3 +175,7 @@ test-results/
 .analyze
 stats.json
 
+
+# Object-storage (Wasabi) keys: never commit
+wasabi.env
+*.wasabi.env

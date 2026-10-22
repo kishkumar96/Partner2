@@ -7,18 +7,15 @@ existing rows are matched by their natural key (country, hazard_source,
 slr_scenario_m, return_period_years, event_label) and left untouched.
 """
 
-import os
-
-import xarray as xr
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from country.lookup import find_country
+from hazard_tiles import store
 from hazard_tiles.views import PRODUCTS
 from hazard_type.models import HazardSource
 from hazard_information.models import HazardInformation
 
-STORE_PATH = os.path.join(settings.BASE_DIR, "data", "hazard_catalog.zarr")
+STORE_PATH = store.store_location()
 
 # hazard_tiles product key -> seeded HazardSource.name
 SOURCE_TO_HAZARD_SOURCE_NAME = {
@@ -57,12 +54,12 @@ class Command(BaseCommand):
                 self.stderr.write(f"HazardSource '{hazard_source_name}' not found, skipping '{source}'.")
                 continue
 
-            if not os.path.isdir(os.path.join(STORE_PATH, *group.split("/"))):
+            if not store.group_exists(group, STORE_PATH):
                 # A partly uploaded store: load what is there now, the rest on a later run
                 self.stderr.write(f"No '{group}' group in {STORE_PATH}, skipping '{source}'.")
                 continue
 
-            ds = xr.open_zarr(STORE_PATH, group=group)
+            ds = store.open_group(group, STORE_PATH)
             # A group whose files only partly arrived reads back blank labels; one blank-labelled
             # row would stand in for every combination, so skip the group until it is complete.
             selectors = [s for s in dict.fromkeys(ds[dim].values.tolist()) if s not in ("", None)]

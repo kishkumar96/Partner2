@@ -3,6 +3,7 @@ import { getLossSequentialColors, WIND_SEQUENTIAL_COLORS } from '@/utils/colorSy
 import { CountryCode } from '@/types/thredds';
 import { getStaticLayerCatalog, listCountryCodes } from '@/config/registry';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import type { HazardScenarioRef } from '@/utils/hazardZarr';
 
 // Get basePath from env — empty in dev, '/partner2' in production
 const BASE_PATH =
@@ -149,6 +150,10 @@ export interface RealWMSLayer {
    * literal {z}/{x}/{y} placeholders. When set, this layer is rendered as a
    * plain raster tile source instead of going through the WMS URL builders. */
   tileUrlTemplate?: string;
+  /** The same scenario as `tileUrlTemplate`, named by where it sits in the catalogue's Zarr store.
+   * With it the map can read the depth raster straight from the store (through the API's
+   * `hazard_zarr` endpoint) and draw one picture, instead of asking the server for tiles. */
+  zarrScenario?: HazardScenarioRef;
   /** Scenario dimensions for multi-scenario hazard catalogs (currently only
    * Cook Islands' Zarr-backed xyz layers). One catalog can contain thousands
    * of (product x SLR x return-period/event) combinations, so a UI selector
