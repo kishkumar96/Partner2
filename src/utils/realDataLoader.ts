@@ -1429,10 +1429,16 @@ function mergePartnerRiskBundle(
   return next;
 }
 
-function extractPartnerRiskBundle(riskRows: Array<Record<string, unknown>>): PartnerRiskBundle {
+export function extractPartnerRiskBundle(
+  riskRows: Array<Record<string, unknown>>
+): PartnerRiskBundle {
   return riskRows.reduce((bundle, row) => {
     const key = inferPartnerRiskKey(row, row.geometry);
     if (!key) return bundle;
+    // A floodplain row the server could not compute geometry for (its file is missing or empty, or
+    // the row is a stray) has nothing to draw. Counting it would offer a floodplain layer that can
+    // only fail, so it is left out; a country or run with no floodplain data simply has no layer.
+    if (key === 'forecastFloodplain' && row.geometry_computed === false) return bundle;
     const next = mergePartnerRiskBundle(bundle, key, row.geometry);
     const rowId = typeof row.id === 'number' || typeof row.id === 'string' ? String(row.id) : null;
     if (key === 'damagedBuildings' && !next.damagedBuildingsRowId && rowId) {
