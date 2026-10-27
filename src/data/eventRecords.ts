@@ -12,6 +12,8 @@ export interface EventRecord {
   backendCycloneTrackId?: string;
   backendHazardIds?: string[];
   backendRiskIds?: string[];
+  /** ModelRun ids the Partner API lists on the Event (`model_runs`); their risk rows carry `model_run`. */
+  backendModelRunIds?: string[];
   /** Event type name from the Partner API, e.g. "Tropical Cyclone", "Earthquake" */
   eventType?: string;
   /** Storm name from the Event's cyclone track (the event title can carry extra wording). */

@@ -33,8 +33,11 @@ import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { buildForecastExposure } from '@/utils/forecastExposure';
 import { previousAdvisory } from '@/utils/forecastComparison';
 import {
+  inferEventTrackId,
+  linkEventRisksFromModelRuns,
   normalizeDateValue,
   normalizePartnerEventRecords,
+  riskRowModelRunId,
   scopeRiskRowsToEvent,
 } from '@/utils/partnerEvents';
 import { listCountryCodes } from '@/config/registry';
@@ -2208,14 +2211,41 @@ async function loadPartnerApiCountryData(
       eventPayload,
       mapping.countryId
     );
+    // Runs of this country's events. Their risk rows carry model_run and no country,
+    // so they are fetched by run too: a server that filters ?country= would drop them.
+    const modelRunIds = [
+      ...new Set(normalizedEventRecords.flatMap(record => record.backendModelRunIds ?? [])),
+    ];
+    const runRiskPayloads = await Promise.all(
+      modelRunIds.map(runId =>
+        fetchPartnerCollection(
+          `${mapping.endpoints.resource.risk_information}?model_run=${runId}&defer_large_assets=true`,
+          signal
+        ).catch(() => null)
+      )
+    );
+    const runRiskRows = [riskPayload, ...runRiskPayloads].flatMap(toArrayPayload).filter(row => {
+      const run = riskRowModelRunId(row);
+      return run !== null && modelRunIds.includes(run);
+    });
+    const eventRecords = linkEventRisksFromModelRuns(normalizedEventRecords, runRiskRows);
     const activeEventRecord =
-      normalizedEventRecords.length > 0
-        ? resolveActiveEventRecord(countryCode, normalizedEventRecords, selectedEventIds, dateRange)
+      eventRecords.length > 0
+        ? resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange)
         : createCountryScopedEventRecord(countryCode);
-    const countryRiskRows = filterPartnerRowsByCountryId(
-      toArrayPayload(riskPayload),
-      mapping.countryId
-    ).filter(row => row.country !== null);
+    const seenRiskIds = new Set<string>();
+    const countryRiskRows = [
+      ...filterPartnerRowsByCountryId(toArrayPayload(riskPayload), mapping.countryId).filter(
+        row => row.country !== null
+      ),
+      ...runRiskRows,
+    ].filter(row => {
+      const id = String(row.id ?? '');
+      if (!id) return true;
+      if (seenRiskIds.has(id)) return false;
+      seenRiskIds.add(id);
+      return true;
+    });
     // A scenario catalog can be country-scoped without an Event row (the
     // Cook Islands catalogue is intentionally model/scenario based). In that
     // case there is no event-to-risk relationship to filter on, so retain the
@@ -2223,11 +2253,7 @@ async function loadPartnerApiCountryData(
     // Rows linked to another event belong to that event, so the fallback
     // leaves them out (e.g. a forecast run's outputs beside a country's
     // unlinked post-event results).
-    const scopedRiskRows = scopeRiskRowsToEvent(
-      countryRiskRows,
-      activeEventRecord,
-      normalizedEventRecords
-    );
+    const scopedRiskRows = scopeRiskRowsToEvent(countryRiskRows, activeEventRecord, eventRecords);
     const riskRows = dedupePartnerRiskRows(scopedRiskRows);
     const allHazardIds = normalizedEventRecords.flatMap(er => er.backendHazardIds ?? []);
     const countryHazardRows = filterPartnerRowsByCountryId(
@@ -2290,19 +2316,22 @@ async function loadPartnerApiCountryData(
       if (eventId === activeEventRecord.id) return activeRiskBundle;
       const cached = eventRiskCache.get(eventId);
       if (cached) return cached;
-      const eventRecord = normalizedEventRecords.find(record => record.id === eventId);
+      const eventRecord = eventRecords.find(record => record.id === eventId);
       if (!eventRecord || (eventRecord.backendRiskIds?.length ?? 0) === 0) return undefined;
       const eventRiskRows = dedupePartnerRiskRows(
-        scopeRiskRowsToEvent(countryRiskRows, eventRecord, normalizedEventRecords)
+        scopeRiskRowsToEvent(countryRiskRows, eventRecord, eventRecords)
       );
       const bundle = withFallbackTables(extractPartnerRiskBundle(eventRiskRows), eventRiskRows);
       eventRiskCache.set(eventId, bundle);
       return bundle;
     };
 
-    const trackIds = activeEventRecord.backendCycloneTrackId
-      ? [activeEventRecord.backendCycloneTrackId]
-      : [];
+    const inferredTrackId = inferEventTrackId(
+      activeEventRecord,
+      toArrayPayload(cyclonePayload),
+      riskRows
+    );
+    const trackIds = inferredTrackId ? [inferredTrackId] : [];
     let cycloneTrack = buildCycloneTrackFromPartnerPayloadForTrackIds(cyclonePayload, trackIds);
 
     // If the embedded geometry is missing, try fetching from the track_file URL.
@@ -2397,14 +2426,14 @@ async function loadPartnerApiCountryData(
 
     return {
       countryId: mapping.countryId,
-      eventRecords: normalizedEventRecords,
+      eventRecords,
       cycloneTrack,
       eventMeta: {
         name: activeEventRecord.name,
         date: activeEventRecord.date,
       },
       riskData: activeRiskBundle,
-      hazardLayers: buildPartnerHazardLayers(countryCode, hazardRows, normalizedEventRecords),
+      hazardLayers: buildPartnerHazardLayers(countryCode, hazardRows, eventRecords),
       forecastTrackUrl,
       forecastPoints,
       getEventRiskData,

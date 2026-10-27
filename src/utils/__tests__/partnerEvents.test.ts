@@ -1,4 +1,6 @@
 import {
+  inferEventTrackId,
+  linkEventRisksFromModelRuns,
   normalizePartnerEventRecords,
   normalizePartnerEventRow,
   scopeRiskRowsToEvent,
@@ -135,5 +137,40 @@ describe('event identity and storm name', () => {
     });
     expect(e?.backendEventId).toBe('11');
     expect(e?.cycloneName).toBe('LOLA');
+  });
+});
+
+describe('model-run linked events', () => {
+  const wati = normalizePartnerEventRow('CK', {
+    id: 7,
+    title: 'Tropical Cyclone Wati',
+    event_datetime: '2026-10-19T12:00:00Z',
+    model_runs: [4],
+  });
+  const runRows = [
+    { id: 50, model_run: 4, country: null, title: 'TC Wati 2026101912 - regional impacts' },
+    { id: 51, model_run: 4, country: null, title: 'TC Wati 2026101912 - regional summary' },
+    { id: 41, model_run: null, country: 3, title: 'Regional Impacts' },
+  ];
+
+  it('treats an event with model runs as a forecast and keeps the run ids', () => {
+    expect(wati?.isForecast).toBe(true);
+    expect(wati?.backendModelRunIds).toEqual(['4']);
+  });
+
+  it('links the run’s risk rows, which scopeRiskRowsToEvent then returns', () => {
+    const [linked] = linkEventRisksFromModelRuns([wati!], runRows);
+    expect(linked.backendRiskIds).toEqual(['50', '51']);
+    expect(ids(scopeRiskRowsToEvent(runRows, linked, [linked]))).toEqual([50, 51]);
+  });
+
+  it('picks the track with the advisory time from the risk titles', () => {
+    const tracks = [
+      { id: 220, cyclone_name: '2026101812_Wati', issued_time: '2026-10-20T12:00:00Z' },
+      { id: 215, cyclone_name: '2026101912_Wati', issued_time: '2026-10-19T12:00:00Z' },
+      { id: 9, cyclone_name: '2026101912_Other', issued_time: '2026-10-21T12:00:00Z' },
+    ];
+    expect(inferEventTrackId(wati!, tracks, runRows)).toBe('215');
+    expect(inferEventTrackId(wati!, tracks, [])).toBe('220');
   });
 });
