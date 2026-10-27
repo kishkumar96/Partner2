@@ -1,5 +1,5 @@
 import { ZarrError, ZarrHttpStore } from './zarrReader';
-import { utmToLonLat, utmZoneFromEpsg } from './utm';
+import { lonLatToUtm, utmToLonLat, utmZoneFromEpsg } from './utm';
 
 /**
  * Hazard scenarios read straight from the catalogue's Zarr store.
@@ -63,13 +63,28 @@ export interface HazardScenarioImage {
   /** Cells with water, and the deepest one (metres) */
   wetCells: number;
   maxDepth: number;
+  /** The raw depths in metres as stored (row 0 is the south edge), NaN where nothing floods */
+  depth: Float32Array;
+  georeference: Georeference;
 }
 
+/** Depths from 0 to this many metres are graded; anything deeper shares the darkest colour. */
+export const DEPTH_RAMP_MAX_M = 5;
+/** Opacity of every cell with a value, out of 255 (the server's tiles used the same). */
+export const DEPTH_ALPHA = 190;
+
 /**
- * Depth to colour, exactly as the server's tiles do it: depths run from 0 to 5 m, shallow is pale
- * and deep is darker blue, every cell with a value is 75% opaque, and no data is transparent.
- * Arithmetic is kept to 32-bit floats so each channel lands on the same integer as the server's.
+ * The colour of one depth, exactly as the server's tiles drew it: pale blue at 0 m, darker blue
+ * towards 5 m. Arithmetic is kept to 32-bit floats so each channel lands on the same integer as the
+ * server's. The picture and the legend both use this, so they cannot disagree.
  */
+export function depthRgb(depth: number): [number, number, number] {
+  const clipped = Math.fround(Math.min(Math.max(depth, 0), DEPTH_RAMP_MAX_M));
+  const shallow = Math.fround(1 - Math.fround(clipped / DEPTH_RAMP_MAX_M));
+  return [Math.trunc(Math.fround(120 * shallow)), Math.trunc(Math.fround(200 * shallow)), 255];
+}
+
+/** Depths to RGBA pixels; cells with no value are transparent. `flipRows` turns a south-up grid north-up. */
 export function depthToRgba(
   depth: Float32Array,
   width: number,
@@ -82,19 +97,18 @@ export function depthToRgba(
     for (let col = 0; col < width; col += 1) {
       const value = depth[row * width + col];
       if (Number.isNaN(value)) continue;
-      const clipped = Math.fround(Math.min(Math.max(value, 0), 5));
-      const shallow = Math.fround(1 - Math.fround(clipped / 5));
+      const [red, green, blue] = depthRgb(value);
       const at = (target * width + col) * 4;
-      rgba[at] = Math.trunc(Math.fround(120 * shallow));
-      rgba[at + 1] = Math.trunc(Math.fround(200 * shallow));
-      rgba[at + 2] = 255;
-      rgba[at + 3] = 190;
+      rgba[at] = red;
+      rgba[at + 1] = green;
+      rgba[at + 2] = blue;
+      rgba[at + 3] = DEPTH_ALPHA;
     }
   }
   return rgba;
 }
 
-interface Georeference {
+export interface Georeference {
   epsg: number;
   /** [a, b, 0, tx, d, e, 0, ty, ...]: x = a*col + b*row + tx, y = d*col + e*row + ty, at pixel centres */
   model_transformation: number[];
@@ -158,6 +172,34 @@ export async function hazardProductBounds(
   ];
 }
 
+/** What a point on the map holds in a scenario. */
+export type DepthReading =
+  | { kind: 'depth'; metres: number }
+  /** inside the modelled area, but nothing floods there */
+  | { kind: 'dry' }
+  /** off the edge of the modelled area */
+  | { kind: 'outside' };
+
+/**
+ * The depth under a longitude and latitude. The point is taken to the grid's own metres and rounded
+ * to the nearest cell, which is how the server's tiles sampled it.
+ */
+export function probeDepth(
+  scenario: Pick<HazardScenarioImage, 'depth' | 'width' | 'height' | 'georeference'>,
+  longitude: number,
+  latitude: number
+): DepthReading {
+  const { georeference, width, height, depth } = scenario;
+  const [a, b, , tx, d, e, , ty] = georeference.model_transformation;
+  const [x, y] = lonLatToUtm(longitude, latitude, utmZoneFromEpsg(georeference.epsg));
+  const determinant = a * e - b * d;
+  const col = Math.round(((x - tx) * e - b * (y - ty)) / determinant);
+  const row = Math.round((a * (y - ty) - d * (x - tx)) / determinant);
+  if (!(col >= 0 && col < width && row >= 0 && row < height)) return { kind: 'outside' };
+  const value = depth[row * width + col];
+  return Number.isNaN(value) ? { kind: 'dry' } : { kind: 'depth', metres: value };
+}
+
 const stores = new Map<string, ZarrHttpStore>();
 
 /** One store object per address, so its metadata is fetched once for all the scenarios. */
@@ -207,11 +249,8 @@ export async function loadHazardScenario(
   const leading = dimensions.slice(0, -2).map(axis => (axis === 'slr' ? slrIndex : selectorIndex));
   const { data, height, width } = await store.plane(depthPath, leading);
 
-  const { corners, flipRows } = imageCorners(
-    georeferenceOf(groupAttrs, product.group),
-    width,
-    height
-  );
+  const georeference = georeferenceOf(groupAttrs, product.group);
+  const { corners, flipRows } = imageCorners(georeference, width, height);
   let wetCells = 0;
   let maxDepth = 0;
   for (const value of data) {
@@ -226,5 +265,7 @@ export async function loadHazardScenario(
     corners,
     wetCells,
     maxDepth,
+    depth: data,
+    georeference,
   };
 }

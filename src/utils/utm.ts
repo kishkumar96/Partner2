@@ -1,9 +1,10 @@
 /**
- * WGS84 UTM (EPSG 326xx north, 327xx south) to longitude and latitude.
+ * WGS84 UTM (EPSG 326xx north, 327xx south), in both directions.
  *
- * The hazard rasters are gridded in UTM metres, and a map needs longitude and latitude for the four
- * corners of the picture. This is the Krüger series (the inverse of the one `pyproj` uses), good to
- * well under a millimetre inside a zone, so no projection library is needed for one small raster.
+ * The hazard rasters are gridded in UTM metres. A map needs longitude and latitude for the corners of
+ * the picture, and a click on the map needs the grid cell under it. These are the Krüger series
+ * (the same maths `pyproj` uses), good to well under a millimetre inside a zone, so no projection
+ * library is needed for one small raster.
  */
 
 export interface UtmZone {
@@ -27,6 +28,12 @@ const BETA = [
   N2 / 48 + N3 / 15 - (437 * N4) / 1440,
   (17 * N3) / 480 - (37 * N4) / 840,
   (4397 * N4) / 161280,
+];
+const ALPHA = [
+  N / 2 - (2 * N2) / 3 + (5 * N3) / 16 + (41 * N4) / 180,
+  (13 * N2) / 48 - (3 * N3) / 5 + (557 * N4) / 1440,
+  (61 * N3) / 240 - (103 * N4) / 140,
+  (49561 * N4) / 161280,
 ];
 const DELTA = [
   2 * N - (2 * N2) / 3 - 2 * N3 + (116 * N4) / 45,
@@ -65,4 +72,31 @@ export function utmToLonLat(
   const centralMeridian = (zone * 6 - 183) * (Math.PI / 180);
   const longitude = centralMeridian + Math.atan2(Math.sinh(etaPrime), Math.cos(xiPrime));
   return [(longitude * 180) / Math.PI, (latitude * 180) / Math.PI];
+}
+
+/** Metres within a UTM zone for a longitude and latitude in degrees (the inverse of `utmToLonLat`). */
+export function lonLatToUtm(
+  longitude: number,
+  latitude: number,
+  { zone, south }: UtmZone
+): [number, number] {
+  const phi = (latitude * Math.PI) / 180;
+  const centralMeridian = (zone * 6 - 183) * (Math.PI / 180);
+  const lambda = (longitude * Math.PI) / 180 - centralMeridian;
+
+  const c = (2 * Math.sqrt(N)) / (1 + N);
+  const t = Math.sinh(Math.atanh(Math.sin(phi)) - c * Math.atanh(c * Math.sin(phi)));
+  const xiPrime = Math.atan2(t, Math.cos(lambda));
+  const etaPrime = Math.atanh(Math.sin(lambda) / Math.sqrt(1 + t * t));
+
+  let xi = xiPrime;
+  let eta = etaPrime;
+  for (let j = 1; j <= 4; j += 1) {
+    xi += ALPHA[j - 1] * Math.sin(2 * j * xiPrime) * Math.cosh(2 * j * etaPrime);
+    eta += ALPHA[j - 1] * Math.cos(2 * j * xiPrime) * Math.sinh(2 * j * etaPrime);
+  }
+  return [
+    FALSE_EASTING + K0 * RECTIFYING_RADIUS * eta,
+    (south ? FALSE_NORTHING_SOUTH : 0) + K0 * RECTIFYING_RADIUS * xi,
+  ];
 }

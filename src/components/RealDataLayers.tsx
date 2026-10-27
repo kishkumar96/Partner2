@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useMemo } from 'react';
-import { Map as MapLibreMap } from 'maplibre-gl';
+import { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { FilterState } from '@/types';
 import {
@@ -15,6 +15,7 @@ import {
 import { loadCycloneForecastTrack } from '@/utils/cycloneAnimationLoader';
 import { hazardZarrEnabled } from '@/utils/hazardZarr';
 import { addHazardZarrLayer } from '@/utils/hazardZarrMapLayer';
+import { attachDepthProbe, type DepthProbeMap, type ProbeMarker } from '@/utils/hazardDepthProbe';
 import {
   loadCycloneTrackData,
   DATA_PATH,
@@ -189,6 +190,14 @@ export default function RealDataLayers({
   // Hazard layers the map still wants. A scenario read from the Zarr store arrives after the pass that
   // asked for it, so it checks here whether it should be visible by the time it is ready.
   const wantedHazardLayerIdsRef = useRef<Set<string>>(new Set());
+
+  // Click the map to read the flood depth of a scenario drawn from the Zarr store
+  useEffect(() => {
+    if (!map) return;
+    return attachDepthProbe(map as unknown as DepthProbeMap, {
+      createMarker: element => new Marker({ element, anchor: 'bottom' }) as unknown as ProbeMarker,
+    });
+  }, [map]);
   const loadingStateRef = useRef<{
     cycloneTracks: boolean;
     hazards: boolean;

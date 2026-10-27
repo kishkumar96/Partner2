@@ -72,6 +72,21 @@ browser reads the Zarr store from Wasabi directly. The API only has to say where
    simply not drawn (the console says why). If rows and the store describe the same scenario it is
    offered once, from the store (`mergeHazardLayers`).
 
+5. **Depth at a click** (`src/utils/hazardDepthProbe.ts`). The browser holds each drawn scenario's raw
+   depths, so a click on the map drops a small chip at the point ("1.53 m deep", "No flooding
+   modelled here", or "Outside the modelled area"). The point is taken to the grid's own UTM metres
+   (`lonLatToUtm`) and rounded to the nearest cell, the way the server's tiles sampled it, so a click
+   and the colour under it always agree. It is a marker and not a popup, so it does not collide with
+   the popups other layers open; it closes with its × button or Escape, moves with the next click,
+   and goes when its scenario is switched off. It acts only while a scenario from the store is
+   visible, so other clicks are left alone. The raw depths of the last two scenarios drawn are kept
+   (about 20 MB each); a click on an older one reads it again.
+6. **Legend** (`src/components/ZarrDepthLegend.tsx`, used by `UnifiedMapLegend`). A scenario from the
+   store gets its exact scale: 0 to 5 m (5 m and deeper share the darkest colour), with a note that no
+   colour means no flooding was modelled. The colours come from `depthRgb`, the same function that
+   paints the picture, and are shown at the opacity the map paints them, so the two cannot drift.
+   Other hazard layers keep their THREDDS legend.
+
 `NEXT_PUBLIC_HAZARD_ZARR_DIRECT=false` turns all of this off: pointer rows are ignored and the
 server-drawn tiles are used. The proxy (`src/utils/partnerProxyPath.ts`) never adds a trailing slash
 to `hazard_zarr` paths, since chunk names such as `slr/0` have no extension.

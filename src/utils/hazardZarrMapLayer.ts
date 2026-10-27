@@ -1,6 +1,8 @@
 import {
   loadHazardScenario,
+  probeDepth,
   storeFor,
+  type DepthReading,
   type HazardScenarioImage,
   type HazardScenarioRef,
   type ImageCorners,
@@ -56,8 +58,12 @@ export function encodePng(image: HazardScenarioImage): string {
   return canvas.toDataURL('image/png');
 }
 
+/** What a click needs from a loaded scenario: its raw depths and where they sit. */
+type ScenarioRaster = Pick<HazardScenarioImage, 'depth' | 'width' | 'height' | 'georeference'>;
+
 async function loadAndEncode(scenario: HazardScenarioRef): Promise<EncodedScenario> {
   const image = await loadHazardScenario(storeFor(scenario.storeUrl), scenario);
+  rememberRaster(scenario, image);
   return { dataUrl: encodePng(image), corners: image.corners };
 }
 
@@ -86,9 +92,60 @@ function cached(
   return started;
 }
 
+/**
+ * The raw depths of the scenarios drawn most recently. A raster is about 20 MB, so only the last two
+ * are kept, which covers the one on screen and the one just left; a click on anything older reads it
+ * again.
+ */
+const RASTER_CACHE_SIZE = 2;
+const rasters = new Map<string, Promise<ScenarioRaster>>();
+
+function keepRaster(key: string, raster: Promise<ScenarioRaster>) {
+  rasters.delete(key);
+  rasters.set(key, raster);
+  while (rasters.size > RASTER_CACHE_SIZE) rasters.delete(rasters.keys().next().value as string);
+}
+
+function rememberRaster(scenario: HazardScenarioRef, image: ScenarioRaster) {
+  keepRaster(keyOf(scenario), Promise.resolve(image));
+}
+
+/**
+ * How deep the water is at a point in a scenario. Uses the raster the picture was made from when it
+ * is still held, and reads the scenario again when it is not.
+ */
+export async function readScenarioDepth(
+  scenario: HazardScenarioRef,
+  longitude: number,
+  latitude: number,
+  loadRaster: (scenario: HazardScenarioRef) => Promise<ScenarioRaster> = s =>
+    loadHazardScenario(storeFor(s.storeUrl), s)
+): Promise<DepthReading> {
+  const key = keyOf(scenario);
+  let raster = rasters.get(key);
+  if (raster) {
+    keepRaster(key, raster); // most recently used last
+  } else {
+    raster = loadRaster(scenario);
+    keepRaster(key, raster);
+    raster.catch(() => rasters.delete(key));
+  }
+  return probeDepth(await raster, longitude, latitude);
+}
+
 /** Forget what was read (for tests, and after the store in the bucket is replaced). */
 export function clearHazardScenarioCache(): void {
   finished.clear();
+  rasters.clear();
+}
+
+/** The hazard layers this module has put on each map, so a click knows which scenarios to ask about. */
+const placed = new WeakMap<object, Map<string, HazardScenarioRef>>();
+
+export function hazardZarrLayersOn(
+  map: object
+): Array<{ layerId: string; scenario: HazardScenarioRef }> {
+  return [...(placed.get(map) ?? [])].map(([layerId, scenario]) => ({ layerId, scenario }));
 }
 
 /** One load at a time per layer on a map, however many times the map's layers are reconciled. */
@@ -153,6 +210,9 @@ export async function addHazardZarrLayer(
       console.warn(`Hazard layer ${layerId}: the map could not take the picture.`, error);
       return 'skipped';
     }
+    let known = placed.get(map);
+    if (!known) placed.set(map, (known = new Map()));
+    known.set(layerId, scenario);
     return 'added';
   } finally {
     pending.delete(layerId);

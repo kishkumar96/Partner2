@@ -10,6 +10,7 @@ import {
 import { formatCurrency } from '@/utils/formatters';
 import { WIND_SEQUENTIAL_COLORS, getLossSequentialColors } from '@/utils/colorSystem';
 import { RealWMSLayer } from '@/data/realThreddsLayers';
+import ZarrDepthLegend from '@/components/ZarrDepthLegend';
 import { CountryCode } from '@/types/thredds';
 
 import { BUILDING_DAMAGE_COLORS, ROAD_DAMAGE_COLORS } from '@/theme/colors';
@@ -165,6 +166,9 @@ export default function UnifiedMapLegend({
 }: UnifiedMapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasActiveWmsLayers = activeWmsLayers.length > 0;
+  // scenarios drawn from the Zarr store have an exact scale of their own; the rest are THREDDS layers
+  const zarrLayers = activeWmsLayers.filter(layer => layer.zarrScenario);
+  const wmsOnlyLayers = activeWmsLayers.filter(layer => !layer.zarrScenario);
 
   // Legend classes mirror the exact static thresholds used by map paint expressions.
   const legendClasses = useMemo(() => {
@@ -430,8 +434,28 @@ export default function UnifiedMapLegend({
               )}
             </div>
 
+            {/* Hazard scenarios read from the Zarr store: the exact depth scale */}
+            {zarrLayers.length > 0 && (
+              <>
+                <div className="px-3 py-2 border-t border-white/10">
+                  <h4 className="text-xs font-bold text-blue-300 mb-0.5 flex items-center gap-1.5">
+                    <Droplet className="w-3 h-3" />
+                    Flood Depth Scenario
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Modelled flood depth from the hazard catalogue
+                  </p>
+                </div>
+                <div className="px-2 py-2 space-y-3">
+                  {zarrLayers.map(layer => (
+                    <ZarrDepthLegend key={layer.id} layer={layer} />
+                  ))}
+                </div>
+              </>
+            )}
+
             {/* THREDDS WMS Hazard Layers (when active) */}
-            {activeWmsLayers && activeWmsLayers.length > 0 && (
+            {wmsOnlyLayers.length > 0 && (
               <>
                 <div className="px-3 py-2 border-t border-white/10">
                   <h4 className="text-xs font-bold text-purple-400 mb-0.5 flex items-center gap-1.5">
@@ -448,7 +472,7 @@ export default function UnifiedMapLegend({
                 </div>
 
                 <div className="px-2 py-2 space-y-3">
-                  {activeWmsLayers.map((layer, layerIndex) => {
+                  {wmsOnlyLayers.map((layer, layerIndex) => {
                     const parsedRange =
                       layer.styleConfig?.colorScaleRange
                         ?.split(',')

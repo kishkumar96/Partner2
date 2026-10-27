@@ -2,13 +2,17 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
 import {
+  DEPTH_ALPHA,
+  depthRgb,
   depthToRgba,
   hazardZarrEnabled,
   imageCorners,
   loadHazardScenario,
   parseHazardTileUrl,
+  probeDepth,
   storeFor,
 } from '../hazardZarr';
+import { utmToLonLat, utmZoneFromEpsg } from '../utm';
 import { ZarrHttpStore } from '../zarrReader';
 
 const ROOT = join(__dirname, 'fixtures', 'hazard_zarr_mini');
@@ -243,5 +247,90 @@ describe('storeFor', () => {
   it('shares one store, and its cached metadata, per address', () => {
     expect(storeFor('/a/hazard_zarr')).toBe(storeFor('/a/hazard_zarr'));
     expect(storeFor('/a/hazard_zarr')).not.toBe(storeFor('/b/hazard_zarr'));
+  });
+});
+
+describe('depthRgb', () => {
+  it('is the colour of each depth on the legend and the picture alike', () => {
+    expect(depthRgb(0)).toEqual([120, 200, 255]);
+    expect(depthRgb(2.5)).toEqual([60, 100, 255]);
+    expect(depthRgb(5)).toEqual([0, 0, 255]);
+    expect(depthRgb(40)).toEqual([0, 0, 255]); // deeper than 5 m shares the darkest colour
+    expect(depthRgb(-3)).toEqual([120, 200, 255]);
+  });
+
+  it('is what depthToRgba draws', () => {
+    const rgba = depthToRgba(new Float32Array([0.7, 3.3]), 2, 1, false);
+    for (const [i, depth] of [0.7, 3.3].entries()) {
+      expect(Array.from(rgba.slice(i * 4, i * 4 + 4))).toEqual([
+        ...depthRgb(Math.fround(depth)),
+        DEPTH_ALPHA,
+      ]);
+    }
+  });
+});
+
+describe('probeDepth', () => {
+  /** Longitude and latitude of the centre of a cell of the 10 x 6 fixture grid */
+  const centreOf = (
+    scenario: Awaited<ReturnType<typeof loadHazardScenario>>,
+    col: number,
+    row: number
+  ) => {
+    const [a, b, , tx, d, e, , ty] = scenario.georeference.model_transformation;
+    return utmToLonLat(
+      a * col + b * row + tx,
+      d * col + e * row + ty,
+      utmZoneFromEpsg(scenario.georeference.epsg)
+    );
+  };
+  // depth = 0*100 + 1*10 + y + x/10, where y is the row counted from the south edge
+  const load = () => loadHazardScenario(miniStore(), { source: 'tc', slr: 0.5, selector: '10' });
+
+  it('reads the depth of the cell under a point, whichever cell it is', async () => {
+    const scenario = await load();
+    for (const [col, row] of [
+      [0, 0],
+      [3, 2],
+      [9, 5],
+      [5, 4],
+    ]) {
+      const [lon, lat] = centreOf(scenario, col, row);
+      const reading = probeDepth(scenario, lon, lat);
+      expect(reading.kind).toBe('depth');
+      expect((reading as { metres: number }).metres).toBeCloseTo(10 + row + col / 10, 4);
+    }
+  });
+
+  it('answers for the cell the point falls in, switching halfway between two cell centres', async () => {
+    const scenario = await load();
+    const [lonA, latA] = centreOf(scenario, 3, 2);
+    const [lonB] = centreOf(scenario, 4, 2);
+    const at = (fraction: number) =>
+      probeDepth(scenario, lonA + (lonB - lonA) * fraction, latA) as { metres: number };
+    expect(at(0.4).metres).toBeCloseTo(12.3, 4);
+    expect(at(0.6).metres).toBeCloseTo(12.4, 4);
+  });
+
+  it('says a cell with no data is dry, not that it is missing', async () => {
+    // the chunk that was never written is rows 3-5 of columns 5-9 for 50 and 100 year return periods
+    const scenario = await loadHazardScenario(miniStore(), {
+      source: 'tc',
+      slr: 0.5,
+      selector: '100',
+    });
+    const [lon, lat] = centreOf(scenario, 7, 4);
+    expect(probeDepth(scenario, lon, lat)).toEqual({ kind: 'dry' });
+    const [lonKept, latKept] = centreOf(scenario, 2, 4);
+    expect(probeDepth(scenario, lonKept, latKept).kind).toBe('depth');
+  });
+
+  it('says a point off the grid is outside it', async () => {
+    const scenario = await load();
+    expect(probeDepth(scenario, -159.8, -21.3)).toEqual({ kind: 'outside' });
+    const [lon, lat] = centreOf(scenario, -2, 0);
+    expect(probeDepth(scenario, lon, lat)).toEqual({ kind: 'outside' });
+    const [lonEdge, latEdge] = centreOf(scenario, 10, 5);
+    expect(probeDepth(scenario, lonEdge, latEdge)).toEqual({ kind: 'outside' });
   });
 });

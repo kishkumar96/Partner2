@@ -1,6 +1,8 @@
 import {
   addHazardZarrLayer,
   clearHazardScenarioCache,
+  hazardZarrLayersOn,
+  readScenarioDepth,
   type EncodedScenario,
   type HazardLayerMap,
   type HazardLayerOptions,
@@ -185,5 +187,92 @@ describe('addHazardZarrLayer', () => {
       options({ load, scenario: { ...SCENARIO, selector: '0' } })
     ); // oldest: gone
     expect(load).toHaveBeenCalledTimes(11);
+  });
+});
+
+describe('hazardZarrLayersOn', () => {
+  it('lists the layers placed on a map, and only those that were drawn from the store', async () => {
+    const map = fakeMap();
+    await addHazardZarrLayer(map, options());
+    await addHazardZarrLayer(
+      map,
+      options({
+        sourceId: 'wms-8',
+        layerId: 'wms-layer-8',
+        scenario: { ...SCENARIO, selector: '50' },
+      })
+    );
+    const failing = jest.fn(async () => {
+      throw new Error('boom');
+    });
+    await addHazardZarrLayer(
+      map,
+      options({
+        sourceId: 'wms-9',
+        layerId: 'wms-layer-9',
+        scenario: { ...SCENARIO, selector: '25' },
+        load: failing,
+      })
+    );
+    expect(hazardZarrLayersOn(map).map(l => l.layerId)).toEqual(['wms-layer-7', 'wms-layer-8']);
+    expect(hazardZarrLayersOn(map)[0].scenario).toEqual(SCENARIO);
+    expect(hazardZarrLayersOn(fakeMap())).toEqual([]);
+  });
+});
+
+describe('readScenarioDepth', () => {
+  // two cells side by side at the first cell of the Rarotonga grid: 1.5 m, then no data
+  const raster = {
+    width: 2,
+    height: 1,
+    depth: new Float32Array([1.5, Number.NaN]),
+    georeference: {
+      epsg: 32704,
+      model_transformation: [5, 0, 0, 413152.5, 0, 5, 0, 7646506.5, 0, 0, 0, 0, 0, 0, 0, 1],
+    },
+  };
+  const first = [-159.8371998181614, -21.281144619320166] as const;
+
+  it("reads the depth under a point from the scenario's raster", async () => {
+    const load = jest.fn(async () => raster);
+    expect(await readScenarioDepth(SCENARIO, first[0], first[1], load)).toEqual({
+      kind: 'depth',
+      metres: 1.5,
+    });
+    expect(await readScenarioDepth(SCENARIO, -159.5, -21.0, load)).toEqual({ kind: 'outside' });
+  });
+
+  it('reads a scenario once however many points are asked about', async () => {
+    const load = jest.fn(async () => raster);
+    await readScenarioDepth(SCENARIO, first[0], first[1], load);
+    await readScenarioDepth(SCENARIO, first[0], first[1], load);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the last two rasters only, reading an older one again', async () => {
+    const load = jest.fn(async () => raster);
+    const scenario = (selector: string) => ({ ...SCENARIO, selector });
+    for (const selector of ['1', '2', '3'])
+      await readScenarioDepth(scenario(selector), first[0], first[1], load);
+    expect(load).toHaveBeenCalledTimes(3);
+    await readScenarioDepth(scenario('3'), first[0], first[1], load);
+    await readScenarioDepth(scenario('2'), first[0], first[1], load);
+    expect(load).toHaveBeenCalledTimes(3); // the two newest are still held
+    await readScenarioDepth(scenario('1'), first[0], first[1], load);
+    expect(load).toHaveBeenCalledTimes(4); // the oldest was let go
+  });
+
+  it('does not remember a failed read', async () => {
+    const failing = jest.fn(async () => {
+      throw new Error('HTTP 503');
+    });
+    await expect(readScenarioDepth(SCENARIO, first[0], first[1], failing)).rejects.toThrow(
+      'HTTP 503'
+    );
+    const ok = jest.fn(async () => raster);
+    expect(await readScenarioDepth(SCENARIO, first[0], first[1], ok)).toEqual({
+      kind: 'depth',
+      metres: 1.5,
+    });
   });
 });
