@@ -175,3 +175,13 @@ test-results/
 .analyze
 stats.json
 
+
+# local logs and scratch output
+dev.log
+test.txt
+stats.txt
+npmtest.txt
+localhost_*.html
+
+# filled-in cloud credentials
+wasabi.env
