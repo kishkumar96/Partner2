@@ -105,7 +105,7 @@ describe('UnifiedMapLegend, hazard scenarios', () => {
     open([zarrLayer]);
     expect(screen.getByText('Flood Depth Scenario')).toBeInTheDocument();
     expect(screen.getByTestId('zarr-depth-legend')).toHaveTextContent(zarrLayer.name);
-    expect(screen.getByText('Click the map to read the depth at a point.')).toBeInTheDocument();
+    expect(screen.getByText(/Click the map to read the depth at a point/)).toBeInTheDocument();
     expect(screen.queryByText('Historical Hazard Rasters')).not.toBeInTheDocument();
     expect(screen.queryByText(/Palette bars are visual previews/)).not.toBeInTheDocument();
   });

@@ -54,6 +54,7 @@ describe('ZarrDepthLegend', () => {
   it('explains that no colour means no flooding, and that the map can be clicked', () => {
     render(<ZarrDepthLegend layer={layer} />);
     expect(screen.getByText('No colour: no flooding modelled.')).toBeInTheDocument();
-    expect(screen.getByText('Click the map to read the depth at a point.')).toBeInTheDocument();
+    expect(screen.getByText(/Click the map to read the depth at a point/)).toBeInTheDocument();
+    expect(screen.getByText(/press Enter to read the depth at its centre/)).toBeInTheDocument();
   });
 });

@@ -79,7 +79,9 @@ browser reads the Zarr store from Wasabi directly. The API only has to say where
    and the colour under it always agree. It is a marker and not a popup, so it does not collide with
    the popups other layers open; it closes with its × button or Escape, moves with the next click,
    and goes when its scenario is switched off. It acts only while a scenario from the store is
-   visible, so other clicks are left alone. The raw depths of the last two scenarios drawn are kept
+   visible, so other clicks are left alone. From the keyboard, focus the map (a centre crosshair appears), move it with the arrow keys and
+   press Enter to read the depth at its centre; the reading is also announced through a polite live
+   region for screen readers. The raw depths of the last two scenarios drawn are kept
    (about 20 MB each); a click on an older one reads it again.
 6. **Legend** (`src/components/ZarrDepthLegend.tsx`, used by `UnifiedMapLegend`). A scenario from the
    store gets its exact scale: 0 to 5 m (5 m and deeper share the darkest colour), with a note that no

@@ -7,6 +7,11 @@ import { hazardZarrLayersOn, readScenarioDepth, type HazardLayerMap } from './ha
  * Wherever a hazard scenario is drawn from the Zarr store, the browser holds its raw depths, so a
  * click can be answered on the spot: a small chip is dropped at the point with the depth under it.
  * It is a marker, not a popup, so it does not collide with the popups other layers open on click.
+ *
+ * It works without a mouse too. The map is focusable and its arrow keys pan it, so with a scenario
+ * showing, Enter reads the depth at the centre of the map; a crosshair marks the centre while the
+ * map has focus. A hidden live region says what to do when the map gets focus and announces every
+ * reading, so a screen reader hears the answer as well as seeing the chip.
  */
 
 export interface ProbeMarker {
@@ -18,6 +23,9 @@ export interface ProbeMarker {
 /** The map calls used, so a fake can stand in for the map in tests. */
 export interface DepthProbeMap extends HazardLayerMap {
   getLayoutProperty(layerId: string, name: string): unknown;
+  getCanvas(): HTMLElement;
+  getContainer(): HTMLElement;
+  getCenter(): { lng: number; lat: number };
   on(type: 'click' | 'styledata', listener: (event: never) => void): unknown;
   off(type: 'click' | 'styledata', listener: (event: never) => void): unknown;
 }
@@ -54,6 +62,44 @@ const CHIP_STYLE: Partial<CSSStyleDeclaration> = {
   cursor: 'default',
 };
 
+/** What is said when the map gets focus while a scenario is showing. */
+export const FOCUS_HINT =
+  'A flood depth scenario is shown. Use the arrow keys to move the map, then press Enter to read the depth at its centre.';
+
+/** Hidden from sight, read out by screen readers. */
+const VISUALLY_HIDDEN: Partial<CSSStyleDeclaration> = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  margin: '-1px',
+  padding: '0',
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: '0',
+};
+
+/** A small plus at the middle of the map, so the point Enter will read is visible. */
+function buildCrosshair(): HTMLElement {
+  const crosshair = document.createElement('div');
+  crosshair.className = 'hazard-depth-crosshair';
+  crosshair.setAttribute('aria-hidden', 'true');
+  Object.assign(crosshair.style, {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '22px',
+    height: '22px',
+    transform: 'translate(-50%, -50%)',
+    pointerEvents: 'none',
+    zIndex: '2',
+    background:
+      'linear-gradient(#0f172a, #0f172a) center / 2px 100% no-repeat, linear-gradient(#0f172a, #0f172a) center / 100% 2px no-repeat',
+    filter: 'drop-shadow(0 0 1px #f8fafc) drop-shadow(0 0 1px #f8fafc)',
+  } satisfies Partial<CSSStyleDeclaration>);
+  return crosshair;
+}
+
 function buildChip(text: string, onClose: () => void): HTMLElement {
   const chip = document.createElement('div');
   chip.className = 'hazard-depth-chip';
@@ -88,11 +134,26 @@ function buildChip(text: string, onClose: () => void): HTMLElement {
   return chip;
 }
 
-/** Start answering clicks on the map; returns a function that stops and clears the reading. */
+/** Start answering clicks and Enter on the map; returns a function that stops and clears everything. */
 export function attachDepthProbe(map: DepthProbeMap, options: DepthProbeOptions): () => void {
   const { createMarker, read = readScenarioDepth } = options;
+  const container = map.getContainer();
+  const canvas = map.getCanvas();
   let shown: { marker: ProbeMarker; layerId: string } | null = null;
+  let crosshair: HTMLElement | null = null;
   let latest = 0;
+
+  // Screen readers hear a change to an existing live region, so one is kept and rewritten.
+  const announcer = document.createElement('div');
+  announcer.className = 'hazard-depth-announcer';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+  Object.assign(announcer.style, VISUALLY_HIDDEN);
+  container.append(announcer);
+  const announce = (text: string) => {
+    announcer.textContent = '';
+    announcer.textContent = text; // cleared first, so the same words are announced again
+  };
 
   const clear = () => {
     shown?.marker.remove();
@@ -105,25 +166,27 @@ export function attachDepthProbe(map: DepthProbeMap, options: DepthProbeOptions)
 
   const isVisible = (layerId: string) =>
     Boolean(map.getLayer(layerId)) && map.getLayoutProperty(layerId, 'visibility') !== 'none';
+  const visibleScenarios = () =>
+    hazardZarrLayersOn(map).filter(({ layerId }) => isVisible(layerId));
 
-  const onClick = async (event: { lngLat: { lng: number; lat: number } }) => {
-    const visible = hazardZarrLayersOn(map).filter(({ layerId }) => isVisible(layerId));
+  const probeAt = async (lng: number, lat: number, where: string) => {
+    const visible = visibleScenarios();
     if (visible.length === 0) return;
     // the layer drawn last is on top
     const { layerId, scenario } = visible[visible.length - 1];
-    const { lng, lat } = event.lngLat;
     const mine = ++latest;
 
     let reading: DepthReading | null = null;
     try {
       reading = await read(scenario, lng, lat);
     } catch (error) {
-      console.warn('Could not read the flood depth at the clicked point.', error);
+      console.warn('Could not read the flood depth at the chosen point.', error);
     }
-    if (mine !== latest) return; // a newer click came in while this one was being read
+    if (mine !== latest) return; // a newer reading was asked for while this one was being read
 
     clear();
-    const chip = buildChip(formatDepthReading(reading), clear);
+    const text = formatDepthReading(reading);
+    const chip = buildChip(text, clear);
     shown = {
       marker: createMarker(chip)
         .setLngLat([lng, lat])
@@ -131,19 +194,55 @@ export function attachDepthProbe(map: DepthProbeMap, options: DepthProbeOptions)
       layerId,
     };
     document.addEventListener('keydown', onKey);
+    announce(`Flood depth at the ${where}: ${text}`);
+  };
+
+  const onClick = (event: { lngLat: { lng: number; lat: number } }) =>
+    probeAt(event.lngLat.lng, event.lngLat.lat, 'clicked point');
+
+  // Enter reads the centre; every other key is left to the map (arrows pan, + and - zoom)
+  const onCanvasKey = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || visibleScenarios().length === 0) return;
+    event.preventDefault();
+    const { lng, lat } = map.getCenter();
+    void probeAt(lng, lat, 'centre of the map');
+  };
+
+  const showCrosshair = () => {
+    if (crosshair || visibleScenarios().length === 0) return;
+    crosshair = buildCrosshair();
+    container.append(crosshair);
+  };
+  const hideCrosshair = () => {
+    crosshair?.remove();
+    crosshair = null;
+  };
+  const onFocus = () => {
+    if (visibleScenarios().length === 0) return;
+    showCrosshair();
+    announce(FOCUS_HINT);
   };
 
   // when the scenario that was read is switched off or replaced, its reading goes too
   const onStyle = () => {
     if (shown && !isVisible(shown.layerId)) clear();
+    if (crosshair && visibleScenarios().length === 0) hideCrosshair();
   };
 
   map.on('click', onClick as (event: never) => void);
   map.on('styledata', onStyle as (event: never) => void);
+  canvas.addEventListener('keydown', onCanvasKey);
+  canvas.addEventListener('focus', onFocus);
+  canvas.addEventListener('blur', hideCrosshair);
   return () => {
     latest += 1;
     map.off('click', onClick as (event: never) => void);
     map.off('styledata', onStyle as (event: never) => void);
+    canvas.removeEventListener('keydown', onCanvasKey);
+    canvas.removeEventListener('focus', onFocus);
+    canvas.removeEventListener('blur', hideCrosshair);
     clear();
+    hideCrosshair();
+    announcer.remove();
   };
 }

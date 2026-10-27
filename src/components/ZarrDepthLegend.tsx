@@ -57,7 +57,10 @@ export default function ZarrDepthLegend({ layer }: { layer: Pick<RealWMSLayer, '
         />
         No colour: no flooding modelled.
       </p>
-      <p className="mt-1 text-xs text-slate-400">Click the map to read the depth at a point.</p>
+      <p className="mt-1 text-xs text-slate-400">
+        Click the map to read the depth at a point. From the keyboard, focus the map, move it with
+        the arrow keys and press Enter to read the depth at its centre.
+      </p>
     </div>
   );
 }
