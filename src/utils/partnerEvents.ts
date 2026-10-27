@@ -210,6 +210,79 @@ export function linkEventRisksFromModelRuns(
   });
 }
 
+const ADVISORY_STAMP = /\b(\d{10})\b/;
+
+/** "2026101906" (YYYYMMDDHH, UTC) as an ISO time. */
+function advisoryStampToIso(stamp: string): string {
+  return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(8, 10)}:00:00Z`;
+}
+
+/** The advisory time a run's risk titles carry ("TC Wati 2026101906 - wind swaths"). */
+function advisoryStampOf(rows: Array<Record<string, unknown>>): string | null {
+  for (const row of rows) {
+    const found = ADVISORY_STAMP.exec(String(row.title ?? ''))?.[1];
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * One record per advisory when the API lists several model runs on an Event but not the
+ * `forecast_runs` that normalizePartnerEventRecords reads (the ModelRun endpoint needs a
+ * login). A run is told apart by its risk rows (`model_run`), its advisory time by the
+ * stamp in their titles, and its track by that stamp. The newest advisory keeps the
+ * Event's id, so shared links to it keep working. A run with no risk rows, or no stamp,
+ * cannot be placed in time and is left out; with fewer than two usable runs the Event is
+ * returned as it was.
+ */
+export function expandEventModelRuns(
+  events: EventRecord[],
+  riskRows: Array<Record<string, unknown>>,
+  trackRows: Array<Record<string, unknown>>
+): EventRecord[] {
+  return events.flatMap(event => {
+    const runIds = event.backendModelRunIds ?? [];
+    if (!event.isForecast || event.forecastRunId || runIds.length < 2) return [event];
+    const runs = runIds
+      .map(runId => {
+        const rows = riskRows.filter(row => riskRowModelRunId(row) === runId);
+        const stamp = advisoryStampOf(rows);
+        return stamp ? { runId, rows, stamp } : null;
+      })
+      .filter((run): run is NonNullable<typeof run> => run !== null);
+    if (runs.length < 2) return [event];
+    runs.sort((a, b) => b.stamp.localeCompare(a.stamp) || Number(b.runId) - Number(a.runId));
+    const storm = stormOfEvent(event);
+    return runs.map((run, index) => {
+      const issued = advisoryStampToIso(run.stamp);
+      const trackId = inferEventTrackId(
+        { ...event, backendCycloneTrackId: undefined, backendModelRunIds: [run.runId] },
+        trackRows,
+        run.rows
+      );
+      return {
+        ...event,
+        id: index === 0 ? event.id : `${event.id}-run-${run.runId}`,
+        forecastRunId: run.runId,
+        cycloneName: `${run.stamp}_${storm}`,
+        date: normalizeDateValue(issued) || event.date,
+        trackIssuedTime: issued,
+        backendModelRunIds: [run.runId],
+        backendRiskIds: run.rows.map(row => toIdString(row.id)).filter((id): id is string => !!id),
+        backendCycloneTrackId: trackId ?? undefined,
+        modelRunStatus: 'complete',
+      };
+    });
+  });
+}
+
+function stormOfEvent(event: Pick<EventRecord, 'name' | 'cycloneName'>): string {
+  const named = (event.cycloneName || event.name.replace(/^(tropical\s+)?(cyclone|tc)\s+/i, ''))
+    .replace(/^\d{8,12}_/, '')
+    .trim();
+  return named;
+}
+
 /**
  * Pick the cyclone track for an Event that does not name one (the ModelRun that
  * knows its track needs a login). Same storm by name; the advisory time that its
@@ -222,9 +295,7 @@ export function inferEventTrackId(
 ): string | null {
   if (event.backendCycloneTrackId) return event.backendCycloneTrackId;
   if ((event.backendModelRunIds?.length ?? 0) === 0) return null;
-  const storm = (event.cycloneName || event.name.replace(/^(tropical\s+)?(cyclone|tc)\s+/i, ''))
-    .trim()
-    .toLowerCase();
+  const storm = stormOfEvent(event).toLowerCase();
   if (!storm) return null;
   const sameStorm = trackRows.filter(row =>
     String(row.cyclone_name ?? '')
@@ -243,6 +314,15 @@ export function inferEventTrackId(
         Date.parse(String(b.issued_time ?? '')) - Date.parse(String(a.issued_time ?? '')) ||
         Number(b.id) - Number(a.id)
     )[0];
-  const pick = latest(exact.length > 0 ? exact : sameStorm);
+  // Two tracks can carry one stamp (a re-ingest with a wrong issue time); the one issued at
+  // the stamp's own time is the advisory itself.
+  const issuedAtStamp = stamp
+    ? exact.filter(
+        row => Date.parse(String(row.issued_time ?? '')) === Date.parse(advisoryStampToIso(stamp))
+      )
+    : [];
+  const pick = latest(
+    issuedAtStamp.length > 0 ? issuedAtStamp : exact.length > 0 ? exact : sameStorm
+  );
   return pick ? toIdString(pick.id) : null;
 }

@@ -33,6 +33,7 @@ import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { buildForecastExposure } from '@/utils/forecastExposure';
 import { previousAdvisory } from '@/utils/forecastComparison';
 import {
+  expandEventModelRuns,
   inferEventTrackId,
   linkEventRisksFromModelRuns,
   normalizeDateValue,
@@ -2211,13 +2212,17 @@ async function loadPartnerApiCountryData(
       eventPayload,
       mapping.countryId
     );
-    // Runs of this country's events. Their risk rows carry model_run and no country,
-    // so they are fetched by run too: a server that filters ?country= would drop them.
+    // Runs of this country's events. Their risk rows carry model_run and no country, so a
+    // server that filters ?country= would drop them. Ask for a run on its own only when the
+    // listing above holds none of its rows: a server that ignores the filters answers every
+    // such request with the whole table (about 110 MB on the shared API).
     const modelRunIds = [
       ...new Set(normalizedEventRecords.flatMap(record => record.backendModelRunIds ?? [])),
     ];
+    const listedRuns = new Set(toArrayPayload(riskPayload).map(riskRowModelRunId));
+    const missingRunIds = modelRunIds.filter(runId => !listedRuns.has(runId));
     const runRiskPayloads = await Promise.all(
-      modelRunIds.map(runId =>
+      missingRunIds.map(runId =>
         fetchPartnerCollection(
           `${mapping.endpoints.resource.risk_information}?model_run=${runId}&defer_large_assets=true`,
           signal
@@ -2228,7 +2233,10 @@ async function loadPartnerApiCountryData(
       const run = riskRowModelRunId(row);
       return run !== null && modelRunIds.includes(run);
     });
-    const eventRecords = linkEventRisksFromModelRuns(normalizedEventRecords, runRiskRows);
+    const eventRecords = linkEventRisksFromModelRuns(
+      expandEventModelRuns(normalizedEventRecords, runRiskRows, toArrayPayload(cyclonePayload)),
+      runRiskRows
+    );
     const activeEventRecord =
       eventRecords.length > 0
         ? resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange)
