@@ -8,14 +8,16 @@ The one place that says what is current. Agents and people: read this first, upd
 - **Don't:** edit `/data/Partner2` (the user's own working tree, with uncommitted changes), or share a checkout with another session.
 
 ## Deployed
-- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): image built on 22 Oct from a hand-made tarball; commit not recorded. It does not contain the Zarr flood depths, the scenario fallback, the model-runs adapter or the Context header.
-- **Next build:** `git archive` of the working branch head; build on WSL, ship, switch with `~/deploy-new-image.sh`. Record the commit here after the switch.
-- **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not yet switched to the shared API (`pacific-disaster-api.spc.int`): `event/?country=` works (checked 2026-10-28), but `risk_information` still ignores `?country=`, `?event=` and `?model_run=` and sends the whole 112 MB table; `cyclone_track` and `hazard_information` ignore `?country=` too.
+- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): image built **22 Oct** from a hand-made tarball, build id `1_mI-CcYuTbYAvJBkYGU_`, commit not recorded. Checked 2026-10-28: it contains none of the Zarr flood depths, the depth chip, the scenario-loss reader, the storm filters or the Context header.
+- **Ready to deploy:** `~/dashboard-source-258ac77.tar.gz` on the server (md5 `1857a6fe0d5e64cb01d6308aa74b6d44`), a `git archive` of `integration/ready-to-build` at `258ac77`. Later commits are docs only.
+- **How to deploy** (the server cannot run `next build`): see "Deploying a prebuilt image" in `DEPLOYMENT.md`. The switch script `~/deploy-new-image.sh` (copy in `scripts/ops/`) refuses an old image before changing anything, and checks the served build id after.
+- **After a deploy:** write the commit and the new build id here.
+- **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not switched to the shared API: see `docs/SHARED_API.md` (risk data is 112 MB per page there).
 
 ## The shared API's conventions (read before testing it)
 - Its filters are **routes**, not query parameters: the only one so far is `GET /event/country/{country_id}/` (found in `/partner_api/schema/`; `event/?country=` also works). Re-read the schema after he changes anything: `curl -s https://pacific-disaster-api.spc.int/partner_api/schema/`.
 - `risk_information` (2026-10-28) accepts only `page` and `page_size`: tried `country`, `model_run`, `event`, `search`, `title`, `ordering`, `fields`, `id__in` and 20 more, none changes the result. A row's detail, `risk_information/{id}/`, is public and small enough; `model_run` and `model` need a token.
-- To ask him for: `risk_information/event/{id}/` and `risk_information/country/{id}/` in the same style, plus a list without geometry.
+- What to ask him for, in order, and how to test his API yourself: `docs/SHARED_API.md`. Short form: embed each run (with its `risks` ids) in the event, or make `GET model_run` public; a run filter on risk data in his route style; link the 44 runless rows; a list without geometry.
 
 ## In progress
 | Who | What | Branch/worktree | Since |

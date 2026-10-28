@@ -625,3 +625,16 @@ For deployment issues:
 - 📧 Email: support@yourdomain.com
 - 📖 Documentation: https://docs.yourdomain.com
 - 🐛 Issues: https://github.com/yourorg/climate-dashboard/issues
+
+## Deploying a prebuilt image (the SPC server)
+The server cannot run `next build` (it runs out of memory), so the image is built on a normal machine and loaded on the server. Always build from a commit, never from a hand-made tarball.
+
+1. **Make the archive** from the commit to ship: `git archive --format=tar.gz -o dashboard-source-<hash>.tar.gz <hash>`. Note the hash in `WORKING.md`.
+2. **On WSL**, run `npm ci && npm run type-check && npm run lint && npm test` (the hooks cannot run on the server), then build the image with `build-and-ship-dashboard.sh --save-only --source dashboard-source-<hash>.tar.gz` (this script lives on the WSL machine, not in the repo). It produces `partner2-dashboard-new.tar.gz`.
+3. **Copy it to the server** (PowerShell `scp`).
+4. **Check it without switching:** `CHECK_ONLY=1 bash ~/deploy-new-image.sh ~/partner2-dashboard-new.tar.gz`. It loads the image and tests that every required string (flood depths, storm filters, Context header, ...) is in its compiled files. An old or incomplete image is refused with exit code 3. Override the strings with `REQUIRE="a|b"` when a release adds others.
+5. **Switch:** `bash ~/deploy-new-image.sh`. It tags the live image as a rollback, restarts the dashboard (about a minute down), and checks health, HTTP 200 and that the served page carries the new image's build id. If a check fails it rolls back by itself. `DRY_RUN=1` shows every step and changes nothing.
+6. **Roll back by hand** if needed: the script prints the exact `docker tag ... && docker compose ... up -d --no-build` line.
+7. **Look at it:** open https://opmthredds.gem.spc.int/partner2/cook-islands, pick a flood scenario, and check the Network tab shows requests to `wasabisys.com`.
+8. Record the commit and the new build id (`docker exec partner2-dashboard cat .next/BUILD_ID`) in `WORKING.md`.
+
