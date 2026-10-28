@@ -78,6 +78,14 @@ Django project, now part of this repo (`middleware/` is the canonical copy; the 
 - Deploy: `Dockerfile` (standalone output), `docker-compose*.yml`, `k8s/`, `terraform/`, `Jenkinsfile`, `vercel.json`, `.github/workflows/ci-cd.yml`. See `DEPLOYMENT.md`.
 - Historical design/critique/fix notes and sample exports were moved to `docs/archive/`; they are context, not source of truth -prefer the code, `README.md`, `docs/`, and `QUICK_REFERENCE.md`. **Not everything left at the root is clutter:** `src/data/localDataAliases.ts` serves nine files (`cyclone-track (2).geojson`, `regional-impacts (1).geojson`, `regional-summary (1).csv`, …) from the project root through `/api/data/[filename]`, so don't move or rename them.
 
+## Working together (humans and agents)
+Read `WORKING.md` first: it names the shared working branch, what is deployed, and who is doing what.
+- **One shared working branch** (named in `WORKING.md`) takes all work. Do not start a branch per task. If two agents must work at the same time, each uses its own short-lived worktree, `agent/<who>/<task>`, merges back to the working branch the same day, and deletes it. Never edit the same checkout as another session.
+- **Update `WORKING.md`** when you start and when you finish: one line each. If a file looks changed by someone else, check `WORKING.md` and the file's timestamp before overwriting it.
+- **CI is the gate** (`.github/workflows/ci-cd.yml`): type-check, lint, format, tests and build for the app, `makemigrations --check` and `manage.py test` for the middleware. The single check to require on `main` is `CI passed`. Run the same commands before you push; if you cannot (see `CLAUDE.md`), say so in the commit or PR and do not skip it silently.
+- **Builds come from a commit**, never from a hand-made tarball: `git archive <commit>`. Record the commit next to the deployed image in `WORKING.md`.
+- A change is done when it has tests, CI is green, and the PR or commit message says what was verified and what was not.
+
 ## Conventions
 - Path alias `@/` → `src/`. Prettier + ESLint enforced on commit. Keep comments sparing and explain *why*.
 - Country is identified by `CountryCode` (`'VU'|'WS'|'TO'|'CK'`) in code and by slug in URLs; convert with `utils/countrySlug.ts`.
