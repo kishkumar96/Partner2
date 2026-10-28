@@ -1851,6 +1851,12 @@ export default function DashboardView({
     analysisMode,
     eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters
   );
+  // The filter chips sit behind the Context toggle, so the toggle says when some are active
+  const activeFilterCount =
+    barFilters.selectedHazards.length +
+    barFilters.selectedSectors.length +
+    barFilters.selectedEvents.length +
+    (barFilters.dateRange.start || barFilters.dateRange.end ? 1 : 0);
 
   // A link such as ?events=12 names a mode's event. Once the records are known and the
   // country has both kinds, treat it as the mode, not as a filter.
@@ -2844,8 +2850,8 @@ export default function DashboardView({
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-2.5 sm:px-6">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:gap-x-4 xl:items-center xl:gap-4">
-          <div className="flex min-w-0 flex-col gap-3 xl:min-w-[26rem] xl:flex-1">
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-start md:gap-x-4 xl:items-center xl:gap-4">
+          <div className="flex min-w-0 flex-col gap-2 xl:min-w-[26rem] xl:flex-1">
             <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 md:hidden">
               <button
                 onClick={() => {
@@ -2929,6 +2935,23 @@ export default function DashboardView({
                   Cyclone
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setShowMetadata(current => !current)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  showMetadata
+                    ? 'border-slate-500/60 bg-slate-700/70 text-slate-100'
+                    : 'border-slate-700/60 bg-slate-800/70 text-slate-300 hover:bg-slate-800/90'
+                }`}
+                aria-expanded={showMetadata}
+                aria-controls="dashboard-metadata"
+              >
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${showMetadata ? 'rotate-180' : ''}`}
+                />
+                Context
+                {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </button>
             </div>
             <div
               className="flex min-w-0 items-center gap-3 px-1 sm:gap-4"
@@ -3015,6 +3038,22 @@ export default function DashboardView({
                 >
                   <ClipboardList className="h-4 w-4" />
                   <span>Impact</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMetadata(current => !current)}
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    showMetadata
+                      ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
+                      : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
+                  }`}
+                  aria-expanded={showMetadata}
+                  aria-controls="dashboard-metadata"
+                >
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${showMetadata ? 'rotate-180' : ''}`}
+                  />
+                  <span>Context{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
                 </button>
               </div>
             </div>
@@ -3143,8 +3182,8 @@ export default function DashboardView({
                       },
                       {
                         id: 'metadata',
-                        label: showMetadata ? 'Hide metadata' : 'Show metadata',
-                        hint: 'Data sources, resolution and reference date',
+                        label: showMetadata ? 'Hide context' : 'Show context',
+                        hint: 'Current scenario, filters, data source and reference date',
                         icon: <ChevronDown className="h-4 w-4" />,
                         pressed: showMetadata,
                         onSelect: () => setShowMetadata(current => !current),
@@ -3188,8 +3227,8 @@ export default function DashboardView({
 
         <div
           id="dashboard-metadata"
-          className={`mt-3 grid transition-all duration-300 ease-out ${
-            showMetadata ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          className={`grid transition-all duration-300 ease-out ${
+            showMetadata ? 'mt-3 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'
           }`}
         >
           <div className="overflow-hidden">
@@ -3217,10 +3256,54 @@ export default function DashboardView({
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Reference date: {activeContextDate}
                 </span>
-                <span className="text-slate-400">
-                  Map first. Open summary, data, or cyclone tools when needed.
-                </span>
               </div>
+              {(barFilters.selectedHazards.length > 0 ||
+                barFilters.selectedSectors.length > 0 ||
+                barFilters.selectedEvents.length > 0 ||
+                !!barFilters.dateRange.start ||
+                !!barFilters.dateRange.end) && (
+                <div className="mt-1 border-t border-slate-800/60 pt-1.5">
+                  <ActiveFilters
+                    filters={barFilters}
+                    hazards={hazards}
+                    sectors={sectors}
+                    onClearFilter={(type, id) => {
+                      setFilters(prevFilters => {
+                        if (type === 'all') {
+                          return {
+                            selectedHazards: [],
+                            selectedSectors: [],
+                            selectedEvents: [],
+                            dateRange: { start: '', end: '' },
+                            aggregationLevel: 'district',
+                          };
+                        }
+                        if (type === 'hazard') {
+                          return {
+                            ...prevFilters,
+                            selectedHazards: id
+                              ? prevFilters.selectedHazards.filter(hazardId => hazardId !== id)
+                              : [],
+                          };
+                        }
+                        if (type === 'sector') {
+                          return {
+                            ...prevFilters,
+                            selectedSectors: id
+                              ? prevFilters.selectedSectors.filter(sectorId => sectorId !== id)
+                              : [],
+                          };
+                        }
+                        if (type === 'event') {
+                          return { ...prevFilters, selectedEvents: [] };
+                        }
+                        return prevFilters;
+                      });
+                    }}
+                    className="w-full"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3269,74 +3352,6 @@ export default function DashboardView({
               onSwitchToLatest={
                 forecastRecord ? () => setModeEventId(forecastRecord.id) : undefined
               }
-            />
-          </div>
-        )}
-
-        {/* Active Filters Bar - only while something is filtered */}
-        {(barFilters.selectedHazards.length > 0 ||
-          barFilters.selectedSectors.length > 0 ||
-          barFilters.selectedEvents.length > 0 ||
-          !!barFilters.dateRange.start ||
-          !!barFilters.dateRange.end) && (
-          <div className="mt-1 pt-1.5 border-t border-slate-800/60">
-            <ActiveFilters
-              filters={barFilters}
-              hazards={hazards}
-              sectors={sectors}
-              onClearFilter={(type, id) => {
-                setFilters(prevFilters => {
-                  if (type === 'all') {
-                    return {
-                      selectedHazards: [],
-                      selectedSectors: [],
-                      selectedEvents: [],
-                      dateRange: { start: '', end: '' },
-                      aggregationLevel: 'district',
-                    };
-                  }
-
-                  if (type === 'hazard') {
-                    if (!id) {
-                      return {
-                        ...prevFilters,
-                        selectedHazards: [],
-                      };
-                    }
-                    return {
-                      ...prevFilters,
-                      selectedHazards: prevFilters.selectedHazards.filter(
-                        hazardId => hazardId !== id
-                      ),
-                    };
-                  }
-
-                  if (type === 'sector') {
-                    if (!id) {
-                      return {
-                        ...prevFilters,
-                        selectedSectors: [],
-                      };
-                    }
-                    return {
-                      ...prevFilters,
-                      selectedSectors: prevFilters.selectedSectors.filter(
-                        sectorId => sectorId !== id
-                      ),
-                    };
-                  }
-
-                  if (type === 'event') {
-                    return {
-                      ...prevFilters,
-                      selectedEvents: [],
-                    };
-                  }
-
-                  return prevFilters;
-                });
-              }}
-              className="w-full"
             />
           </div>
         )}
