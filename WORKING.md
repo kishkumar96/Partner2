@@ -9,7 +9,7 @@ The one place that says what is current. Agents and people: read this first, upd
 
 ## Deployed
 - **Live dashboard** (https://opmthredds.gem.spc.int/partner2): image built **22 Oct** from a hand-made tarball, build id `1_mI-CcYuTbYAvJBkYGU_`, commit not recorded. Checked 2026-10-28: it contains none of the Zarr flood depths, the depth chip, the scenario-loss reader, the storm filters or the Context header.
-- **Ready to deploy:** `~/dashboard-source-258ac77.tar.gz` on the server (md5 `1857a6fe0d5e64cb01d6308aa74b6d44`), a `git archive` of `integration/ready-to-build` at `258ac77`. Later commits are docs only.
+- **Ready to deploy:** `~/dashboard-source-9707860.tar.gz` on the server (md5 `ed6c1bbcab6ddfb13c2de35bdc9a32ba`), a `git archive` of `integration/ready-to-build` at `9707860`. Its app code is identical to the earlier `258ac77` archive; `9707860` also makes `npm test` green on a real install (found by the first WSL run: node-environment suites failed on `window`, and the credentials guard flagged a token *path*). Later commits are docs only.
 - **How to deploy** (the server cannot run `next build`): see "Deploying a prebuilt image" in `DEPLOYMENT.md`. The switch script `~/deploy-new-image.sh` (copy in `scripts/ops/`) refuses an old image before changing anything, and checks the served build id after.
 - **After a deploy:** write the commit and the new build id here.
 - **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not switched to the shared API: see `docs/SHARED_API.md` (risk data is 112 MB per page there).
