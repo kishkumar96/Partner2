@@ -10,7 +10,7 @@ The one place that says what is current. Agents and people: read this first, upd
 ## Deployed
 - **Live dashboard** (https://opmthredds.gem.spc.int/partner2): image built on 22 Oct from a hand-made tarball; commit not recorded. It does not contain the Zarr flood depths, the scenario fallback, the model-runs adapter or the Context header.
 - **Next build:** `git archive` of the working branch head; build on WSL, ship, switch with `~/deploy-new-image.sh`. Record the commit here after the switch.
-- **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not yet switched to the shared API (`pacific-disaster-api.spc.int`): it ignores `?country=`, `?event=` and `?model_run=` and sends the whole 112 MB risk table.
+- **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not yet switched to the shared API (`pacific-disaster-api.spc.int`): `event/?country=` works (checked 2026-10-28), but `risk_information` still ignores `?country=`, `?event=` and `?model_run=` and sends the whole 112 MB table; `cyclone_track` and `hazard_information` ignore `?country=` too.
 
 ## In progress
 | Who | What | Branch/worktree | Since |
