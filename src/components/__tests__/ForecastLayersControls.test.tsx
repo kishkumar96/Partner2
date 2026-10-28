@@ -128,8 +128,26 @@ describe('ForecastLegend', () => {
     priority: false,
   };
 
+  const openLegend = () => fireEvent.click(screen.getByRole('button', { name: 'Forecast legend' }));
+
+  it('starts collapsed, so it does not cover the islands the forecast is about', () => {
+    render(<ForecastLegend active={active} />);
+
+    const toggle = screen.getByRole('button', { name: 'Forecast legend' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('region', { name: 'Forecast legend' })).not.toHaveTextContent(
+      'Hurricane'
+    );
+    openLegend();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('region', { name: 'Forecast legend' })).toHaveTextContent('Hurricane');
+    openLegend();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('always explains every wind band, since area shading is always drawn', () => {
     render(<ForecastLegend active={{ ...active, swaths: false, facilities: false }} />);
+    openLegend();
     const legend = screen.getByRole('region', { name: 'Forecast legend' });
     ['Hurricane', 'Possible Hurricane', 'Gale', 'Track Uncertainty', 'Not exposed'].forEach(band =>
       expect(within(legend).getByText(band)).toBeInTheDocument()
@@ -140,6 +158,7 @@ describe('ForecastLegend', () => {
 
   it('explains each layer that is drawn, and only those', () => {
     const { rerender } = render(<ForecastLegend active={active} />);
+    openLegend();
     const legend = () => screen.getByRole('region', { name: 'Forecast legend' });
     expect(legend()).toHaveTextContent('swath outlines');
     expect(legend()).toHaveTextContent('Evacuation Centre');

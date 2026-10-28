@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import { ChevronDown, ChevronUp, Layers as LayersIcon } from 'lucide-react';
 import { getBeforeLayerId } from '@/utils/layerOrder';
-import { WIND_DANGER_ORDER, windDangerColor } from '@/utils/forecastExposure';
+import { MAP_DANGER_NAMES, WIND_DANGER_ORDER, windDangerColor } from '@/utils/forecastExposure';
+import { RADIUS_OF_MAX_WINDS } from '@/utils/windScale';
 import {
   FACILITY_COLORS,
   FLOODPLAIN_COLOR,
@@ -59,7 +60,7 @@ function popupHtml(title: string, rows: Array<[string, string]>, badge?: string 
 const dangerLineColor = [
   'match',
   ['coalesce', ['get', 'Danger'], ''],
-  ...WIND_DANGER_ORDER.flatMap(danger => [danger, windDangerColor(danger)]),
+  ...MAP_DANGER_NAMES.flatMap(danger => [danger, windDangerColor(danger)]),
   windDangerColor(null),
 ] as unknown as maplibregl.ExpressionSpecification;
 
@@ -357,11 +358,8 @@ export default function ForecastLayers({
 
 /** What everything drawn on the forecast map means. */
 export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> }) {
-  const [open, setOpen] = useState(true);
-  // On a phone the open legend covers a third of the map, so start it collapsed
-  useEffect(() => {
-    if (window.innerWidth < 640) setOpen(false);
-  }, []);
+  // Collapsed to start with: open, it covers the islands the forecast is about
+  const [open, setOpen] = useState(false);
 
   // Area shading is always drawn, so the wind bands are always explained.
   const bands = [...WIND_DANGER_ORDER].reverse();
@@ -402,6 +400,16 @@ export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> 
                 </li>
               ))}
             </ul>
+            {active.swaths && (
+              <p className="mt-1 flex items-center gap-1 text-slate-300">
+                <span
+                  className="h-0 w-3 flex-shrink-0 border-t-[3px]"
+                  style={{ borderColor: windDangerColor(RADIUS_OF_MAX_WINDS) }}
+                  aria-hidden="true"
+                />
+                Ring of strongest winds around the centre (radius of maximum winds)
+              </p>
+            )}
           </div>
           {(active.facilities ||
             active.floodplain ||

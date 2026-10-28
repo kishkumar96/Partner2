@@ -70,7 +70,7 @@ describe('Rapid Exposure Forecast framing', () => {
   it('states it is a planning signal and labels figures as exposure, never damage or affected', () => {
     render(<ForecastExposureSummary exposure={exposure} event={event} />);
     const panel = screen.getByTestId('summary-panel');
-    expect(panel).toHaveTextContent('Planning signal -exposure, not a damage estimate');
+    expect(panel).toHaveTextContent('Planning signal — exposure, not a damage estimate');
     expect(panel).toHaveTextContent(/people exposed to forecast winds/i);
     expect(panel).toHaveTextContent(/buildings in forecast wind zones/i);
     expect(panel).toHaveTextContent(/building value potentially exposed/i);
@@ -97,7 +97,7 @@ describe('Rapid Exposure Forecast framing', () => {
   it('repeats the framing above the tables', () => {
     render(<ForecastExposureTables exposure={exposure} areaLabel="Province" />);
     expect(screen.getByTestId('forecast-signal')).toHaveTextContent(
-      'Planning signal -exposure, not a damage estimate'
+      'Planning signal — exposure, not a damage estimate'
     );
   });
 });
@@ -157,7 +157,7 @@ describe('Forecast run status panel', () => {
     render(<ForecastRunStatusPanel event={withStatus('running')} />);
     const panel = screen.getByTestId('forecast-run-status-panel');
     expect(panel).toHaveTextContent('Exposure results are not ready yet');
-    expect(panel).toHaveTextContent('Planning signal -exposure, not a damage estimate');
+    expect(panel).toHaveTextContent('Planning signal — exposure, not a damage estimate');
     expect(panel.textContent).not.toMatch(/people exposed to forecast winds/i);
   });
 
@@ -340,7 +340,7 @@ describe('Information button', () => {
   it('always shows the short planning-signal line and how old the advisory is', () => {
     render(<ForecastExposureSummary exposure={exposure} event={event} />);
     expect(screen.getByTestId('forecast-signal-short')).toHaveTextContent(
-      'Planning signal -exposure, not a damage estimate'
+      'Planning signal — exposure, not a damage estimate'
     );
     expect(screen.getByTestId('advisory-age')).toHaveTextContent(
       'Advisory issued 2020-01-01 00:00 UTC'

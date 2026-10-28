@@ -10,6 +10,8 @@ import {
 
 /** Advisories shown before "Show all": a long storm has dozens, the newest few are what matter */
 const VISIBLE_ADVISORIES = 6;
+/** A list only a little longer than this is shown whole: a button to reveal one or two rows is worse than the rows */
+const COLLAPSE_AFTER = VISIBLE_ADVISORIES + 2;
 
 function formatIssued(iso: string): string {
   const date = new Date(iso);
@@ -75,7 +77,7 @@ export default function ForecastRunSelector({
     onSelect(newestUsableRun(group).id);
   };
 
-  const collapsed = selected.runs.length > VISIBLE_ADVISORIES && !showAll;
+  const collapsed = selected.runs.length > COLLAPSE_AFTER && !showAll;
   const visible = collapsed
     ? [
         ...selected.runs.slice(0, VISIBLE_ADVISORIES),
@@ -161,7 +163,7 @@ export default function ForecastRunSelector({
         })}
       </ul>
 
-      {selected.runs.length > VISIBLE_ADVISORIES && (
+      {selected.runs.length > COLLAPSE_AFTER && (
         <button
           type="button"
           onClick={() => setShowAll(open => !open)}

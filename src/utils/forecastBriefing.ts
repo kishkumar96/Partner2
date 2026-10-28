@@ -6,7 +6,7 @@ import {
 } from './forecastExposure';
 
 /** The framing every REF figure, export and screenshot carries. */
-export const FORECAST_SIGNAL = 'Planning signal -exposure, not a damage estimate';
+export const FORECAST_SIGNAL = 'Planning signal — exposure, not a damage estimate';
 
 /** REF advisories are issued about every six hours; beyond this one may be superseded. */
 const STALE_AFTER_HOURS = 12;
@@ -114,7 +114,7 @@ export function forecastCsvRows(
   meta: ForecastExportMeta = {}
 ): string[][] {
   const rows: string[][] = [
-    [`Rapid Exposure Forecast -${FORECAST_SIGNAL}`],
+    [`Rapid Exposure Forecast: ${FORECAST_SIGNAL}`],
     ['event', meta.eventName ?? ''],
     ['forecast_track_issued', meta.issuedAt ?? ''],
     ['run_completed', meta.runCompletedAt ?? ''],

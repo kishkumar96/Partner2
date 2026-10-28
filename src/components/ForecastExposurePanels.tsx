@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Building2,
@@ -33,6 +33,11 @@ import {
 import type { EventRecord } from '@/data/eventRecords';
 import { FORECAST_SIGNAL, advisoryAge, operationalPriorities } from '@/utils/forecastBriefing';
 import ResponsePriorityPanel from './ResponsePriorityPanel';
+import AdvisoryStatusBanner from './AdvisoryStatusBanner';
+import ForecastSummaryView from './ForecastSummaryView';
+import { buildForecastInsight } from '@/utils/forecastInsight';
+import { strongestBandLabel, type TimelinePoint } from '@/utils/forecastTimeline';
+import { parseWindBand, windAreaLabel } from '@/utils/windScale';
 import { compareForecasts } from '@/utils/forecastComparison';
 import type { ResponsePriority } from '@/utils/useResponsePriority';
 
@@ -71,7 +76,7 @@ export function ForecastFreshness({ event }: { event: EventRecord | null }) {
   const superseded = event.modelRunStatus === 'superseded';
 
   return (
-    <div className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-3 text-[11px] text-slate-300">
+    <div className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-3 text-xs text-slate-300">
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold text-slate-100">Forecast data status</span>
         <span
@@ -97,7 +102,7 @@ export function ForecastFreshness({ event }: { event: EventRecord | null }) {
       {event.modelRunCreatedAt && !event.modelRunFinishedAt && (
         <p>Run started: {formatUtcDateTime(event.modelRunCreatedAt)}</p>
       )}
-      <p className="text-[11px] text-slate-400">
+      <p className="text-xs text-slate-400">
         Exposure data: as supplied with the run (its date isn’t recorded here)
       </p>
       {superseded && (
@@ -186,7 +191,7 @@ function AdvisoryChange({
   const change = compareForecasts(exposure, previous.exposure);
   return (
     <div
-      className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-3 text-[11px] text-slate-300"
+      className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-3 text-xs text-slate-300"
       data-testid="advisory-change"
     >
       <p className="text-xs font-semibold text-slate-100">
@@ -227,6 +232,36 @@ function AdvisoryChange({
   );
 }
 
+type ForecastView = 'summary' | 'details';
+const VIEW_PREFERENCE_KEY = 'ref-forecast-panel-view';
+
+function readViewPreference(): ForecastView | null {
+  try {
+    const stored = window.localStorage.getItem(VIEW_PREFERENCE_KEY);
+    return stored === 'summary' || stored === 'details' ? stored : null;
+  } catch {
+    return null; // private window, blocked storage: the default view is fine
+  }
+}
+
+function saveViewPreference(view: ForecastView): void {
+  try {
+    window.localStorage.setItem(VIEW_PREFERENCE_KEY, view);
+  } catch {
+    /* a remembered tab is a convenience, not something to fail over */
+  }
+}
+
+/** What the Summary view needs beyond the exposure itself. Without it the panel is the detailed view only. */
+export interface ForecastSummaryContext {
+  /** Every advisory of the storm with results, for the trend */
+  timeline?: TimelinePoint[];
+  /** Issue time of the newest advisory with results */
+  latestIssuedAt?: string | null;
+  onSwitchToLatest?: () => void;
+  onSelectAdvisory?: (id: string) => void;
+}
+
 export function ForecastExposureSummary({
   exposure,
   event,
@@ -237,8 +272,11 @@ export function ForecastExposureSummary({
   countryName,
   areaLabel,
   previous,
+  summary,
 }: {
   exposure: ForecastExposure;
+  /** Turns on the Summary view (plain-language key points) beside the detailed one */
+  summary?: ForecastSummaryContext;
   /** The advisory before this one, for "what changed" */
   previous?: { record: EventRecord; exposure: ForecastExposure } | null;
   /** Operational priority for this forecast (per-country thresholds) */
@@ -257,6 +295,37 @@ export function ForecastExposureSummary({
   const totals = area?.exposed;
   const exposedDanger = exposure.byWindDanger.filter(band => isExposedDanger(band.label));
   const exposedPopulation = exposedDanger.reduce((sum, band) => sum + band.totals.population, 0);
+  // An area's own band; for the whole country the strongest band anywhere (the national row can lag it)
+  const headerWinds = region
+    ? region.overallWinds
+    : (strongestBandLabel(exposure) ?? area?.overallWinds);
+
+  const [view, setView] = useState<ForecastView>('summary');
+  useEffect(() => {
+    const stored = readViewPreference();
+    if (stored) setView(stored);
+  }, []);
+  const chooseView = (next: ForecastView) => {
+    setView(next);
+    saveViewPreference(next);
+  };
+  const issuedAt = event?.trackIssuedTime || event?.date || null;
+  const insight = useMemo(
+    () =>
+      summary
+        ? buildForecastInsight({
+            exposure,
+            countryName: countryName ?? 'this country',
+            issuedAt,
+            latestIssuedAt: summary.latestIssuedAt ?? null,
+            timeline: summary.timeline ?? [],
+          })
+        : null,
+    [summary, exposure, countryName, issuedAt]
+  );
+  // An area picked on the map is a question about detail, so it shows the details
+  const showSummary = Boolean(insight) && view === 'summary' && !region;
+  const bannerShown = Boolean(insight) && insight!.status.kind !== 'latest';
 
   return (
     <div className={PANEL_CLASSES} data-testid="summary-panel">
@@ -281,8 +350,9 @@ export function ForecastExposureSummary({
         </div>
         <p className="text-xs text-slate-400 mt-1">
           {area ? area.name : 'National'}
-          {area?.overallWinds ? ` · up to ${area.overallWinds.toLowerCase()}` : ''}
-          {area?.maxWindKmph ? ` (${Math.round(area.maxWindKmph)} km/h)` : ''}
+          {headerWinds
+            ? ` · ${parseWindBand(headerWinds) ? 'up to ' : ''}${windAreaLabel(headerWinds)}`
+            : ''}
         </p>
         {region && onRegionClear && (
           <button
@@ -293,74 +363,140 @@ export function ForecastExposureSummary({
             Show national totals
           </button>
         )}
-      </div>
-      <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
-        <p className="text-[11px] font-medium text-sky-200/90" data-testid="forecast-signal-short">
-          {FORECAST_SIGNAL}
-        </p>
-        {showInfo && <ForecastInfo event={event} />}
-        <AdvisoryAgeLine event={event} />
-        {previous && <AdvisoryChange exposure={exposure} previous={previous} />}
-        {totals ? (
-          <>
-            <HeroMetric
-              label="People exposed to forecast winds"
-              value={formatNumber(totals.population)}
-              subtitle={
-                area && area.totalPopulation > 0
-                  ? `${formatPercent((totals.population / area.totalPopulation) * 100, 0)} of ${formatNumber(area.totalPopulation)} people`
-                  : 'Under gale-force winds or stronger'
-              }
-              icon={Users}
-              color="orange"
-            />
-            <HeroMetric
-              label="Buildings in forecast wind zones"
-              value={formatNumber(totals.buildings)}
-              subtitle={`${formatNumber(totals.residentialBuildings)} residential`}
-              icon={Home}
-              color="amber"
-            />
-            <HeroMetric
-              label="Building value potentially exposed"
-              value={formatCurrency(totals.buildingValue)}
-              subtitle="Replacement value, not expected loss"
-              icon={DollarSign}
-              color="purple"
-            />
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <Facility icon={HeartPulse} label="Health" value={totals.healthFacilities} />
-              <Facility icon={GraduationCap} label="Schools" value={totals.schools} />
-              <Facility icon={Building2} label="Evac. centres" value={totals.evacuationCentres} />
-            </div>
-            {!region && priority && (
-              <ResponsePriorityPanel
-                priority={priority}
-                countryName={countryName ?? 'this country'}
-                areaLabel={areaLabel ?? 'areas'}
-              />
-            )}
-            {!region && <OperationalPriorities exposure={exposure} />}
-          </>
-        ) : null}
-
-        {!region && exposedDanger.length > 0 && (
-          <div className="space-y-2 rounded-lg border border-slate-700/50 bg-slate-800/60 p-3">
-            <p className="text-xs font-semibold text-slate-200">People by forecast wind</p>
-            {exposedDanger.map(band => (
-              <DangerBar
-                key={band.label}
-                band={band}
-                share={exposedPopulation > 0 ? band.totals.population / exposedPopulation : 0}
-              />
-            ))}
-            {area && area.populationInTrackUncertainty > 0 && (
-              <p className="text-[11px] text-slate-400 leading-snug">
-                A further {formatNumber(area.populationInTrackUncertainty)} people are within the
-                track’s uncertainty.
-              </p>
-            )}
+        {insight && (
+          <div
+            role="tablist"
+            aria-label="Forecast view"
+            className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-800/80 p-1"
+          >
+            {(['summary', 'details'] as const).map(id => {
+              const selected = (showSummary ? 'summary' : 'details') === id;
+              return (
+                <button
+                  key={id}
+                  id={`forecast-tab-${id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls="forecast-view-panel"
+                  onClick={() => {
+                    // Back to the summary means back to the whole country
+                    if (id === 'summary') onRegionClear?.();
+                    chooseView(id);
+                  }}
+                  className={`min-h-[44px] rounded-md px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
+                    selected
+                      ? 'bg-sky-400 text-slate-950'
+                      : 'text-slate-300 hover:bg-slate-700/60 hover:text-white'
+                  }`}
+                >
+                  {id === 'summary' ? 'Summary' : 'Details'}
+                </button>
+              );
+            })}
           </div>
+        )}
+      </div>
+      <div
+        id="forecast-view-panel"
+        role={insight ? 'tabpanel' : undefined}
+        aria-labelledby={
+          insight ? `forecast-tab-${showSummary ? 'summary' : 'details'}` : undefined
+        }
+        className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3"
+      >
+        {insight && bannerShown && (
+          <AdvisoryStatusBanner
+            status={insight.status}
+            onSwitchToLatest={summary?.onSwitchToLatest}
+          />
+        )}
+        {showSummary && insight ? (
+          <ForecastSummaryView
+            insight={insight}
+            showStatus={!bannerShown}
+            onSwitchToLatest={summary?.onSwitchToLatest}
+            onSelectAdvisory={summary?.onSelectAdvisory}
+            onShowDetails={() => chooseView('details')}
+            onAbout={() => {
+              setShowInfo(true);
+              chooseView('details');
+            }}
+          />
+        ) : (
+          <>
+            <p className="text-xs font-medium text-sky-200/90" data-testid="forecast-signal-short">
+              {FORECAST_SIGNAL}
+            </p>
+            {showInfo && <ForecastInfo event={event} />}
+            {!bannerShown && <AdvisoryAgeLine event={event} />}
+            {previous && <AdvisoryChange exposure={exposure} previous={previous} />}
+            {totals ? (
+              <>
+                <HeroMetric
+                  label="People exposed to forecast winds"
+                  value={formatNumber(totals.population)}
+                  subtitle={
+                    area && area.totalPopulation > 0
+                      ? `${formatPercent((totals.population / area.totalPopulation) * 100, 0)} of ${formatNumber(area.totalPopulation)} people`
+                      : 'Under gale-force winds or stronger'
+                  }
+                  icon={Users}
+                  color="orange"
+                />
+                <HeroMetric
+                  label="Buildings in forecast wind zones"
+                  value={formatNumber(totals.buildings)}
+                  subtitle={`${formatNumber(totals.residentialBuildings)} residential`}
+                  icon={Home}
+                  color="amber"
+                />
+                <HeroMetric
+                  label="Building value potentially exposed"
+                  value={formatCurrency(totals.buildingValue)}
+                  subtitle="Replacement value, not expected loss"
+                  icon={DollarSign}
+                  color="purple"
+                />
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <Facility icon={HeartPulse} label="Health" value={totals.healthFacilities} />
+                  <Facility icon={GraduationCap} label="Schools" value={totals.schools} />
+                  <Facility
+                    icon={Building2}
+                    label="Evac. centres"
+                    value={totals.evacuationCentres}
+                  />
+                </div>
+                {!region && priority && (
+                  <ResponsePriorityPanel
+                    priority={priority}
+                    countryName={countryName ?? 'this country'}
+                    areaLabel={areaLabel ?? 'areas'}
+                  />
+                )}
+                {!region && <OperationalPriorities exposure={exposure} />}
+              </>
+            ) : null}
+
+            {!region && exposedDanger.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-slate-700/50 bg-slate-800/60 p-3">
+                <p className="text-xs font-semibold text-slate-200">People by forecast wind</p>
+                {exposedDanger.map(band => (
+                  <DangerBar
+                    key={band.label}
+                    band={band}
+                    share={exposedPopulation > 0 ? band.totals.population / exposedPopulation : 0}
+                  />
+                ))}
+                {area && area.populationInTrackUncertainty > 0 && (
+                  <p className="text-xs text-slate-400 leading-snug">
+                    A further {formatNumber(area.populationInTrackUncertainty)} people are within
+                    the track’s uncertainty.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -376,7 +512,7 @@ function OperationalPriorities({ exposure }: { exposure: ForecastExposure }) {
       data-testid="operational-priorities"
     >
       <p className="text-xs font-semibold text-slate-200">Operational priorities</p>
-      <ul className="space-y-1 text-[11px] text-slate-300">
+      <ul className="space-y-1 text-xs text-slate-300">
         <li className="flex items-center gap-2">
           <Waves className="h-3.5 w-3.5 text-sky-300" aria-hidden="true" />
           {formatNumber(p.populationInFloodplains)} people in mapped floodplains
@@ -394,8 +530,8 @@ function OperationalPriorities({ exposure }: { exposure: ForecastExposure }) {
       </ul>
       {p.topAreas.length > 0 && (
         <div>
-          <p className="mt-1 text-[11px] font-medium text-slate-400">Most people exposed</p>
-          <ol className="mt-1 space-y-0.5 text-[11px] text-slate-300">
+          <p className="mt-1 text-xs font-medium text-slate-400">Most people exposed</p>
+          <ol className="mt-1 space-y-0.5 text-xs text-slate-300">
             {p.topAreas.map(area => (
               <li key={area.name} className="flex justify-between gap-2">
                 <span>
@@ -415,7 +551,7 @@ function OperationalPriorities({ exposure }: { exposure: ForecastExposure }) {
 /** The limits of the forecast, in plain words. */
 function WindScaleKey() {
   return (
-    <p className="text-[11px] leading-snug text-slate-300" data-testid="wind-scale-key">
+    <p className="text-xs leading-snug text-slate-300" data-testid="wind-scale-key">
       Strongest last: gale (63–88 km/h), storm (89–117 km/h), hurricane (118 km/h+). “Possible”
       means the winds lie within the track’s uncertainty, so they are less certain, not weaker.
     </p>
@@ -424,7 +560,7 @@ function WindScaleKey() {
 
 function HowToRead() {
   return (
-    <div className="text-[11px] leading-snug text-slate-300">
+    <div className="text-xs leading-snug text-slate-300">
       <p className="text-xs font-semibold text-slate-200">How to read this forecast</p>
       <ul className="mt-2 list-disc space-y-1 pl-4">
         <li>Exposure is what lies under forecast winds, not what will be damaged.</li>
@@ -460,7 +596,7 @@ function AdvisoryAgeLine({ event }: { event: EventRecord | null }) {
   if (!age) return null;
   return (
     <p
-      className={`flex items-start gap-1.5 text-[11px] ${age.stale ? 'text-amber-200' : 'text-slate-300'}`}
+      className={`flex items-start gap-1.5 text-xs ${age.stale ? 'text-amber-200' : 'text-slate-300'}`}
       data-testid="advisory-age"
     >
       {age.stale && (
@@ -505,7 +641,7 @@ function Facility({
     <div className="rounded-lg border border-slate-700/50 bg-slate-800/80 p-2">
       <Icon className="mx-auto h-4 w-4 text-sky-300" aria-hidden="true" />
       <div className="mt-1 text-sm font-semibold text-slate-100">{formatNumber(value)}</div>
-      <div className="text-[10px] text-slate-400">{label}</div>
+      <div className="text-xs text-slate-400">{label}</div>
     </div>
   );
 }
@@ -513,7 +649,7 @@ function Facility({
 function DangerBar({ band, share }: { band: ExposureBand; share: number }) {
   return (
     <div>
-      <div className="flex justify-between text-[11px] text-slate-300">
+      <div className="flex justify-between text-xs text-slate-300">
         <span className="inline-flex items-center gap-1.5">
           <span
             className="h-2 w-2 rounded-full"
@@ -562,6 +698,7 @@ export function ForecastExposureTables({
   onRegionSelect?: (region: string) => void;
 }) {
   const [tab, setTab] = useState<ForecastTab>('regions');
+  const [showUnexposed, setShowUnexposed] = useState(false);
   const tabs: Array<{ id: ForecastTab; label: string }> = [
     { id: 'regions', label: `Exposure by ${areaLabel} (${exposure.regions.length})` },
     { id: 'wind', label: 'By forecast wind' },
@@ -575,7 +712,9 @@ export function ForecastExposureTables({
     tab === 'regions'
       ? exposure.regions.map(area => ({
           label: area.name,
-          detail: area.overallWinds,
+          detail: parseWindBand(area.overallWinds)
+            ? area.overallWinds
+            : windAreaLabel(area.overallWinds),
           color: windDangerColor(area.overallWinds),
           totals: area.exposed,
         }))
@@ -585,6 +724,24 @@ export function ForecastExposureTables({
           color: tab === 'wind' ? windDangerColor(band.label) : null,
           totals: band.totals,
         }));
+
+  // Areas with nothing under forecast winds are rows of zeros; fold them away once there are several
+  const nothingExposed = (totals: ExposureTotals) =>
+    totals.population === 0 &&
+    totals.buildings === 0 &&
+    totals.roadKm === 0 &&
+    totals.healthFacilities === 0 &&
+    totals.schools === 0 &&
+    totals.evacuationCentres === 0 &&
+    totals.buildingValue === 0 &&
+    totals.cropValue === 0;
+  const isPicked = (label: string) =>
+    !!selectedRegion && label.toLowerCase() === selectedRegion.toLowerCase();
+  const unexposed =
+    tab === 'regions' ? rows.filter(row => nothingExposed(row.totals) && !isPicked(row.label)) : [];
+  const folded = unexposed.length >= 3 && !showUnexposed;
+  const shownRows = folded ? rows.filter(row => !unexposed.includes(row)) : rows;
+  const areasWord = `${areaLabel.toLowerCase()}${unexposed.length === 1 ? '' : 's'}`;
 
   return (
     <div
@@ -614,23 +771,23 @@ export function ForecastExposureTables({
         ))}
       </div>
       <div className="flex-1 overflow-auto p-3 sm:p-4">
-        <p className="mb-2 text-[11px] font-medium text-sky-200/90" data-testid="forecast-signal">
+        <p className="mb-2 text-xs font-medium text-sky-200/90" data-testid="forecast-signal">
           {FORECAST_SIGNAL}
         </p>
         {tab === 'regions' && (
-          <p className="mb-2 text-[11px] text-slate-400">
+          <p className="mb-2 text-xs text-slate-400">
             Exposed to gale-force winds or stronger, by the strongest forecast wind reaching each{' '}
             {areaLabel.toLowerCase()}.
           </p>
         )}
         {tab === 'distance' && (
-          <p className="mb-2 text-[11px] text-slate-400">
+          <p className="mb-2 text-xs text-slate-400">
             Each row counts only the people and assets between the ring before it and its own, so
             the rows add up to the whole country. Add the rows to get “everyone within” a distance.
           </p>
         )}
         {tab === 'wind' && (
-          <p className="mb-2 text-[11px] text-slate-400">
+          <p className="mb-2 text-xs text-slate-400">
             “Possible” bands lie within the forecast’s uncertainty; Track Uncertainty and Not
             exposed aren’t counted as exposed.
           </p>
@@ -656,7 +813,14 @@ export function ForecastExposureTables({
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => {
+              {folded && shownRows.length === 0 && (
+                <tr data-testid="nothing-exposed-row">
+                  <td colSpan={COLUMNS.length + 1} className="py-3 text-sm text-slate-300">
+                    Nothing is under forecast winds in any {areaLabel.toLowerCase()}.
+                  </td>
+                </tr>
+              )}
+              {shownRows.map(row => {
                 const selected =
                   tab === 'regions' &&
                   !!selectedRegion &&
@@ -689,6 +853,23 @@ export function ForecastExposureTables({
                   </tr>
                 );
               })}
+              {unexposed.length >= 3 && (
+                <tr>
+                  <td colSpan={COLUMNS.length + 1} className="py-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowUnexposed(open => !open)}
+                      aria-expanded={showUnexposed}
+                      className="min-h-[44px] text-sm text-sky-300 underline underline-offset-2 hover:text-sky-200"
+                      data-testid="toggle-unexposed"
+                    >
+                      {showUnexposed
+                        ? `Hide the ${unexposed.length} ${areasWord} with nothing exposed`
+                        : `Show ${unexposed.length} ${areasWord} with nothing exposed`}
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -745,7 +926,7 @@ export function FacilityList({
               type="button"
               aria-pressed={kind === item.id}
               onClick={() => setKind(item.id)}
-              className={`rounded-full border px-2 py-0.5 text-[11px] ${
+              className={`rounded-full border px-2 py-0.5 text-xs ${
                 kind === item.id
                   ? 'border-sky-400/60 bg-sky-500/20 text-sky-50'
                   : 'border-slate-600/60 text-slate-300 hover:border-sky-500/40'
@@ -794,7 +975,7 @@ export function FacilityList({
         </tbody>
       </table>
       {shown.length === 0 && (
-        <p className="mt-2 text-[11px] text-slate-400">No facilities of this type are exposed.</p>
+        <p className="mt-2 text-xs text-slate-400">No facilities of this type are exposed.</p>
       )}
     </div>
   );
@@ -819,7 +1000,7 @@ function RowLabel({
         />
       )}
       <span>{label}</span>
-      {detail && <span className="text-[10px] text-slate-400">· {detail}</span>}
+      {detail && <span className="text-xs text-slate-400">· {detail}</span>}
     </span>
   );
 }

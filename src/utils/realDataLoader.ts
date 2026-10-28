@@ -32,6 +32,7 @@ import type { HazardScenarioSelection, RealWMSLayer } from '@/data/realThreddsLa
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { buildForecastExposure } from '@/utils/forecastExposure';
 import { previousAdvisory } from '@/utils/forecastComparison';
+import { buildForecastTimeline } from '@/utils/forecastTimeline';
 import {
   expandEventModelRuns,
   inferEventTrackId,
@@ -2962,11 +2963,28 @@ export async function loadAllRealData(
     return exposure ? { record: previous, exposure } : null;
   })();
 
+  // Every advisory of this storm with results, so the dashboard can show how exposure has moved
+  const forecastTimeline = (() => {
+    if (!partnerApiActive || !forecastExposure || !activeEventRecord.isForecast) return [];
+    return buildForecastTimeline(partnerData.eventRecords, activeEventRecord, record => {
+      const bundle = partnerData.getEventRiskData(record.id);
+      return bundle
+        ? buildForecastExposure({
+            national: bundle.forecastNational,
+            regional: bundle.regionalSummary,
+            byWindSpeed: bundle.forecastByWindSpeed,
+            byTrackDistance: bundle.forecastByTrackDistance,
+          })
+        : null;
+    });
+  })();
+
   return {
     cycloneTrack: effectiveCycloneTrack,
     cycloneForecast: (cycloneForecast as any) || null,
     forecastExposure,
     previousForecast,
+    forecastTimeline,
     regionalImpacts: enrichedRegionalImpacts,
     exposureByCluster,
     nationalSummary: (effectiveNationalSummary || []) as any,

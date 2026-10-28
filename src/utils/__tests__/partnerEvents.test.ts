@@ -81,6 +81,30 @@ describe('normalizePartnerEventRecords', () => {
     expect(byTime['2026-10-17T18:00:00Z'].backendRiskIds).toEqual(['90', '91']);
   });
 
+  it("names each advisory by its own track, not the Event's current one", () => {
+    const named = {
+      ...event,
+      cyclone_name: '2026101818_Wati',
+      forecast_runs: [
+        { ...event.forecast_runs[0], cyclone_name: '2026101818_Wati' },
+        { ...event.forecast_runs[1], cyclone_name: '2026101812_Wati' },
+      ],
+    };
+    const byTime = Object.fromEntries(
+      normalizePartnerEventRecords('CK', named).map(r => [r.trackIssuedTime, r])
+    );
+    expect(byTime['2026-10-17T18:00:00Z'].cycloneName).toBe('2026101818_Wati');
+    expect(byTime['2026-10-17T12:00:00Z'].cycloneName).toBe('2026101812_Wati');
+  });
+
+  it("falls back to the Event's name for a run that doesn't carry one (an older backend)", () => {
+    const records = normalizePartnerEventRecords('CK', {
+      ...event,
+      cyclone_name: '2026101818_Wati',
+    });
+    expect(records.every(r => r.cycloneName === '2026101818_Wati')).toBe(true);
+  });
+
   it('keeps the Event id on the run the Event shows, so existing links still work', () => {
     const records = normalizePartnerEventRecords('CK', event);
     const current = records.find(r => r.forecastRunId === '22');
@@ -88,6 +112,16 @@ describe('normalizePartnerEventRecords', () => {
     expect(current?.id).toBe('12');
     expect(older?.id).toBe('12-run-21');
     expect(new Set(records.map(r => r.id)).size).toBe(3);
+  });
+
+  it("never gives a run without its own track the Event's track, which is the shown run's", () => {
+    const records = normalizePartnerEventRecords('CK', {
+      ...event,
+      forecast_runs: [event.forecast_runs[0], { ...event.forecast_runs[1], cyclone_track: null }],
+    });
+    const byTime = Object.fromEntries(records.map(r => [r.trackIssuedTime, r]));
+    expect(byTime['2026-10-17T12:00:00Z'].backendCycloneTrackId).toBeUndefined();
+    expect(byTime['2026-10-17T18:00:00Z'].backendCycloneTrackId).toBe('131');
   });
 
   it('carries a failed run as a run with no outputs and its reason', () => {

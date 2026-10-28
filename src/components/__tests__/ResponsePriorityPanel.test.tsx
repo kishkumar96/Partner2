@@ -76,7 +76,7 @@ describe('ResponsePriorityPanel', () => {
   it('is labelled preliminary and says it does not declare an emergency', () => {
     renderPanel(make(2).priority);
     const panel = screen.getByTestId('response-priority');
-    expect(panel).toHaveTextContent('Operational priority -preliminary');
+    expect(panel).toHaveTextContent('Operational priority — preliminary');
     expect(panel).toHaveTextContent(/does not declare an emergency/i);
   });
 
@@ -190,5 +190,25 @@ describe('Response priority map layer option', () => {
     expect(withAreas.options.map(o => o.id)).toContain('priority');
     expect(withAreas.shown.priority).toBe(false);
     expect(withAreas.options.find(o => o.id === 'priority')!.label).toMatch(/preliminary/i);
+  });
+});
+
+describe('ResponsePriorityPanel, the amber watch list', () => {
+  it('names the watch areas on the line itself, so they need not be opened to be found', () => {
+    renderPanel(make(2).priority);
+
+    expect(screen.getByTestId('priority-amber-summary')).toHaveTextContent(
+      'AMBER · 1 watch area: Sola'
+    );
+    expect(screen.getByTestId('priority-amber-summary').className).toContain('text-amber-300');
+  });
+
+  it('does not show the rules’ amber reading in amber when it is unverified (grey)', () => {
+    renderPanel(make(48).priority);
+
+    const summary = screen.getByTestId('priority-amber-summary');
+    expect(summary).toHaveTextContent('Rules read AMBER · 1 watch area: Sola (unverified)');
+    expect(summary.className).not.toContain('text-amber-300');
+    expect(summary.className).toContain('text-slate-300');
   });
 });

@@ -62,7 +62,10 @@ import {
 } from '@/components/ForecastExposurePanels';
 import ForecastLayers from '@/components/ForecastLayers';
 import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
+import { filtersShownFor } from '@/utils/forecastFilters';
 import type { ForecastExposure } from '@/utils/forecastExposure';
+import type { TimelinePoint } from '@/utils/forecastTimeline';
+import ModeFilterPanel from '@/components/ModeFilterPanel';
 import type { EventRecord } from '@/data/eventRecords';
 import {
   assessmentGap,
@@ -460,6 +463,7 @@ export default function DashboardView({
     record: EventRecord;
     exposure: ForecastExposure;
   } | null>(null);
+  const [forecastTimeline, setForecastTimeline] = useState<TimelinePoint[]>([]);
   const [forecastLayersFocusKey, setForecastLayersFocusKey] = useState(0);
   const [activeEventRecord, setActiveEventRecord] = useState<EventRecord | null>(null);
   const responsePriority = useResponsePriority(
@@ -1832,7 +1836,10 @@ export default function DashboardView({
     filters.selectedEvents.length === 1 &&
     isModeEventId(filters.selectedEvents[0], forecastRuns, assessmentRecord?.id) &&
     !!forecastRecord;
-  const barFilters = eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters;
+  const barFilters = filtersShownFor(
+    analysisMode,
+    eventSelectionIsMode ? { ...filters, selectedEvents: [] } : filters
+  );
 
   // A link such as ?events=12 names a mode's event. Once the records are known and the
   // country has both kinds, treat it as the mode, not as a filter.
@@ -2550,6 +2557,7 @@ export default function DashboardView({
       setRegionalImpactsGeoJSON(realData.regionalImpacts ?? null);
       setForecastExposure(realData.forecastExposure ?? null);
       setPreviousForecast(realData.previousForecast ?? null);
+      setForecastTimeline(realData.forecastTimeline ?? []);
       setActiveEventRecord(realData.activeEventRecord ?? null);
 
       if (realData.regionalSummaryBySector) {
@@ -2928,10 +2936,13 @@ export default function DashboardView({
                     the full "<Country> Tropical Cyclone Rapid Impact
                     Assessment Tool" wrapped to five lines and took a third of
                     the screen from the map. Still one heading for screen
-                    readers; the page title keeps the full name. */}
+                    readers; the page title keeps the full name. The small line
+                    uses the dashboard's own name (as on the login page and in
+                    reports), not "Rapid Impact Assessment": it sits above the
+                    mode switch and read as the name of the Assessment mode. */}
                 <h1 className="min-w-0">
                   <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    Tropical Cyclone Rapid Impact Assessment
+                    Pacific Disaster Impact &amp; Exposure
                   </span>{' '}
                   <span className="block text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
                     {COUNTRIES[selectedCountry].name}
@@ -3233,8 +3244,8 @@ export default function DashboardView({
             scenarioParts={
               effectiveHazardScenario ? describeHazardScenario(effectiveHazardScenario) : undefined
             }
-            aggregationLabel={currentAggregationLabel}
-            sectorNames={filters.selectedSectors.map(
+            aggregationLabel={analysisMode === 'forecast' ? undefined : currentAggregationLabel}
+            sectorNames={barFilters.selectedSectors.map(
               id => sectors.find(sector => sector.id === id)?.name ?? id
             )}
           />
@@ -3339,28 +3350,42 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <FilterPanel
-            viewMode={viewMode}
-            hazards={hazards}
-            sectors={sectors}
-            events={events}
-            districts={resolvedDistricts}
-            countryCode={selectedCountry}
-            filters={filters}
-            onFilterChange={handleFilterChange}
-            availableHazardIds={availableHazardIds}
-            exposureData={exposureData}
-            economicDamageData={economicDamageData}
-            accessibleDistricts={accessibleDistricts}
-            onDistrictSelect={districtId => {
-              const region = regionalSummary.find(
-                (r: any) => r.Region_ID === districtId || r.Region === districtId
-              );
-              if (region) {
-                setSelectedRegion(region.Region_ID ?? region.Region);
-              }
+          <ModeFilterPanel
+            analysisMode={analysisMode}
+            forecastSetup={{
+              runs: forecastRuns,
+              activeRunId: activeEventRecord?.id ?? null,
+              onRunSelect: setModeEventId,
+              onOpenLayers: () => {
+                openMapPanel();
+                setShowSummary(false);
+                setForecastLayersFocusKey(key => key + 1);
+              },
             }}
-          />
+          >
+            <FilterPanel
+              viewMode={viewMode}
+              hazards={hazards}
+              sectors={sectors}
+              events={events}
+              districts={resolvedDistricts}
+              countryCode={selectedCountry}
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              availableHazardIds={availableHazardIds}
+              exposureData={exposureData}
+              economicDamageData={economicDamageData}
+              accessibleDistricts={accessibleDistricts}
+              onDistrictSelect={districtId => {
+                const region = regionalSummary.find(
+                  (r: any) => r.Region_ID === districtId || r.Region === districtId
+                );
+                if (region) {
+                  setSelectedRegion(region.Region_ID ?? region.Region);
+                }
+              }}
+            />
+          </ModeFilterPanel>
         </div>
 
         {/* Map Controls Panel */}
@@ -3737,6 +3762,14 @@ export default function DashboardView({
               countryName={COUNTRIES[selectedCountry].name}
               areaLabel={countryUi.focusAreaPlural.toLowerCase()}
               previous={previousForecast}
+              summary={{
+                timeline: forecastTimeline,
+                latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
+                onSwitchToLatest: forecastRecord
+                  ? () => setModeEventId(forecastRecord.id)
+                  : undefined,
+                onSelectAdvisory: setModeEventId,
+              }}
             />
           ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
             <ForecastRunStatusPanel event={activeEventRecord} />

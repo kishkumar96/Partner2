@@ -111,6 +111,9 @@ export const WIND_DANGER_ORDER = [
   'Hurricane Winds',
 ] as const;
 
+/** Every area name the map colours: the wind bands plus the radius of maximum winds ring */
+export const MAP_DANGER_NAMES = [...WIND_DANGER_ORDER, 'Radius of Maximum Winds'] as const;
+
 const DANGER_COLORS: Record<string, string> = {
   'Not exposed': '#cbd5e1',
   'Track Uncertainty': '#a5b4fc',
@@ -120,6 +123,7 @@ const DANGER_COLORS: Record<string, string> = {
   'Storm Winds': '#f97316',
   'Possible Hurricane Winds': '#f87171',
   'Hurricane Winds': '#b91c1c',
+  'Radius of Maximum Winds': '#c026d3',
 };
 
 export function windDangerColor(danger: string | null | undefined): string {
@@ -348,7 +352,7 @@ export function windDangerColorExpression(): unknown[] {
   return [
     'match',
     ['coalesce', ['get', 'Overall_Winds'], ''],
-    ...WIND_DANGER_ORDER.flatMap(danger => [danger, DANGER_COLORS[danger]]),
+    ...MAP_DANGER_NAMES.flatMap(danger => [danger, DANGER_COLORS[danger]]),
     windDangerColor(null),
   ];
 }

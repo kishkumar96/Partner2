@@ -136,7 +136,16 @@ export function normalizePartnerEventRecords(
       forecastRunId: runId,
       date: issued ? normalizeDateValue(issued) || base.date : base.date,
       trackIssuedTime: issued ?? base.trackIssuedTime,
-      backendCycloneTrackId: toIdString(run.cyclone_track) ?? base.backendCycloneTrackId,
+      // Another advisory must never borrow the Event's track: that is the shown run's, so the map
+      // would draw one forecast over another advisory's figures
+      backendCycloneTrackId:
+        toIdString(run.cyclone_track) ??
+        (run === keepsEventId ? base.backendCycloneTrackId : undefined),
+      // Each advisory's own track name, not the name of the track the Event shows now
+      cycloneName:
+        typeof run.cyclone_name === 'string' && run.cyclone_name
+          ? run.cyclone_name
+          : base.cycloneName,
       backendRiskIds: toIdList(run.risks),
       modelRunStatus: typeof run.status === 'string' ? run.status : base.modelRunStatus,
       modelRunFinishedAt:
