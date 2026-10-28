@@ -26,13 +26,28 @@ A token comes from `POST /partner_api/api-token-auth/` with a username and passw
 - Everything else ignores filters. `risk_information` accepts only `page` and `page_size`: `country`, `model_run`, `event`, `search`, `title`, `ordering`, `fields`, `id__in` and 20 more were tried and none changes the result. `cyclone_track` and `hazard_information` ignore `?country=`.
 - So a country page that asks for `risk_information` follows every page: about **112 MB** (6 pages of 11.7 MB, 2 to 7 seconds each). Our API sends the same request for one country in about 5.8 MB.
 
-## What we asked Anuj for (in this order)
-1. Put the runs inside the event, with their `risks` ids: `model_runs: [{id, name, model_run_time, model_run_completed, tc_track, risks:[...], hazards:[...]}]` (or make `GET model_run` public). Then the dashboard fetches only the chosen advisory's rows (`risk_information/{id}/`, about 0.65 MB for 9 rows) and needs no filters.
-2. A run filter on risk data in his route style (`risk_information/model_run/{id}/`).
-3. A way to reach the 44 runless rows: attach them to runs, or give the event a `risks` list.
-4. A list without geometry (the floodplain row alone is 8.3 MB).
-5. A home for `risk_scenario`. Until then the dashboard reads the Cook Islands loss tables from Wasabi (`scenario_losses/v1`, see `HAZARD_CATALOG_ZARR.md`).
-6. Cleanup only he can do: track 220 (duplicate of 210, wrong time), stray risk rows 49 and 23, rotate the API password.
+## What we need from Anuj (in this order)
+Everything is event first: pick an event, get its runs, get their risk information.
+
+**Blocks the switch**
+1. **The event returns its runs and their risk information.** Either embed each run in the event (`model_runs: [{id, name, model_run_time, model_run_completed, tc_track, risks:[ids], hazards:[ids]}]`) or add `risk_information/event/{id}/` in the style of `event/country/{id}/`. Test: `event/7/` shows `dict` entries in `model_runs`, or the route returns 73 rows.
+2. **The 44 risk rows with no run belong to an event** (Gita, Harold, Meena, the first Lola): attach them to runs, or give the event a plain `risks` list.
+3. **A list of risk data without `geometry`** (the floodplain row alone is 8.3 MB). The full row stays at `risk_information/{id}/`.
+
+**Needed as the data grows**
+4. **Date filters on events and runs** (`event/?country=3&from=2026-01-01&to=...`, same on `model_run`), and `ordering` by `event_datetime`. Test: `to=2010-01-01` on `event/` returns 1 event (Meena), `from=2026-01-01` returns 1 (Wati). Today both return all 6.
+5. **`?country=` on `cyclone_track` and `hazard_information`**, and `?model_run=` on `hazard_information` (they ignore it today: 51 tracks and 9 hazard rows for every country).
+6. **Page size and ordering that hold up**: a stable newest-first order on lists.
+
+**Improvements**
+7. **A home for the scenario losses** (`risk_scenario` and its breakdown are 404). The dashboard reads them from Wasabi for now.
+8. **A canonical `code` on countries** (`CK`, `VU`, `TO`, `WS`). Today they are named "Cook Island", "Ton", "FJI".
+9. **Correct `country` on cyclone tracks**: most Wati tracks are tagged country 1 (Fiji), not Cook Islands (3).
+10. **Hazard layers**: his API has 9 `hazard_information` rows, ours about 2,200. Will the layer catalogue be loaded there, or does the dashboard keep its fixed list?
+
+**Cleanup only he can do**
+11. Remove track 220 (duplicate of 210, wrong issue time) and the stray risk rows 49 and 23 (recheck first); check the duplicate Lola events (ids 1 and 8). Rotate the API password. Keep `hazard_information` row 10 (ours, protocol `zarr`).
+12. Optional fallback if he cannot change the event: public read of `GET model_run`, or a read-only account for the dashboard server.
 
 ## What the dashboard does about it today
 - `src/utils/partnerEvents.ts` `expandEventModelRuns`: one advisory per run from the risk rows' `model_run` and the time stamp in their titles, and the track from that stamp.
