@@ -12,6 +12,11 @@ The one place that says what is current. Agents and people: read this first, upd
 - **Next build:** `git archive` of the working branch head; build on WSL, ship, switch with `~/deploy-new-image.sh`. Record the commit here after the switch.
 - **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not yet switched to the shared API (`pacific-disaster-api.spc.int`): `event/?country=` works (checked 2026-10-28), but `risk_information` still ignores `?country=`, `?event=` and `?model_run=` and sends the whole 112 MB table; `cyclone_track` and `hazard_information` ignore `?country=` too.
 
+## The shared API's conventions (read before testing it)
+- Its filters are **routes**, not query parameters: the only one so far is `GET /event/country/{country_id}/` (found in `/partner_api/schema/`; `event/?country=` also works). Re-read the schema after he changes anything: `curl -s https://pacific-disaster-api.spc.int/partner_api/schema/`.
+- `risk_information` (2026-10-28) accepts only `page` and `page_size`: tried `country`, `model_run`, `event`, `search`, `title`, `ordering`, `fields`, `id__in` and 20 more, none changes the result. A row's detail, `risk_information/{id}/`, is public and small enough; `model_run` and `model` need a token.
+- To ask him for: `risk_information/event/{id}/` and `risk_information/country/{id}/` in the same style, plus a list without geometry.
+
 ## In progress
 | Who | What | Branch/worktree | Since |
 |---|---|---|---|
