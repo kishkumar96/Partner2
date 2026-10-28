@@ -1,4 +1,8 @@
+import { listForecastRuns } from '../forecastRuns';
 import {
+  expandEventModelRuns,
+  inferEventTrackId,
+  linkEventRisksFromModelRuns,
   normalizePartnerEventRecords,
   normalizePartnerEventRow,
   scopeRiskRowsToEvent,
@@ -135,5 +139,132 @@ describe('event identity and storm name', () => {
     });
     expect(e?.backendEventId).toBe('11');
     expect(e?.cycloneName).toBe('LOLA');
+  });
+});
+
+describe('model-run linked events', () => {
+  const wati = normalizePartnerEventRow('CK', {
+    id: 7,
+    title: 'Tropical Cyclone Wati',
+    event_datetime: '2026-10-19T12:00:00Z',
+    model_runs: [4],
+  });
+  const runRows = [
+    { id: 50, model_run: 4, country: null, title: 'TC Wati 2026101912 - regional impacts' },
+    { id: 51, model_run: 4, country: null, title: 'TC Wati 2026101912 - regional summary' },
+    { id: 41, model_run: null, country: 3, title: 'Regional Impacts' },
+  ];
+
+  it('treats an event with model runs as a forecast and keeps the run ids', () => {
+    expect(wati?.isForecast).toBe(true);
+    expect(wati?.backendModelRunIds).toEqual(['4']);
+  });
+
+  it('links the run’s risk rows, which scopeRiskRowsToEvent then returns', () => {
+    const [linked] = linkEventRisksFromModelRuns([wati!], runRows);
+    expect(linked.backendRiskIds).toEqual(['50', '51']);
+    expect(ids(scopeRiskRowsToEvent(runRows, linked, [linked]))).toEqual([50, 51]);
+  });
+
+  it('picks the track with the advisory time from the risk titles', () => {
+    const tracks = [
+      { id: 220, cyclone_name: '2026101812_Wati', issued_time: '2026-10-20T12:00:00Z' },
+      { id: 215, cyclone_name: '2026101912_Wati', issued_time: '2026-10-19T12:00:00Z' },
+      { id: 9, cyclone_name: '2026101912_Other', issued_time: '2026-10-21T12:00:00Z' },
+    ];
+    expect(inferEventTrackId(wati!, tracks, runRows)).toBe('215');
+    expect(inferEventTrackId(wati!, tracks, [])).toBe('220');
+  });
+});
+
+describe('expandEventModelRuns (the shared API: runs listed as ids, no forecast_runs)', () => {
+  const wati = () =>
+    normalizePartnerEventRecords('CK', {
+      id: 7,
+      title: 'Tropical Cyclone Wati',
+      country: 3,
+      model_runs: [11, 4, 9],
+    })[0];
+  const risk = (id: number, run: number, stamp: string, title = 'wind swaths') => ({
+    id,
+    model_run: run,
+    title: `TC Wati ${stamp} - ${title}`,
+  });
+  const riskRows = [
+    risk(101, 11, '2026101906'),
+    risk(102, 11, '2026101906', 'track distance'),
+    risk(41, 4, '2026101912'),
+    risk(91, 9, '2026101812'),
+  ];
+  const tracks = [
+    { id: 214, cyclone_name: '2026101906_Wati', issued_time: '2026-10-19T06:00:00Z' },
+    { id: 215, cyclone_name: '2026101912_Wati', issued_time: '2026-10-19T12:00:00Z' },
+    { id: 210, cyclone_name: '2026101812_Wati', issued_time: '2026-10-18T12:00:00Z' },
+    { id: 220, cyclone_name: '2026101812_Wati', issued_time: '2026-10-20T12:00:00Z' },
+  ];
+
+  it('makes one record per run, newest advisory first, each with only its own risks', () => {
+    const records = expandEventModelRuns([wati()], riskRows, tracks);
+    expect(records.map(r => r.forecastRunId)).toEqual(['4', '11', '9']);
+    expect(records.map(r => r.trackIssuedTime)).toEqual([
+      '2026-10-19T12:00:00Z',
+      '2026-10-19T06:00:00Z',
+      '2026-10-18T12:00:00Z',
+    ]);
+    expect(records.map(r => r.backendRiskIds)).toEqual([['41'], ['101', '102'], ['91']]);
+    expect(records.every(r => r.modelRunStatus === 'complete')).toBe(true);
+  });
+
+  it('keeps the Event id on the newest advisory and ids the others by run', () => {
+    const records = expandEventModelRuns([wati()], riskRows, tracks);
+    expect(records.map(r => r.id)).toEqual(['7', '7-run-11', '7-run-9']);
+  });
+
+  it('names each advisory like a track, so the run picker can group and label it', () => {
+    const records = expandEventModelRuns([wati()], riskRows, tracks);
+    expect(records.map(r => r.cycloneName)).toEqual([
+      '2026101912_Wati',
+      '2026101906_Wati',
+      '2026101812_Wati',
+    ]);
+  });
+
+  it('gives each advisory the track that carries its own stamp', () => {
+    const records = expandEventModelRuns([wati()], riskRows, tracks);
+    expect(records[0].backendCycloneTrackId).toBe('215');
+    expect(records[1].backendCycloneTrackId).toBe('214');
+    // two tracks share 2026101812_Wati; the one issued at that time is the advisory
+    expect(records[2].backendCycloneTrackId).toBe('210');
+  });
+
+  it('feeds the run picker as forecast runs', () => {
+    const records = expandEventModelRuns([wati()], riskRows, tracks);
+    const runs = listForecastRuns(records, 'CK');
+    expect(runs.map(r => r.storm)).toEqual(['Wati', 'Wati', 'Wati']);
+    expect(runs.map(r => r.isLatest)).toEqual([true, false, false]);
+  });
+
+  it('leaves out a run with no risk rows or no advisory time in its titles', () => {
+    const rows = [...riskRows, { id: 5, model_run: 12, title: 'no stamp here' }];
+    const event = { ...wati(), backendModelRunIds: ['11', '4', '9', '12', '99'] };
+    expect(expandEventModelRuns([event], rows, tracks).map(r => r.forecastRunId)).toEqual([
+      '4',
+      '11',
+      '9',
+    ]);
+  });
+
+  it('returns the Event unchanged with fewer than two placeable runs', () => {
+    const one = { ...wati(), backendModelRunIds: ['11'] };
+    expect(expandEventModelRuns([one], riskRows, tracks)).toEqual([one]);
+    const unplaceable = [{ id: 1, model_run: 11, title: 'no stamp' }, riskRows[2]];
+    expect(expandEventModelRuns([wati()], unplaceable, tracks)).toEqual([wati()]);
+  });
+
+  it('does not touch events that are not forecasts or already come split', () => {
+    const observed = { ...wati(), isForecast: false };
+    expect(expandEventModelRuns([observed], riskRows, tracks)).toEqual([observed]);
+    const split = { ...wati(), forecastRunId: '11' };
+    expect(expandEventModelRuns([split], riskRows, tracks)).toEqual([split]);
   });
 });

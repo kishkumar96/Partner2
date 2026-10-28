@@ -51,12 +51,17 @@ export function normalizePartnerEventRow(
     firstString(row, ['id', 'event_id', 'eventId', 'cyclone_id', 'cycloneId']);
   const cycloneTrackId = toIdString(row.cyclone_track) ?? toIdString(row.cycloneTrack) ?? '';
   const eventType = firstString(row, ['event_type_name']);
+  const singleRun = toIdString(row.model_run);
+  const modelRunIds = [...toIdList(row.model_runs), ...(singleRun ? [singleRun] : [])];
   const dataSource = typeof row.data_source === 'string' ? row.data_source : undefined;
   // Prefer explicit backend signals. The title match is only a fallback for
   // rows that carry no data_source, and requires the spelled-out phrase so an
   // unrelated title containing "ref" is not mistaken for a forecast.
   const isForecast =
     row.is_forecast === true ||
+    // The API lists a model run on an Event only for RiskScape (REF) outputs, and
+    // does not flag is_forecast itself.
+    (modelRunIds.length > 0 && row.is_forecast === undefined && !dataSource) ||
     dataSource === 'rapid_exposure_forecast' ||
     (!dataSource && /rapid\s+(exposure|forecast)/i.test(name));
 
@@ -74,6 +79,7 @@ export function normalizePartnerEventRow(
     backendCycloneTrackId: cycloneTrackId || undefined,
     backendHazardIds: toIdList(row.hazards),
     backendRiskIds: toIdList(row.risks),
+    backendModelRunIds: modelRunIds.length > 0 ? modelRunIds : undefined,
     cycloneName: firstString(row, ['cyclone_name', 'CycloneName']) || undefined,
     isForecast,
     dataSource,
@@ -172,4 +178,151 @@ export function scopeRiskRowsToEvent(
     const id = rowId(row);
     return id === null || !otherIds.has(id);
   });
+}
+
+/** A risk row's ModelRun id, as a string. */
+export function riskRowModelRunId(row: Record<string, unknown>): string | null {
+  return toIdString(row.model_run);
+}
+
+/**
+ * The API links an Event to its outputs through ModelRun (`Event.model_runs` and
+ * `RiskInformation.model_run`), with no `Event.risks` list. Turn that into
+ * `backendRiskIds` so the rest of the dashboard scopes rows the same way for both shapes.
+ * An event that already lists its risks keeps them.
+ */
+export function linkEventRisksFromModelRuns(
+  events: EventRecord[],
+  riskRows: Array<Record<string, unknown>>
+): EventRecord[] {
+  return events.map(event => {
+    const runs = event.backendModelRunIds ?? [];
+    if (runs.length === 0 || (event.backendRiskIds?.length ?? 0) > 0) return event;
+    const wanted = new Set(runs);
+    const ids = riskRows
+      .filter(row => {
+        const run = riskRowModelRunId(row);
+        return run !== null && wanted.has(run);
+      })
+      .map(row => toIdString(row.id))
+      .filter((id): id is string => id !== null);
+    return ids.length > 0 ? { ...event, backendRiskIds: ids } : event;
+  });
+}
+
+const ADVISORY_STAMP = /\b(\d{10})\b/;
+
+/** "2026101906" (YYYYMMDDHH, UTC) as an ISO time. */
+function advisoryStampToIso(stamp: string): string {
+  return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(8, 10)}:00:00Z`;
+}
+
+/** The advisory time a run's risk titles carry ("TC Wati 2026101906 - wind swaths"). */
+function advisoryStampOf(rows: Array<Record<string, unknown>>): string | null {
+  for (const row of rows) {
+    const found = ADVISORY_STAMP.exec(String(row.title ?? ''))?.[1];
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * One record per advisory when the API lists several model runs on an Event but not the
+ * `forecast_runs` that normalizePartnerEventRecords reads (the ModelRun endpoint needs a
+ * login). A run is told apart by its risk rows (`model_run`), its advisory time by the
+ * stamp in their titles, and its track by that stamp. The newest advisory keeps the
+ * Event's id, so shared links to it keep working. A run with no risk rows, or no stamp,
+ * cannot be placed in time and is left out; with fewer than two usable runs the Event is
+ * returned as it was.
+ */
+export function expandEventModelRuns(
+  events: EventRecord[],
+  riskRows: Array<Record<string, unknown>>,
+  trackRows: Array<Record<string, unknown>>
+): EventRecord[] {
+  return events.flatMap(event => {
+    const runIds = event.backendModelRunIds ?? [];
+    if (!event.isForecast || event.forecastRunId || runIds.length < 2) return [event];
+    const runs = runIds
+      .map(runId => {
+        const rows = riskRows.filter(row => riskRowModelRunId(row) === runId);
+        const stamp = advisoryStampOf(rows);
+        return stamp ? { runId, rows, stamp } : null;
+      })
+      .filter((run): run is NonNullable<typeof run> => run !== null);
+    if (runs.length < 2) return [event];
+    runs.sort((a, b) => b.stamp.localeCompare(a.stamp) || Number(b.runId) - Number(a.runId));
+    const storm = stormOfEvent(event);
+    return runs.map((run, index) => {
+      const issued = advisoryStampToIso(run.stamp);
+      const trackId = inferEventTrackId(
+        { ...event, backendCycloneTrackId: undefined, backendModelRunIds: [run.runId] },
+        trackRows,
+        run.rows
+      );
+      return {
+        ...event,
+        id: index === 0 ? event.id : `${event.id}-run-${run.runId}`,
+        forecastRunId: run.runId,
+        cycloneName: `${run.stamp}_${storm}`,
+        date: normalizeDateValue(issued) || event.date,
+        trackIssuedTime: issued,
+        backendModelRunIds: [run.runId],
+        backendRiskIds: run.rows.map(row => toIdString(row.id)).filter((id): id is string => !!id),
+        backendCycloneTrackId: trackId ?? undefined,
+        modelRunStatus: 'complete',
+      };
+    });
+  });
+}
+
+function stormOfEvent(event: Pick<EventRecord, 'name' | 'cycloneName'>): string {
+  const named = (event.cycloneName || event.name.replace(/^(tropical\s+)?(cyclone|tc)\s+/i, ''))
+    .replace(/^\d{8,12}_/, '')
+    .trim();
+  return named;
+}
+
+/**
+ * Pick the cyclone track for an Event that does not name one (the ModelRun that
+ * knows its track needs a login). Same storm by name; the advisory time that its
+ * risk titles carry ("TC Wati 2026101912 - ...") wins, else the latest issued.
+ */
+export function inferEventTrackId(
+  event: Pick<EventRecord, 'name' | 'cycloneName' | 'backendCycloneTrackId' | 'backendModelRunIds'>,
+  trackRows: Array<Record<string, unknown>>,
+  eventRiskRows: Array<Record<string, unknown>>
+): string | null {
+  if (event.backendCycloneTrackId) return event.backendCycloneTrackId;
+  if ((event.backendModelRunIds?.length ?? 0) === 0) return null;
+  const storm = stormOfEvent(event).toLowerCase();
+  if (!storm) return null;
+  const sameStorm = trackRows.filter(row =>
+    String(row.cyclone_name ?? '')
+      .toLowerCase()
+      .includes(storm)
+  );
+  const stamp = eventRiskRows
+    .map(row => /\b(\d{10})\b/.exec(String(row.title ?? ''))?.[1])
+    .find((value): value is string => !!value);
+  const exact = stamp
+    ? sameStorm.filter(row => String(row.cyclone_name ?? '').startsWith(stamp))
+    : [];
+  const latest = (rows: Array<Record<string, unknown>>) =>
+    [...rows].sort(
+      (a, b) =>
+        Date.parse(String(b.issued_time ?? '')) - Date.parse(String(a.issued_time ?? '')) ||
+        Number(b.id) - Number(a.id)
+    )[0];
+  // Two tracks can carry one stamp (a re-ingest with a wrong issue time); the one issued at
+  // the stamp's own time is the advisory itself.
+  const issuedAtStamp = stamp
+    ? exact.filter(
+        row => Date.parse(String(row.issued_time ?? '')) === Date.parse(advisoryStampToIso(stamp))
+      )
+    : [];
+  const pick = latest(
+    issuedAtStamp.length > 0 ? issuedAtStamp : exact.length > 0 ? exact : sameStorm
+  );
+  return pick ? toIdString(pick.id) : null;
 }
