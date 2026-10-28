@@ -9,6 +9,7 @@ Guidance for working in this repository, for any coding agent or contributor. `C
 Data comes from two places:
 - **Local files** under `public/data/` (GeoJSON/CSV/GeoTIFF; see `public/data/README.md`) -the legacy/fallback source.
 - **The "partner API"** -a Django REST middleware that lives in this repo under `middleware/`, reached through the Next.js proxy route. THREDDS (`gemthreddshpc.spc.int`) serves WMS tiles through the same proxy.
+  - **Not every deployment is this code.** The shared API at `pacific-disaster-api.spc.int` (run by Anuj) is a different, older deployment and lacks what only this repo's middleware has. Checked 2026-10-28: no `risk_scenario` / `risk_scenario_breakdown`, no `forecast_runs` on events, no `hazard_zarr`, no `defer_large_assets`, and it ignores `?country=`, `?event=` and `?model_run=` (one risk-table page is 11.7 MB, the whole table 112 MB). `model_run` needs a login there. The dashboard has fallbacks for several of these (`partnerEvents.ts` splits runs by `model_run`, `scenarioLosses.ts` reads the loss tables from the bucket); don't assume a partner-API feature exists on the shared one without testing it. See `docs/HAZARD_CATALOG_ZARR.md`.
 
 Requires Node `20.19.6` (`.nvmrc`), npm >= 10.
 
@@ -75,7 +76,7 @@ Django project, now part of this repo (`middleware/` is the canonical copy; the 
 ## Config & deployment
 - Env: copy `.env.example` → `.env.local`. Key vars: `NEXT_PUBLIC_BASE_PATH`, `PARTNER_API_*`, `TENANT_COUNTRY`, `COUNTRY_*`, `AUTH_REQUIRE_REDIS`, `REDIS_URL`, `DATABASE_URL`, `THREDDS_BASE_URL`, Sentry vars. Real `.env.{development,staging,production}` files are gitignored -never commit secrets.
 - Deploy: `Dockerfile` (standalone output), `docker-compose*.yml`, `k8s/`, `terraform/`, `Jenkinsfile`, `vercel.json`, `.github/workflows/ci-cd.yml`. See `DEPLOYMENT.md`.
-- The repo root holds ~80 historical design/critique/fix notes (`*_CRITIQUE.md`, `*_SUMMARY.md`) and sample data exports (`*.gpkg`, `*.csv`, `*.geojson`); they are context, not source of truth -prefer the code, `README.md`, `docs/`, and `QUICK_REFERENCE.md`.
+- Historical design/critique/fix notes and sample exports were moved to `docs/archive/`; they are context, not source of truth -prefer the code, `README.md`, `docs/`, and `QUICK_REFERENCE.md`. **Not everything left at the root is clutter:** `src/data/localDataAliases.ts` serves nine files (`cyclone-track (2).geojson`, `regional-impacts (1).geojson`, `regional-summary (1).csv`, …) from the project root through `/api/data/[filename]`, so don't move or rename them.
 
 ## Conventions
 - Path alias `@/` → `src/`. Prettier + ESLint enforced on commit. Keep comments sparing and explain *why*.
