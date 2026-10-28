@@ -21,4 +21,8 @@ The one place that says what is current. Agents and people: read this first, upd
 - Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and stray rows 49 and 23, rotate the API password.
 - On GitHub: protect `main` and require the `CI passed` check.
 - Scenario losses are on Wasabi (`spc-zarr-file/scenario_losses/v1`, Cook Islands only); rerun `publish_scenario_losses --replace` after importing new scenarios.
-- Old branches/worktrees (merged ones can go; five hold unmerged commits to review): `feat/admin-event-run-links`, `feat/analysis-mode-full-names`, `fix/forecast-filter-panel`, `fix/forecast-run-names`, `fix/runner-name-run`.
+- Branches and worktrees left over from earlier work (the merged ones were deleted on 2026-10-28):
+  - Five hold commits the working branch lacks, to review and either merge or drop: `feat/admin-event-run-links`, `feat/analysis-mode-full-names`, `fix/forecast-filter-panel`, `fix/forecast-run-names`, `fix/runner-name-run`.
+  - `fix/forecast-sync-and-labels` (`~/Partner2-summary`) is merged, but its worktree still has 20 staged files, which are now committed on the working branch; remove it once the user confirms.
+  - `feat/frontend-partner-api-model-runs` is checked out in the user's own `/data/Partner2`; leave it.
+  - `~/Partner2-ingest` is a leftover folder, no longer a worktree; it holds root-owned test files under `middleware/media`, so the user needs `sudo rm -rf` to remove it.
