@@ -40,6 +40,8 @@ const URL_WITH_PASSWORD =
   /\b(?:postgres(?:ql)?|redis|mysql|mongodb(?:\+srv)?):\/\/[^\s:/@'"`]*:([^\s@'"`]+)@/g;
 // ${NAME:-literal} where NAME is a password / secret / token / key
 const SECRET_DEFAULT = /\$\{[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY)[A-Z0-9_]*:-([^}]+)\}/g;
+// A default that only points somewhere else ($HOME/tc-runner.token, ~/.token) holds no secret itself
+const IS_REFERENCE = /^[$~]/;
 
 function findings(): string[] {
   const found: string[] = [];
@@ -51,7 +53,7 @@ function findings(): string[] {
         found.push(`${rel}: a connection string with a password (${match[0].slice(0, 40)}…)`);
     }
     for (const match of text.matchAll(SECRET_DEFAULT)) {
-      if (!PLACEHOLDER.test(match[1]))
+      if (!PLACEHOLDER.test(match[1]) && !IS_REFERENCE.test(match[1]))
         found.push(`${rel}: a secret-like default value (${match[0].slice(0, 60)})`);
     }
   }
@@ -73,6 +75,18 @@ describe('committed credentials', () => {
     const defaults = [...sample.matchAll(SECRET_DEFAULT)].map(m => m[1]);
     expect(urls.filter(p => !PLACEHOLDER.test(p))).toEqual(['Sup3rSecret', 'hunter2hunter']);
     expect(defaults).toEqual(['staging_secure_2026']);
+  });
+
+  it('allows a default that is a path to a secret, but not a secret written in place', () => {
+    const sample = [
+      'TOKEN_FILE="${TOKEN_FILE:-$HOME/tc-runner.token}"',
+      'KEY_FILE="${API_KEY_FILE:-~/.keys/partner}"',
+      'PASSWORD="${DB_PASSWORD:-hunter2hunter}"',
+    ].join('\n');
+    const defaults = [...sample.matchAll(SECRET_DEFAULT)]
+      .map(m => m[1])
+      .filter(d => !PLACEHOLDER.test(d) && !IS_REFERENCE.test(d));
+    expect(defaults).toEqual(['hunter2hunter']);
   });
 
   it('allows the obvious placeholders documentation uses', () => {

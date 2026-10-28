@@ -5,20 +5,23 @@
 
 import '@testing-library/jest-dom';
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock window.matchMedia. Suites that opt into the node environment (`@jest-environment node`, for
+// fetch/Response) have no window; skip it there instead of failing before the first test.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
@@ -66,9 +69,9 @@ beforeEach(() => {
     Promise.reject(
       new Error(
         'fetch() was called but is not mocked. ' +
-          'Provide a test-specific mock: global.fetch = jest.fn().mockResolvedValue(...)',
-      ),
-    ),
+          'Provide a test-specific mock: global.fetch = jest.fn().mockResolvedValue(...)'
+      )
+    )
   );
 });
 
