@@ -54,7 +54,7 @@ describe('ForecastSummaryView, when winds are forecast', () => {
     expect(areas.getAllByText('possible gale')).toHaveLength(2); // Aitutaki and Atiu
     expect(areas.getByText('about 1,600')).toBeInTheDocument();
     expect(areas.queryByText('Mitiaro')).not.toBeInTheDocument();
-    expect(areas.getByText(/\+ 1 more area in the full details/)).toBeInTheDocument();
+    expect(areas.getByText(/\+ 1 more area in Details/)).toBeInTheDocument();
   });
 
   it('shows three numbers with the facilities spelled out', () => {
@@ -97,7 +97,7 @@ describe('ForecastSummaryView, when winds are forecast', () => {
     const h = handlers();
     render(<ForecastSummaryView insight={forecast()} {...h} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show full details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See every affected area in Details →' }));
     fireEvent.click(screen.getByRole('button', { name: 'How to read this forecast' }));
     expect(h.onShowDetails).toHaveBeenCalledTimes(1);
     expect(h.onAbout).toHaveBeenCalledTimes(1);
@@ -152,7 +152,7 @@ describe('ForecastSummaryView, readability', () => {
   it('gives every button a tap target of at least 44px', () => {
     render(<ForecastSummaryView insight={forecast()} showStatus {...handlers()} />);
     for (const name of [
-      'Show full details',
+      'See every affected area in Details →',
       'How to read this forecast',
       'Switch to the latest advisory',
     ]) {

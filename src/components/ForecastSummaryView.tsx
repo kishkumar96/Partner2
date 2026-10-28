@@ -66,10 +66,10 @@ function Stat({
   title?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-700/60 bg-slate-800/60 px-1.5 py-3 text-center">
+    <div className="@container min-w-0 rounded-xl border border-slate-700/60 bg-slate-800/60 px-1 py-3 text-center">
       <Icon className="mx-auto h-5 w-5 text-slate-300" aria-hidden="true" />
       <p
-        className="mt-1 truncate text-2xl font-semibold tabular-nums leading-tight text-slate-50"
+        className="mt-1 whitespace-nowrap text-[clamp(1rem,26cqw,1.5rem)] font-semibold tabular-nums leading-tight text-slate-50"
         title={title}
       >
         {value}
@@ -165,7 +165,7 @@ export default function ForecastSummaryView({
           </ul>
           {hidden > 0 && (
             <p className="mt-2 text-xs text-slate-400">
-              + {hidden} more {hidden === 1 ? 'area' : 'areas'} in the full details
+              + {hidden} more {hidden === 1 ? 'area' : 'areas'} in Details
             </p>
           )}
         </section>
@@ -229,9 +229,9 @@ export default function ForecastSummaryView({
         <button
           type="button"
           onClick={onShowDetails}
-          className="min-h-[44px] w-full rounded-lg bg-sky-400 px-3 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
+          className="flex min-h-[44px] w-full items-center justify-center text-sm font-medium text-sky-200 underline-offset-2 hover:text-sky-100 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
         >
-          Show full details
+          See every affected area in Details →
         </button>
         {onAbout && (
           <button

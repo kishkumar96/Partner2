@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { FileDown, FileSpreadsheet } from 'lucide-react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { ChevronDown, Download, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
 import { buildForecastBrief, type ForecastBriefContext } from '@/utils/forecastBrief';
@@ -157,6 +157,22 @@ interface ExportButtonsProps {
   forecastMeta?: ForecastExportMeta;
   /** With a forecast showing, the PDF is the two-page exposure brief built from this */
   forecastBrief?: ForecastBriefContext;
+  /** 'inline' is the row of buttons; 'menu' folds them into one "Export" menu */
+  layout?: 'inline' | 'menu';
+  /** Further actions for the menu layout (for example the map image), each closing the menu on use */
+  extraActions?: ExportMenuAction[];
+}
+
+export interface ExportMenuAction {
+  id: string;
+  label: string;
+  hint?: string;
+  icon: ComponentType<{ className?: string }>;
+  onClick: () => void;
+  busy?: boolean;
+  disabled?: boolean;
+  title?: string;
+  ariaLabel?: string;
 }
 
 export default function ExportButtons({
@@ -179,6 +195,8 @@ export default function ExportButtons({
   forecastExposure = null,
   forecastMeta,
   forecastBrief,
+  layout = 'inline',
+  extraActions = [],
 }: ExportButtonsProps) {
   // The damage/loss PDF can't describe a forecast. With one showing, the PDF button
   // opens the dedicated exposure brief; without brief data it is unavailable.
@@ -1633,69 +1651,214 @@ export default function ExportButtons({
     }
   };
 
+  const menuLayout = layout === 'menu';
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+
+  const closeMenuThen = (action: () => unknown) => {
+    setMenuOpen(false);
+    void action();
+  };
+  const menuItemClass = (off: boolean) =>
+    `flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
+      off ? 'cursor-not-allowed text-slate-500' : 'text-slate-100 hover:bg-slate-700/60'
+    }`;
+  const pdfTitle = isForecastBrief
+    ? 'Preview the two-page forecast exposure brief (not a damage report)'
+    : pdfUnavailableForForecast
+      ? 'The PDF report covers damage and loss, which a forecast does not have. Use CSV or Map PNG for forecast exposure.'
+      : disabled
+        ? 'No data available to export'
+        : 'Preview & Export PDF';
+  const csvTitle = disabled
+    ? 'No data available to export'
+    : forecastExposure
+      ? 'Export forecast exposure as CSV (planning signal, not a damage estimate)'
+      : 'Export as CSV';
+
   return (
     <>
-      <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">
-        {exportError && (
-          <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 hidden lg:block">
-            {exportError}
-          </span>
-        )}
-        <button
-          onClick={openPDFPreview}
-          disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
-          aria-label={isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'}
-          className={`group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
-            disabled || pdfUnavailableForForecast
-              ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
-              : isForecastBrief
-                ? 'bg-gradient-to-br from-amber-500/90 to-blue-700/90 border-amber-300/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-amber-300/70'
-                : 'bg-gradient-to-br from-red-500/90 to-rose-600/90 border-red-400/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-red-300/70'
-          }`}
-          style={
-            !disabled && !pdfUnavailableForForecast
-              ? { boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)' }
-              : undefined
-          }
-          title={
-            isForecastBrief
-              ? 'Preview the two-page forecast exposure brief (not a damage report)'
-              : pdfUnavailableForForecast
-                ? 'The PDF report covers damage and loss, which a forecast does not have. Use CSV or Map PNG for forecast exposure.'
-                : disabled
-                  ? 'No data available to export'
-                  : 'Preview & Export PDF'
-          }
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
-            <FileDown className="w-3.5 h-3.5" />
-          </span>
-          <span className="hidden xl:inline">{isExportingPDF ? 'Loading' : 'Preview'}</span> PDF
-        </button>
-        <button
-          onClick={downloadCSV}
-          disabled={disabled || isExportingCSV}
-          aria-label="Export data as CSV file"
-          className={`group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
-            disabled
-              ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
-              : 'bg-gradient-to-br from-emerald-500/90 to-teal-600/90 border-emerald-300/30 hover:scale-105 hover:-translate-y-0.5 focus-visible:ring-emerald-300/70'
-          }`}
-          style={!disabled ? { boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)' } : undefined}
-          title={
-            disabled
-              ? 'No data available to export'
-              : forecastExposure
-                ? 'Export forecast exposure as CSV (planning signal, not a damage estimate)'
-                : 'Export as CSV'
-          }
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-          </span>
-          <span className="hidden xl:inline">{isExportingCSV ? 'Exporting' : 'Export'}</span> CSV
-        </button>
-      </div>
+      {menuLayout ? (
+        <div ref={menuRef} className="relative flex-shrink-0">
+          {exportError && (
+            <span role="alert" className="sr-only">
+              {exportError}
+            </span>
+          )}
+          <button
+            ref={triggerRef}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(open => !open)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-600/60 bg-slate-700/35 px-3 py-1.5 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Export
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              aria-label="Export"
+              className="absolute right-0 z-50 mt-2 w-72 space-y-0.5 rounded-xl border border-slate-600/60 bg-slate-900 p-1.5 shadow-xl"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => closeMenuThen(openPDFPreview)}
+                disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
+                aria-label={
+                  isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'
+                }
+                title={pdfTitle}
+                className={menuItemClass(disabled || pdfUnavailableForForecast)}
+              >
+                <FileDown className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block">
+                    {isExportingPDF
+                      ? 'Loading…'
+                      : isForecastBrief
+                        ? 'Forecast brief (PDF)'
+                        : 'PDF report'}
+                  </span>
+                  <span className="block text-xs font-normal text-slate-400">
+                    {pdfUnavailableForForecast
+                      ? 'Not available for a forecast'
+                      : isForecastBrief
+                        ? 'Two-page exposure brief'
+                        : 'Damage and loss report'}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => closeMenuThen(downloadCSV)}
+                disabled={disabled || isExportingCSV}
+                aria-label="Export data as CSV file"
+                title={csvTitle}
+                className={menuItemClass(disabled)}
+              >
+                <FileSpreadsheet className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block">{isExportingCSV ? 'Exporting…' : 'Data (CSV)'}</span>
+                  <span className="block text-xs font-normal text-slate-400">
+                    {forecastExposure ? 'Exposure tables' : 'Results as a table'}
+                  </span>
+                </span>
+              </button>
+              {extraActions.map(action => {
+                const Icon = action.busy ? Loader2 : action.icon;
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => closeMenuThen(action.onClick)}
+                    disabled={action.disabled || action.busy}
+                    aria-label={action.ariaLabel}
+                    title={action.title}
+                    className={menuItemClass(Boolean(action.disabled))}
+                  >
+                    <Icon
+                      className={`h-4 w-4 flex-shrink-0 ${action.busy ? 'animate-spin' : ''}`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">
+                      <span className="block">{action.busy ? 'Exporting…' : action.label}</span>
+                      {action.hint && (
+                        <span className="block text-xs font-normal text-slate-400">
+                          {action.hint}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">
+          {exportError && (
+            <span className="text-xs sm:text-sm text-red-600 dark:text-red-400 hidden lg:block">
+              {exportError}
+            </span>
+          )}
+          <button
+            onClick={openPDFPreview}
+            disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
+            aria-label={
+              isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'
+            }
+            className={`group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
+              disabled || pdfUnavailableForForecast
+                ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
+                : 'border-slate-600/60 bg-slate-700/35 hover:bg-slate-700/55 focus-visible:ring-sky-300/70'
+            }`}
+            title={
+              isForecastBrief
+                ? 'Preview the two-page forecast exposure brief (not a damage report)'
+                : pdfUnavailableForForecast
+                  ? 'The PDF report covers damage and loss, which a forecast does not have. Use CSV or Map PNG for forecast exposure.'
+                  : disabled
+                    ? 'No data available to export'
+                    : 'Preview & Export PDF'
+            }
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
+              <FileDown className="w-3.5 h-3.5" />
+            </span>
+            <span className="hidden xl:inline">{isExportingPDF ? 'Loading' : 'Preview'}</span> PDF
+          </button>
+          <button
+            onClick={downloadCSV}
+            disabled={disabled || isExportingCSV}
+            aria-label="Export data as CSV file"
+            className={`group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white rounded-lg border transition-transform duration-200 ease-out whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 will-change-transform ${
+              disabled
+                ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 cursor-not-allowed opacity-60'
+                : 'border-slate-600/60 bg-slate-700/35 hover:bg-slate-700/55 focus-visible:ring-sky-300/70'
+            }`}
+            title={
+              disabled
+                ? 'No data available to export'
+                : forecastExposure
+                  ? 'Export forecast exposure as CSV (planning signal, not a damage estimate)'
+                  : 'Export as CSV'
+            }
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/15 border border-white/20 group-hover:bg-white/20 transition-colors">
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+            </span>
+            <span className="hidden xl:inline">{isExportingCSV ? 'Exporting' : 'Export'}</span> CSV
+          </button>
+        </div>
+      )}
 
       {briefPreview && (
         <PDFPreviewModal

@@ -65,7 +65,7 @@ export default function ToolsMenu({ items, className = '' }: ToolsMenuProps) {
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         data-tour="tools-menu"
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-600/60 bg-slate-700/35 px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700/55 sm:min-h-12 sm:text-sm"
+        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-600/60 bg-slate-700/35 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700/55 sm:text-sm"
       >
         <Wrench className="h-4 w-4" aria-hidden="true" />
         <span>Tools</span>

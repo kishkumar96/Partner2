@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import AnalysisModeSwitch from '../AnalysisModeSwitch';
 
 const REF = 'Rapid Exposure Forecast (REF)';
-const PDIE = 'Pacific Disaster Impact & Exposure (PDIE)';
+const PDA = 'Post Disaster Analysis';
 
 describe('AnalysisModeSwitch', () => {
   it('offers only the modes the country has data for, in a fixed order', () => {
@@ -18,7 +18,7 @@ describe('AnalysisModeSwitch', () => {
       Array.from(group.querySelectorAll('button')).map(
         b => b.getAttribute('aria-label') ?? b.textContent
       )
-    ).toEqual([REF, PDIE, 'Scenarios']);
+    ).toEqual([REF, PDA, 'Scenarios']);
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
   });
 
@@ -31,7 +31,7 @@ describe('AnalysisModeSwitch', () => {
         onChange={onChange}
       />
     );
-    expect(screen.getByRole('button', { name: PDIE })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: PDA })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: REF }));
     expect(onChange).toHaveBeenCalledWith('forecast');
   });
@@ -71,10 +71,27 @@ describe('AnalysisModeSwitch', () => {
     expect(narrow).toHaveTextContent('Forecast (REF)');
     expect(narrow).toHaveClass('lg:hidden');
 
-    const assessment = screen.getByRole('button', { name: PDIE });
-    const [assessmentWide, assessmentNarrow] = Array.from(assessment.querySelectorAll('span'));
-    expect(assessmentWide).toHaveTextContent(PDIE);
-    expect(assessmentNarrow).toHaveTextContent('Assessment (PDIE)');
+    // Post Disaster Analysis has no model abbreviation, so it is one plain label at every width
+    const assessment = screen.getByRole('button', { name: PDA });
+    expect(assessment.querySelectorAll('span')).toHaveLength(0);
+  });
+
+  it('wraps inside its border when the header is narrow, with the same chrome on every tab', () => {
+    render(
+      <AnalysisModeSwitch
+        available={['forecast', 'assessment', 'scenarios', 'history']}
+        active="history"
+        onChange={jest.fn()}
+      />
+    );
+    const group = screen.getByRole('group', { name: 'Analysis mode' });
+    // tabs that do not fit wrap onto a second row instead of spilling out past the border
+    expect(group).toHaveClass('flex-wrap', 'max-w-full');
+    const buttons = Array.from(group.querySelectorAll('button'));
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button).toHaveClass('border', 'text-xs');
+    }
   });
 
   it('keeps the plain label for a mode with no model behind it', () => {
@@ -98,9 +115,9 @@ describe('AnalysisModeSwitch', () => {
       'title',
       'REF · Rapid Exposure Forecast: what may be exposed under the latest advisory?'
     );
-    expect(screen.getByRole('button', { name: PDIE })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PDA })).toHaveAttribute(
       'title',
-      'PDIE · Pacific Disaster Impact & Exposure: post-event, what damage and loss occurred?'
+      'Post-event: what damage and loss occurred?'
     );
     // A mode with no model behind it keeps its plain question
     expect(screen.getByRole('button', { name: 'Scenarios' })).toHaveAttribute(
@@ -119,7 +136,7 @@ describe('AnalysisModeSwitch', () => {
     );
     expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
       'Forecast (REF): Forecast exposure',
-      'Assessment (PDIE): Post-event impact',
+      'Post Disaster Analysis: Post-event impact',
       'History: Historical event',
     ]);
   });

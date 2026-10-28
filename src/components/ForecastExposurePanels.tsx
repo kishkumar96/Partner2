@@ -258,6 +258,8 @@ export interface ForecastSummaryContext {
   timeline?: TimelinePoint[];
   /** Issue time of the newest advisory with results */
   latestIssuedAt?: string | null;
+  /** The page already shows the "not the latest forecast" notice above, so the panel leaves it out */
+  statusShownAbove?: boolean;
   onSwitchToLatest?: () => void;
   onSelectAdvisory?: (id: string) => void;
 }
@@ -325,7 +327,8 @@ export function ForecastExposureSummary({
   );
   // An area picked on the map is a question about detail, so it shows the details
   const showSummary = Boolean(insight) && view === 'summary' && !region;
-  const bannerShown = Boolean(insight) && insight!.status.kind !== 'latest';
+  const olderShownAbove = insight?.status.kind === 'older' && Boolean(summary?.statusShownAbove);
+  const bannerShown = Boolean(insight) && insight!.status.kind !== 'latest' && !olderShownAbove;
 
   return (
     <div className={PANEL_CLASSES} data-testid="summary-panel">
@@ -414,7 +417,7 @@ export function ForecastExposureSummary({
         {showSummary && insight ? (
           <ForecastSummaryView
             insight={insight}
-            showStatus={!bannerShown}
+            showStatus={!bannerShown && !olderShownAbove}
             onSwitchToLatest={summary?.onSwitchToLatest}
             onSelectAdvisory={summary?.onSelectAdvisory}
             onShowDetails={() => chooseView('details')}
@@ -429,7 +432,7 @@ export function ForecastExposureSummary({
               {FORECAST_SIGNAL}
             </p>
             {showInfo && <ForecastInfo event={event} />}
-            {!bannerShown && <AdvisoryAgeLine event={event} />}
+            {!bannerShown && !olderShownAbove && <AdvisoryAgeLine event={event} />}
             {previous && <AdvisoryChange exposure={exposure} previous={previous} />}
             {totals ? (
               <>

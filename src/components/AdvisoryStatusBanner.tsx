@@ -8,26 +8,59 @@ import { utcStamp, type AdvisoryStatus } from '@/utils/forecastInsight';
  *
  * An old advisory looks exactly like a current one, and a person acting on it may not know a newer
  * one exists. So the newer-advisory case is a banner with one button to the latest, not a line of
- * small grey text.
+ * small grey text. It stays in view (no dismiss) but is kept light so the forecast stays the focus.
  */
 export default function AdvisoryStatusBanner({
   status,
   onSwitchToLatest,
+  variant = 'card',
 }: {
   status: AdvisoryStatus;
   onSwitchToLatest?: () => void;
+  /** 'bar' is one slim line for under the page header; 'card' is for inside a panel */
+  variant?: 'card' | 'bar';
 }) {
   const issued = status.issuedAt ? utcStamp(status.issuedAt) : null;
   const age = status.age?.label;
 
   if (status.kind === 'older' && status.newer) {
     const { count } = status.newer;
+    if (variant === 'bar') {
+      return (
+        <div
+          role="status"
+          data-testid="advisory-banner"
+          data-state="older"
+          data-variant="bar"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-amber-50"
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-300" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-sm leading-snug">
+            <span className="font-semibold">This is not the latest forecast. </span>
+            <span className="text-amber-100/85">
+              {issued ? `Issued ${issued}${age ? ` (${age})` : ''}; ` : ''}
+              {count === 1 ? 'a newer one has' : `${count} newer ones have`} been issued, the latest
+              is {utcStamp(status.newer.issuedAt)}.
+            </span>
+          </p>
+          {onSwitchToLatest && (
+            <button
+              type="button"
+              onClick={onSwitchToLatest}
+              className="min-h-[44px] flex-shrink-0 rounded-md border border-amber-400/70 px-3 py-1.5 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+            >
+              Switch to the latest advisory
+            </button>
+          )}
+        </div>
+      );
+    }
     return (
       <div
         role="status"
         data-testid="advisory-banner"
         data-state="older"
-        className="rounded-xl border border-amber-400/50 bg-amber-500/15 p-3 text-amber-50"
+        className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-50"
       >
         <p className="flex items-start gap-2 text-sm font-semibold">
           <AlertTriangle
@@ -36,7 +69,7 @@ export default function AdvisoryStatusBanner({
           />
           <span>This is not the latest forecast</span>
         </p>
-        <p className="mt-1 text-sm leading-snug text-amber-100/90">
+        <p className="mt-0.5 pl-6 text-sm leading-snug text-amber-100/80">
           {issued
             ? `You are looking at the advisory issued ${issued}${age ? ` (${age})` : ''}. `
             : ''}
@@ -47,7 +80,7 @@ export default function AdvisoryStatusBanner({
           <button
             type="button"
             onClick={onSwitchToLatest}
-            className="mt-2 min-h-[44px] w-full rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+            className="ml-6 mt-1 min-h-[44px] rounded-md border border-amber-400/70 px-3 py-1.5 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
           >
             Switch to the latest advisory
           </button>

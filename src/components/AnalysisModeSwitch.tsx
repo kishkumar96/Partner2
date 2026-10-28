@@ -23,10 +23,8 @@ export const ANALYSIS_MODES: Record<
     active: 'bg-amber-500/20 text-amber-200',
   },
   assessment: {
-    label: 'Assessment',
-    acronym: 'PDIE',
-    fullName: 'Pacific Disaster Impact & Exposure',
-    question: 'post-event, what damage and loss occurred?',
+    label: 'Post Disaster Analysis',
+    question: 'Post-event: what damage and loss occurred?',
     status: 'Post-event impact',
     active: 'bg-emerald-500/20 text-emerald-200',
   },
@@ -72,11 +70,11 @@ export default function AnalysisModeSwitch({
   if (modes.length === 0) return null;
 
   return (
-    <div className="mt-1.5">
+    <div className="w-full sm:w-auto">
       <div
         role="group"
         aria-label="Analysis mode"
-        className="hidden max-w-full rounded-lg border border-slate-600/60 bg-slate-900/50 p-0.5 sm:inline-flex"
+        className="hidden max-w-full flex-wrap gap-1 rounded-lg border border-slate-600/60 bg-slate-900/50 p-1 sm:inline-flex"
       >
         {modes.map(mode => {
           const { label, acronym, fullName } = ANALYSIS_MODES[mode];
@@ -89,10 +87,10 @@ export default function AnalysisModeSwitch({
               aria-label={named ?? undefined}
               title={modeTooltip(mode)}
               onClick={() => active !== mode && onChange(mode)}
-              className={`shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+              className={`shrink-0 rounded-md border px-3.5 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
                 active === mode
-                  ? ANALYSIS_MODES[mode].active
-                  : 'text-slate-300 hover:bg-slate-700/50'
+                  ? `${ANALYSIS_MODES[mode].active} border-current/25`
+                  : 'border-transparent text-slate-300 hover:bg-slate-700/50 hover:text-white'
               }`}
             >
               {named ? (

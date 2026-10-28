@@ -22,6 +22,16 @@ describe('ViewStatusLine', () => {
     ).toEqual(['Coastal Flood · SLR 0 m · 5-yr return period', 'sector: Housing']);
   });
 
+  it('renders nothing when there is nothing to say, so no empty line is left in the header', () => {
+    const { container } = render(<ViewStatusLine mode="event" />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('takes its spacing from the caller', () => {
+    render(<ViewStatusLine mode="event" eventName="Tropical Cyclone Lola" className="" />);
+    expect(screen.getByTestId('view-status-line').className).not.toContain('mt-1');
+  });
+
   it('renders the line', () => {
     render(<ViewStatusLine mode="event" eventName="Tropical Cyclone Lola" />);
     expect(screen.getByTestId('view-status-line')).toHaveTextContent('TC Lola');

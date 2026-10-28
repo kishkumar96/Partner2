@@ -20,6 +20,8 @@ interface ViewStatusLineProps {
   aggregationLabel?: string;
   /** Names of the sectors currently filtered */
   sectorNames?: string[];
+  /** Spacing and layout classes; defaults to a small top margin under a title */
+  className?: string;
 }
 
 /** Builds the segments of the always-visible "what am I looking at?" line. */
@@ -52,11 +54,16 @@ export function buildViewStatusSegments({
 }
 
 export default function ViewStatusLine(props: ViewStatusLineProps) {
-  const { onChangeScenario, onBrowseHistorical } = props;
+  const { onChangeScenario, onBrowseHistorical, className = 'mt-1' } = props;
   const segments = buildViewStatusSegments(props);
+  const hasAction =
+    (props.mode === 'event' && Boolean(onBrowseHistorical)) ||
+    (props.mode === 'planning' && Boolean(onChangeScenario));
+  // Nothing to say (for example a mode with no specifics): leave no empty line
+  if (segments.length === 0 && !hasAction) return null;
   return (
     <p
-      className="mt-1 text-xs leading-snug text-slate-400"
+      className={`${className} text-xs leading-snug text-slate-400`}
       data-testid="view-status-line"
       aria-label="Current view"
     >

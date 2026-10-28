@@ -26,6 +26,30 @@ describe('AdvisoryStatusBanner', () => {
     expect(onSwitch).toHaveBeenCalledTimes(1);
   });
 
+  it('is one slim line with the same button as a bar for under the page header', () => {
+    const status: AdvisoryStatus = {
+      kind: 'older',
+      issuedAt: '2026-10-19T06:00:00Z',
+      age: { hours: 40, label: '40 hours ago', stale: true },
+      newer: { issuedAt: '2026-10-19T12:00:00Z', count: 1 },
+    };
+    const onSwitch = jest.fn();
+    render(<AdvisoryStatusBanner variant="bar" status={status} onSwitchToLatest={onSwitch} />);
+
+    const banner = screen.getByTestId('advisory-banner');
+    expect(banner).toHaveAttribute('data-variant', 'bar');
+    expect(banner).toHaveAttribute('data-state', 'older');
+    expect(banner).toHaveTextContent('This is not the latest forecast.');
+    expect(banner).toHaveTextContent('Issued 19 Oct 06:00 UTC (40 hours ago)');
+    expect(banner).toHaveTextContent(
+      'a newer one has been issued, the latest is 19 Oct 12:00 UTC.'
+    );
+    const button = screen.getByRole('button', { name: 'Switch to the latest advisory' });
+    expect(button.className).toContain('min-h-[44px]');
+    fireEvent.click(button);
+    expect(onSwitch).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the singular for one newer advisory, and has no button when it cannot switch', () => {
     const status: AdvisoryStatus = {
       kind: 'older',

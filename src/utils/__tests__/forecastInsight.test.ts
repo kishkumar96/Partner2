@@ -1,4 +1,9 @@
-import { approximate, buildForecastInsight, utcStamp } from '../forecastInsight';
+import {
+  approximate,
+  buildAdvisoryStatus,
+  buildForecastInsight,
+  utcStamp,
+} from '../forecastInsight';
 import { WATI_17_OCT, WATI_19_OCT, exposureFixture } from '../testing/forecastFixtures';
 import type { TimelinePoint } from '../forecastTimeline';
 
@@ -301,6 +306,69 @@ describe('buildForecastInsight, the trend across advisories', () => {
       point('1', '2026-10-17T12:00:00Z', 2622),
     ]).trend;
     expect(trend?.points.map(p => p.id)).toEqual(['1', '2']);
+  });
+});
+
+describe('buildAdvisoryStatus', () => {
+  const now = Date.UTC(2026, 9, 19, 14);
+  const timeline: TimelinePoint[] = [
+    { id: 'a', issuedAt: '2026-10-19T00:00:00Z', people: 1, buildings: 1, strongest: 'gale' },
+    { id: 'b', issuedAt: '2026-10-19T06:00:00Z', people: 1, buildings: 1, strongest: 'gale' },
+    { id: 'c', issuedAt: '2026-10-19T12:00:00Z', people: 1, buildings: 1, strongest: 'gale' },
+  ];
+
+  it('is older, with how many newer advisories exist, when a later one has results', () => {
+    const status = buildAdvisoryStatus({
+      issuedAt: '2026-10-19T00:00:00Z',
+      latestIssuedAt: '2026-10-19T12:00:00Z',
+      timeline,
+      now,
+    });
+    expect(status.kind).toBe('older');
+    expect(status.newer).toEqual({ issuedAt: '2026-10-19T12:00:00Z', count: 2 });
+  });
+
+  it('is the latest when nothing newer exists and the advisory is recent', () => {
+    const status = buildAdvisoryStatus({
+      issuedAt: '2026-10-19T12:00:00Z',
+      latestIssuedAt: '2026-10-19T12:00:00Z',
+      timeline,
+      now,
+    });
+    expect(status.kind).toBe('latest');
+    expect(status.newer).toBeNull();
+  });
+
+  it('says so when the newest advisory is itself old', () => {
+    const status = buildAdvisoryStatus({
+      issuedAt: '2026-10-19T12:00:00Z',
+      latestIssuedAt: '2026-10-19T12:00:00Z',
+      now: Date.UTC(2026, 9, 22, 12),
+    });
+    expect(status.kind).toBe('latest-aging');
+  });
+
+  it('is the latest, not an error, when the times are missing', () => {
+    expect(buildAdvisoryStatus({}).kind).toBe('latest');
+  });
+
+  it('is the same status the insight carries', () => {
+    const insight = buildForecastInsight({
+      exposure: WATI_17_OCT(),
+      countryName: 'Cook Islands',
+      issuedAt: '2026-10-19T00:00:00Z',
+      latestIssuedAt: '2026-10-19T12:00:00Z',
+      timeline,
+      now,
+    });
+    expect(insight.status).toEqual(
+      buildAdvisoryStatus({
+        issuedAt: '2026-10-19T00:00:00Z',
+        latestIssuedAt: '2026-10-19T12:00:00Z',
+        timeline,
+        now,
+      })
+    );
   });
 });
 

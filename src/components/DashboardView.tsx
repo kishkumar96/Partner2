@@ -16,7 +16,6 @@ import {
   MapPin,
   Users,
   Download,
-  Loader2,
   Wind,
   Compass,
   Scale,
@@ -29,16 +28,15 @@ import CountryFlag from '@/components/CountryFlag';
 import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
 import ViewStatusLine from '@/components/ViewStatusLine';
+import AdvisoryStatusBanner from '@/components/AdvisoryStatusBanner';
+import { buildAdvisoryStatus } from '@/utils/forecastInsight';
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { resolveHazard } from '@/data/vanuatuHazards';
 import ToolsMenu from '@/components/ToolsMenu';
 import { FORECAST_SIGNAL } from '@/utils/forecastBriefing';
 import { useForecastLayers } from '@/utils/useForecastLayers';
 import { useResponsePriority } from '@/utils/useResponsePriority';
-import AnalysisModeSwitch, {
-  ANALYSIS_MODES,
-  type AnalysisMode,
-} from '@/components/AnalysisModeSwitch';
+import AnalysisModeSwitch, { type AnalysisMode } from '@/components/AnalysisModeSwitch';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
@@ -1763,6 +1761,19 @@ export default function DashboardView({
     () => listForecastRuns(countryEventRecords, selectedCountry),
     [countryEventRecords, selectedCountry]
   );
+  // Choosing an advisory changes the map and every figure, so a notice that this is not the newest
+  // one belongs to the page, not to one panel
+  const advisoryStatus = useMemo(
+    () =>
+      !isPlanningMode && forecastExposure
+        ? buildAdvisoryStatus({
+            issuedAt: activeEventRecord?.trackIssuedTime,
+            latestIssuedAt: forecastRecord?.trackIssuedTime,
+            timeline: forecastTimeline,
+          })
+        : null,
+    [isPlanningMode, forecastExposure, activeEventRecord, forecastRecord, forecastTimeline]
+  );
   const assessmentRecord = useMemo(
     () =>
       newestRecord(
@@ -2832,7 +2843,7 @@ export default function DashboardView({
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-4 sm:px-6">
+      <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-2.5 sm:px-6">
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:gap-x-4 xl:items-center xl:gap-4">
           <div className="flex min-w-0 flex-col gap-3 xl:min-w-[26rem] xl:flex-1">
             <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 md:hidden">
@@ -2920,15 +2931,17 @@ export default function DashboardView({
               )}
             </div>
             <div
-              className="flex min-w-0 items-start gap-3 px-1 py-1 sm:gap-4"
+              className="flex min-w-0 items-center gap-3 px-1 sm:gap-4"
               data-tour="dashboard-hero"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-900/55">
+              {/* CountryFlag sizes itself with `size`; a width class here is overridden by its inline style */}
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md shadow-md ring-1 ring-white/20">
                 <CountryFlag
                   countryCode={selectedCountry}
                   aria-label={COUNTRIES[selectedCountry].name}
                   title={COUNTRIES[selectedCountry].name}
-                  className="h-5 w-7 rounded-[4px]"
+                  size="4rem"
+                  className="block"
                 />
               </div>
               <div className="min-w-0">
@@ -2944,7 +2957,7 @@ export default function DashboardView({
                   <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     Pacific Disaster Impact &amp; Exposure
                   </span>{' '}
-                  <span className="block text-xl font-semibold leading-tight tracking-tight text-white sm:text-2xl">
+                  <span className="block text-xl font-semibold leading-tight tracking-tight text-white">
                     {COUNTRIES[selectedCountry].name}
                   </span>
                 </h1>
@@ -2952,13 +2965,7 @@ export default function DashboardView({
                   <p className="mt-1 text-xs text-slate-400 sm:text-sm">
                     {`Loading ${COUNTRIES[selectedCountry].name} operational view...`}
                   </p>
-                ) : (
-                  <AnalysisModeSwitch
-                    available={availableAnalysisModes}
-                    active={analysisMode}
-                    onChange={handleAnalysisModeChange}
-                  />
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -2966,10 +2973,10 @@ export default function DashboardView({
           {/* Nav + actions wrap together and stay right-aligned */}
           <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-x-4 xl:flex-[3] xl:basis-0 xl:justify-end">
             <div className="hidden min-w-0 md:flex xl:shrink-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1">
                 <button
                   onClick={() => openFilterPanel('filters')}
-                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     showFilters && filterPanelTab === 'filters'
                       ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
                       : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
@@ -2983,9 +2990,9 @@ export default function DashboardView({
                 </button>
                 <button
                   onClick={() => setShowAnalytics(current => !current)}
-                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     showAnalytics
-                      ? 'border border-blue-500/35 bg-blue-500/15 text-blue-200'
+                      ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
                       : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                   }`}
                   aria-pressed={showAnalytics}
@@ -2997,9 +3004,9 @@ export default function DashboardView({
                 </button>
                 <button
                   onClick={() => setShowSummary(current => !current)}
-                  className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     showSummary
-                      ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-200'
+                      ? 'border border-cyan-500/35 bg-cyan-500/15 text-cyan-200'
                       : 'border border-transparent bg-slate-700/30 text-slate-300 hover:border-slate-600/60 hover:bg-slate-700/50'
                   }`}
                   aria-pressed={showSummary}
@@ -3007,7 +3014,7 @@ export default function DashboardView({
                   data-tour="summary-panel-toggle"
                 >
                   <ClipboardList className="h-4 w-4" />
-                  <span>Summary</span>
+                  <span>Impact</span>
                 </button>
               </div>
             </div>
@@ -3015,7 +3022,7 @@ export default function DashboardView({
             <div className="min-w-0 xl:shrink-0">
               <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
                 <div
-                  className="flex min-w-max items-center gap-2 rounded-2xl border border-slate-700/40 bg-slate-900/35 p-2 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.9)]"
+                  className="flex min-w-max items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1"
                   data-tour="export-controls"
                 >
                   <ShareLinkButton
@@ -3052,30 +3059,23 @@ export default function DashboardView({
                       viewMode: viewModeChoice ?? undefined,
                     }}
                     compact
-                    className="min-h-11 rounded-xl border-slate-600/60 bg-slate-700/35 px-3 py-2 hover:bg-slate-700/55 sm:min-h-12"
+                    className="min-h-10 rounded-lg border-slate-600/60 bg-slate-700/35 px-3 py-1.5 hover:bg-slate-700/55"
                   />
 
-                  <button
-                    onClick={() => void handleDownloadMap()}
-                    disabled={isDownloadingMap}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-12 sm:text-sm"
-                    aria-label="Download map as PNG"
-                    title="Download current map view as PNG image"
-                  >
-                    {isDownloadingMap ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Exporting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        <span>Map PNG</span>
-                      </>
-                    )}
-                  </button>
-
                   <ExportButtons
+                    layout="menu"
+                    extraActions={[
+                      {
+                        id: 'map-png',
+                        label: 'Map image (PNG)',
+                        hint: 'The current map view',
+                        icon: Download,
+                        busy: isDownloadingMap,
+                        onClick: () => void handleDownloadMap(),
+                        ariaLabel: 'Download map as PNG',
+                        title: 'Download current map view as PNG image',
+                      },
+                    ]}
                     events={exportEvents}
                     exposureData={exportExposureData}
                     economicDamageData={exportEconomicDamageData}
@@ -3225,30 +3225,52 @@ export default function DashboardView({
           </div>
         </div>
 
+        {/* The mode tabs and what they are showing, as one row: the tab names the mode, the line
+            beside it carries the specifics (storm, advisory, scenario) */}
+        {!isLoadingData && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <AnalysisModeSwitch
+              available={availableAnalysisModes}
+              active={analysisMode}
+              onChange={handleAnalysisModeChange}
+            />
+            <ViewStatusLine
+              className=""
+              mode={viewMode}
+              onChangeScenario={() => {
+                openMapPanel();
+                setShowSummary(false);
+              }}
+              isForecast={!!forecastExposure}
+              issuedAt={activeEventRecord?.trackIssuedTime}
+              eventName={hasNamedEvent ? activeCycloneName : undefined}
+              scenarioParts={
+                effectiveHazardScenario
+                  ? describeHazardScenario(effectiveHazardScenario)
+                  : undefined
+              }
+              aggregationLabel={analysisMode === 'forecast' ? undefined : currentAggregationLabel}
+              sectorNames={barFilters.selectedSectors.map(
+                id => sectors.find(sector => sector.id === id)?.name ?? id
+              )}
+            />
+          </div>
+        )}
+
         {!showAnalytics && !showSummary && (
           <TopInsightsCards insights={headlineMetrics} className="mt-2" />
         )}
 
-        {/* What the dashboard is showing right now, in one line */}
-        {!isLoadingData && (
-          <ViewStatusLine
-            mode={viewMode}
-            modeLabel={ANALYSIS_MODES[analysisMode].status}
-            onChangeScenario={() => {
-              openMapPanel();
-              setShowSummary(false);
-            }}
-            isForecast={!!forecastExposure}
-            issuedAt={activeEventRecord?.trackIssuedTime}
-            eventName={hasNamedEvent ? activeCycloneName : undefined}
-            scenarioParts={
-              effectiveHazardScenario ? describeHazardScenario(effectiveHazardScenario) : undefined
-            }
-            aggregationLabel={analysisMode === 'forecast' ? undefined : currentAggregationLabel}
-            sectorNames={barFilters.selectedSectors.map(
-              id => sectors.find(sector => sector.id === id)?.name ?? id
-            )}
-          />
+        {advisoryStatus?.kind === 'older' && (
+          <div className="mt-1.5">
+            <AdvisoryStatusBanner
+              variant="bar"
+              status={advisoryStatus}
+              onSwitchToLatest={
+                forecastRecord ? () => setModeEventId(forecastRecord.id) : undefined
+              }
+            />
+          </div>
         )}
 
         {/* Active Filters Bar - only while something is filtered */}
@@ -3765,6 +3787,7 @@ export default function DashboardView({
               summary={{
                 timeline: forecastTimeline,
                 latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
+                statusShownAbove: true,
                 onSwitchToLatest: forecastRecord
                   ? () => setModeEventId(forecastRecord.id)
                   : undefined,

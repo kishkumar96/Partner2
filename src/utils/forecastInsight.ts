@@ -217,6 +217,41 @@ export interface InsightInput {
   now?: number;
 }
 
+/**
+ * Whether the advisory on screen is the newest, from its issue time and the newest one that has
+ * results. Separate from the insight so the page can show it without building the whole summary.
+ */
+export function buildAdvisoryStatus({
+  issuedAt = null,
+  latestIssuedAt = null,
+  timeline = [],
+  now,
+}: {
+  issuedAt?: string | null;
+  latestIssuedAt?: string | null;
+  timeline?: TimelinePoint[];
+  now?: number;
+}): AdvisoryStatus {
+  const issuedMs = issuedAt ? Date.parse(issuedAt) : NaN;
+  const latestMs = latestIssuedAt ? Date.parse(latestIssuedAt) : NaN;
+  const age = advisoryAge(issuedAt, now);
+  const hasNewer = !Number.isNaN(issuedMs) && !Number.isNaN(latestMs) && latestMs > issuedMs;
+  return {
+    kind: hasNewer ? 'older' : age?.stale ? 'latest-aging' : 'latest',
+    issuedAt,
+    age,
+    newer: hasNewer
+      ? {
+          issuedAt: latestIssuedAt as string,
+          count: Math.max(
+            1,
+            timeline.filter(point => Date.parse(point.issuedAt) > issuedMs).length
+          ),
+        }
+      : null,
+  };
+}
+
 export function buildForecastInsight(input: InsightInput): ForecastInsight {
   const {
     exposure,
@@ -288,24 +323,7 @@ export function buildForecastInsight(input: InsightInput): ForecastInsight {
     }
   }
 
-  const issuedMs = issuedAt ? Date.parse(issuedAt) : NaN;
-  const latestMs = latestIssuedAt ? Date.parse(latestIssuedAt) : NaN;
-  const age = advisoryAge(issuedAt, now);
-  const hasNewer = !Number.isNaN(issuedMs) && !Number.isNaN(latestMs) && latestMs > issuedMs;
-  const status: AdvisoryStatus = {
-    kind: hasNewer ? 'older' : age?.stale ? 'latest-aging' : 'latest',
-    issuedAt,
-    age,
-    newer: hasNewer
-      ? {
-          issuedAt: latestIssuedAt as string,
-          count: Math.max(
-            1,
-            timeline.filter(point => Date.parse(point.issuedAt) > issuedMs).length
-          ),
-        }
-      : null,
-  };
+  const status = buildAdvisoryStatus({ issuedAt, latestIssuedAt, timeline, now });
 
   const facilitiesExposed = exposure.national?.exposed;
   const health = facilitiesExposed?.healthFacilities ?? 0;

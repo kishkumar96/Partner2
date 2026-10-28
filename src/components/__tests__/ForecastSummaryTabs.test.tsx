@@ -73,7 +73,7 @@ describe('ForecastExposureSummary with the summary view', () => {
 
   it('goes to the details from the button at the bottom of the summary', () => {
     render(panel());
-    fireEvent.click(screen.getByRole('button', { name: 'Show full details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See every affected area in Details →' }));
 
     expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
   });
@@ -126,6 +126,31 @@ describe('ForecastExposureSummary, an advisory that is not the latest', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
     expect(screen.getByTestId('advisory-banner')).toHaveAttribute('data-state', 'older');
     expect(screen.queryByTestId('advisory-age')).not.toBeInTheDocument();
+  });
+
+  it('leaves the older-advisory notice to the page when the page shows it', () => {
+    render(panel({}, { statusShownAbove: true }));
+
+    expect(screen.queryByTestId('advisory-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('advisory-age')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+    expect(screen.queryByTestId('advisory-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('advisory-age')).not.toBeInTheDocument();
+  });
+
+  it('still shows an aging latest advisory in the panel when the page shows the older notice', () => {
+    const staleEvent = recordFixture({
+      id: '10',
+      trackIssuedTime: '2020-01-01T00:00:00Z',
+    } as never);
+    render(
+      panel(
+        { event: staleEvent },
+        { statusShownAbove: true, latestIssuedAt: '2020-01-01T00:00:00Z' }
+      )
+    );
+
+    expect(screen.getByTestId('advisory-banner')).toHaveAttribute('data-state', 'aging');
   });
 
   it('keeps the original age line in the details when this is the latest advisory', () => {
