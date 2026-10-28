@@ -100,6 +100,32 @@ Wasabi with no server in between.
 Access: the bucket's policy makes every store in it public, this one included. If the hazard
 rasters should not be public, use the Django pass-through below instead (keys stay on the server).
 
+## Scenario losses for an API without `risk_scenario`
+
+The loss-by-scenario tables (`RiskScenario`, and its split by sector and asset type) live only in
+this repo's middleware. A partner API without them answers 404 and the scenario loss figures, curve
+and breakdown come back empty. `publish_scenario_losses` writes the same rows, in the serializers'
+field names, as gzip JSON next to the Zarr store, and the dashboard reads them from the bucket when
+the API has none (the address is the zarr pointer row's, with the last path segment replaced by
+`scenario_losses/v1`):
+
+```
+<bucket>/scenario_losses/v1/manifest.json                      counts, loss totals, sha256 per file
+<bucket>/scenario_losses/v1/<CC>/scenarios.json                every scenario of the country
+<bucket>/scenario_losses/v1/<CC>/breakdown/<risk_information>.json   {"<scenario id>": [rows]}
+```
+
+```bash
+python manage.py publish_scenario_losses s3://spc-zarr-file/scenario_losses/v1 --dry-run
+python manage.py publish_scenario_losses s3://spc-zarr-file/scenario_losses/v1
+```
+
+Files go up first and the manifest last; every file is read back and compared by hash. An existing
+folder is left alone unless `--replace` is given. The command streams one product at a time (the
+Cook Islands breakdown is 381,276 rows), so it fits in a few hundred MB. Rerun it after importing new
+scenarios, and use a new folder name (`v2`) if the file layout ever changes. Cook Islands today:
+4,716 scenarios, 6 products, 6.6 MB compressed, largest file 3.9 MB.
+
 ## Optional: reading it through Django
 `GET /partner_api/v1/hazard_zarr/<key>` (middleware only) hands over one object of the store,
 read-only, with `Range` requests (`206`/`416`), `HEAD` and `Cache-Control`
