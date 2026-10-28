@@ -2,7 +2,7 @@
 
 ## 📖 Before You Start
 
-**Read First**: [MAP_STATE_CRITIQUE.md](./MAP_STATE_CRITIQUE.md) for full context  
+**Read First**: [MAP_STATE_CRITIQUE.md](./docs/archive/MAP_STATE_CRITIQUE.md) for full context  
 **Implementation Guide**: [ARCHITECTURE_PROPOSAL.md](./src/stores/ARCHITECTURE_PROPOSAL.md)  
 **Code Examples**: [filterUtilsIndexed.EXAMPLE.ts](./src/utils/filterUtilsIndexed.EXAMPLE.ts)
 
@@ -362,6 +362,6 @@ You've successfully migrated when:
 
 - **Stuck?** Re-read [ARCHITECTURE_PROPOSAL.md](./src/stores/ARCHITECTURE_PROPOSAL.md)
 - **Code examples?** Check [filterUtilsIndexed.EXAMPLE.ts](./src/utils/filterUtilsIndexed.EXAMPLE.ts)
-- **Big picture?** Review [MAP_STATE_CRITIQUE.md](./MAP_STATE_CRITIQUE.md)
+- **Big picture?** Review [MAP_STATE_CRITIQUE.md](./docs/archive/MAP_STATE_CRITIQUE.md)
 
 **Remember**: Migrate one component at a time. Don't try to do everything at once!

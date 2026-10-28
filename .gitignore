@@ -179,3 +179,10 @@ stats.json
 # Object-storage (Wasabi) keys: never commit
 wasabi.env
 *.wasabi.env
+
+# local logs and scratch output
+dev.log
+test.txt
+stats.txt
+npmtest.txt
+localhost_*.html
