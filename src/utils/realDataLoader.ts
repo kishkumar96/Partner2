@@ -38,8 +38,15 @@ import {
   scopeRiskRowsToEvent,
 } from '@/utils/partnerEvents';
 import { listCountryCodes } from '@/config/registry';
-import { parseHazardTileUrl } from '@/utils/hazardZarr';
-import { loadZarrHazardLayers, mergeHazardLayers } from '@/utils/hazardZarrCatalog';
+import { loadZarrHazardLayers, mergeHazardLayers, zarrStoreUrls } from '@/utils/hazardZarrCatalog';
+import { hazardZarrEnabled, parseHazardTileUrl } from '@/utils/hazardZarr';
+import {
+  loadBreakdownRows,
+  loadScenarioRows,
+  scenarioLossesBase,
+  scenarioLossesBaseOf,
+  selectScenarioRows,
+} from '@/utils/scenarioLosses';
 
 // ---------------------------------------------------------------------------
 // Per-country public/ subdirectory paths (must match folder names under public/)
@@ -1719,6 +1726,24 @@ async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promis
   }
 }
 
+/**
+ * Where a country's published scenario-loss files are, for an API with no `risk_scenario`: the
+ * folder beside the Zarr store its `hazard_information` pointer row names. Null when there is no
+ * such row, or when reading from the bucket directly is switched off.
+ */
+function scenarioLossesBaseFor(
+  countryCode: CountryCode,
+  hazardUrl: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (!hazardZarrEnabled()) return Promise.resolve(null);
+  return scenarioLossesBaseOf(countryCode, async () =>
+    scenarioLossesBase(
+      zarrStoreUrls(toArrayPayload(await fetchPartnerCollection(hazardUrl, signal)))
+    )
+  );
+}
+
 // RiskScenario rows carry no product label of their own (tc/combined/
 // historical_tcs/...) -- only their parent RiskInformation's title does,
 // following the exact naming import_ck_risk_scenarios.py used when
@@ -1761,7 +1786,17 @@ export async function fetchHazardScenarioRiskSummary(
 
     const url = `${mapping.scopedUrls.risk_scenario}&${params.toString()}`;
     const payload = await fetchPartnerCollection(url, signal);
-    const results = toArrayPayload(payload);
+    let results = toArrayPayload(payload);
+
+    if (results.length === 0) {
+      const base = await scenarioLossesBaseFor(
+        countryCode,
+        mapping.scopedUrls.hazard_information,
+        signal
+      );
+      const published = base ? await loadScenarioRows(base, countryCode, signal) : null;
+      results = published ? selectScenarioRows(published, scenario) : [];
+    }
 
     return (
       results.find(row =>
@@ -1805,9 +1840,18 @@ export async function fetchHazardScenarioCurve(
       risk_information: String(riskInformationId),
       page_size: '200',
     });
-    const rows = toArrayPayload(
+    let rows = toArrayPayload(
       await fetchPartnerCollection(`${mapping.scopedUrls.risk_scenario}&${params}`, signal)
     );
+    if (rows.length === 0) {
+      const base = await scenarioLossesBaseFor(
+        countryCode,
+        mapping.scopedUrls.hazard_information,
+        signal
+      );
+      const published = base ? await loadScenarioRows(base, countryCode, signal) : null;
+      rows = (published ?? []).filter(row => toNumber(row.risk_information) === riskInformationId);
+    }
 
     const points: HazardScenarioCurvePoint[] = [];
     const annualAverageLoss: HazardScenarioCurve['annualAverageLoss'] = [];
@@ -1870,27 +1914,45 @@ export async function fetchHazardScenarioBreakdown(
   try {
     const mapping = await mapCountryPartnerApis(countryCode);
     const base = mapping.endpoints.resource.risk_scenario_breakdown;
+    const toRow = (row: Record<string, unknown>): HazardScenarioBreakdownRow => ({
+      name: typeof row.name === 'string' ? row.name : 'Unknown',
+      sector: typeof row.sector === 'string' ? row.sector : '',
+      totalLoss: toNumber(row.total_loss) ?? 0,
+      exposedCount: toNumber(row.exposed_count),
+      exposedValue: toNumber(row.exposed_value),
+      averageInundationDepth: toNumber(row.average_inundation_depth),
+    });
     const fetchDimension = async (dimension: 'sector' | 'asset_type') => {
       const params = new URLSearchParams({
         risk_scenario: String(riskScenarioId),
         dimension,
         page_size: '200',
       });
-      const rows = toArrayPayload(await fetchPartnerCollection(`${base}?${params}`, signal));
-      return rows.map(row => ({
-        name: typeof row.name === 'string' ? row.name : 'Unknown',
-        sector: typeof row.sector === 'string' ? row.sector : '',
-        totalLoss: toNumber(row.total_loss) ?? 0,
-        exposedCount: toNumber(row.exposed_count),
-        exposedValue: toNumber(row.exposed_value),
-        averageInundationDepth: toNumber(row.average_inundation_depth),
-      }));
+      return toArrayPayload(await fetchPartnerCollection(`${base}?${params}`, signal)).map(toRow);
     };
 
-    const [sectors, assetTypes] = await Promise.all([
+    let [sectors, assetTypes] = await Promise.all([
       fetchDimension('sector'),
       fetchDimension('asset_type'),
     ]);
+    if (sectors.length === 0 && assetTypes.length === 0 && mapping.scopedUrls) {
+      const bucket = await scenarioLossesBaseFor(
+        countryCode,
+        mapping.scopedUrls.hazard_information,
+        signal
+      );
+      const scenarios = bucket ? await loadScenarioRows(bucket, countryCode, signal) : null;
+      const owner = scenarios?.find(row => toNumber(row.id) === riskScenarioId);
+      const productId = owner ? toNumber(owner.risk_information) : null;
+      const published =
+        bucket && productId !== null
+          ? await loadBreakdownRows(bucket, countryCode, productId, riskScenarioId, signal)
+          : null;
+      const ofDimension = (dimension: string) =>
+        (published ?? []).filter(row => row.dimension === dimension).map(toRow);
+      sectors = ofDimension('sector');
+      assetTypes = ofDimension('asset_type');
+    }
     if (sectors.length === 0 && assetTypes.length === 0) {
       return null;
     }
