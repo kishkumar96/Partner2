@@ -155,7 +155,9 @@ function normalizeForecastRow(row: RawForecastRow): CycloneForecastRow | null {
     return null;
   }
 
-  const meanWind = asNumber(firstDefined(row, ['MeanWind', 'WIND_SPD', 'mean_wind']));
+  // MEAN_WIND is the column in the partner API's track geometry (one property per CSV column);
+  // without it every point read as 0 kt: a still wind glow and "winds of 0 kt" in the story.
+  const meanWind = asNumber(firstDefined(row, ['MeanWind', 'MEAN_WIND', 'WIND_SPD', 'mean_wind']));
   const windGust = asNumber(firstDefined(row, ['WindGust', 'WIND_GUST', 'wind_gust']));
   const pressure = asNumber(
     firstDefined(row, ['Pressure', 'PRESSURE_CENTRAL', 'central_pressure', 'pressure'])
