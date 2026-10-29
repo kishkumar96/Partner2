@@ -40,10 +40,10 @@ Everything is event first: pick an event, get its runs, get their risk informati
 6. **Page size and ordering that hold up**: a stable newest-first order on lists.
 
 **Improvements**
-7. **A home for the scenario losses** (`risk_scenario` and its breakdown are 404). The dashboard reads them from Wasabi for now.
+7. **Planning scenarios as an event, like everything else.** One event per country (e.g. "Cook Islands: planning scenarios"), one model run per hazard product (tc, swell, combined, historical, synthetic), the loss tables uploaded as `risk_information` files. No `risk_scenario` tables needed (they are 404 today; the dashboard reads the same tables from Wasabi meanwhile). This needs an event type for planning scenarios (the API does not expose event types) and a meaning for `event_datetime` on it, e.g. the analysis date.
 8. **A canonical `code` on countries** (`CK`, `VU`, `TO`, `WS`). Today they are named "Cook Island", "Ton", "FJI".
 9. **Correct `country` on cyclone tracks**: most Wati tracks are tagged country 1 (Fiji), not Cook Islands (3).
-10. **Hazard layers**: his API has 9 `hazard_information` rows, ours about 2,200. Will the layer catalogue be loaded there, or does the dashboard keep its fixed list?
+10. **Hazard layers**: attach the catalogue to the runs of the planning event (the `model_run` field), in stages. He has 9 `hazard_information` rows, none tied to a run; ours has about 2,200. Until then the dashboard keeps its fixed list.
 
 **Cleanup only he can do**
 11. Remove track 220 (duplicate of 210, wrong issue time) and the stray risk rows 49 and 23 (recheck first); check the duplicate Lola events (ids 1 and 8). Rotate the API password. Keep `hazard_information` row 10 (ours, protocol `zarr`).
