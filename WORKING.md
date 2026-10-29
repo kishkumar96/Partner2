@@ -25,7 +25,7 @@ The one place that says what is current. Agents and people: read this first, upd
 | (nobody) | | | |
 
 ## Open items
-- Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and stray rows 49 and 23, rotate the API password.
+- Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and give rows 49 (Wati run 4, real data, do not delete) and 23 a country, rotate the API password.
 - On GitHub: protect `main` and require the `CI passed` check.
 - Scenario losses are on Wasabi (`spc-zarr-file/scenario_losses/v1`, Cook Islands only); rerun `publish_scenario_losses --replace` after importing new scenarios.
 - Branches and worktrees (cleaned up on 2026-10-28; the old merged ones and the five that held unmerged commits are gone, and the two real changes among them were cherry-picked here):

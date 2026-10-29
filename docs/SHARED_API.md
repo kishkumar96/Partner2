@@ -32,7 +32,7 @@ Everything is event first: pick an event, get its runs, get their risk informati
 **Blocks the switch**
 1. **The event returns its runs and their risk information.** Either embed each run in the event (`model_runs: [{id, name, model_run_time, model_run_completed, tc_track, risks:[ids], hazards:[ids]}]`) or add `risk_information/event/{id}/` in the style of `event/country/{id}/`. Test: `event/7/` shows `dict` entries in `model_runs`, or the route returns 73 rows.
 2. **The 44 risk rows with no run belong to an event** (Gita, Harold, Meena, the first Lola): attach them to runs, or give the event a plain `risks` list.
-3. **A list of risk data without `geometry`** (the floodplain row alone is 8.3 MB). The full row stays at `risk_information/{id}/`.
+3. **A list of risk data without `geometry`** (the floodplain row alone is 7.8 MB). The full row stays at `risk_information/{id}/`.
 
 **Needed as the data grows**
 4. **Date filters on events and runs** (`event/?country=3&from=2026-01-01&to=...`, same on `model_run`), and `ordering` by `event_datetime`. Test: `to=2010-01-01` on `event/` returns 1 event (Meena), `from=2026-01-01` returns 1 (Wati). Today both return all 6.
@@ -46,7 +46,7 @@ Everything is event first: pick an event, get its runs, get their risk informati
 10. **Hazard layers**: attach the catalogue to the runs of the planning event (the `model_run` field), in stages. He has 9 `hazard_information` rows, none tied to a run; ours has about 2,200. Until then the dashboard keeps its fixed list.
 
 **Cleanup only he can do**
-11. Remove track 220 (duplicate of 210, wrong issue time) and the stray risk rows 49 and 23 (recheck first); check the duplicate Lola events (ids 1 and 8). Rotate the API password. Keep `hazard_information` row 10 (ours, protocol `zarr`).
+11. Remove track 220 (duplicate of 210, wrong issue time) and give risk rows 49 (Wati run 4, real data) and 23 a country: they have `country: null`, so a country filter would drop them. Do not delete 49; check the duplicate Lola events (ids 1 and 8). Rotate the API password. Keep `hazard_information` row 10 (ours, protocol `zarr`).
 12. Optional fallback if he cannot change the event: public read of `GET model_run`, or a read-only account for the dashboard server.
 
 ## What the dashboard does about it today
