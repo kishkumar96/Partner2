@@ -1,5 +1,6 @@
 import { listForecastRuns } from '../forecastRuns';
 import {
+  annotateEventTypeNames,
   expandEventModelRuns,
   inferEventTrackId,
   linkEventRisksFromModelRuns,
@@ -208,6 +209,43 @@ describe('model-run linked events', () => {
     ];
     expect(inferEventTrackId(wati!, tracks, runRows)).toBe('215');
     expect(inferEventTrackId(wati!, tracks, [])).toBe('220');
+  });
+});
+
+describe('event types on the shared API (event/ carries only the type id)', () => {
+  const types = [
+    { id: 1, event_name: 'Tropical Cyclone - REF' },
+    { id: 3, event_name: 'Tropical Cyclone - PDIE' },
+  ];
+  const row = (id: number, type: number, runs: number[]) => ({
+    id,
+    title: `Storm ${id}`,
+    event_datetime: '2020-04-06T12:00:00Z',
+    event_type: type,
+    model_runs: runs,
+  });
+  const normalize = (r: Record<string, unknown>) => {
+    const [annotated] = annotateEventTypeNames([r], types);
+    return normalizePartnerEventRow('TO', annotated);
+  };
+
+  it('reads REF as a forecast and PDIE as observed, whatever the runs say', () => {
+    expect(normalize(row(7, 1, [4]))?.isForecast).toBe(true);
+    expect(normalize(row(4, 3, [20]))?.isForecast).toBe(false);
+    expect(normalize(row(4, 3, []))?.isForecast).toBe(false);
+  });
+
+  it('keeps the hazard without the REF or PDIE suffix', () => {
+    expect(normalize(row(4, 3, []))?.eventType).toBe('Tropical Cyclone');
+  });
+
+  it('falls back to the old guess when the types are not available', () => {
+    const [same] = annotateEventTypeNames([row(7, 1, [4])], []);
+    expect(normalizePartnerEventRow('TO', same)?.isForecast).toBe(true);
+  });
+
+  it('lets an explicit is_forecast win over the type name', () => {
+    expect(normalize({ ...row(4, 1, []), is_forecast: false })?.isForecast).toBe(false);
   });
 });
 

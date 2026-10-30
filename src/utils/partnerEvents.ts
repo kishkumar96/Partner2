@@ -33,6 +33,41 @@ function toIdList(value: unknown): string[] {
 }
 
 /** Normalize one Partner API Event row (shared by the loader and /api/events). */
+/**
+ * What an event type's name says about the event. The shared API names its types
+ * "Tropical Cyclone - REF" (rapid exposure forecast) and "Tropical Cyclone - PDIE"
+ * (post-event assessment); `event/` carries only the type's id.
+ */
+export function eventTypeKind(typeName: string): 'forecast' | 'observed' | null {
+  if (/\bREF\b|rapid\s+exposure/i.test(typeName)) return 'forecast';
+  if (/\bPDIE\b|\bPDNA\b|post[-\s]?event|observed/i.test(typeName)) return 'observed';
+  return null;
+}
+
+/** Hazard part of a type name: "Tropical Cyclone - REF" is "Tropical Cyclone". */
+function hazardOfEventType(typeName: string): string {
+  return typeName.replace(/\s*[-–]\s*(REF|PDIE|PDNA)\s*$/i, '').trim();
+}
+
+/** Adds `event_type_name` to event rows that carry only the type's id. */
+export function annotateEventTypeNames(
+  eventRows: Array<Record<string, unknown>>,
+  typeRows: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  const names = new Map<string, string>();
+  for (const type of typeRows) {
+    const id = toIdString(type.id);
+    const name = typeof type.event_name === 'string' ? type.event_name : '';
+    if (id && name) names.set(id, name);
+  }
+  if (names.size === 0) return eventRows;
+  return eventRows.map(row => {
+    if (typeof row.event_type_name === 'string' && row.event_type_name) return row;
+    const name = names.get(toIdString(row.event_type) ?? '');
+    return name ? { ...row, event_type_name: name } : row;
+  });
+}
+
 export function normalizePartnerEventRow(
   countryCode: CountryCode,
   row: Record<string, unknown>
@@ -50,20 +85,29 @@ export function normalizePartnerEventRow(
     (typeof row.id === 'number' && Number.isFinite(row.id) ? String(row.id) : '') ||
     firstString(row, ['id', 'event_id', 'eventId', 'cyclone_id', 'cycloneId']);
   const cycloneTrackId = toIdString(row.cyclone_track) ?? toIdString(row.cycloneTrack) ?? '';
-  const eventType = firstString(row, ['event_type_name']);
+  const eventTypeName = firstString(row, ['event_type_name']);
+  const typeKind = eventTypeKind(eventTypeName);
+  const eventType = hazardOfEventType(eventTypeName);
   const singleRun = toIdString(row.model_run);
   const modelRunIds = [...toIdList(row.model_runs), ...(singleRun ? [singleRun] : [])];
   const dataSource = typeof row.data_source === 'string' ? row.data_source : undefined;
   // Prefer explicit backend signals. The title match is only a fallback for
   // rows that carry no data_source, and requires the spelled-out phrase so an
   // unrelated title containing "ref" is not mistaken for a forecast.
+  // An explicit flag wins, then the event type's name, then the guesses below.
+  const declaredForecast =
+    typeof row.is_forecast === 'boolean'
+      ? row.is_forecast
+      : typeKind !== null
+        ? typeKind === 'forecast'
+        : null;
   const isForecast =
-    row.is_forecast === true ||
+    declaredForecast ??
     // The API lists a model run on an Event only for RiskScape (REF) outputs, and
     // does not flag is_forecast itself.
-    (modelRunIds.length > 0 && row.is_forecast === undefined && !dataSource) ||
-    dataSource === 'rapid_exposure_forecast' ||
-    (!dataSource && /rapid\s+(exposure|forecast)/i.test(name));
+    ((modelRunIds.length > 0 && !dataSource) ||
+      dataSource === 'rapid_exposure_forecast' ||
+      (!dataSource && /rapid\s+(exposure|forecast)/i.test(name)));
 
   if (!name && !explicitId) return null;
 

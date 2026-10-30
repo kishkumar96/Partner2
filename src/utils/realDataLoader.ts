@@ -38,6 +38,7 @@ import {
   inferEventTrackId,
   linkEventRisksFromModelRuns,
   normalizeDateValue,
+  annotateEventTypeNames,
   normalizePartnerEventRecords,
   riskRowModelRunId,
   scopeRiskRowsToEvent,
@@ -2275,12 +2276,19 @@ async function loadPartnerApiCountryData(
       };
     }
 
-    const [eventPayload, cyclonePayload, riskPayload, hazardPayload] = await Promise.all([
-      fetchPartnerCollection(mapping.scopedUrls.event, signal),
-      fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
-      fetchPartnerCollection(mapping.scopedUrls.risk_information, signal),
-      fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
-    ]);
+    const [rawEventPayload, eventTypePayload, cyclonePayload, riskPayload, hazardPayload] =
+      await Promise.all([
+        fetchPartnerCollection(mapping.scopedUrls.event, signal),
+        // Two or three rows. The shared API names an event's kind only here (REF or PDIE).
+        fetchPartnerCollection(mapping.endpoints.resource.event_type, signal),
+        fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
+        fetchPartnerCollection(mapping.scopedUrls.risk_information, signal),
+        fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
+      ]);
+    const eventPayload = annotateEventTypeNames(
+      toArrayPayload(rawEventPayload),
+      toArrayPayload(eventTypePayload)
+    );
     const normalizedEventRecords = normalizePartnerEvents(
       countryCode,
       eventPayload,
