@@ -489,7 +489,7 @@ describe('prepareEventRows', () => {
 
   it('reads the shared API’s runs and missing tracks, and names the types', async () => {
     const gita = { id: 5, title: 'Gita', event_type: 3, country: 5, model_runs: [13] };
-    const out = await prepareEventRows([gita], [], types, read, urls);
+    const out = await prepareEventRows([gita], [], async () => types, read, urls);
     expect(out.runOnly).toBe(true);
     expect(read.mock.calls.map(([url]) => url)).toEqual(['run/13/', 'track/41/']);
     expect(out.trackRows.map(t => t.id)).toEqual([41]);
@@ -508,9 +508,35 @@ describe('prepareEventRows', () => {
       model_run: 14,
       event_type_name: 'Tropical Cyclone',
     };
-    const out = await prepareEventRows([ours], [], types, read, urls);
+    const loadTypes = jest.fn(async () => types);
+    const out = await prepareEventRows([ours], [], loadTypes, read, urls);
     expect(out.runOnly).toBe(false);
     expect(read).not.toHaveBeenCalled();
+    expect(loadTypes).not.toHaveBeenCalled();
     expect(out.eventRows).toEqual([ours]);
+  });
+});
+
+describe('placeholder events', () => {
+  // As our API serves the six empty Cook Islands events on Meena's track
+  const placeholder = {
+    id: 9,
+    title: '',
+    event_datetime: null,
+    cyclone_track: 6,
+    risks: [],
+    hazards: [8],
+    model_run: null,
+    forecast_runs: [],
+  };
+
+  it('drops an event with no title, date, risks or runs', () => {
+    expect(normalizePartnerEventRecords('CK', placeholder)).toEqual([]);
+  });
+
+  it('keeps an untitled event that has its own risks', () => {
+    expect(normalizePartnerEventRecords('CK', { ...placeholder, id: 3, risks: [28] })).toHaveLength(
+      1
+    );
   });
 });

@@ -104,10 +104,7 @@ async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord
       return [];
     }
 
-    const [rows, typeRows] = await Promise.all([
-      fetchPartnerCollection(mapping.scopedUrls.event),
-      fetchPartnerCollection(mapping.endpoints.resource.event_type),
-    ]);
+    const rows = await fetchPartnerCollection(mapping.scopedUrls.event);
     const countryRows = rows.filter(row => {
       const rowCountryId =
         typeof row.country === 'number'
@@ -118,9 +115,15 @@ async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord
       return rowCountryId === mapping.countryId;
     });
     // Tracks only name the advisories here; their names are rebuilt from the run times instead
-    const { eventRows } = await prepareEventRows(countryRows, [], typeRows, fetchPartnerDetail, {
-      modelRun: mapping.endpoints.resource.model_run,
-    });
+    const { eventRows } = await prepareEventRows(
+      countryRows,
+      [],
+      () => fetchPartnerCollection(mapping.endpoints.resource.event_type),
+      fetchPartnerDetail,
+      {
+        modelRun: mapping.endpoints.resource.model_run,
+      }
+    );
     return eventRows.flatMap(row => normalizePartnerEventRecords(countryCode, row));
   } catch {
     return [];

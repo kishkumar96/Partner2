@@ -100,3 +100,34 @@ describe('aggregateEventsByLevel', () => {
     ]);
   });
 });
+
+describe('aggregateEventsByLevel names per-area entries by their own area', () => {
+  // Per-area entries keep the parent event's whole regionalImpacts list (Meena, Cook Islands)
+  const impacts = [
+    { regionId: '9', regionName: 'Aitutaki' },
+    { regionId: '3', regionName: 'Rarotonga' },
+    { regionId: '12', regionName: 'Mangaia' },
+  ];
+  const entries = impacts.map(
+    (impact, index) =>
+      ({
+        id: `3-${impact.regionId}`,
+        parentEventId: '3',
+        name: `Meena - ${impact.regionName}`,
+        provinceId: impact.regionId,
+        districtId: impact.regionId,
+        totalAffectedPopulation: [563, 10974, 522][index],
+        totalEconomicDamage: 0,
+        regionalImpacts: impacts,
+      }) as unknown as Event
+  );
+
+  it('uses the area whose id is the row key, not the first in the list', () => {
+    const rows = aggregateEventsByLevel(entries, 'province', [], [], false);
+    expect(rows.map(row => [row.id, row.name, row.totalAffectedPopulation])).toEqual([
+      ['9', 'Aitutaki', 563],
+      ['3', 'Rarotonga', 10974],
+      ['12', 'Mangaia', 522],
+    ]);
+  });
+});

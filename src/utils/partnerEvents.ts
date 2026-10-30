@@ -160,10 +160,26 @@ export function normalizePartnerEventRow(
  * which the dashboard shows as such. Events with no runs (loaded by hand)
  * stay a single record.
  */
+/**
+ * An Event row with no title, no date and nothing of its own (no risks, no runs): a placeholder.
+ * Our API has six for the Cook Islands, all on Meena's track, which listed as blank duplicates.
+ */
+export function isPlaceholderEventRow(row: Record<string, unknown>): boolean {
+  return (
+    !firstString(row, ['title', 'event_name', 'name']) &&
+    !firstString(row, ['event_datetime', 'event_date', 'date']) &&
+    toIdList(row.risks).length === 0 &&
+    toIdList(row.model_runs).length === 0 &&
+    toIdString(row.model_run) === null &&
+    !(Array.isArray(row.forecast_runs) && row.forecast_runs.length > 0)
+  );
+}
+
 export function normalizePartnerEventRecords(
   countryCode: CountryCode,
   row: Record<string, unknown>
 ): EventRecord[] {
+  if (isPlaceholderEventRow(row)) return [];
   const base = normalizePartnerEventRow(countryCode, row);
   if (!base) return [];
   const runs = Array.isArray(row.forecast_runs)
@@ -236,13 +252,20 @@ type Row = Record<string, unknown>;
 export async function prepareEventRows(
   eventRows: Row[],
   trackRows: Row[],
-  typeRows: Row[],
+  loadTypeRows: () => Promise<Row[]>,
   readDetail: (url: string) => Promise<Row | null>,
   urls: { modelRun: string; cycloneTrack?: string }
 ): Promise<{ eventRows: Row[]; trackRows: Row[]; runOnly: boolean }> {
   const runOnly = eventRows.length > 0 && eventRows.every(isRunOnlyEventRow);
+  // Our API names the type on the event and has no event_type/ list, so ask only when needed
+  const typesNeeded = eventRows.some(row => !firstString(row, ['event_type_name']));
+  const typeRowsPromise = typesNeeded ? loadTypeRows() : Promise.resolve([]);
   if (!runOnly) {
-    return { eventRows: annotateEventTypeNames(eventRows, typeRows), trackRows, runOnly };
+    return {
+      eventRows: annotateEventTypeNames(eventRows, await typeRowsPromise),
+      trackRows,
+      runOnly,
+    };
   }
   const runIds = [...new Set(eventRows.flatMap(row => toIdList(row.model_runs)))];
   const runs = await mapWithConcurrency(runIds, PARTNER_BY_ID_CONCURRENCY, id =>
@@ -269,7 +292,7 @@ export async function prepareEventRows(
   return {
     eventRows: annotateEventTypeNames(
       eventRows.map(row => attachModelRunDetails(row, runsById, allTracks)),
-      typeRows
+      await typeRowsPromise
     ),
     trackRows: allTracks,
     runOnly,

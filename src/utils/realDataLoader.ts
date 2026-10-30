@@ -2307,15 +2307,11 @@ async function loadPartnerApiCountryData(
       };
     }
 
-    const [rawEventPayload, eventTypePayload, rawCyclonePayload, hazardPayload] = await Promise.all(
-      [
-        fetchPartnerCollection(mapping.scopedUrls.event, signal),
-        // Two or three rows. The shared API names an event's kind only here (REF or PDIE).
-        fetchPartnerCollection(mapping.endpoints.resource.event_type, signal),
-        fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
-        fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
-      ]
-    );
+    const [rawEventPayload, rawCyclonePayload, hazardPayload] = await Promise.all([
+      fetchPartnerCollection(mapping.scopedUrls.event, signal),
+      fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
+      fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
+    ]);
     // The shared API's events list only their model runs, and its risk listing ignores every
     // filter (about 110 MB), so there the data is read event first: runs, then rows by id.
     const {
@@ -2327,7 +2323,9 @@ async function loadPartnerApiCountryData(
         row => mapping.countryId == null || toNumber(row.country) === mapping.countryId
       ),
       toArrayPayload(rawCyclonePayload),
-      toArrayPayload(eventTypePayload),
+      // Two or three rows. The shared API names an event's kind only here (REF or PDIE).
+      async () =>
+        toArrayPayload(await fetchPartnerCollection(mapping.endpoints.resource.event_type, signal)),
       async url => asDetailRow(await fetchPartnerCollection(url, signal))[0] ?? null,
       {
         modelRun: mapping.endpoints.resource.model_run,

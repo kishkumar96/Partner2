@@ -423,7 +423,7 @@ export default function FilterPanel({
           </div>
 
           {/* Observed-event picker: meaningless for planning scenarios, which are chosen in the Hazard Scenario section */}
-          {viewMode === 'event' && events.length > 1 && (
+          {viewMode === 'event' && events.length > 0 && (
             <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
               <button
                 type="button"

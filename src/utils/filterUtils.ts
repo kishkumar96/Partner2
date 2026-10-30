@@ -36,7 +36,13 @@ function getFallbackAggregationName(
   aggregationLevel: Exclude<AggregationLevel, 'national'>,
   fallbackId: string
 ): string {
-  const regionalName = event.regionalImpacts?.[0]?.regionName?.trim();
+  // A per-area entry keeps its parent event's whole regionalImpacts list, so the area is the
+  // one whose id is this group's key, not the list's first.
+  const impacts = event.regionalImpacts ?? [];
+  const regionalName = (
+    impacts.find(impact => impact.regionId === fallbackId) ??
+    (impacts.length === 1 ? impacts[0] : undefined)
+  )?.regionName?.trim();
   if (regionalName) return regionalName;
 
   const eventName = event.name?.trim();

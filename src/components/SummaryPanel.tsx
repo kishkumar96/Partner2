@@ -515,6 +515,11 @@ export default function SummaryPanel({
     }),
     [filteredEvents]
   );
+  // Entries are per area and sector, so their count overstates the areas
+  const filteredAreaCount = useMemo(
+    () => new Set(filteredEvents.map(e => e.districtId || e.provinceId || e.id)).size,
+    [filteredEvents]
+  );
 
   // Define sector colors using the centralized theme system
   // These colors complement the application's blue/purple/slate aesthetic
@@ -962,7 +967,7 @@ export default function SummaryPanel({
                     ? 'For the selected hazard scenario'
                     : csvTotals
                       ? `${scopePrefix}Across ${csvTotals.districtCount} ${csvTotals.districtCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
-                      : `Across ${filteredEvents.length} ${filteredEvents.length !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
+                      : `Across ${filteredAreaCount} ${filteredAreaCount !== 1 ? areaLabelPlural.toLowerCase() : areaLabelSingular.toLowerCase()}`
                 }
                 icon={DollarSign}
                 color="red"
