@@ -39,12 +39,10 @@ describe('AdvisoryStatusBanner', () => {
     const banner = screen.getByTestId('advisory-banner');
     expect(banner).toHaveAttribute('data-variant', 'bar');
     expect(banner).toHaveAttribute('data-state', 'older');
-    expect(banner).toHaveTextContent('This is not the latest forecast.');
+    expect(banner).toHaveTextContent('Not the latest forecast.');
     expect(banner).toHaveTextContent('Issued 19 Oct 06:00 UTC (40 hours ago)');
-    expect(banner).toHaveTextContent(
-      'a newer one has been issued, the latest is 19 Oct 12:00 UTC.'
-    );
-    const button = screen.getByRole('button', { name: 'Switch to the latest advisory' });
+    expect(banner).toHaveTextContent('1 newer, latest 19 Oct 12:00 UTC');
+    const button = screen.getByRole('button', { name: 'Switch to latest' });
     expect(button.className).toContain('min-h-[44px]');
     fireEvent.click(button);
     expect(onSwitch).toHaveBeenCalledTimes(1);

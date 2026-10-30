@@ -26,30 +26,31 @@ export default function AdvisoryStatusBanner({
   if (status.kind === 'older' && status.newer) {
     const { count } = status.newer;
     if (variant === 'bar') {
+      // One line under the header, so it costs the map as little height as possible
       return (
         <div
           role="status"
           data-testid="advisory-banner"
           data-state="older"
           data-variant="bar"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-amber-50"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-amber-50"
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-300" aria-hidden="true" />
-          <p className="min-w-0 flex-1 text-sm leading-snug">
-            <span className="font-semibold">This is not the latest forecast. </span>
+          <p className="min-w-0 flex-1 text-xs leading-snug sm:text-sm">
+            <span className="font-semibold">Not the latest forecast.</span>{' '}
             <span className="text-amber-100/85">
-              {issued ? `Issued ${issued}${age ? ` (${age})` : ''}; ` : ''}
-              {count === 1 ? 'a newer one has' : `${count} newer ones have`} been issued, the latest
-              is {utcStamp(status.newer.issuedAt)}.
+              {issued ? `Issued ${issued}${age ? ` (${age})` : ''} · ` : ''}
+              {count === 1 ? '1 newer' : `${count} newer`}, latest {utcStamp(status.newer.issuedAt)}
             </span>
           </p>
           {onSwitchToLatest && (
+            // The negative margin keeps the 44px tap target without making the bar 44px tall
             <button
               type="button"
               onClick={onSwitchToLatest}
-              className="min-h-[44px] flex-shrink-0 rounded-md border border-amber-400/70 px-3 py-1.5 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+              className="-my-2.5 min-h-[44px] flex-shrink-0 rounded-md border border-amber-400/70 px-3 py-1 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 sm:text-sm"
             >
-              Switch to the latest advisory
+              Switch to latest
             </button>
           )}
         </div>

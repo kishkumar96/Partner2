@@ -67,9 +67,9 @@ describe('AnalysisModeSwitch', () => {
     const forecast = screen.getByRole('button', { name: REF });
     const [wide, narrow] = Array.from(forecast.querySelectorAll('span'));
     expect(wide).toHaveTextContent(REF);
-    expect(wide).toHaveClass('hidden', 'lg:inline');
+    expect(wide).toHaveClass('hidden', 'min-[1920px]:inline');
     expect(narrow).toHaveTextContent('Forecast (REF)');
-    expect(narrow).toHaveClass('lg:hidden');
+    expect(narrow).toHaveClass('min-[1920px]:hidden');
 
     // Post Disaster Analysis has no model abbreviation, so it is one plain label at every width
     const assessment = screen.getByRole('button', { name: PDA });

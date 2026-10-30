@@ -95,12 +95,13 @@ export default function AnalysisModeSwitch({
             >
               {named ? (
                 <>
-                  {/* The full name needs the width; below large screens it is the label and the
-                      abbreviation. The button's aria-label carries the full name either way. */}
-                  <span aria-hidden="true" className="hidden lg:inline">
+                  {/* The full name needs the width: the tabs share the header's top line with the
+                      title and buttons, which only leaves room for it from 1920px. Below that it is
+                      the label and the abbreviation; the aria-label carries the full name either way. */}
+                  <span aria-hidden="true" className="hidden min-[1920px]:inline">
                     {named}
                   </span>
-                  <span aria-hidden="true" className="lg:hidden">
+                  <span aria-hidden="true" className="min-[1920px]:hidden">
                     {label} ({acronym})
                   </span>
                 </>
