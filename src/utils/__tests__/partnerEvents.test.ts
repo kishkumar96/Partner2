@@ -211,6 +211,30 @@ describe('model-run linked events', () => {
   });
 });
 
+describe('an observed storm that has its own model run', () => {
+  const harold = normalizePartnerEventRow('TO', {
+    id: 4,
+    title: 'Tropical Cyclone Harold',
+    event_datetime: '2020-04-06T12:00:00Z',
+    is_forecast: false,
+    model_runs: [20],
+  });
+  const rows = [
+    { id: 90, model_run: 20, country: 4, title: 'Harold Damaged buildings' },
+    { id: 91, model_run: null, country: 4, title: 'Other storm file' },
+  ];
+
+  it('is not a forecast when the API says so, though it lists a run', () => {
+    expect(harold?.isForecast).toBe(false);
+    expect(harold?.backendModelRunIds).toEqual(['20']);
+  });
+
+  it('gets only its run’s rows, not the country’s unlinked ones', () => {
+    const [linked] = linkEventRisksFromModelRuns([harold!], rows);
+    expect(ids(scopeRiskRowsToEvent(rows, linked, [linked]))).toEqual([90]);
+  });
+});
+
 describe('expandEventModelRuns (the shared API: runs listed as ids, no forecast_runs)', () => {
   const wati = () =>
     normalizePartnerEventRecords('CK', {

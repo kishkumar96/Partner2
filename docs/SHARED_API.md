@@ -27,11 +27,13 @@ A token comes from `POST /partner_api/api-token-auth/` with a username and passw
 - So a country page that asks for `risk_information` follows every page: about **112 MB** (6 pages of 11.7 MB, 2 to 7 seconds each). Our API sends the same request for one country in about 5.8 MB.
 
 ## What we need from Anuj (in this order)
-Everything is event first: pick an event, get its risk information. **Model runs exist only for REF (RiskScape rapid exposure) forecasts**, where an event's runs are its advisories. Every other event (observed storms, planning scenarios) lists its risk files, track and hazards directly on the event.
+Everything is event first: pick an event, follow its model runs, get each run's risk information. **Decided with Anuj: every event has at least one model run, and the run holds the risk files, track and hazards.** For a REF forecast an event's runs are its advisories. For an observed storm (Gita, Harold, Meena, the first Lola) or a planning scenario the event has one run that holds its data. The dashboard then has one path for every event, with no guessing by country.
+
+**One flag is needed so a run is not mistaken for a forecast:** the event must say whether it is a REF forecast (`is_forecast: true/false`, or an event type that tells them apart, which is also what the `event_type` filter would be for). Without it the dashboard treats any event with runs as a forecast, and Harold would show as one. The dashboard already honours `is_forecast: false`.
 
 **Blocks the switch**
 1. **A REF forecast event returns its runs and their risk information.** Either embed each run in the event (`model_runs: [{id, name, model_run_time, model_run_completed, tc_track, risks:[ids], hazards:[ids]}]`) or add `risk_information/event/{id}/` in the style of `event/country/{id}/`. Test: `event/7/` shows `dict` entries in `model_runs`, or the route returns 73 rows.
-2. **Events that are not REF forecasts list their data directly** (Gita, Harold, Meena, the first Lola, and the planning scenarios): `"risks": [...]` with the same fields as a run's risk items, plus `"cyclone_track"` and `"hazards"`. The 44 risk rows with no run must belong to one of these events.
+2. **Events that are not REF forecasts get one model run each** (Gita, Harold, Meena, the first Lola, and the planning scenarios). The run's `risks`, `tc_track` and `hazards` hold their data, and the event says it is not a forecast (`is_forecast: false`). The 44 risk rows with no run are attached to these runs. The run's `model_run_time` can be the event date and `model_run_completed` true.
 3. **A list of risk data without `geometry`** (the floodplain row alone is 7.8 MB). The full row stays at `risk_information/{id}/`.
 
 **Needed as the data grows**
@@ -40,7 +42,7 @@ Everything is event first: pick an event, get its risk information. **Model runs
 6. **Page size and ordering that hold up**: a stable newest-first order on lists.
 
 **Improvements**
-7. **Planning scenarios as an event, like everything else.** One event per country (e.g. "Cook Islands: planning scenarios") with its loss tables (one file per hazard product) listed directly as `risks`, and no runs, because runs are for REF only. No `risk_scenario` tables are needed (they are 404 today; the dashboard reads the same tables from Wasabi meanwhile). This needs an event type for planning scenarios (the API does not expose event types) and a meaning for `event_datetime` on it, e.g. the analysis date.
+7. **Planning scenarios as an event, like everything else.** One event per country (e.g. "Cook Islands: planning scenarios") with one run whose `risks` are its loss tables (one file per hazard product). No `risk_scenario` tables are needed (they are 404 today; the dashboard reads the same tables from Wasabi meanwhile). This needs an event type for planning scenarios (the API does not expose event types) and a meaning for `event_datetime` on it, e.g. the analysis date.
 8. **A canonical `code` on countries** (`CK`, `VU`, `TO`, `WS`). Today they are named "Cook Island", "Ton", "FJI".
 9. **Correct `country` on cyclone tracks**: most Wati tracks are tagged country 1 (Fiji), not Cook Islands (3).
 10. **Hazard layers**: attach the catalogue to the planning event as a `hazards` list, in stages (`hazard_information` has a `model_run` field but no event field, and runs are only for REF). He has 9 `hazard_information` rows, none tied to a run; ours has about 2,200. Until then the dashboard keeps its fixed list.
