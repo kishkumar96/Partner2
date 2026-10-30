@@ -8,8 +8,7 @@ The one place that says what is current. Agents and people: read this first, upd
 - **Don't:** edit `/data/Partner2` (the user's own working tree, with uncommitted changes), or share a checkout with another session.
 
 ## Deployed
-- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): image built **22 Oct** from a hand-made tarball, build id `1_mI-CcYuTbYAvJBkYGU_`, commit not recorded. Checked 2026-10-28: it contains none of the Zarr flood depths, the depth chip, the scenario-loss reader, the storm filters or the Context header.
-- **Ready to deploy:** `~/dashboard-source-5c11468.tar.gz` on the server (md5 `636ff8f452d7a721510d0dee624fbeb5`), a `git archive` of `integration/ready-to-build` at `5c11468`. On top of the MEAN_WIND fix it reads the event types (REF, PDIE, Scenario) and reads the shared API event first, never its whole risk table.
+- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): deployed **30 Oct 16:53** from `5c11468` on `integration/ready-to-build` (archive md5 `636ff8f452d7a721510d0dee624fbeb5`), build id `qI_OVGzDBykMsRkvJMmZA`. Still reads our own API (`PARTNER_API_BASE_URL` unchanged). Rollback tag: `partner2-partner2:rollback-202610301653` (the 22 Oct build).
 - **How to deploy** (the server cannot run `next build`): see "Deploying a prebuilt image" in `DEPLOYMENT.md`. The switch script `~/deploy-new-image.sh` (copy in `scripts/ops/`) refuses an old image before changing anything, and checks the served build id after.
 - **After a deploy:** write the commit and the new build id here.
 - **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not switched to the shared API: see `docs/SHARED_API.md` (risk data is 112 MB per page there).
