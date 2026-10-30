@@ -21,13 +21,13 @@ function firstString(row: Record<string, unknown>, keys: string[]): string {
   return '';
 }
 
-function toIdString(value: unknown): string | null {
+export function toIdString(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   if (typeof value === 'string' && value.trim()) return value.trim();
   return null;
 }
 
-function toIdList(value: unknown): string[] {
+export function toIdList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.map(toIdString).filter((id): id is string => id !== null)
     : [];
@@ -201,6 +201,133 @@ export function normalizePartnerEventRecords(
       modelRunError: typeof run.error === 'string' && run.error ? run.error : undefined,
     };
   });
+}
+
+/** Requests in flight at once when reading rows one by one (a storm can have 70 risk rows). */
+export const PARTNER_BY_ID_CONCURRENCY = 6;
+
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+type Row = Record<string, unknown>;
+
+/**
+ * A country's Event rows ready for normalizePartnerEventRecords, from either API. On the
+ * shared API, whose Events list only model run ids, each run is read
+ * (`model_run/{id}/`, public) and its rows and track written onto the Event; a run's track
+ * missing from `trackRows` is read by id when `trackUrl` is given (most Wati tracks are
+ * filed under Fiji). Every row gets its event type's name, which there only `event_type/`
+ * has. Returns the rows and the tracks, extra ones included.
+ */
+export async function prepareEventRows(
+  eventRows: Row[],
+  trackRows: Row[],
+  typeRows: Row[],
+  readDetail: (url: string) => Promise<Row | null>,
+  urls: { modelRun: string; cycloneTrack?: string }
+): Promise<{ eventRows: Row[]; trackRows: Row[]; runOnly: boolean }> {
+  const runOnly = eventRows.length > 0 && eventRows.every(isRunOnlyEventRow);
+  if (!runOnly) {
+    return { eventRows: annotateEventTypeNames(eventRows, typeRows), trackRows, runOnly };
+  }
+  const runIds = [...new Set(eventRows.flatMap(row => toIdList(row.model_runs)))];
+  const runs = await mapWithConcurrency(runIds, PARTNER_BY_ID_CONCURRENCY, id =>
+    readDetail(`${urls.modelRun}${id}/`)
+  );
+  const runsById = new Map<string, Row>();
+  runs.forEach((run, index) => {
+    if (run) runsById.set(runIds[index], run);
+  });
+  const known = new Set(trackRows.map(row => toIdString(row.id)));
+  const missingTrackIds = urls.cycloneTrack
+    ? [
+        ...new Set(
+          [...runsById.values()]
+            .map(run => toIdString(run.tc_track))
+            .filter((id): id is string => id !== null && !known.has(id))
+        ),
+      ]
+    : [];
+  const extraTracks = await mapWithConcurrency(missingTrackIds, PARTNER_BY_ID_CONCURRENCY, id =>
+    readDetail(`${urls.cycloneTrack}${id}/`)
+  );
+  const allTracks = [...trackRows, ...extraTracks.filter((row): row is Row => !!row)];
+  return {
+    eventRows: annotateEventTypeNames(
+      eventRows.map(row => attachModelRunDetails(row, runsById, allTracks)),
+      typeRows
+    ),
+    trackRows: allTracks,
+    runOnly,
+  };
+}
+
+/** A shared-API Event row: it lists its model run ids and nothing else of its data. */
+export function isRunOnlyEventRow(row: Record<string, unknown>): boolean {
+  return !('risks' in row) && Array.isArray(row.model_runs);
+}
+
+/**
+ * The shared API's Event lists only its model run ids; each run (`model_run/{id}/`) names
+ * its risk rows and track. Writes them onto the Event row in the shape our API serves —
+ * `risks` and `cyclone_track` of the newest run, and `forecast_runs` when there are
+ * several — so both APIs go through normalizePartnerEventRecords the same way.
+ */
+export function attachModelRunDetails(
+  eventRow: Record<string, unknown>,
+  runsById: Map<string, Record<string, unknown>>,
+  trackRows: Array<Record<string, unknown>>
+): Record<string, unknown> {
+  const runs = toIdList(eventRow.model_runs)
+    .map(id => runsById.get(id))
+    .filter((run): run is Record<string, unknown> => !!run)
+    .sort(
+      (a, b) =>
+        String(b.model_run_time ?? '').localeCompare(String(a.model_run_time ?? '')) ||
+        Number(b.id) - Number(a.id)
+    );
+  if (runs.length === 0) return eventRow;
+  const [current] = runs;
+  const storm = stormOfEvent({ name: String(eventRow.title ?? '') });
+  const trackName = (id: string | null) =>
+    trackRows.find(track => id !== null && toIdString(track.id) === id)?.cyclone_name;
+  return {
+    ...eventRow,
+    risks: toIdList(current.risks),
+    cyclone_track: current.tc_track ?? null,
+    forecast_runs:
+      runs.length > 1
+        ? runs.map(run => {
+            const issued = typeof run.model_run_time === 'string' ? run.model_run_time : '';
+            const stamp = issued.slice(0, 13).replace(/[-T]/g, '');
+            return {
+              id: run.id,
+              cyclone_track: run.tc_track ?? null,
+              // Named like the storm's tracks ("2026101906_Wati") so the run picker groups them
+              cyclone_name:
+                trackName(toIdString(run.tc_track)) || (stamp ? `${stamp}_${storm}` : undefined),
+              issued_time: issued || undefined,
+              status: run.model_run_completed === false ? 'pending' : 'complete',
+              risks: toIdList(run.risks),
+              is_current: run === current,
+            };
+          })
+        : undefined,
+  };
 }
 
 /**

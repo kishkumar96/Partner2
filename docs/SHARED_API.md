@@ -51,11 +51,18 @@ Everything is event first: pick an event, follow its model runs, get each run's 
 11. Remove track 220 (duplicate of 210, wrong issue time) and give risk rows 49 (Wati run 4, real data) and 23 a country: they have `country: null`, so a country filter would drop them. Do not delete 49; check the duplicate Lola events (ids 1 and 8). Rotate the API password. Keep `hazard_information` row 10 (ours, protocol `zarr`).
 12. Optional fallback if he cannot change the event: public read of `GET model_run`, or a read-only account for the dashboard server.
 
-## What the dashboard does about it today
-- `src/utils/partnerEvents.ts` `expandEventModelRuns`: one advisory per run from the risk rows' `model_run` and the time stamp in their titles, and the track from that stamp.
-- `src/utils/scenarioLosses.ts`: scenario losses from Wasabi when the API has no `risk_scenario`.
-- Flood depths come from the zarr pointer row, straight from the bucket.
-- It is **not** pointed at this API in production (`PARTNER_API_BASE_URL` is `https://opmthredds.gem.spc.int`), because of the 112 MB page.
+## How the dashboard reads it (event first)
+Since 30 October every event on this API has runs (REF: one per advisory; PDIE and scenarios: one), every run lists its risk rows and track, `model_run/{id}/` is public, and the event types name the kind (1 REF, 3 PDIE, 4 Scenario). So the dashboard reads it event first, with no country filter:
+
+1. `event/?country=` and `event_type/`.
+2. `model_run/{id}/` for each run of the country's events, and `cyclone_track/{id}/` for a run's track filed under another country.
+3. `risk_information/{id}/` for the **shown** event's rows only. Other events' rows are read when they are shown.
+
+It never asks for the `risk_information` listing. `prepareEventRows` in `src/utils/partnerEvents.ts` does steps 1 and 2 for both the loader and `/api/events`; it recognises this API by event rows that list `model_runs` but no `risks`, so our own API is read as before.
+
+Measured against the live API (30 October): Cook Islands with Wati shown, 1.2 MB in 53 requests; Meena 27 MB, the first Lola 39 MB, Harold 24 MB. The observed storms are heavy because their damaged-buildings and damaged-roads rows carry full geometry (Lola's buildings row alone is 32 MB). Only a list without `geometry` (ask 3 above) fixes that, because the dashboard cannot tell which ids are heavy before reading them.
+
+Elsewhere: scenario losses come from Wasabi (`src/utils/scenarioLosses.ts`) and flood depths from the zarr pointer row, straight from the bucket. Data to tidy: runs 4 and 9 are both the 18 Oct 12Z Wati advisory, and run 4 has no track.
 
 ## Test it yourself
 ```bash
@@ -67,16 +74,15 @@ curl -s "$B/event/country/3/" | python3 -c "import json,sys;d=json.load(sys.stdi
 # one page of risk data: ignores the country, about 11.7 MB
 curl -s -o /dev/null -w "%{size_download} bytes, %{time_total}s\n" "$B/risk_information/?country=3"
 
-# the model run page is locked: 403 without a token
-curl -s -o /dev/null -w "%{http_code}\n" "$B/model_run/11/"
+# a model run, public since 30 October: its risk ids and track
+curl -s "$B/model_run/11/"
 
 # one risk row on its own, public and small
 curl -s -o /dev/null -w "%{http_code} %{size_download} bytes\n" "$B/risk_information/114/"
 
-# has he embedded the runs yet? prints "int" now, "dict" once he has
-curl -s "$B/event/7/" | python3 -c "import json,sys;print(type(json.load(sys.stdin)['model_runs'][0]).__name__)"
+# event types: 1 REF, 3 PDIE, 4 Scenario
+curl -s "$B/event_type/"
 ```
-With a token (`TOKEN=...`): `curl -s -H "Authorization: Token $TOKEN" "$B/model_run/11/"` gives the run's `tc_track` (214) and its risk ids.
 
 ## Switching production to this API
-Do it only when `risk_information` can be read per run or event (ask 1 or 2 above). Then set `PARTNER_API_BASE_URL=https://pacific-disaster-api.spc.int` in `docker-compose.prod.yml`, redeploy, and check one country page in the browser's Network tab: no request should be larger than a few MB.
+The dashboard can now read this API without the 112 MB listing (see above); observed storms stay slow (24-39 MB) until there is a list without geometry. To switch, set `PARTNER_API_BASE_URL=https://pacific-disaster-api.spc.int` in `docker-compose.prod.yml`, redeploy, and check one country page in the browser's Network tab: no request should be larger than a few MB.

@@ -1,6 +1,9 @@
 import { listForecastRuns } from '../forecastRuns';
 import {
   annotateEventTypeNames,
+  attachModelRunDetails,
+  prepareEventRows,
+  isRunOnlyEventRow,
   expandEventModelRuns,
   inferEventTrackId,
   linkEventRisksFromModelRuns,
@@ -378,5 +381,136 @@ describe('expandEventModelRuns (the shared API: runs listed as ids, no forecast_
     expect(expandEventModelRuns([observed], riskRows, tracks)).toEqual([observed]);
     const split = { ...wati(), forecastRunId: '11' };
     expect(expandEventModelRuns([split], riskRows, tracks)).toEqual([split]);
+  });
+});
+
+describe('attachModelRunDetails (shared API: the event lists run ids, each run its data)', () => {
+  // Shapes as event/7/, event/5/ and model_run/{id}/ return them
+  const wati = {
+    id: 7,
+    title: 'Tropical Cyclone Wati',
+    event_datetime: '2026-10-19T12:00:00Z',
+    event_type: 1,
+    event_type_name: 'Tropical Cyclone - REF',
+    country: 3,
+    citizen_sciences: [],
+    model_runs: [11, 10],
+  };
+  const gita = {
+    id: 5,
+    title: 'Tropical Cyclpone Gita Samoa',
+    event_datetime: '2018-02-07T06:00:00Z',
+    event_type: 3,
+    event_type_name: 'Tropical Cyclone - PDIE',
+    country: 5,
+    citizen_sciences: [],
+    model_runs: [13],
+  };
+  const runs = new Map<string, Record<string, unknown>>([
+    [
+      '10',
+      {
+        id: 10,
+        model_run_time: '2026-10-19T00:00:00Z',
+        model_run_completed: true,
+        tc_track: 213,
+        risks: [101, 102],
+      },
+    ],
+    [
+      '11',
+      {
+        id: 11,
+        model_run_time: '2026-10-19T06:00:00Z',
+        model_run_completed: true,
+        tc_track: 214,
+        risks: [112, 113],
+      },
+    ],
+    [
+      '13',
+      {
+        id: 13,
+        model_run_time: '2018-02-07T06:00:00Z',
+        model_run_completed: true,
+        tc_track: 41,
+        risks: [35, 36],
+      },
+    ],
+  ]);
+  const tracks = [{ id: 214, cyclone_name: '2026101906_Wati' }];
+
+  it('tells a shared-API event row from ours, which lists its risks', () => {
+    expect(isRunOnlyEventRow(wati)).toBe(true);
+    expect(isRunOnlyEventRow({ ...wati, risks: [] })).toBe(false);
+  });
+
+  it('gives an observed storm its run’s rows and track, with no advisories', () => {
+    const [record] = normalizePartnerEventRecords('WS', attachModelRunDetails(gita, runs, []));
+    expect(record.isForecast).toBe(false);
+    expect(record.backendRiskIds).toEqual(['35', '36']);
+    expect(record.backendCycloneTrackId).toBe('41');
+    expect(record.forecastRunId).toBeUndefined();
+  });
+
+  it('makes one record per forecast run, newest first, each with its own rows and track', () => {
+    const records = normalizePartnerEventRecords('CK', attachModelRunDetails(wati, runs, tracks));
+    expect(records.map(r => [r.id, r.forecastRunId, r.backendCycloneTrackId])).toEqual([
+      ['7', '11', '214'],
+      ['7-run-10', '10', '213'],
+    ]);
+    expect(records[0].backendRiskIds).toEqual(['112', '113']);
+    expect(records[0].trackIssuedTime).toBe('2026-10-19T06:00:00Z');
+  });
+
+  it('names an advisory by its track, else by its time and the storm', () => {
+    const records = normalizePartnerEventRecords('CK', attachModelRunDetails(wati, runs, tracks));
+    expect(records.map(r => r.cycloneName)).toEqual(['2026101906_Wati', '2026101900_Wati']);
+  });
+
+  it('leaves the row alone when its runs could not be read', () => {
+    expect(attachModelRunDetails(gita, new Map(), [])).toBe(gita);
+  });
+});
+
+describe('prepareEventRows', () => {
+  const types = [
+    { id: 1, event_name: 'Tropical Cyclone - REF' },
+    { id: 3, event_name: 'Tropical Cyclone - PDIE' },
+  ];
+  const details: Record<string, Record<string, unknown>> = {
+    'run/13/': { id: 13, model_run_time: '2018-02-07T06:00:00Z', tc_track: 41, risks: [35] },
+    'track/41/': { id: 41, cyclone_name: 'Tropical cyclone Gita track' },
+  };
+  const read = jest.fn(async (url: string) => details[url] ?? null);
+  const urls = { modelRun: 'run/', cycloneTrack: 'track/' };
+
+  beforeEach(() => read.mockClear());
+
+  it('reads the shared API’s runs and missing tracks, and names the types', async () => {
+    const gita = { id: 5, title: 'Gita', event_type: 3, country: 5, model_runs: [13] };
+    const out = await prepareEventRows([gita], [], types, read, urls);
+    expect(out.runOnly).toBe(true);
+    expect(read.mock.calls.map(([url]) => url)).toEqual(['run/13/', 'track/41/']);
+    expect(out.trackRows.map(t => t.id)).toEqual([41]);
+    expect(out.eventRows[0]).toMatchObject({
+      risks: ['35'],
+      cyclone_track: 41,
+      event_type_name: 'Tropical Cyclone - PDIE',
+    });
+  });
+
+  it('reads nothing for our API, whose events list their own risks', async () => {
+    const ours = {
+      id: 10,
+      title: 'Wati',
+      risks: [1],
+      model_run: 14,
+      event_type_name: 'Tropical Cyclone',
+    };
+    const out = await prepareEventRows([ours], [], types, read, urls);
+    expect(out.runOnly).toBe(false);
+    expect(read).not.toHaveBeenCalled();
+    expect(out.eventRows).toEqual([ours]);
   });
 });

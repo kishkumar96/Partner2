@@ -37,9 +37,11 @@ import {
   expandEventModelRuns,
   inferEventTrackId,
   linkEventRisksFromModelRuns,
+  mapWithConcurrency,
   normalizeDateValue,
-  annotateEventTypeNames,
   normalizePartnerEventRecords,
+  PARTNER_BY_ID_CONCURRENCY,
+  prepareEventRows,
   riskRowModelRunId,
   scopeRiskRowsToEvent,
 } from '@/utils/partnerEvents';
@@ -1971,6 +1973,35 @@ export async function fetchHazardScenarioBreakdown(
 }
 
 /**
+ * The shown event's risk rows, read one by one: the only way to ask the shared API for
+ * some rows without the whole table. Other events' rows are read when they are shown.
+ */
+async function fetchEventRiskRowsById(
+  riskInformationUrl: string,
+  eventRecords: EventRecord[],
+  selectedEventIds: string[],
+  countryCode: CountryCode,
+  dateRange: { start?: string; end?: string } | undefined,
+  signal?: AbortSignal
+): Promise<Array<Record<string, unknown>>> {
+  if (eventRecords.length === 0) return [];
+  const active = resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange);
+  const rows = await mapWithConcurrency(
+    active.backendRiskIds ?? [],
+    PARTNER_BY_ID_CONCURRENCY,
+    rowId => fetchPartnerCollection(`${riskInformationUrl}${rowId}/`, signal)
+  );
+  return rows.flatMap(asDetailRow);
+}
+
+/** A detail endpoint's answer (`.../{id}/`) as a one-row list, or none. */
+function asDetailRow(payload: unknown): Array<Record<string, unknown>> {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) && 'id' in payload
+    ? [payload as Record<string, unknown>]
+    : [];
+}
+
+/**
  * Fetches one risk_information row's full geometry by id, bypassing the
  * defer_large_assets exclusion the list endpoint applies (the retrieve
  * endpoint doesn't take that param, so it always returns full geometry).
@@ -2276,24 +2307,48 @@ async function loadPartnerApiCountryData(
       };
     }
 
-    const [rawEventPayload, eventTypePayload, cyclonePayload, riskPayload, hazardPayload] =
-      await Promise.all([
+    const [rawEventPayload, eventTypePayload, rawCyclonePayload, hazardPayload] = await Promise.all(
+      [
         fetchPartnerCollection(mapping.scopedUrls.event, signal),
         // Two or three rows. The shared API names an event's kind only here (REF or PDIE).
         fetchPartnerCollection(mapping.endpoints.resource.event_type, signal),
         fetchPartnerCollection(mapping.scopedUrls.cyclone_track, signal),
-        fetchPartnerCollection(mapping.scopedUrls.risk_information, signal),
         fetchPartnerCollection(mapping.scopedUrls.hazard_information, signal),
-      ]);
-    const eventPayload = annotateEventTypeNames(
-      toArrayPayload(rawEventPayload),
-      toArrayPayload(eventTypePayload)
+      ]
+    );
+    // The shared API's events list only their model runs, and its risk listing ignores every
+    // filter (about 110 MB), so there the data is read event first: runs, then rows by id.
+    const {
+      eventRows: eventPayload,
+      trackRows: cyclonePayload,
+      runOnly,
+    } = await prepareEventRows(
+      toArrayPayload(rawEventPayload).filter(
+        row => mapping.countryId == null || toNumber(row.country) === mapping.countryId
+      ),
+      toArrayPayload(rawCyclonePayload),
+      toArrayPayload(eventTypePayload),
+      async url => asDetailRow(await fetchPartnerCollection(url, signal))[0] ?? null,
+      {
+        modelRun: mapping.endpoints.resource.model_run,
+        cycloneTrack: mapping.endpoints.resource.cyclone_track,
+      }
     );
     const normalizedEventRecords = normalizePartnerEvents(
       countryCode,
       eventPayload,
       mapping.countryId
     );
+    const riskPayload = runOnly
+      ? await fetchEventRiskRowsById(
+          mapping.endpoints.resource.risk_information,
+          normalizedEventRecords,
+          selectedEventIds,
+          countryCode,
+          dateRange,
+          signal
+        )
+      : await fetchPartnerCollection(mapping.scopedUrls.risk_information, signal);
     // Runs of this country's events. Their risk rows carry model_run and no country, so a
     // server that filters ?country= would drop them. Ask for a run on its own only when the
     // listing above holds none of its rows: a server that ignores the filters answers every
@@ -2302,7 +2357,8 @@ async function loadPartnerApiCountryData(
       ...new Set(normalizedEventRecords.flatMap(record => record.backendModelRunIds ?? [])),
     ];
     const listedRuns = new Set(toArrayPayload(riskPayload).map(riskRowModelRunId));
-    const missingRunIds = modelRunIds.filter(runId => !listedRuns.has(runId));
+    // Read by id above: the shown event's rows are all there, and the rest wait their turn
+    const missingRunIds = runOnly ? [] : modelRunIds.filter(runId => !listedRuns.has(runId));
     const runRiskPayloads = await Promise.all(
       missingRunIds.map(runId =>
         fetchPartnerCollection(
@@ -2410,6 +2466,10 @@ async function loadPartnerApiCountryData(
       if (cached) return cached;
       const eventRecord = eventRecords.find(record => record.id === eventId);
       if (!eventRecord || (eventRecord.backendRiskIds?.length ?? 0) === 0) return undefined;
+      // Not read yet (only the shown event's rows are, on the shared API): no figures, not zeros
+      if (runOnly && !eventRecord.backendRiskIds?.every(id => seenRiskIds.has(id))) {
+        return undefined;
+      }
       const eventRiskRows = dedupePartnerRiskRows(
         scopeRiskRowsToEvent(countryRiskRows, eventRecord, eventRecords)
       );

@@ -11,13 +11,14 @@ export type PartnerApiResource =
   | 'hazard_information'
   | 'citizen_science'
   | 'event'
-  | 'event_type';
+  | 'event_type'
+  | 'model_run';
 
 // Sector/asset-type rows hang off one RiskScenario (filtered by
 // ?risk_scenario=), not off a country, so they have no country-scoped URL.
 type CountryScopedPartnerApiResource = Exclude<
   PartnerApiResource,
-  'country' | 'risk_scenario_breakdown' | 'event_type'
+  'country' | 'risk_scenario_breakdown' | 'event_type' | 'model_run'
 >;
 
 export interface PartnerApiEndpoints {
@@ -130,6 +131,7 @@ export function buildPartnerApiEndpoints(
       citizen_science: `${v1}/citizen_science/`,
       event: `${v1}/event/`,
       event_type: `${v1}/event_type/`,
+      model_run: `${v1}/model_run/`,
     },
   };
 }

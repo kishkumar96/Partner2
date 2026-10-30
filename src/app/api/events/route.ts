@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { CountryCode } from '@/types/thredds';
 import type { EventRecord } from '@/data/eventRecords';
-import { normalizePartnerEventRecords } from '@/utils/partnerEvents';
+import { normalizePartnerEventRecords, prepareEventRows } from '@/utils/partnerEvents';
 import {
   isPartnerApiCountryEnabled,
   isPartnerApiEnabled,
@@ -79,6 +79,20 @@ async function fetchPartnerCollection(url: string): Promise<Array<Record<string,
   }
 }
 
+async function fetchPartnerDetail(url: string): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await fetch(url, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord[]> {
   if (!isPartnerApiEnabled() || !isPartnerApiCountryEnabled(countryCode)) {
     return [];
@@ -90,18 +104,24 @@ async function fetchPartnerEvents(countryCode: CountryCode): Promise<EventRecord
       return [];
     }
 
-    const rows = await fetchPartnerCollection(mapping.scopedUrls.event);
-    return rows
-      .filter(row => {
-        const rowCountryId =
-          typeof row.country === 'number'
-            ? row.country
-            : typeof row.country === 'string'
-              ? Number(row.country)
-              : null;
-        return rowCountryId === mapping.countryId;
-      })
-      .flatMap(row => normalizePartnerEventRecords(countryCode, row));
+    const [rows, typeRows] = await Promise.all([
+      fetchPartnerCollection(mapping.scopedUrls.event),
+      fetchPartnerCollection(mapping.endpoints.resource.event_type),
+    ]);
+    const countryRows = rows.filter(row => {
+      const rowCountryId =
+        typeof row.country === 'number'
+          ? row.country
+          : typeof row.country === 'string'
+            ? Number(row.country)
+            : null;
+      return rowCountryId === mapping.countryId;
+    });
+    // Tracks only name the advisories here; their names are rebuilt from the run times instead
+    const { eventRows } = await prepareEventRows(countryRows, [], typeRows, fetchPartnerDetail, {
+      modelRun: mapping.endpoints.resource.model_run,
+    });
+    return eventRows.flatMap(row => normalizePartnerEventRecords(countryCode, row));
   } catch {
     return [];
   }
