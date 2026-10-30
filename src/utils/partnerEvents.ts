@@ -1,6 +1,7 @@
 import { COUNTRIES, type CountryCode } from '@/types/thredds';
-import { createPartnerEventId, type EventRecord } from '@/data/eventRecords';
+import { createPartnerEventId, type EventKind, type EventRecord } from '@/data/eventRecords';
 import { hazardIdForEventType } from '@/utils/hazardIds';
+import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 
 export function normalizeDateValue(dateStr: string): string {
   if (!dateStr) return '';
@@ -32,15 +33,16 @@ function toIdList(value: unknown): string[] {
     : [];
 }
 
-/** Normalize one Partner API Event row (shared by the loader and /api/events). */
 /**
  * What an event type's name says about the event. The shared API names its types
- * "Tropical Cyclone - REF" (rapid exposure forecast) and "Tropical Cyclone - PDIE"
- * (post-event assessment); `event/` carries only the type's id.
+ * "Tropical Cyclone - REF" (rapid exposure forecast), "Tropical Cyclone - PDIE"
+ * (post-event assessment) and "Scenario" (planning scenarios); `event/` carries only
+ * the type's id.
  */
-export function eventTypeKind(typeName: string): 'forecast' | 'observed' | null {
+export function eventTypeKind(typeName: string): EventKind | null {
   if (/\bREF\b|rapid\s+exposure/i.test(typeName)) return 'forecast';
   if (/\bPDIE\b|\bPDNA\b|post[-\s]?event|observed/i.test(typeName)) return 'observed';
+  if (/scenario/i.test(typeName)) return 'scenario';
   return null;
 }
 
@@ -68,6 +70,7 @@ export function annotateEventTypeNames(
   });
 }
 
+/** Normalize one Partner API Event row (shared by the loader and /api/events). */
 export function normalizePartnerEventRow(
   countryCode: CountryCode,
   row: Record<string, unknown>
@@ -91,10 +94,9 @@ export function normalizePartnerEventRow(
   const singleRun = toIdString(row.model_run);
   const modelRunIds = [...toIdList(row.model_runs), ...(singleRun ? [singleRun] : [])];
   const dataSource = typeof row.data_source === 'string' ? row.data_source : undefined;
-  // Prefer explicit backend signals. The title match is only a fallback for
-  // rows that carry no data_source, and requires the spelled-out phrase so an
-  // unrelated title containing "ref" is not mistaken for a forecast.
-  // An explicit flag wins, then the event type's name, then the guesses below.
+  // An explicit flag wins, then the event type's name, then the guesses below. The
+  // title match requires the spelled-out phrase so an unrelated title containing
+  // "ref" is not mistaken for a forecast.
   const declaredForecast =
     typeof row.is_forecast === 'boolean'
       ? row.is_forecast
@@ -117,8 +119,10 @@ export function normalizePartnerEventRow(
     countryCode,
     name: name || country.name,
     date: normalizedDate,
-    hazardId: hazardIdForEventType(eventType),
+    // A planning scenario spans several hazards; its type names none.
+    hazardId: typeKind === 'scenario' ? MULTI_HAZARD_ID : hazardIdForEventType(eventType),
     eventType: eventType || undefined,
+    eventKind: typeKind ?? (isForecast ? 'forecast' : undefined),
     backendEventId: explicitId || undefined,
     backendCycloneTrackId: cycloneTrackId || undefined,
     backendHazardIds: toIdList(row.hazards),

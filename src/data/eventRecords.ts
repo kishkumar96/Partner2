@@ -2,6 +2,9 @@ import type { CountryCode } from '@/types/thredds';
 import { COUNTRIES } from '@/types/thredds';
 import { getStaticEvents, getStaticLayerCatalog, listCountryCodes } from '@/config/registry';
 
+/** What the Partner API's event type says an event is. */
+export type EventKind = 'forecast' | 'observed' | 'scenario';
+
 export interface EventRecord {
   id: string;
   countryCode: CountryCode;
@@ -20,6 +23,8 @@ export interface EventRecord {
   cycloneName?: string;
   /** Metadata supplied by the Partner API for operational forecast events. */
   isForecast?: boolean;
+  /** Set when the Partner API's event type names the kind (REF, PDIE, Scenario). */
+  eventKind?: EventKind;
   dataSource?: string;
   trackIssuedTime?: string;
   modelRunStatus?: string;

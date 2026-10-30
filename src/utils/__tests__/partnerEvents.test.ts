@@ -235,6 +235,22 @@ describe('event types on the shared API (event/ carries only the type id)', () =
     expect(normalize(row(4, 3, []))?.isForecast).toBe(false);
   });
 
+  it('reads the Scenario type as a multi-hazard planning scenario, not a forecast', () => {
+    const [annotated] = annotateEventTypeNames(
+      [row(9, 4, [])],
+      [...types, { id: 4, event_name: 'Scenario' }]
+    );
+    const scenario = normalizePartnerEventRow('CK', annotated);
+    expect(scenario?.eventKind).toBe('scenario');
+    expect(scenario?.isForecast).toBe(false);
+    expect(scenario?.hazardId).toBe('multi-hazard');
+  });
+
+  it('records the kind for REF and PDIE too', () => {
+    expect(normalize(row(7, 1, [4]))?.eventKind).toBe('forecast');
+    expect(normalize(row(4, 3, []))?.eventKind).toBe('observed');
+  });
+
   it('keeps the hazard without the REF or PDIE suffix', () => {
     expect(normalize(row(4, 3, []))?.eventType).toBe('Tropical Cyclone');
   });
