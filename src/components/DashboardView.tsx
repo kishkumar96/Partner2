@@ -2884,13 +2884,14 @@ export default function DashboardView({
       <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-2.5 sm:px-6">
         <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-2">
           <div className="flex min-w-0 flex-col gap-2 md:order-1">
-            <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 md:hidden">
+            {/* Three to a row: in one scrolling row, six chips needed 600px of a 390px phone and Data was cut off */}
+            <div className="grid grid-cols-3 gap-1.5 md:hidden">
               <button
                 onClick={() => {
                   openMapPanel();
                   setShowSummary(false);
                 }}
-                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showMapControls
                     ? 'bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2906,7 +2907,7 @@ export default function DashboardView({
                   openFilterPanel('filters');
                   setShowSummary(false);
                 }}
-                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showFilters
                     ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2919,7 +2920,7 @@ export default function DashboardView({
               </button>
               <button
                 onClick={openSummaryPanel}
-                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showSummary
                     ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2938,7 +2939,7 @@ export default function DashboardView({
                   setShowMapControls(false);
                   setShowFilters(false);
                 }}
-                className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                   showAnalytics
                     ? 'bg-blue-500/20 text-blue-200 border-blue-500/40 shadow-sm'
                     : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2955,7 +2956,7 @@ export default function DashboardView({
                     openFilterPanel('cyclone');
                     setShowSummary(false);
                   }}
-                  className={`flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
+                  className={`flex min-w-0 items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide border transition-colors ${
                     showFilters && filterPanelTab === 'cyclone'
                       ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-sm'
                       : 'bg-slate-800/70 text-slate-300 border-slate-700/60 hover:bg-slate-800/90'
@@ -2970,7 +2971,7 @@ export default function DashboardView({
               <button
                 type="button"
                 onClick={() => setShowMetadata(current => !current)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                   showMetadata
                     ? 'border-slate-500/60 bg-slate-700/70 text-slate-100'
                     : 'border-slate-700/60 bg-slate-800/70 text-slate-300 hover:bg-slate-800/90'
