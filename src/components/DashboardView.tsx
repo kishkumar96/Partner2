@@ -1791,6 +1791,21 @@ export default function DashboardView({
     if (scenarioLayersByCategory.observed.length > 0) modes.push('history');
     return modes;
   }, [forecastRecord, assessmentRecord, hasEventImpact, scenarioLayersByCategory]);
+  // The modes keep their place while a load replaces the data: the last known set, or all four
+  // before the first load says which this country has
+  const lastAnalysisModesRef = useRef<AnalysisMode[]>([
+    'forecast',
+    'assessment',
+    'scenarios',
+    'history',
+  ]);
+  if (!isLoadingData && availableAnalysisModes.length > 0) {
+    lastAnalysisModesRef.current = availableAnalysisModes;
+  }
+  const shownAnalysisModes =
+    !isLoadingData && availableAnalysisModes.length > 0
+      ? availableAnalysisModes
+      : lastAnalysisModesRef.current;
   const analysisMode: AnalysisMode = isPlanningMode
     ? scenarioCategory === 'observed'
       ? 'history'
@@ -3216,13 +3231,13 @@ export default function DashboardView({
             </div>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2 md:order-3 md:basis-full md:gap-x-4 min-[1720px]:order-2 min-[1720px]:ml-auto min-[1720px]:basis-auto">
-            {!isLoadingData && (
-              <AnalysisModeSwitch
-                available={availableAnalysisModes}
-                active={analysisMode}
-                onChange={handleAnalysisModeChange}
-              />
-            )}
+            {/* Always shown, disabled while loading: hiding it moved the buttons under the cursor */}
+            <AnalysisModeSwitch
+              available={shownAnalysisModes}
+              active={analysisMode}
+              onChange={handleAnalysisModeChange}
+              disabled={isLoadingData}
+            />
             <div className="hidden min-w-0 md:ml-auto md:flex min-[1720px]:ml-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1">
                 <button

@@ -140,4 +140,22 @@ describe('AnalysisModeSwitch', () => {
       'History: Historical event',
     ]);
   });
+
+  it('stays in place while loading, but cannot be used', () => {
+    const onChange = jest.fn();
+    render(
+      <AnalysisModeSwitch
+        available={['forecast', 'assessment']}
+        active="forecast"
+        onChange={onChange}
+        disabled
+      />
+    );
+    const group = screen.getByRole('group', { name: 'Analysis mode' });
+    expect(group).toHaveAttribute('aria-busy', 'true');
+    const assessment = screen.getByRole('button', { name: PDA });
+    expect(assessment).toBeDisabled();
+    fireEvent.click(assessment);
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

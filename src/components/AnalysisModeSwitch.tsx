@@ -55,6 +55,8 @@ interface AnalysisModeSwitchProps {
   available: AnalysisMode[];
   active: AnalysisMode;
   onChange: (mode: AnalysisMode) => void;
+  /** While data loads: shown in place, so the header does not move, but not clickable */
+  disabled?: boolean;
 }
 
 /**
@@ -65,6 +67,7 @@ export default function AnalysisModeSwitch({
   available,
   active,
   onChange,
+  disabled = false,
 }: AnalysisModeSwitchProps) {
   const modes = ORDER.filter(mode => available.includes(mode));
   if (modes.length === 0) return null;
@@ -74,6 +77,7 @@ export default function AnalysisModeSwitch({
       <div
         role="group"
         aria-label="Analysis mode"
+        aria-busy={disabled || undefined}
         className="hidden max-w-full flex-wrap gap-1 rounded-lg border border-slate-600/60 bg-slate-900/50 p-1 sm:inline-flex"
       >
         {modes.map(mode => {
@@ -86,8 +90,9 @@ export default function AnalysisModeSwitch({
               aria-pressed={active === mode}
               aria-label={named ?? undefined}
               title={modeTooltip(mode)}
+              disabled={disabled}
               onClick={() => active !== mode && onChange(mode)}
-              className={`shrink-0 rounded-md border px-3.5 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
+              className={`shrink-0 disabled:cursor-wait disabled:opacity-60 rounded-md border px-3.5 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
                 active === mode
                   ? `${ANALYSIS_MODES[mode].active} border-current/25`
                   : 'border-transparent text-slate-300 hover:bg-slate-700/50 hover:text-white'
@@ -116,6 +121,7 @@ export default function AnalysisModeSwitch({
         <span className="sr-only">Analysis mode</span>
         <select
           value={active}
+          disabled={disabled}
           onChange={event => onChange(event.target.value as AnalysisMode)}
           className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-2.5 py-1.5 text-xs font-semibold text-slate-100"
         >
