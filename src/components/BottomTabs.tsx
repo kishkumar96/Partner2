@@ -678,11 +678,10 @@ export default function BottomTabs({
                         </span>
                       </div>
                     )}
+                    {/* Users read this, not developers: it says what is missing, not which file */}
                     {regionalSummary && regionalSummary.length === 0 && (
                       <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                        <p className="text-amber-300 text-xs">
-                          CSV data not loaded. Check that regional-summary.csv is available.
-                        </p>
+                        <p className="text-amber-300 text-xs">No area figures for this view yet.</p>
                       </div>
                     )}
                   </div>

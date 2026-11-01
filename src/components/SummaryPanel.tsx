@@ -18,6 +18,7 @@
  */
 
 import { sectorLabel, sortSectorsUnclassifiedLast } from '@/utils/sectorDisplay';
+import { areasHoldingShare } from '@/utils/damageConcentration';
 import { useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -1277,6 +1278,12 @@ export default function SummaryPanel({
                           d => d.totalEconomicDamage > avgDamagePerArea * 1.5
                         ).length;
                         const hasEconomicDamage = totalDamage > 0;
+                        // How few areas hold most of the damage. An average hides that: one
+                        // island with 87% of the loss sets it far above every other area.
+                        const areasForMostDamage = areasHoldingShare(
+                          displayAggregatedData.map(d => d.totalEconomicDamage),
+                          0.9
+                        );
 
                         return (
                           <>
@@ -1294,8 +1301,8 @@ export default function SummaryPanel({
                                   {' '}
                                   of total damage
                                   {hasEconomicDamage
-                                    ? ' -the largest share of damage'
-                                    : ' -no recorded economic loss in current view'}
+                                    ? ', the largest share'
+                                    : ' (no recorded economic loss in this view)'}
                                 </span>
                               </div>
                             </div>
@@ -1309,11 +1316,13 @@ export default function SummaryPanel({
                                     ? areaLabelSingular.toLowerCase()
                                     : areaLabelPlural.toLowerCase()}
                                 </span>
-                                <span className="text-slate-400"> exceed </span>
+                                <span className="text-slate-400">
+                                  {highImpactAreas === 1 ? ' exceeds ' : ' exceed '}
+                                </span>
                                 <span className="text-slate-300">150% of average</span>
                                 <span className="text-slate-400">
                                   {' '}
-                                  damage -concentrated impact pattern
+                                  damage: a concentrated impact pattern
                                 </span>
                               </div>
                             </div>
@@ -1321,13 +1330,25 @@ export default function SummaryPanel({
                             <div className="flex items-start gap-2 p-2 bg-slate-800/50 rounded-lg">
                               <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0" />
                               <div>
-                                <span className="text-slate-400">
-                                  Average damage per {areaLabelSingular.toLowerCase()}:{' '}
-                                </span>
-                                <span className="text-cyan-400 font-bold font-mono">
-                                  {formatCurrency(avgDamagePerArea)}
-                                </span>
-                                <span className="text-slate-400"> -use for prioritization</span>
+                                {hasEconomicDamage ? (
+                                  <>
+                                    <span className="text-cyan-400 font-bold">
+                                      {areasForMostDamage} of {displayAggregatedData.length}{' '}
+                                      {displayAggregatedData.length === 1
+                                        ? areaLabelSingular.toLowerCase()
+                                        : areaLabelPlural.toLowerCase()}
+                                    </span>
+                                    <span className="text-slate-400">
+                                      {' '}
+                                      {areasForMostDamage === 1 ? 'holds' : 'hold'} 90% of the
+                                      damage
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-400">
+                                    No damage recorded in this view
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </>
@@ -1466,7 +1487,7 @@ export default function SummaryPanel({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                              Peak Wind Speed
+                              Peak Wind Gust
                             </p>
                             <p className="text-2xl font-bold text-cyan-400 mt-1 tabular-nums">
                               {formatSummaryNumber(nationalSummary[0]?.Max_Wind_Gusts || 0)} km/h

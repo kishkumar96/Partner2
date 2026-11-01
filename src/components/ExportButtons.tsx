@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Download, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
@@ -1654,23 +1655,39 @@ export default function ExportButtons({
   const menuLayout = layout === 'menu';
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    // The header toolbar scrolls sideways, which clipped this menu to its own height; it is
+    // drawn on the page instead, under the button (as the Tools menu is)
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
     };
+    place();
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !popupRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+    // Capture phase, marked handled: the side panels also close on Escape, and should not here
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      event.preventDefault();
       setMenuOpen(false);
       triggerRef.current?.focus();
     };
     document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('resize', place);
     return () => {
+      window.removeEventListener('resize', place);
       document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, true);
     };
   }, [menuOpen]);
 
@@ -1719,88 +1736,93 @@ export default function ExportButtons({
               aria-hidden="true"
             />
           </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              aria-label="Export"
-              className="absolute right-0 z-50 mt-2 w-72 space-y-0.5 rounded-xl border border-slate-600/60 bg-slate-900 p-1.5 shadow-xl"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => closeMenuThen(openPDFPreview)}
-                disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
-                aria-label={
-                  isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'
-                }
-                title={pdfTitle}
-                className={menuItemClass(disabled || pdfUnavailableForForecast)}
+          {menuOpen &&
+            menuPosition &&
+            createPortal(
+              <div
+                ref={popupRef}
+                role="menu"
+                aria-label="Export"
+                style={{ position: 'fixed', top: menuPosition.top, right: menuPosition.right }}
+                className="z-[70] w-72 max-w-[calc(100vw-1rem)] space-y-0.5 rounded-xl border border-slate-600/60 bg-slate-900 p-1.5 shadow-xl"
               >
-                <FileDown className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">
-                    {isExportingPDF
-                      ? 'Loading…'
-                      : isForecastBrief
-                        ? 'Forecast brief (PDF)'
-                        : 'PDF report'}
-                  </span>
-                  <span className="block text-xs font-normal text-slate-400">
-                    {pdfUnavailableForForecast
-                      ? 'Not available for a forecast'
-                      : isForecastBrief
-                        ? 'Two-page exposure brief'
-                        : 'Damage and loss report'}
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => closeMenuThen(downloadCSV)}
-                disabled={disabled || isExportingCSV}
-                aria-label="Export data as CSV file"
-                title={csvTitle}
-                className={menuItemClass(disabled)}
-              >
-                <FileSpreadsheet className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">{isExportingCSV ? 'Exporting…' : 'Data (CSV)'}</span>
-                  <span className="block text-xs font-normal text-slate-400">
-                    {forecastExposure ? 'Exposure tables' : 'Results as a table'}
-                  </span>
-                </span>
-              </button>
-              {extraActions.map(action => {
-                const Icon = action.busy ? Loader2 : action.icon;
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => closeMenuThen(action.onClick)}
-                    disabled={action.disabled || action.busy}
-                    aria-label={action.ariaLabel}
-                    title={action.title}
-                    className={menuItemClass(Boolean(action.disabled))}
-                  >
-                    <Icon
-                      className={`h-4 w-4 flex-shrink-0 ${action.busy ? 'animate-spin' : ''}`}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0">
-                      <span className="block">{action.busy ? 'Exporting…' : action.label}</span>
-                      {action.hint && (
-                        <span className="block text-xs font-normal text-slate-400">
-                          {action.hint}
-                        </span>
-                      )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => closeMenuThen(openPDFPreview)}
+                  disabled={disabled || isExportingPDF || pdfUnavailableForForecast}
+                  aria-label={
+                    isForecastBrief ? 'Preview forecast brief PDF' : 'Export data as PDF report'
+                  }
+                  title={pdfTitle}
+                  className={menuItemClass(disabled || pdfUnavailableForForecast)}
+                >
+                  <FileDown className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block">
+                      {isExportingPDF
+                        ? 'Loading…'
+                        : isForecastBrief
+                          ? 'Forecast brief (PDF)'
+                          : 'PDF report'}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                    <span className="block text-xs font-normal text-slate-400">
+                      {pdfUnavailableForForecast
+                        ? 'Not available for a forecast'
+                        : isForecastBrief
+                          ? 'Two-page exposure brief'
+                          : 'Damage and loss report'}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => closeMenuThen(downloadCSV)}
+                  disabled={disabled || isExportingCSV}
+                  aria-label="Export data as CSV file"
+                  title={csvTitle}
+                  className={menuItemClass(disabled)}
+                >
+                  <FileSpreadsheet className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block">{isExportingCSV ? 'Exporting…' : 'Data (CSV)'}</span>
+                    <span className="block text-xs font-normal text-slate-400">
+                      {forecastExposure ? 'Exposure tables' : 'Results as a table'}
+                    </span>
+                  </span>
+                </button>
+                {extraActions.map(action => {
+                  const Icon = action.busy ? Loader2 : action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => closeMenuThen(action.onClick)}
+                      disabled={action.disabled || action.busy}
+                      aria-label={action.ariaLabel}
+                      title={action.title}
+                      className={menuItemClass(Boolean(action.disabled))}
+                    >
+                      <Icon
+                        className={`h-4 w-4 flex-shrink-0 ${action.busy ? 'animate-spin' : ''}`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">
+                        <span className="block">{action.busy ? 'Exporting…' : action.label}</span>
+                        {action.hint && (
+                          <span className="block text-xs font-normal text-slate-400">
+                            {action.hint}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body
+            )}
         </div>
       ) : (
         <div className="flex gap-1.5 sm:gap-2 items-center flex-shrink-0">

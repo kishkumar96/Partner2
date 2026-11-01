@@ -1815,7 +1815,7 @@ export default function DashboardView({
   const respectUrlViewRef = useRef(Boolean(urlState.center && urlState.zoom));
   useEffect(() => {
     if (!forecastExposure || isPlanningMode || !mapInstance) return;
-    const focus = forecastFocusCollection(forecastExposure);
+    const focus = forecastFocusCollection(forecastExposure, regionalImpactsGeoJSON);
     const key = activeEventRecord?.id ?? '';
     if (!focus || framedForecastRef.current === key) return;
     framedForecastRef.current = key;
@@ -1824,7 +1824,36 @@ export default function DashboardView({
       return;
     }
     zoomToData(focus);
-  }, [forecastExposure, isPlanningMode, mapInstance, activeEventRecord?.id, zoomToData]);
+  }, [
+    forecastExposure,
+    isPlanningMode,
+    mapInstance,
+    activeEventRecord?.id,
+    regionalImpactsGeoJSON,
+    zoomToData,
+  ]);
+
+  // Every other mode is about the islands themselves: back to the country's own view when one
+  // is chosen. Coming from Forecast the map would otherwise stay on the storm, where scenario
+  // layers are too small to draw and the map opens blank.
+  const lastFramedModeRef = useRef<AnalysisMode | null>(null);
+  useEffect(() => {
+    // The first load settles the mode; that is not a choice, and a shared link's view stays
+    if (lastFramedModeRef.current === null) {
+      if (!isLoadingData) lastFramedModeRef.current = analysisMode;
+      return;
+    }
+    if (lastFramedModeRef.current === analysisMode) return;
+    lastFramedModeRef.current = analysisMode;
+    if (analysisMode === 'forecast') {
+      // Frame the storm again when Forecast is chosen again
+      framedForecastRef.current = null;
+      return;
+    }
+    const country = COUNTRIES[selectedCountry];
+    if (!mapInstance || !country) return;
+    mapInstance.flyTo({ center: country.center, zoom: country.zoom, duration: 900 });
+  }, [analysisMode, isLoadingData, mapInstance, selectedCountry]);
 
   // Choosing an area moves the map to it, so the click visibly does something
   const zoomedRegionRef = useRef<string | null>(null);
@@ -2807,6 +2836,9 @@ export default function DashboardView({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // A menu open over the panel closes on this key first (it marks it handled); one
+        // press closes one thing
+        if (event.defaultPrevented) return;
         if (showFilters) setShowFilters(false);
         if (showMapControls) setShowMapControls(false);
         if (showSummary) setShowSummary(false);
@@ -3271,8 +3303,11 @@ export default function DashboardView({
                 <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 font-semibold text-blue-100">
                   Country: {COUNTRIES[selectedCountry].name}
                 </span>
+                {/* A planning scenario is no storm: it names the scenario, not the last event */}
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
-                  Event: {activeEventContextLabel}
+                  {analysisMode === 'scenarios' && effectiveHazardScenario
+                    ? `Scenario: ${describeHazardScenario(effectiveHazardScenario).join(' · ')}`
+                    : `Event: ${activeEventContextLabel}`}
                 </span>
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Hazards: {metadataHazardSummary}
@@ -3283,9 +3318,11 @@ export default function DashboardView({
                 <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
                   Source: {devDataSourceLabel || 'Pacific Disaster Impact & Exposure local dataset'}
                 </span>
-                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
-                  Reference date: {activeContextDate}
-                </span>
+                {analysisMode !== 'scenarios' && (
+                  <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-2.5 py-1">
+                    Reference date: {activeContextDate}
+                  </span>
+                )}
               </div>
               {(barFilters.selectedHazards.length > 0 ||
                 barFilters.selectedSectors.length > 0 ||

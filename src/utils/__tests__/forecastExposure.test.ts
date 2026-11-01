@@ -197,6 +197,50 @@ describe('map framing helpers', () => {
     expect(forecastFocusCollection(layers(null, null))).toBeNull();
   });
 
+  it('frames the country’s areas and only the part of the track near them', () => {
+    // Rarotonga, and a track that starts 2,000 km away and passes 3 degrees from the island
+    const areas: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Point', coordinates: [-159.78, -21.23] },
+        },
+      ],
+    };
+    const track: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [-178, -12],
+              [-170, -16],
+              [-162, -19],
+              [-157, -24],
+            ],
+          },
+        },
+      ],
+    };
+    const focus = forecastFocusCollection(layers(track), areas)!;
+    expect(focus.features[0]).toBe(areas.features[0]);
+    expect(focus.features[1].geometry).toEqual({
+      type: 'MultiPoint',
+      coordinates: [
+        [-162, -19],
+        [-157, -24],
+      ],
+    });
+    // a track nowhere near: the areas alone
+    const far = forecastFocusCollection(layers(line), areas)!;
+    expect(far.features).toEqual(areas.features);
+  });
+
   it('finds an area by name or id, ignoring case, so a click can move the map', () => {
     const areas: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',

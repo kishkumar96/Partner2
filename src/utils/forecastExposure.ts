@@ -406,18 +406,75 @@ export function trackPointsToLine(
   };
 }
 
+/** How far past the country's areas the track is still framed with them: about 550 km */
+const TRACK_FRAME_MARGIN_DEG = 5;
+
+function coordinatesOf(collection: GeoJSON.FeatureCollection): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  const walk = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    if (typeof value[0] === 'number' && typeof value[1] === 'number') {
+      out.push([value[0], value[1]]);
+      return;
+    }
+    value.forEach(walk);
+  };
+  const walkGeometry = (geometry: GeoJSON.Geometry | null) => {
+    if (!geometry) return;
+    if (geometry.type === 'GeometryCollection') geometry.geometries.forEach(walkGeometry);
+    else walk((geometry as { coordinates?: unknown }).coordinates);
+  };
+  collection.features.forEach(feature => walkGeometry(feature.geometry));
+  return out;
+}
+
 /**
- * What to frame when a forecast opens: the forecast track if there is one,
- * else the wind swaths. The country's default view can sit well away from a
- * storm that is 100 km out, which reads as "no storm on the map".
+ * What to frame when a forecast opens. The country's default view can sit well away from a
+ * storm 100 km out, which reads as "no storm on the map"; but the whole track of a long-lived
+ * storm spans thousands of kilometres and shrinks the islands to dots. So with the country's
+ * areas known, frame them and the part of the track near them. Without, the forecast track,
+ * else the wind swaths.
  */
 export function forecastFocusCollection(
-  exposure: Pick<ForecastExposure, 'layers'>
+  exposure: Pick<ForecastExposure, 'layers'>,
+  countryAreas?: GeoJSON.FeatureCollection | null
 ): GeoJSON.FeatureCollection | null {
   const { cycloneTrack, windSwaths } = exposure.layers;
-  if (cycloneTrack?.features?.length) return cycloneTrack;
-  if (windSwaths?.features?.length) return windSwaths;
-  return null;
+  const storm = cycloneTrack?.features?.length
+    ? cycloneTrack
+    : windSwaths?.features?.length
+      ? windSwaths
+      : null;
+  const areaPoints = countryAreas?.features?.length ? coordinatesOf(countryAreas) : [];
+  if (areaPoints.length === 0) return storm;
+  const lngs = areaPoints.map(([lng]) => lng);
+  const lats = areaPoints.map(([, lat]) => lat);
+  const [west, east] = [Math.min(...lngs), Math.max(...lngs)];
+  const [south, north] = [Math.min(...lats), Math.max(...lats)];
+  const near = storm
+    ? coordinatesOf(storm).filter(
+        ([lng, lat]) =>
+          lng >= west - TRACK_FRAME_MARGIN_DEG &&
+          lng <= east + TRACK_FRAME_MARGIN_DEG &&
+          lat >= south - TRACK_FRAME_MARGIN_DEG &&
+          lat <= north + TRACK_FRAME_MARGIN_DEG
+      )
+    : [];
+  return {
+    type: 'FeatureCollection',
+    features: [
+      ...countryAreas!.features,
+      ...(near.length > 0
+        ? [
+            {
+              type: 'Feature' as const,
+              properties: {},
+              geometry: { type: 'MultiPoint' as const, coordinates: near },
+            },
+          ]
+        : []),
+    ],
+  };
 }
 
 /** The map features for one area, matched by id or name (case-insensitive). */
