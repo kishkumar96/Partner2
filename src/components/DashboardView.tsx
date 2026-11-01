@@ -29,7 +29,7 @@ import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
 import ViewStatusLine from '@/components/ViewStatusLine';
 import AdvisoryStatusBanner from '@/components/AdvisoryStatusBanner';
-import { buildAdvisoryStatus } from '@/utils/forecastInsight';
+import { buildAdvisoryStatus, utcStamp } from '@/utils/forecastInsight';
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { resolveHazard } from '@/data/vanuatuHazards';
 import ToolsMenu from '@/components/ToolsMenu';
@@ -37,6 +37,7 @@ import { FORECAST_SIGNAL } from '@/utils/forecastBriefing';
 import { useForecastLayers } from '@/utils/useForecastLayers';
 import { useResponsePriority } from '@/utils/useResponsePriority';
 import AnalysisModeSwitch, { type AnalysisMode } from '@/components/AnalysisModeSwitch';
+import EventPicker from '@/components/EventPicker';
 import ShareLinkButton from '@/components/ShareLinkButton';
 import { District, FilterState, Event, Hazard, Province, Sector } from '@/types';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
@@ -69,6 +70,7 @@ import {
   assessmentGap,
   defaultForecastRecord,
   isModeEventId,
+  groupForecastRuns,
   listForecastRuns,
 } from '@/utils/forecastRuns';
 import AssessmentPendingNotice from '@/components/AssessmentPendingNotice';
@@ -1978,6 +1980,41 @@ export default function DashboardView({
     [forecastRecord, forecastRuns, assessmentRecord, scenarioLayersByCategory]
   );
 
+  // The header's event picker: forecast storms with their advisories, then observed events
+  const stormGroups = useMemo(() => groupForecastRuns(forecastRuns), [forecastRuns]);
+  const observedEventOptions = useMemo(
+    () =>
+      countryEventRecords
+        .filter(record => record.countryCode === selectedCountry && !record.isForecast)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        .map(record => ({ id: record.id, name: record.name, date: record.date })),
+    [countryEventRecords, selectedCountry]
+  );
+  const eventPickerHasChoices = stormGroups.length + observedEventOptions.length > 0;
+  const eventPickerLabel = (() => {
+    const name = hasNamedEvent ? activeCycloneName : 'Choose an event';
+    if (analysisMode === 'forecast' && activeEventRecord?.trackIssuedTime) {
+      return `${name} · issued ${utcStamp(activeEventRecord.trackIssuedTime)}`;
+    }
+    const year = activeEventRecord?.date?.slice(0, 4);
+    return year ? `${name} · ${year}` : name;
+  })();
+  // Choosing an event or advisory is choosing its mode too, as the mode tabs do
+  const handlePickEvent = useCallback(
+    (id: string) => {
+      setViewModeChoice('event');
+      setModeEventId(id);
+      const isModeEvent = (eventId: string) =>
+        isModeEventId(eventId, forecastRuns, assessmentRecord?.id);
+      setFilters(prev =>
+        prev.selectedEvents.length > 0 && prev.selectedEvents.every(isModeEvent)
+          ? { ...prev, selectedEvents: [] }
+          : prev
+      );
+    },
+    [forecastRuns, assessmentRecord]
+  );
+
   // The header's "Active event context" and the Metadata chip both used to
   // read activeCycloneName unconditionally -- for a country like Cook
   // Islands with no real Event record, that's just the generic "Tropical
@@ -3038,6 +3075,15 @@ export default function DashboardView({
                   <p className="mt-1 text-xs text-slate-400 sm:text-sm">
                     {`Loading ${COUNTRIES[selectedCountry].name} operational view...`}
                   </p>
+                ) : !isPlanningMode && eventPickerHasChoices ? (
+                  // Forecast and Post Disaster: the line is the event picker itself
+                  <EventPicker
+                    label={eventPickerLabel}
+                    stormGroups={stormGroups}
+                    observedEvents={observedEventOptions}
+                    activeId={activeEventRecord?.id ?? null}
+                    onPick={handlePickEvent}
+                  />
                 ) : (
                   <ViewStatusLine
                     className="mt-0.5"
@@ -3457,7 +3503,8 @@ export default function DashboardView({
                 viewMode={viewMode}
                 hazards={hazards}
                 sectors={sectors}
-                events={events}
+                // Advisories are chosen in the header's event picker, not listed here as events
+                events={events.filter(event => !event.isForecast)}
                 districts={resolvedDistricts}
                 countryCode={selectedCountry}
                 filters={filters}
