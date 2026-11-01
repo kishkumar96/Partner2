@@ -45,12 +45,14 @@ function count(value: unknown): string {
   return Number.isFinite(parsed) ? formatCount(parsed) : '0';
 }
 
+// Light text: the global popup style (globals.css) gives every map popup a dark background, and
+// dark text on it could not be read. The band badge keeps dark text on its own light colour.
 function popupHtml(title: string, rows: Array<[string, string]>, badge?: string | null): string {
-  return `<div style="padding: 6px; font-family: system-ui, sans-serif; font-size: 12px; color: #0f172a;">
-    <h3 style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold;">${escapeHtml(title)}</h3>
+  return `<div style="padding: 12px 36px 12px 12px; font-family: system-ui, sans-serif; font-size: 12px; color: #e2e8f0;">
+    <h3 style="margin: 0 0 6px 0; font-size: 13px; font-weight: bold; color: #f8fafc;">${escapeHtml(title)}</h3>
     ${
       badge
-        ? `<div style="background: ${windDangerColor(badge)}; padding: 3px 6px; border-radius: 4px; margin-bottom: 6px; font-weight: bold; font-size: 11px;">${escapeHtml(badge)}</div>`
+        ? `<div style="background: ${windDangerColor(badge)}; color: #0f172a; padding: 3px 6px; border-radius: 4px; margin-bottom: 6px; font-weight: bold; font-size: 11px;">${escapeHtml(badge)}</div>`
         : ''
     }
     ${rows.map(([label, value]) => `<p style="margin: 2px 0;"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join('')}

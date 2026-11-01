@@ -552,8 +552,8 @@ export default function RegionalImpactsLayer({
               const danger = String(props.Overall_Winds ?? props.Danger ?? 'Not exposed');
               const maxWind = Number(props.Max_WindSpeed_kmph ?? props.WindSpeed_kmph);
               const popupContent = `
-                <div style="padding:8px;font-family:system-ui,sans-serif;font-size:12px;color:#0f172a;">
-                  <h3 style="margin:0 0 6px;font-size:14px;font-weight:700;">${escapePopupText(regionName)}</h3>
+                <div style="padding:12px 36px 12px 12px;font-family:system-ui,sans-serif;font-size:12px;color:#e2e8f0;">
+                  <h3 style="margin:0 0 6px;font-size:14px;font-weight:700;color:#f8fafc;">${escapePopupText(regionName)}</h3>
                   <p style="margin:2px 0;"><strong>Forecast wind:</strong> ${escapePopupText(danger)}${Number.isFinite(maxWind) ? ` (${Math.round(maxWind)} km/h)` : ''}</p>
                   <p style="margin:2px 0;"><strong>People exposed:</strong> ${formatPopupNumber(props.Exposed_Population)}</p>
                   <p style="margin:2px 0;"><strong>Buildings exposed:</strong> ${formatPopupNumber(props.Exposed_Buildings)}</p>
