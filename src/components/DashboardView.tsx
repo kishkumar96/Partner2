@@ -3409,11 +3409,12 @@ export default function DashboardView({
         <div
           ref={filterPanelRef}
           data-tour="filter-panel"
-          className={`fixed inset-y-0 left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
+          className={`fixed inset-y-0 flex flex-col left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
             ${showFilters ? 'translate-x-0' : '-translate-x-full'} 
             md:static md:transform-none md:shadow-none ${showFilters ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
         >
-          <div className="md:hidden absolute top-4 right-4 z-[45]">
+          {/* On phones the close button has its own bar: floating over the panel it covered the title */}
+          <div className="flex flex-shrink-0 justify-end bg-slate-900/95 px-3 pt-3 pb-1 md:hidden">
             <button
               onClick={() => setShowFilters(false)}
               className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
@@ -3422,53 +3423,56 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <ModeFilterPanel
-            analysisMode={analysisMode}
-            forecastSetup={{
-              runs: forecastRuns,
-              activeRunId: activeEventRecord?.id ?? null,
-              onRunSelect: setModeEventId,
-              onOpenLayers: () => {
-                openMapPanel();
-                setShowSummary(false);
-                setForecastLayersFocusKey(key => key + 1);
-              },
-            }}
-          >
-            <FilterPanel
-              viewMode={viewMode}
-              hazards={hazards}
-              sectors={sectors}
-              events={events}
-              districts={resolvedDistricts}
-              countryCode={selectedCountry}
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              availableHazardIds={availableHazardIds}
-              exposureData={exposureData}
-              economicDamageData={economicDamageData}
-              accessibleDistricts={accessibleDistricts}
-              onDistrictSelect={districtId => {
-                const region = regionalSummary.find(
-                  (r: any) => r.Region_ID === districtId || r.Region === districtId
-                );
-                if (region) {
-                  setSelectedRegion(region.Region_ID ?? region.Region);
-                }
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ModeFilterPanel
+              analysisMode={analysisMode}
+              forecastSetup={{
+                runs: forecastRuns,
+                activeRunId: activeEventRecord?.id ?? null,
+                onRunSelect: setModeEventId,
+                onOpenLayers: () => {
+                  openMapPanel();
+                  setShowSummary(false);
+                  setForecastLayersFocusKey(key => key + 1);
+                },
               }}
-            />
-          </ModeFilterPanel>
+            >
+              <FilterPanel
+                viewMode={viewMode}
+                hazards={hazards}
+                sectors={sectors}
+                events={events}
+                districts={resolvedDistricts}
+                countryCode={selectedCountry}
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                availableHazardIds={availableHazardIds}
+                exposureData={exposureData}
+                economicDamageData={economicDamageData}
+                accessibleDistricts={accessibleDistricts}
+                onDistrictSelect={districtId => {
+                  const region = regionalSummary.find(
+                    (r: any) => r.Region_ID === districtId || r.Region === districtId
+                  );
+                  if (region) {
+                    setSelectedRegion(region.Region_ID ?? region.Region);
+                  }
+                }}
+              />
+            </ModeFilterPanel>
+          </div>
         </div>
 
         {/* Map Controls Panel */}
         <div
           ref={mapPanelRef}
           data-tour="map-panel"
-          className={`fixed inset-y-0 left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
+          className={`fixed inset-y-0 flex flex-col left-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out shadow-2xl
             ${showMapControls ? 'translate-x-0' : '-translate-x-full'} 
             md:static md:transform-none md:shadow-none ${showMapControls ? 'md:w-80' : 'md:w-0 md:overflow-hidden'}`}
         >
-          <div className="md:hidden absolute top-4 right-4 z-[45]">
+          {/* On phones the close button has its own bar: floating over the panel it covered the title */}
+          <div className="flex flex-shrink-0 justify-end bg-slate-900/95 px-3 pt-3 pb-1 md:hidden">
             <button
               onClick={() => setShowMapControls(false)}
               className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
@@ -3477,69 +3481,71 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <MapPanel
-            forecastRuns={!isPlanningMode && activeEventRecord?.isForecast ? forecastRuns : []}
-            activeForecastRunId={activeEventRecord?.id ?? null}
-            onForecastRunSelect={setModeEventId}
-            forecastLayers={!isPlanningMode ? forecastLayerControls : null}
-            forecastLayersFocusKey={forecastLayersFocusKey}
-            mapStyle={mapStyle}
-            // A forecast is shaded by wind band; there's no damage to choose
-            onMapStyleChange={
-              modeUnresolved || (!isPlanningMode && forecastExposure) ? undefined : setMapStyle
-            }
-            is3DView={is3DView}
-            on3DViewToggle={setIs3DView}
-            extrusionMode={extrusionMode}
-            onExtrusionModeChange={setExtrusionMode}
-            extrusionExaggeration={extrusionExaggeration}
-            onExtrusionExaggerationChange={setExtrusionExaggeration}
-            // Forecast mode gets only the cyclone row (the animation); the other overlays
-            // belong to the post-event assessment
-            showOverlayRows={canAnimateCyclone}
-            showWindLayer={showWindLayer}
-            showInundationLayer={isPlanningMode ? showScenarioLayer : showInundationLayer}
-            windLayersAvailable={countryHasWindLayers}
-            onWindLayerToggle={isAssessmentMode ? setShowWindLayer : undefined}
-            onInundationLayerToggle={
-              isPlanningMode
-                ? setShowScenarioLayer
-                : isAssessmentMode
-                  ? setShowInundationLayer
+          <div className="flex min-h-0 flex-1 flex-col">
+            <MapPanel
+              forecastRuns={!isPlanningMode && activeEventRecord?.isForecast ? forecastRuns : []}
+              activeForecastRunId={activeEventRecord?.id ?? null}
+              onForecastRunSelect={setModeEventId}
+              forecastLayers={!isPlanningMode ? forecastLayerControls : null}
+              forecastLayersFocusKey={forecastLayersFocusKey}
+              mapStyle={mapStyle}
+              // A forecast is shaded by wind band; there's no damage to choose
+              onMapStyleChange={
+                modeUnresolved || (!isPlanningMode && forecastExposure) ? undefined : setMapStyle
+              }
+              is3DView={is3DView}
+              on3DViewToggle={setIs3DView}
+              extrusionMode={extrusionMode}
+              onExtrusionModeChange={setExtrusionMode}
+              extrusionExaggeration={extrusionExaggeration}
+              onExtrusionExaggerationChange={setExtrusionExaggeration}
+              // Forecast mode gets only the cyclone row (the animation); the other overlays
+              // belong to the post-event assessment
+              showOverlayRows={canAnimateCyclone}
+              showWindLayer={showWindLayer}
+              showInundationLayer={isPlanningMode ? showScenarioLayer : showInundationLayer}
+              windLayersAvailable={countryHasWindLayers}
+              onWindLayerToggle={isAssessmentMode ? setShowWindLayer : undefined}
+              onInundationLayerToggle={
+                isPlanningMode
+                  ? setShowScenarioLayer
+                  : isAssessmentMode
+                    ? setShowInundationLayer
+                    : undefined
+              }
+              showBuildingsLayer={showBuildingsLayer}
+              showRoadsLayer={showRoadsLayer}
+              onBuildingsLayerToggle={isAssessmentMode ? handleBuildingsLayerToggle : undefined}
+              onRoadsLayerToggle={isAssessmentMode ? handleRoadsLayerToggle : undefined}
+              showCycloneLayer={showCycloneControls}
+              onCycloneLayerToggle={
+                isAssessmentMode || (canAnimateCyclone && !!cycloneForecast)
+                  ? handleCycloneVisibilityChange
                   : undefined
-            }
-            showBuildingsLayer={showBuildingsLayer}
-            showRoadsLayer={showRoadsLayer}
-            onBuildingsLayerToggle={isAssessmentMode ? handleBuildingsLayerToggle : undefined}
-            onRoadsLayerToggle={isAssessmentMode ? handleRoadsLayerToggle : undefined}
-            showCycloneLayer={showCycloneControls}
-            onCycloneLayerToggle={
-              isAssessmentMode || (canAnimateCyclone && !!cycloneForecast)
-                ? handleCycloneVisibilityChange
-                : undefined
-            }
-            hasCycloneData={!!cycloneForecast}
-            cycloneIsForecast={!isPlanningMode && !isAssessmentMode}
-            isCyclonePlaying={isCyclonePlaying}
-            onToggleCyclonePlaying={setIsCyclonePlaying}
-            cycloneControlsHostRef={cycloneControlsHostRef}
-            storyMode={storyMode}
-            layerOpacity={layerOpacity}
-            onLayerOpacityChange={setLayerOpacity}
-            legendSettings={legendSettings}
-            onLegendSettingsChange={setLegendSettings}
-            countryCode={selectedCountry}
-            isMapDataLoading={isMapDataLoading}
-            isHazardsLoading={isHazardsLoading}
-            hazardZoomBlocked={hazardZoomBlocked && !modeUnresolved}
-            onResetUserPreferences={handleResetUserPreferences}
-            basemapStyle={basemapStyle}
-            onBasemapChange={handleBasemapChange}
-            hazardScenarioLayers={isPlanningMode ? planningScenarioLayers : []}
-            hazardScenarioSelection={effectiveHazardScenario}
-            hazardScenarioCurve={hazardScenarioCurve}
-            onHazardScenarioChange={setHazardScenarioSelection}
-          />
+              }
+              hasCycloneData={!!cycloneForecast}
+              cycloneIsForecast={!isPlanningMode && !isAssessmentMode}
+              isCyclonePlaying={isCyclonePlaying}
+              onToggleCyclonePlaying={setIsCyclonePlaying}
+              cycloneControlsHostRef={cycloneControlsHostRef}
+              storyMode={storyMode}
+              layerOpacity={layerOpacity}
+              onLayerOpacityChange={setLayerOpacity}
+              legendSettings={legendSettings}
+              onLegendSettingsChange={setLegendSettings}
+              countryCode={selectedCountry}
+              isMapDataLoading={isMapDataLoading}
+              isHazardsLoading={isHazardsLoading}
+              hazardZoomBlocked={hazardZoomBlocked && !modeUnresolved}
+              onResetUserPreferences={handleResetUserPreferences}
+              basemapStyle={basemapStyle}
+              onBasemapChange={handleBasemapChange}
+              hazardScenarioLayers={isPlanningMode ? planningScenarioLayers : []}
+              hazardScenarioSelection={effectiveHazardScenario}
+              hazardScenarioCurve={hazardScenarioCurve}
+              onHazardScenarioChange={setHazardScenarioSelection}
+            />
+          </div>
         </div>
 
         {/* Center Map + Bottom Tabs */}
@@ -3804,7 +3810,7 @@ export default function DashboardView({
         {/* Right Summary Panel */}
         <div
           ref={summaryPanelRef}
-          className={`fixed inset-y-0 right-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out bg-transparent shadow-2xl
+          className={`fixed inset-y-0 flex flex-col right-0 z-[40] w-full max-w-[min(24rem,100vw)] transform transition-transform duration-300 ease-out bg-transparent shadow-2xl
             md:static md:inset-auto md:h-full md:flex-shrink-0 md:shadow-none
             ${
               showSummary
@@ -3812,7 +3818,8 @@ export default function DashboardView({
                 : 'translate-x-full pointer-events-none md:w-0 md:translate-x-0 md:overflow-hidden md:opacity-0'
             }`}
         >
-          <div className="md:hidden absolute top-4 left-4 z-[45]">
+          {/* On phones the close button has its own bar: floating over the panel it covered the title */}
+          <div className="flex flex-shrink-0 justify-end bg-slate-900/95 px-3 pt-3 pb-1 md:hidden">
             <button
               onClick={() => setShowSummary(false)}
               className="w-9 h-9 rounded-full bg-slate-800/95 text-slate-200 border border-slate-700/80 shadow-lg flex items-center justify-center hover:bg-slate-700/95 transition-colors"
@@ -3821,66 +3828,68 @@ export default function DashboardView({
               <X className="w-4 h-4" />
             </button>
           </div>
-          {modeUnresolved ? (
-            <LoadingSummaryPanel countryName={COUNTRIES[selectedCountry].name} />
-          ) : !isPlanningMode && forecastExposure ? (
-            <ForecastExposureSummary
-              exposure={forecastExposure}
-              event={activeEventRecord}
-              areaFeatures={regionalImpactsGeoJSON}
-              selectedRegion={selectedRegion}
-              onRegionClear={() => setSelectedRegion(null)}
-              priority={responsePriority}
-              countryName={COUNTRIES[selectedCountry].name}
-              areaLabel={countryUi.focusAreaPlural.toLowerCase()}
-              previous={previousForecast}
-              summary={{
-                timeline: forecastTimeline,
-                latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
-                statusShownAbove: true,
-                onSwitchToLatest: forecastRecord
-                  ? () => setModeEventId(forecastRecord.id)
-                  : undefined,
-                onSelectAdvisory: setModeEventId,
-              }}
-            />
-          ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
-            <ForecastRunStatusPanel event={activeEventRecord} />
-          ) : (
-            <SummaryPanel
-              notice={
-                analysisMode === 'assessment' && assessmentGapInfo ? (
-                  <AssessmentPendingNotice
-                    forecastStorm={assessmentGapInfo.forecastStorm}
-                    assessmentName={assessmentGapInfo.assessmentName}
-                    onShowForecast={() => handleAnalysisModeChange('forecast')}
-                  />
-                ) : undefined
-              }
-              events={countryEvents}
-              filters={filters}
-              districts={resolvedDistricts}
-              provinces={resolvedProvinces}
-              sectors={sectors}
-              hazards={hazards}
-              selectedCountry={selectedCountry}
-              selectedRegion={selectedRegion}
-              onRegionClear={() => setSelectedRegion(null)}
-              assetExposureData={assetExposureData}
-              nationalSummary={scopedRisk.nationalSummary}
-              regionalSummary={scopedRisk.regionalSummary}
-              regionalSummaryBySector={scopedRisk.regionalSummaryBySector}
-              impactBySector={scopedRisk.impactBySector}
-              hazardLossScope={hazardLossScope}
-              hazardLossScopeComplete={scopedRisk.complete}
-              hazardLossMayDoubleCount={scopedRisk.mayDoubleCount}
-              scenarioRiskSummary={isPlanningMode ? hazardScenarioRiskSummary : null}
-              hazardScenarioMapActive={false}
-              viewMode={viewMode}
-              hazardScenario={effectiveHazardScenario}
-              eventName={hasEventImpact ? activeCycloneName : undefined}
-            />
-          )}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {modeUnresolved ? (
+              <LoadingSummaryPanel countryName={COUNTRIES[selectedCountry].name} />
+            ) : !isPlanningMode && forecastExposure ? (
+              <ForecastExposureSummary
+                exposure={forecastExposure}
+                event={activeEventRecord}
+                areaFeatures={regionalImpactsGeoJSON}
+                selectedRegion={selectedRegion}
+                onRegionClear={() => setSelectedRegion(null)}
+                priority={responsePriority}
+                countryName={COUNTRIES[selectedCountry].name}
+                areaLabel={countryUi.focusAreaPlural.toLowerCase()}
+                previous={previousForecast}
+                summary={{
+                  timeline: forecastTimeline,
+                  latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
+                  statusShownAbove: true,
+                  onSwitchToLatest: forecastRecord
+                    ? () => setModeEventId(forecastRecord.id)
+                    : undefined,
+                  onSelectAdvisory: setModeEventId,
+                }}
+              />
+            ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
+              <ForecastRunStatusPanel event={activeEventRecord} />
+            ) : (
+              <SummaryPanel
+                notice={
+                  analysisMode === 'assessment' && assessmentGapInfo ? (
+                    <AssessmentPendingNotice
+                      forecastStorm={assessmentGapInfo.forecastStorm}
+                      assessmentName={assessmentGapInfo.assessmentName}
+                      onShowForecast={() => handleAnalysisModeChange('forecast')}
+                    />
+                  ) : undefined
+                }
+                events={countryEvents}
+                filters={filters}
+                districts={resolvedDistricts}
+                provinces={resolvedProvinces}
+                sectors={sectors}
+                hazards={hazards}
+                selectedCountry={selectedCountry}
+                selectedRegion={selectedRegion}
+                onRegionClear={() => setSelectedRegion(null)}
+                assetExposureData={assetExposureData}
+                nationalSummary={scopedRisk.nationalSummary}
+                regionalSummary={scopedRisk.regionalSummary}
+                regionalSummaryBySector={scopedRisk.regionalSummaryBySector}
+                impactBySector={scopedRisk.impactBySector}
+                hazardLossScope={hazardLossScope}
+                hazardLossScopeComplete={scopedRisk.complete}
+                hazardLossMayDoubleCount={scopedRisk.mayDoubleCount}
+                scenarioRiskSummary={isPlanningMode ? hazardScenarioRiskSummary : null}
+                hazardScenarioMapActive={false}
+                viewMode={viewMode}
+                hazardScenario={effectiveHazardScenario}
+                eventName={hasEventImpact ? activeCycloneName : undefined}
+              />
+            )}
+          </div>
         </div>
       </div>
 
