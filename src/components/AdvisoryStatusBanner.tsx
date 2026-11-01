@@ -91,6 +91,24 @@ export default function AdvisoryStatusBanner({
   }
 
   if (status.kind === 'latest-aging') {
+    if (variant === 'bar') {
+      // The newest advisory we have can still be days old: said in the header, on every screen
+      return (
+        <div
+          role="status"
+          data-testid="advisory-banner"
+          data-state="aging"
+          data-variant="bar"
+          className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-xs leading-snug text-amber-100 sm:text-sm"
+        >
+          <Clock className="h-4 w-4 flex-shrink-0 text-amber-300" aria-hidden="true" />
+          <p className="min-w-0">
+            <span className="font-semibold">Latest advisory, but issued {issued}</span>
+            {age ? ` (${age})` : ''}. Check for a newer forecast before acting on it.
+          </p>
+        </div>
+      );
+    }
     return (
       <div
         role="status"

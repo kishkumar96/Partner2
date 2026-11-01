@@ -17,6 +17,7 @@
  * and improved maintainability.
  */
 
+import { sectorLabel, sortSectorsUnclassifiedLast } from '@/utils/sectorDisplay';
 import { useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -557,14 +558,18 @@ export default function SummaryPanel({
     (data: any[], valueField: string) => {
       if (!data || data.length === 0) return null;
 
-      const validSectors = data.filter(s => s.Sector !== 'Unknown' && (s[valueField] || 0) > 0);
+      const validSectors = sortSectorsUnclassifiedLast(
+        data.filter(s => (s[valueField] || 0) > 0),
+        s => s.Sector,
+        s => Number(s[valueField]) || 0
+      );
 
       if (validSectors.length === 0) return null;
 
       const total = validSectors.reduce((sum, s) => sum + (Number(s[valueField]) || 0), 0);
 
       return {
-        labels: validSectors.map(s => s.Sector),
+        labels: validSectors.map(s => sectorLabel(s.Sector)),
         datasets: [
           {
             data: validSectors.map(s => (s[valueField] || 0) / 1000000),
@@ -586,13 +591,14 @@ export default function SummaryPanel({
       return null;
     }
 
-    // Filter out Unknown sector and sort by total loss
-    const sortedSectors = [...filteredImpactBySector]
-      .filter(s => s.Sector !== 'Unknown')
-      .sort((a, b) => (b.Total_Loss || 0) - (a.Total_Loss || 0));
+    const sortedSectors = sortSectorsUnclassifiedLast(
+      filteredImpactBySector,
+      s => s.Sector,
+      s => s.Total_Loss || 0
+    );
 
     return {
-      labels: sortedSectors.map(s => s.Sector),
+      labels: sortedSectors.map(s => sectorLabel(s.Sector)),
       datasets: [
         {
           label: 'Economic Loss (Millions USD)',

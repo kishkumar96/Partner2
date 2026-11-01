@@ -1648,7 +1648,37 @@ function normalizeRegionalSummaryContract(
     });
 }
 
+/**
+ * Partner API answers kept for this page session. Switching mode or event reloads everything,
+ * and without this every switch downloaded the country's risk data again (about 5.6 MB for the
+ * Cook Islands, twice on first load). Kept as text and parsed on each use so no caller can
+ * change another's copy; only in the browser, and not under tests, which fake fetch per test.
+ */
+const PARTNER_RESPONSE_TTL_MS = 5 * 60_000;
+/** Damaged-building geometry can be 30 MB; holding that twice costs more than fetching it again */
+const PARTNER_RESPONSE_CACHE_MAX_CHARS = 12_000_000;
+const partnerResponseCache = new Map<string, { at: number; body: string }>();
+
+function partnerResponseCacheEnabled(): boolean {
+  return typeof window !== 'undefined' && process.env.NODE_ENV !== 'test';
+}
+
 async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promise<unknown> {
+  if (!partnerResponseCacheEnabled()) return fetchPartnerCollectionUncached(url, signal);
+  const hit = partnerResponseCache.get(url);
+  if (hit && Date.now() - hit.at < PARTNER_RESPONSE_TTL_MS) return JSON.parse(hit.body);
+  const payload = await fetchPartnerCollectionUncached(url, signal);
+  // A failed or aborted request answers null; asking again later is right for those
+  if (payload != null && !signal?.aborted) {
+    const body = JSON.stringify(payload);
+    if (body.length <= PARTNER_RESPONSE_CACHE_MAX_CHARS) {
+      partnerResponseCache.set(url, { at: Date.now(), body });
+    }
+  }
+  return payload;
+}
+
+async function fetchPartnerCollectionUncached(url: string, signal?: AbortSignal): Promise<unknown> {
   const normalizePartnerProxyUrl = (nextUrl: string): string => {
     if (typeof window === 'undefined') {
       return nextUrl;
@@ -2647,6 +2677,11 @@ export async function fetchEventRecords(
   signal?: AbortSignal
 ): Promise<EventRecord[]> {
   const usePartnerOnly = isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode);
+  const cacheKey = `events:${countryCode}`;
+  const hit = partnerResponseCacheEnabled() ? partnerResponseCache.get(cacheKey) : undefined;
+  if (hit && Date.now() - hit.at < PARTNER_RESPONSE_TTL_MS) {
+    return JSON.parse(hit.body) as EventRecord[];
+  }
   try {
     const response = await fetch(withBasePath(`/api/events?country=${countryCode}`), {
       signal,
@@ -2661,6 +2696,9 @@ export async function fetchEventRecords(
       return usePartnerOnly ? [] : getLocalEventRecords(countryCode);
     }
 
+    if (partnerResponseCacheEnabled() && payload.events.length > 0) {
+      partnerResponseCache.set(cacheKey, { at: Date.now(), body: JSON.stringify(payload.events) });
+    }
     return payload.events as EventRecord[];
   } catch {
     return usePartnerOnly ? [] : getLocalEventRecords(countryCode);

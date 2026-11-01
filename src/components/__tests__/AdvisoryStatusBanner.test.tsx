@@ -89,4 +89,20 @@ describe('AdvisoryStatusBanner', () => {
     expect(banner).toHaveTextContent('Latest advisory · issued 19 Oct 12:00 UTC (1 hour ago)');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('says in one header line when even the newest advisory is old', () => {
+    const status: AdvisoryStatus = {
+      kind: 'latest-aging',
+      issuedAt: '2026-10-19T12:00:00Z',
+      age: { hours: 336, label: '14 days ago', stale: true },
+      newer: null,
+    };
+    render(<AdvisoryStatusBanner variant="bar" status={status} />);
+
+    const banner = screen.getByTestId('advisory-banner');
+    expect(banner).toHaveAttribute('data-variant', 'bar');
+    expect(banner).toHaveAttribute('data-state', 'aging');
+    expect(banner).toHaveTextContent('Latest advisory, but issued 19 Oct 12:00 UTC (14 days ago)');
+    expect(banner).toHaveTextContent('Check for a newer forecast before acting on it');
+  });
 });

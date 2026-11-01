@@ -138,7 +138,7 @@ describe('ForecastExposureSummary, an advisory that is not the latest', () => {
     expect(screen.queryByTestId('advisory-age')).not.toBeInTheDocument();
   });
 
-  it('still shows an aging latest advisory in the panel when the page shows the older notice', () => {
+  it('leaves an aging latest advisory to the page too when the page shows the notice', () => {
     const staleEvent = recordFixture({
       id: '10',
       trackIssuedTime: '2020-01-01T00:00:00Z',
@@ -150,7 +150,7 @@ describe('ForecastExposureSummary, an advisory that is not the latest', () => {
       )
     );
 
-    expect(screen.getByTestId('advisory-banner')).toHaveAttribute('data-state', 'aging');
+    expect(screen.queryByTestId('advisory-banner')).not.toBeInTheDocument();
   });
 
   it('keeps the original age line in the details when this is the latest advisory', () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { sectorLabel } from '@/utils/sectorDisplay';
 import { useState, useMemo } from 'react';
 import { formatCurrency, formatNumber, formatPercent } from '@/utils/formatters';
 import { BarChart3, AlertTriangle } from 'lucide-react';
@@ -49,8 +50,13 @@ export default function ComparativeAnalytics({
         buildingsExposed: parseInt(row.Number_Exposed_Buildings || 0),
         buildingsDamaged: parseInt(row.Number_Damaged_Buildings || 0),
       }))
-      .filter(s => s.sector !== 'Unknown' && s.totalLoss > 0)
-      .sort((a, b) => b.totalLoss - a.totalLoss);
+      .filter(s => s.totalLoss > 0)
+      .map(s => ({ ...s, sector: sectorLabel(s.sector) }))
+      .sort(
+        (a, b) =>
+          Number(a.sector === 'Unclassified') - Number(b.sector === 'Unclassified') ||
+          b.totalLoss - a.totalLoss
+      );
   }, [sectorData]);
 
   // Calculate statistics

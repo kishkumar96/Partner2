@@ -112,12 +112,12 @@ const AdvancedCharts = memo(function AdvancedCharts({
       return null;
     }
 
-    // Exclude Unknown sector from totals
+    // Every sector counts, unclassified loss included, or a region's total comes out short
     const regionTotals = regionalSummary
       .filter(r => r.Region && r.Region.trim() !== '')
       .map(r => {
         const sectorsData = regionalSummaryBySector
-          .filter(s => s.Region === r.Region && s.Sector !== 'Unknown')
+          .filter(s => s.Region === r.Region)
           .reduce((sum, s) => sum + (Number(s.Total_Loss) || 0), 0);
         return {
           region: r.Region,

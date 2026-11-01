@@ -3342,7 +3342,7 @@ export default function DashboardView({
           <TopInsightsCards insights={headlineMetrics} className="mt-2" />
         )}
 
-        {advisoryStatus?.kind === 'older' && (
+        {(advisoryStatus?.kind === 'older' || advisoryStatus?.kind === 'latest-aging') && (
           <div className="mt-1.5">
             <AdvisoryStatusBanner
               variant="bar"
