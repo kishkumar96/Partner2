@@ -57,7 +57,7 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    expect(screen.getByText('$1,000,000')).toBeInTheDocument();
+    expect(screen.getByText('US$1.0M')).toBeInTheDocument();
     expect(screen.getByText('50,000')).toBeInTheDocument();
   });
 
@@ -102,7 +102,7 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    expect(screen.getByText('$1,234,567,890')).toBeInTheDocument();
+    expect(screen.getByText('US$1.23B')).toBeInTheDocument();
   });
 
   it('updates when data prop changes', () => {
@@ -142,6 +142,6 @@ describe('SummaryPanel Component', () => {
       />
     );
 
-    expect(screen.getByText('$2,000,000')).toBeInTheDocument();
+    expect(screen.getByText('US$2.0M')).toBeInTheDocument();
   });
 });

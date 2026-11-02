@@ -328,8 +328,8 @@ export default function BottomTabs({
           : [];
         return selected.length > 0 ? selected : districtRows;
       }
-      // Province: the summary CSV rows.
-      return provinceRows;
+      // Province: the summary CSV rows, biggest loss first (the CSV's own order is by region id)
+      return [...provinceRows].sort((a, b) => b.totalEconomicDamage - a.totalEconomicDamage);
     }
 
     // Event-based aggregation -used when filters are active or CSV is absent.
@@ -337,7 +337,9 @@ export default function BottomTabs({
     // district-level breakdown is not available; fall back to province in that case.
     const effectiveLevel =
       filters.aggregationLevel === 'district' ? 'province' : filters.aggregationLevel;
-    return aggregateEventsByLevel(filteredEvents, effectiveLevel, districts, provinces, false);
+    return aggregateEventsByLevel(filteredEvents, effectiveLevel, districts, provinces, false).sort(
+      (a, b) => b.totalEconomicDamage - a.totalEconomicDamage
+    );
   }, [
     hasActiveDataFilters,
     hasEventOrDateFilters,

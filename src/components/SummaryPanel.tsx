@@ -106,8 +106,26 @@ function formatSummaryNumber(value: number | string | undefined | null): string 
   });
 }
 
+/**
+ * Rounded, with the currency named. To the dollar ("$45,786,904") the figures claimed a precision
+ * the model does not have, and the cards did not say which dollar.
+ */
 function formatSummaryCurrency(value: number | string | undefined | null): string {
-  return `$${formatSummaryNumber(value)}`;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return 'US$0';
+  const size = Math.abs(amount);
+  const [divisor, suffix, digits] =
+    size >= 1e9
+      ? [1e9, 'B', 2]
+      : size >= 1e6
+        ? [1e6, 'M', 1]
+        : size >= 1e3
+          ? [1e3, 'K', 0]
+          : [1, '', 0];
+  return `US$${(amount / divisor).toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}${suffix}`;
 }
 
 function formatSummaryPercent(

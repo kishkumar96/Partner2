@@ -30,6 +30,7 @@ import { getAreaId, getAreaName } from '@/utils/adminNormalization';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 import type { HazardScenarioSelection, RealWMSLayer } from '@/data/realThreddsLayers';
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
+import { withTotalLossFromParts } from '@/utils/lossTotals';
 import { buildForecastExposure } from '@/utils/forecastExposure';
 import { previousAdvisory } from '@/utils/forecastComparison';
 import { buildForecastTimeline } from '@/utils/forecastTimeline';
@@ -1432,7 +1433,11 @@ function mergePartnerRiskBundle(
   ) {
     const featureCollection = extractFeatureCollectionFromValue(geometryValue);
     if (featureCollection && !next[key]) {
-      next[key] = featureCollection as never;
+      next[key] = (
+        key === 'regionalImpacts' || key === 'regionalImpactsBySector'
+          ? withTotalLossFromParts(featureCollection)
+          : featureCollection
+      ) as never;
     }
     return next;
   }

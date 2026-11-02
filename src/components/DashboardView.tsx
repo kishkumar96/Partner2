@@ -2042,6 +2042,24 @@ export default function DashboardView({
     [forecastRuns, assessmentRecord]
   );
 
+  // Escape closes an open map popup before anything else (it used to close both side panels and
+  // leave the popup). Capture phase and marked handled, like the menus.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const closeButtons = document.querySelectorAll<HTMLButtonElement>(
+        '.maplibregl-popup .maplibregl-popup-close-button'
+      );
+      const popups = document.querySelectorAll('.maplibregl-popup');
+      if (popups.length === 0) return;
+      event.preventDefault();
+      if (closeButtons.length > 0) closeButtons.forEach(button => button.click());
+      else popups.forEach(popup => popup.remove());
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
   // Back and Forward: put the address's mode, event and scenario back. The page reads the address
   // only when it opens, so without this Back changed the address but not the view.
   useEffect(() => {
@@ -2081,7 +2099,10 @@ export default function DashboardView({
   // that -- it's more specific and it's what the map and risk figures
   // actually reflect.
   const activeEventContextLabel = useMemo(() => {
+    // Only in History: the past-event scenario stays chosen after leaving it, and Forecast then
+    // said "Event: Historical Cyclones -22-Feb-1981"
     if (
+      analysisMode === 'history' &&
       effectiveHazardScenario &&
       HAZARD_SCENARIO_PRODUCT_CATEGORY[effectiveHazardScenario.product] === 'observed' &&
       effectiveHazardScenario.eventLabel
@@ -2089,10 +2110,10 @@ export default function DashboardView({
       const productLabel =
         HAZARD_SCENARIO_PRODUCT_LABELS[effectiveHazardScenario.product] ??
         effectiveHazardScenario.product;
-      return `${productLabel} -${effectiveHazardScenario.eventLabel}`;
+      return `${productLabel} · ${effectiveHazardScenario.eventLabel}`;
     }
     return activeCycloneName;
-  }, [effectiveHazardScenario, activeCycloneName]);
+  }, [analysisMode, effectiveHazardScenario, activeCycloneName]);
 
   // National-level loss/exposure totals for the scenario currently shown on
   // the map, so the risk summary panel matches the selected SLR x
@@ -2405,9 +2426,14 @@ export default function DashboardView({
       .join(', ');
   }, [filters.selectedHazards, hazards, activeWmsLayers.length]);
 
+  // The date of what is on screen: a past event's own date in History, else the shown event's.
+  // It was the first loaded event's date, so Meena (2005) said "Oct 19, 2026", Wati's.
   const activeContextDate = useMemo(() => {
-    const eventDate = events[0]?.date;
-    if (!eventDate) return 'Not available';
+    const eventDate =
+      analysisMode === 'history'
+        ? (effectiveHazardScenario?.eventLabel ?? undefined)
+        : activeEventRecord?.date || events[0]?.date;
+    if (!eventDate) return 'Not recorded';
 
     const parsed = new Date(eventDate);
     return Number.isNaN(parsed.getTime())
@@ -2417,7 +2443,7 @@ export default function DashboardView({
           month: 'short',
           day: 'numeric',
         });
-  }, [events, selectedCountry]);
+  }, [analysisMode, effectiveHazardScenario, activeEventRecord, events]);
 
   const headlineMetrics = useMemo(() => {
     const selectedRows = selectedRegion
