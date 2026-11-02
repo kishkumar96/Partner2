@@ -221,14 +221,16 @@ export function buildCountryScopedResourceUrls(
     // in this listing (tens of MB per country, only needed once that map
     // overlay is switched on) -- see loadPartnerApiCountryData, which
     // re-fetches a row's full geometry individually by id on demand.
-    risk_information: `${endpoints.resource.risk_information}?country=${countryId}&defer_large_assets=true`,
+    // page_size: one request instead of pages of 25 fetched one after another (both APIs
+    // allow up to 200)
+    risk_information: `${endpoints.resource.risk_information}?country=${countryId}&defer_large_assets=true&page_size=200`,
     // RiskScenario has no direct `country` field of its own (it's reached
     // through its RiskInformation parent), so this filters on the FK path
     // instead of the `?country=` convention every other resource here uses.
-    risk_scenario: `${endpoints.resource.risk_scenario}?risk_information__country=${countryId}`,
+    risk_scenario: `${endpoints.resource.risk_scenario}?risk_information__country=${countryId}&page_size=200`,
     hazard_information: `${endpoints.resource.hazard_information}?country=${countryId}`,
-    citizen_science: `${endpoints.resource.citizen_science}?country=${countryId}`,
-    event: `${endpoints.resource.event}?country=${countryId}`,
+    citizen_science: `${endpoints.resource.citizen_science}?country=${countryId}&page_size=200`,
+    event: `${endpoints.resource.event}?country=${countryId}&page_size=200`,
   };
 }
 
