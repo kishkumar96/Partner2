@@ -288,6 +288,9 @@ export default function UnifiedMapLegend({
     if (!dataValues || dataValues.length === 0) return null;
     const validValues = dataValues.filter(v => v != null && !isNaN(v));
     if (validValues.length === 0) return null;
+    // All zero means these rows carry no such figure (a forecast's rows under a scenario have no
+    // loss or gust columns): "$0 → $0" and "0 → 0 km/h" read as a measured nothing
+    if (validValues.every(v => v === 0)) return null;
 
     return {
       min: Math.min(...validValues),

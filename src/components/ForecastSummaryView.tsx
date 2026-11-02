@@ -13,7 +13,12 @@ import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastTrendChart from './ForecastTrendChart';
 import { windAreaLabel } from '@/utils/windScale';
 import { windDangerColor } from '@/utils/forecastExposure';
-import { approximate, type ForecastInsight, type InsightArea } from '@/utils/forecastInsight';
+import {
+  approximate,
+  type ForecastInsight,
+  type InsightArea,
+  utcStamp,
+} from '@/utils/forecastInsight';
 
 /**
  * The forecast in plain words, for someone who has not read the tables.
@@ -132,6 +137,20 @@ export default function ForecastSummaryView({
           )}
           <span>{insight.headline}</span>
         </h3>
+        {/* The age belongs to the headline: a reader of only this panel (a phone, where it covers
+            the header's notice) must still see that the forecast is old */}
+        {!showStatus && insight.status.kind !== 'latest' && (
+          <p
+            data-testid="summary-advisory-age"
+            className="mt-1 text-sm font-semibold leading-snug text-amber-200"
+          >
+            {insight.status.kind === 'older'
+              ? 'Not the latest advisory'
+              : 'Latest advisory we have'}
+            {insight.status.issuedAt ? `, issued ${utcStamp(insight.status.issuedAt)}` : ''}
+            {insight.status.age?.label ? ` (${insight.status.age.label})` : ''}.
+          </p>
+        )}
         <p data-testid="summary-detail" className="mt-2 text-sm leading-relaxed text-slate-300">
           {insight.detail}
         </p>

@@ -79,6 +79,26 @@ export default function AnalysisModeSwitch({
         role="group"
         aria-label="Analysis mode"
         aria-busy={disabled || undefined}
+        // Left/Right move between the modes, as tabs do; Home/End go to the first and last
+        onKeyDown={event => {
+          if (disabled) return;
+          const index = modes.indexOf(active);
+          const next =
+            event.key === 'ArrowRight'
+              ? modes[(index + 1) % modes.length]
+              : event.key === 'ArrowLeft'
+                ? modes[(index - 1 + modes.length) % modes.length]
+                : event.key === 'Home'
+                  ? modes[0]
+                  : event.key === 'End'
+                    ? modes[modes.length - 1]
+                    : null;
+          if (!next) return;
+          event.preventDefault();
+          onChange(next);
+          const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('button');
+          buttons[modes.indexOf(next)]?.focus();
+        }}
         className="hidden max-w-full flex-wrap gap-1 rounded-lg border border-slate-600/60 bg-slate-900/50 p-1 xl:inline-flex"
       >
         {modes.map(mode => {

@@ -158,4 +158,22 @@ describe('AnalysisModeSwitch', () => {
     fireEvent.click(assessment);
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('moves between modes with the arrow keys, as tabs do', () => {
+    const onChange = jest.fn();
+    render(
+      <AnalysisModeSwitch
+        available={['forecast', 'assessment', 'scenarios']}
+        active="assessment"
+        onChange={onChange}
+      />
+    );
+    const group = screen.getByRole('group', { name: 'Analysis mode' });
+    fireEvent.keyDown(group, { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenLastCalledWith('scenarios');
+    fireEvent.keyDown(group, { key: 'ArrowLeft' });
+    expect(onChange).toHaveBeenLastCalledWith('forecast');
+    fireEvent.keyDown(group, { key: 'End' });
+    expect(onChange).toHaveBeenLastCalledWith('scenarios');
+  });
 });

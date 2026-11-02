@@ -495,7 +495,9 @@ export default function SummaryPanel({
   // specific region is selected, where the regional csvTotals is more
   // relevant than one fixed national number.
   const scenarioTotals = useMemo(() => {
-    if (!scenarioRiskSummary || selectedRegion) return null;
+    // Scenario losses are national. With an area selected this returned nothing, and the panel
+    // said no figures were modelled next to the scenario's loss chart and sector table.
+    if (!scenarioRiskSummary) return null;
     const totalLoss = Number(scenarioRiskSummary.total_loss);
     const affectedPopulation = Number(scenarioRiskSummary.exposed_population);
     if (!Number.isFinite(totalLoss) && !Number.isFinite(affectedPopulation)) return null;
@@ -503,7 +505,7 @@ export default function SummaryPanel({
       totalLoss: Number.isFinite(totalLoss) ? totalLoss : 0,
       affectedPopulation: Number.isFinite(affectedPopulation) ? affectedPopulation : 0,
     };
-  }, [scenarioRiskSummary, selectedRegion]);
+  }, [scenarioRiskSummary]);
 
   // Check if filters are active (Tier 3)
   const hasActiveFilters = useMemo(
@@ -810,6 +812,12 @@ export default function SummaryPanel({
                 icon={DollarSign}
                 color="red"
               />
+              {selectedRegion && (
+                <p role="note" className="text-xs leading-snug text-amber-200/90">
+                  These are national figures: scenario losses are not split by area, so they do not
+                  change with the area you selected.
+                </p>
+              )}
               <HeroMetric
                 label="Affected Population"
                 value={formatSummaryNumber(scenarioTotals.affectedPopulation)}
@@ -831,8 +839,11 @@ export default function SummaryPanel({
               </p>
               <p className="text-xs leading-snug text-slate-300">
                 The map shows this scenario’s hazard. Impact modelling hasn’t been done for{' '}
-                {countryName}’s planning scenarios, so there are no loss or exposure figures for it.
-                {eventName ? ` Switch to Event to see the modelled impact of ${eventName}.` : ''}
+                {countryName.endsWith('s') ? `${countryName}’` : `${countryName}’s`} planning
+                scenarios, so there are no loss or exposure figures for it.
+                {eventName
+                  ? ` Switch to Post Disaster Analysis to see the modelled impact of ${eventName}.`
+                  : ''}
               </p>
             </div>
           )}

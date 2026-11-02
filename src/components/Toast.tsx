@@ -46,7 +46,8 @@ export default function Toast({
 
   return (
     <div
-      className={`fixed top-4 right-4 z-[65] flex items-center gap-3 px-4 py-3 rounded-lg border-2 shadow-lg backdrop-blur-sm animate-slide-up ${colors[type]} min-w-[280px] max-w-[90vw] md:max-w-md pointer-events-auto`}
+      // Bottom centre: at the top right it covered the header's Share, Export and Tools buttons
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] flex items-center gap-3 px-4 py-3 rounded-lg border-2 shadow-lg backdrop-blur-sm animate-slide-up ${colors[type]} min-w-[280px] max-w-[90vw] md:max-w-md pointer-events-auto`}
       role="alert"
     >
       <Icon className="w-5 h-5 flex-shrink-0" />

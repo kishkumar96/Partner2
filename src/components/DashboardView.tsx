@@ -1629,19 +1629,6 @@ export default function DashboardView({
         ],
       },
       {
-        title: 'Filter Your Data',
-        body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
-        selector: '[data-tour="filter-primary-controls"]',
-        category: 'Inputs',
-        targetLabel: 'Filter controls',
-        placement: 'right',
-        tips: [
-          'Start by selecting an event to see available disasters',
-          'Combine hazard and sector filters for targeted analysis',
-          'The map updates automatically as you apply filters',
-        ],
-      },
-      {
         title: 'Control the Map View',
         body: 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
         selector: '[data-tour="tools-menu"]',
@@ -1656,6 +1643,23 @@ export default function DashboardView({
         keyboardShortcut: 'M',
       },
     ];
+
+    // Forecast's left panel is its forecast setup, not these filters
+    if (analysisMode !== 'forecast') {
+      baseSteps.splice(1, 0, {
+        title: 'Filter Your Data',
+        body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
+        selector: '[data-tour="filter-primary-controls"]',
+        category: 'Inputs',
+        targetLabel: 'Filter controls',
+        placement: 'right',
+        tips: [
+          'Start by selecting an event to see available disasters',
+          'Combine hazard and sector filters for targeted analysis',
+          'The map updates automatically as you apply filters',
+        ],
+      });
+    }
 
     // Shading mode and opacity are Post Disaster, Scenario and History controls; Forecast has
     // its own overlay list, so these two steps would point at nothing there
@@ -1703,7 +1707,7 @@ export default function DashboardView({
     });
 
     // Conditionally add asset damage steps if data is available
-    if (damagedBuildings || damagedRoads) {
+    if ((damagedBuildings || damagedRoads) && analysisMode !== 'forecast') {
       baseSteps.push({
         title: 'Inspect Asset-Level Damage',
         body: 'View individual damaged buildings and road segments with severity ratings, precise coordinates, and damage classifications.',
@@ -2041,6 +2045,31 @@ export default function DashboardView({
     },
     [forecastRuns, assessmentRecord]
   );
+
+  // A link can name an advisory or event that no longer exists (runs get renumbered, or a
+  // different API serves the page). The page then falls back to the default; say so once
+  // instead of quietly showing something else.
+  const checkedLinkEventsRef = useRef(false);
+  useEffect(() => {
+    if (checkedLinkEventsRef.current || countryEventRecords.length === 0) return;
+    checkedLinkEventsRef.current = true;
+    const linked = urlState.events ?? [];
+    const known = new Set(countryEventRecords.map(record => record.id));
+    const missing = linked.filter(id => !known.has(id));
+    if (missing.length === 0) return;
+    setToastMessage(
+      'The event or advisory in this link is no longer available, so the latest is shown instead.'
+    );
+    setToastType('warning');
+    setToastAction(undefined);
+    setShowToast(true);
+    setFilters(prev => ({
+      ...prev,
+      selectedEvents: prev.selectedEvents.filter(id => known.has(id)),
+    }));
+    // Only the address the page opened with
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryEventRecords]);
 
   // Escape closes an open map popup before anything else (it used to close both side panels and
   // leave the popup). Capture phase and marked handled, like the menus.
@@ -3015,6 +3044,13 @@ export default function DashboardView({
   return (
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
+      {/* For keyboard and screen-reader users: jump past the header to the map and panels */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[80] focus:rounded-md focus:bg-sky-600 focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      >
+        Skip to the map and data
+      </a>
       <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-2.5 sm:px-6">
         <div className="flex flex-col gap-2 md:flex-row md:flex-nowrap md:items-center md:gap-x-3">
           <div className="flex min-w-0 flex-col gap-2 md:order-1 md:flex-1">
@@ -3540,8 +3576,12 @@ export default function DashboardView({
         )}
       </header>
 
-      {/* Main Content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+      {/* Main Content: the page's main landmark, where the skip link lands */}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex flex-1 min-h-0 overflow-hidden relative focus:outline-none"
+      >
         {/* Mobile Unified Backdrop - closes any open panel */}
         {(showFilters || showMapControls || showSummary) && (
           <button
@@ -4043,7 +4083,7 @@ export default function DashboardView({
             )}
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Toast Notification */}
       {showToast && (
