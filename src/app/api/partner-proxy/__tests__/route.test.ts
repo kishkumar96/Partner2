@@ -52,4 +52,26 @@ describe('partner-proxy forwarded headers', () => {
     expect(sent.get('cookie')).toBeNull();
     expect(sent.get('cf-connecting-ip')).toBeNull();
   });
+
+  it('answers a missing scenario table with an empty list, and other 404s as they are', async () => {
+    global.fetch = jest.fn(
+      async () => new Response('not found', { status: 404 })
+    ) as unknown as typeof fetch;
+    const missing = await GET(
+      new NextRequest(
+        'https://x/partner2/api/partner-proxy/partner_api/v1/risk_scenario/?page_size=200'
+      ),
+      { params: Promise.resolve({ path: ['partner_api', 'v1', 'risk_scenario'] }) }
+    );
+    expect(missing.status).toBe(200);
+    expect(await missing.json()).toEqual({ count: 0, next: null, previous: null, results: [] });
+
+    const other = await GET(
+      new NextRequest('https://x/partner2/api/partner-proxy/partner_api/v1/event/99/'),
+      {
+        params: Promise.resolve({ path: ['partner_api', 'v1', 'event', '99'] }),
+      }
+    );
+    expect(other.status).toBe(404);
+  });
 });

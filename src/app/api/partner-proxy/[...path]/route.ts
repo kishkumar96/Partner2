@@ -3,6 +3,12 @@ import { partnerTargetPath } from '@/utils/partnerProxyPath';
 
 const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://localhost:8000';
 
+/** List endpoints our own API has and the shared API does not: missing means no rows */
+const OPTIONAL_LIST_ENDPOINTS = [
+  'partner_api/v1/risk_scenario_breakdown',
+  'partner_api/v1/risk_scenario',
+];
+
 const FORWARDED_REQUEST_HEADERS = new Set([
   'accept',
   'accept-language',
@@ -161,6 +167,21 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
         { status: isTimeout ? 504 : 502 }
       );
     }
+  }
+
+  // The shared API has no scenario tables. For these two list endpoints "no rows" is the true
+  // answer, and the dashboard then reads the published copy; answering 404 only put three red
+  // errors in every visitor's console. Any other path keeps its real status.
+  if (
+    upstream &&
+    upstream.status === 404 &&
+    request.method === 'GET' &&
+    OPTIONAL_LIST_ENDPOINTS.some(prefix => targetPath.startsWith(prefix))
+  ) {
+    return NextResponse.json(
+      { count: 0, next: null, previous: null, results: [] },
+      { status: 200, headers: { 'X-Partner-Endpoint-Missing': 'true' } }
+    );
   }
 
   if (!upstream) {
