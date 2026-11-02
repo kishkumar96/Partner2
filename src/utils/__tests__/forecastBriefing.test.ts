@@ -153,3 +153,40 @@ describe('forecastCsvRows', () => {
     ).toEqual(['Vanuatu', 'A', 'B', 'C', 'D']);
   });
 });
+
+describe('forecastCsvRows: the national row and area codes', () => {
+  // As REF reports Wati 18 Oct 12:00 for the Cook Islands: the national row is milder than two areas
+  const { toArea } = jest.requireActual('../forecastExposure');
+  const exposure = {
+    national: toArea(
+      { Region: 'Cook Islands', Overall_Winds: 'Possible Gale Winds' },
+      'Cook Islands'
+    ),
+    regions: [
+      toArea({ Region: 'Mangaia', Region_ID: '12', Overall_Winds: 'Gale Winds' }, 'Mangaia'),
+      toArea(
+        { Region: 'Aitutaki', Region_ID: '9', Overall_Winds: 'Possible Gale Winds' },
+        'Aitutaki'
+      ),
+    ],
+  } as never;
+
+  it('gives the country its strongest area’s wind, and each area its code', () => {
+    const rows = forecastCsvRows(exposure);
+    const header = rows.find(row => row[0] === 'area')!;
+    expect(header.slice(0, 3)).toEqual(['area', 'area_code', 'strongest_forecast_wind']);
+    const body = rows.slice(rows.indexOf(header) + 1);
+    expect(body.map(row => row.slice(0, 3))).toEqual([
+      ['Cook Islands', '', 'Gale Winds'],
+      ['Mangaia', '12', 'Gale Winds'],
+      ['Aitutaki', '9', 'Possible Gale Winds'],
+    ]);
+  });
+
+  it('says when the run’s completion time is not recorded', () => {
+    expect(forecastCsvRows(exposure).find(row => row[0] === 'run_completed')).toEqual([
+      'run_completed',
+      'not recorded',
+    ]);
+  });
+});

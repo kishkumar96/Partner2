@@ -3,6 +3,7 @@ import {
   type ExposureArea,
   type ExposureTotals,
   type ForecastExposure,
+  WIND_DANGER_ORDER,
 } from './forecastExposure';
 
 /** The framing every REF figure, export and screenshot carries. */
@@ -117,18 +118,28 @@ export function forecastCsvRows(
     [`Rapid Exposure Forecast: ${FORECAST_SIGNAL}`],
     ['event', meta.eventName ?? ''],
     ['forecast_track_issued', meta.issuedAt ?? ''],
-    ['run_completed', meta.runCompletedAt ?? ''],
+    ['run_completed', meta.runCompletedAt || 'not recorded'],
     ['exported', meta.exportedAt ?? ''],
     [],
-    ['area', 'strongest_forecast_wind', ...CSV_COLUMNS.map(([name]) => name)],
+    ['area', 'area_code', 'strongest_forecast_wind', ...CSV_COLUMNS.map(([name]) => name)],
   ];
+  // The country's strongest wind is the strongest of any of its areas. REF's national row can
+  // carry a milder band ("Possible Gale Winds" while Mangaia and Mauke were "Gale Winds").
+  const rank = (band: string | null | undefined) =>
+    band ? (WIND_DANGER_ORDER as readonly string[]).indexOf(band) : -1;
+  const strongest = [exposure.national?.overallWinds, ...exposure.regions.map(r => r.overallWinds)]
+    .filter((band): band is string => !!band)
+    .sort((a, b) => rank(b) - rank(a))[0];
   const areas: ExposureArea[] = [
-    ...(exposure.national ? [exposure.national] : []),
+    ...(exposure.national
+      ? [{ ...exposure.national, overallWinds: strongest ?? exposure.national.overallWinds }]
+      : []),
     ...exposure.regions,
   ];
   for (const area of areas) {
     rows.push([
       area.name,
+      area.code ?? '',
       area.overallWinds ?? '',
       ...CSV_COLUMNS.map(([, pick]) => csvNumber(pick(area))),
     ]);

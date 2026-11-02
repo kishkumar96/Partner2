@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
+import { menuPlacement } from '@/utils/menuPlacement';
 import { ChevronDown, Download, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
@@ -1657,7 +1658,7 @@ export default function ExportButtons({
   const menuRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1665,7 +1666,7 @@ export default function ExportButtons({
     // drawn on the page instead, under the button (as the Tools menu is)
     const place = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
-      if (rect) setMenuPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+      if (rect) setMenuPosition(menuPlacement(rect, 288));
     };
     place();
     const onPointerDown = (event: MouseEvent) => {
@@ -1745,7 +1746,7 @@ export default function ExportButtons({
                 ref={popupRef}
                 role="menu"
                 aria-label="Export"
-                style={{ position: 'fixed', top: menuPosition.top, right: menuPosition.right }}
+                style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left }}
                 className="z-[70] w-72 max-w-[calc(100vw-1rem)] space-y-0.5 rounded-xl border border-slate-600/60 bg-slate-900 p-1.5 shadow-xl"
               >
                 <button

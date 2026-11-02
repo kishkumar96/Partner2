@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { menuPlacement } from '@/utils/menuPlacement';
 import { ChevronDown, Wrench } from 'lucide-react';
 
 export interface ToolsMenuItem {
@@ -26,7 +27,7 @@ export default function ToolsMenu({ items, className = '' }: ToolsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const menuId = useId();
   const visibleItems = items.filter(item => !item.hidden);
 
@@ -36,7 +37,7 @@ export default function ToolsMenu({ items, className = '' }: ToolsMenuProps) {
     // positioned menu, so it is portalled and placed from the button's rect.
     const place = () => {
       const rect = rootRef.current?.getBoundingClientRect();
-      if (rect) setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+      if (rect) setPosition(menuPlacement(rect, 256));
     };
     place();
     const onPointerDown = (event: MouseEvent) => {
@@ -87,7 +88,7 @@ export default function ToolsMenu({ items, className = '' }: ToolsMenuProps) {
             id={menuId}
             role="menu"
             aria-label="Tools"
-            style={{ position: 'fixed', top: position.top, right: position.right }}
+            style={{ position: 'fixed', top: position.top, left: position.left }}
             className="z-[70] w-64 max-w-[calc(100vw-1rem)] rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur"
           >
             {visibleItems.map(item => (

@@ -40,6 +40,8 @@ export interface ExposureTotals {
 
 export interface ExposureArea {
   name: string;
+  /** The area's id in REF's tables (Region_ID), for joining to map layers; national rows have none */
+  code?: string | null;
   overallWinds: string | null;
   minWindKmph: number | null;
   maxWindKmph: number | null;
@@ -202,6 +204,7 @@ function bandTotals(row: Row): ExposureTotals {
 export function toArea(row: Row, name: string): ExposureArea {
   return {
     name,
+    code: text(row.Region_ID) || text(row['Region.ID']) || null,
     overallWinds: text(row.Overall_Winds) || null,
     minWindKmph: optionalNum(row.Min_WindSpeed_kmph),
     maxWindKmph: optionalNum(row.Max_WindSpeed_kmph),

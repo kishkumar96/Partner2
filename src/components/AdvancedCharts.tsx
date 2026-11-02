@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 
 import { RegionalSummary, RegionalSummaryBySector } from '@/types';
+import { sectorLabel } from '@/utils/sectorDisplay';
 import { SEVERITY_COLORS, UI_COLORS } from '@/theme/colors';
 import { formatMillionsUsd } from '@/utils/formatters';
 
@@ -82,7 +83,24 @@ const AdvancedCharts = memo(function AdvancedCharts({
       .slice(0, maxRegions)
       .map(r => r.name);
 
-    const sectors = ['Residential', 'Infrastructure', 'Public', 'Productive', 'Education', 'Other'];
+    // Every sector the data has: the usual ones in their usual order, then any others, then the
+    // unclassified loss last. A fixed list of six left out Meena's "Unknown" ($10.89M of $45.79M).
+    const usualOrder = [
+      'Residential',
+      'Infrastructure',
+      'Public',
+      'Productive',
+      'Education',
+      'Other',
+    ];
+    const present = [...new Set(regionalSummaryBySector.map(r => r.Sector).filter(Boolean))];
+    const rank = (sector: string) =>
+      sectorLabel(sector) === 'Unclassified'
+        ? usualOrder.length + 1
+        : usualOrder.includes(sector)
+          ? usualOrder.indexOf(sector)
+          : usualOrder.length;
+    const sectors = present.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 
     // Create matrix data
     const matrix = sectors.map(sector => {
@@ -98,7 +116,7 @@ const AdvancedCharts = memo(function AdvancedCharts({
     const maxValue = flatMatrix.length ? Math.max(...flatMatrix) : 0;
 
     return {
-      sectors,
+      sectors: sectors.map(sectorLabel),
       regions: regionsByLoss,
       matrix,
       maxValue,
