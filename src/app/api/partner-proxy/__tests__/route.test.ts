@@ -37,6 +37,10 @@ describe('partner-proxy forwarded headers', () => {
     expect(response.status).toBe(200);
     // The browser cannot see the upstream request; this header says where the data came from
     expect(response.headers.get('x-partner-upstream')).toBeTruthy();
+    // Kept briefly in the viewer's own browser only, never in a shared cache
+    expect(response.headers.get('cache-control')).toBe(
+      'private, max-age=120, stale-while-revalidate=600'
+    );
     const sent = new Headers(
       (fetchMock.mock.calls[0] as unknown[])[1] &&
         ((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).headers

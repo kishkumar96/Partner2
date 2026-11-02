@@ -17,6 +17,10 @@ const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.
 
 // WMS responses are immutable for a given request -cache 5 minutes in the browser / CDN.
 const WMS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=60';
+// API data: kept two minutes in the viewer's own browser (private: some countries need a
+// login, so no shared cache), then served while it refreshes. A new advisory shows within
+// minutes; a reload or mode switch no longer waits on the network.
+const PARTNER_DATA_CACHE_CONTROL = 'private, max-age=120, stale-while-revalidate=600';
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 20000;
 const DEFAULT_PARTNER_DATA_TIMEOUT_MS = 60000;
 const DEFAULT_THREDDS_WMS_TIMEOUT_MS = 30000;
@@ -196,6 +200,9 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   // Add browser/CDN caching for WMS tile requests (GET only, successful responses)
   if (request.method === 'GET' && upstream.status === 200 && isThreddsRequest) {
     responseHeaders.set('Cache-Control', WMS_CACHE_CONTROL);
+  }
+  if (request.method === 'GET' && upstream.status === 200 && isPartnerDataRequest) {
+    responseHeaders.set('Cache-Control', PARTNER_DATA_CACHE_CONTROL);
   }
 
   return new Response(upstream.body, {

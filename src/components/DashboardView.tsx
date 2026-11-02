@@ -1630,16 +1630,26 @@ export default function DashboardView({
       },
       {
         title: 'Control the Map View',
-        body: 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
+        body:
+          analysisMode === 'forecast'
+            ? 'Open Tools → Map controls to choose which forecast layers are drawn: the track, wind swaths, distance rings, facilities and floodplains. Tools also holds the context, country comparison and this tour.'
+            : 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
         selector: '[data-tour="tools-menu"]',
         category: 'Map',
         targetLabel: 'Tools menu',
         placement: 'bottom',
-        tips: [
-          'Switch between Loss (damage) and Wind (intensity) visualization modes',
-          'Adjust layer opacity to see through overlays to the basemap',
-          'Toggle individual layers on/off to focus on specific data',
-        ],
+        // Forecast has no loss/wind shading switch and no opacity control
+        tips:
+          analysisMode === 'forecast'
+            ? [
+                'Turn forecast layers on and off to see what is exposed where',
+                'Click an area or facility on the map for its forecast wind and exposure',
+              ]
+            : [
+                'Switch between Loss (damage) and Wind (intensity) visualization modes',
+                'Adjust layer opacity to see through overlays to the basemap',
+                'Toggle individual layers on/off to focus on specific data',
+              ],
         keyboardShortcut: 'M',
       },
     ];
@@ -1699,11 +1709,17 @@ export default function DashboardView({
       category: 'Analysis',
       targetLabel: 'Data workspace',
       placement: 'top',
-      tips: [
-        'Regional Impacts: District-level summaries with sortable columns',
-        'Buildings & Roads: Asset-level damage with coordinates',
-        'Analytics: Comparison charts across regions and sectors',
-      ],
+      tips:
+        analysisMode === 'forecast'
+          ? [
+              'Exposure by area: people, buildings and facilities under each wind band',
+              'Export the tables as CSV for planning',
+            ]
+          : [
+              'Regional Impacts: District-level summaries with sortable columns',
+              'Buildings & Roads: Asset-level damage with coordinates',
+              'Analytics: Comparison charts across regions and sectors',
+            ],
     });
 
     // Conditionally add asset damage steps if data is available
@@ -1741,7 +1757,8 @@ export default function DashboardView({
     if (cycloneForecast && cycloneForecast.length > 0) {
       baseSteps.push({
         title: 'Cyclone Track Animation',
-        body: 'Watch the cyclone evolution over time with animated wind swaths, intensity changes, and forecast prediction cone.',
+        // There is no prediction cone: REF gives one deterministic track
+        body: 'Watch the storm move along its track over time, with its wind strength and the area it covers at each step.',
         selector: '[data-tour="story-mode-button"]',
         category: 'Map',
         targetLabel: 'Animation controls',
@@ -3750,8 +3767,11 @@ export default function DashboardView({
 
               return (
                 <>
-                  {/* The $ loss legend doesn't apply to a forecast, which has its own legend */}
-                  {showMapOverlays && !(forecastExposure && !isPlanningMode) && (
+                  {/* The $ loss / wind legend describes the area shading: a forecast has its own
+                      legend, and Scenarios and History draw no area shading (they have the
+                      flood-depth legend), where this legend described nothing and covered the
+                      scenario card */}
+                  {showMapOverlays && !isPlanningMode && !forecastExposure && (
                     <UnifiedMapLegend
                       mode={mapStyle}
                       visible={true}
