@@ -1658,6 +1658,20 @@ const PARTNER_RESPONSE_TTL_MS = 5 * 60_000;
 /** Damaged-building geometry can be 30 MB; holding that twice costs more than fetching it again */
 const PARTNER_RESPONSE_CACHE_MAX_CHARS = 12_000_000;
 const partnerResponseCache = new Map<string, { at: number; body: string }>();
+/**
+ * API paths that answered 404 in this session. The shared API has no risk_scenario tables, so
+ * without this every scenario switch asked again, logged two or three 404s, and only then read
+ * the published copy on Wasabi.
+ */
+const missingPartnerPaths = new Set<string>();
+
+function partnerPathOf(url: string): string {
+  try {
+    return new URL(url, 'http://local').pathname.replace(/\/+$/, '');
+  } catch {
+    return url;
+  }
+}
 
 function partnerResponseCacheEnabled(): boolean {
   return typeof window !== 'undefined' && process.env.NODE_ENV !== 'test';
@@ -1665,6 +1679,7 @@ function partnerResponseCacheEnabled(): boolean {
 
 async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promise<unknown> {
   if (!partnerResponseCacheEnabled()) return fetchPartnerCollectionUncached(url, signal);
+  if (missingPartnerPaths.has(partnerPathOf(url))) return null;
   const hit = partnerResponseCache.get(url);
   if (hit && Date.now() - hit.at < PARTNER_RESPONSE_TTL_MS) return JSON.parse(hit.body);
   const payload = await fetchPartnerCollectionUncached(url, signal);
@@ -1704,6 +1719,9 @@ async function fetchPartnerCollectionUncached(url: string, signal?: AbortSignal)
   try {
     const response = await fetch(normalizePartnerProxyUrl(url), { signal, cache: 'no-store' });
     if (!response.ok) {
+      if (response.status === 404 && partnerResponseCacheEnabled()) {
+        missingPartnerPaths.add(partnerPathOf(url));
+      }
       return null;
     }
 
@@ -1874,10 +1892,7 @@ export async function fetchHazardScenarioCurve(
     if (!mapping.scopedUrls) {
       return null;
     }
-    const params = new URLSearchParams({
-      risk_information: String(riskInformationId),
-      page_size: '200',
-    });
+    const params = new URLSearchParams({ risk_information: String(riskInformationId) });
     let rows = toArrayPayload(
       await fetchPartnerCollection(`${mapping.scopedUrls.risk_scenario}&${params}`, signal)
     );
