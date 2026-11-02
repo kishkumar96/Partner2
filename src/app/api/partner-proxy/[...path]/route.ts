@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { partnerTargetPath } from '@/utils/partnerProxyPath';
 
 const PARTNER_API_BASE = process.env.PARTNER_API_BASE_URL ?? 'http://localhost:8000';
+
+const FORWARDED_REQUEST_HEADERS = new Set([
+  'accept',
+  'accept-language',
+  'authorization',
+  'content-type',
+  'if-modified-since',
+  'if-none-match',
+  'range',
+  'user-agent',
+]);
 const THREDDS_BASE = process.env.THREDDS_BASE_URL ?? 'https://gemthreddshpc.spc.int';
 
 // WMS responses are immutable for a given request -cache 5 minutes in the browser / CDN.
@@ -44,14 +55,12 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   // Partner API data endpoints (risk_information, event, etc.) can be large/slow on pagination.
   const isPartnerDataRequest = targetPath.startsWith('partner_api/');
 
-  // Forward a safe subset of request headers, omitting host which would confuse the upstream.
+  // Forward only the headers the upstream needs. Passing on everything sent our host name in
+  // X-Forwarded-Host, which the shared API (pacific-disaster-api.spc.int) answers with 400 Bad
+  // Request, and sent the browser's cookies, our login session included, to another server.
   const forwardHeaders = new Headers();
   for (const [key, value] of request.headers.entries()) {
-    const lower = key.toLowerCase();
-    if (lower === 'host' || lower === 'connection' || lower === 'transfer-encoding') {
-      continue;
-    }
-    forwardHeaders.set(key, value);
+    if (FORWARDED_REQUEST_HEADERS.has(key.toLowerCase())) forwardHeaders.set(key, value);
   }
   // Ask the upstream for an uncompressed body. This route re-streams the
   // response with content-encoding/length stripped; a gzip-encoded upstream
