@@ -131,8 +131,13 @@ export default function EventPicker({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         title="Choose the storm, advisory or event shown"
-        className="mt-0.5 inline-flex max-w-full items-center gap-1 rounded-md text-left text-xs leading-snug text-slate-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-default disabled:hover:text-slate-200"
+        // A bordered button with its own label: drawn as plain text, it read as a status line
+        // and nobody found that it opens the list
+        className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-sky-400/40 bg-sky-500/10 px-2 py-0.5 text-left text-xs leading-snug text-slate-100 transition-colors hover:border-sky-300/70 hover:bg-sky-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-default disabled:border-slate-600/50 disabled:bg-transparent"
       >
+        <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+          Event
+        </span>
         <span className="min-w-0 truncate font-semibold">{label}</span>
         {total > 0 && (
           <ChevronDown
