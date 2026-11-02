@@ -174,6 +174,12 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
   }
 
   const responseHeaders = new Headers();
+  // Which server answered: the browser only sees this proxy, so its Network tab cannot show it
+  try {
+    responseHeaders.set('X-Partner-Upstream', new URL(targetBase).host);
+  } catch {
+    // an unparsable base is reported by the fetch itself
+  }
   for (const [key, value] of upstream.headers.entries()) {
     const lower = key.toLowerCase();
     if (
