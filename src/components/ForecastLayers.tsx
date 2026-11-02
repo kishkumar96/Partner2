@@ -40,6 +40,16 @@ function escapeHtml(value: unknown): string {
   );
 }
 
+/**
+ * REF's distance band, e.g. "Within 150km". Some runs wrote the band without its number
+ * ("Within km of track"), which read as a blank in the popup.
+ */
+function trackDistanceText(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return `${formatCount(value)} km`;
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /\d/.test(text) ? text : 'not recorded';
+}
+
 function count(value: unknown): string {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? formatCount(parsed) : '0';
@@ -224,7 +234,7 @@ function addOverlay(
               ['Health facilities', count(props.Health_Facilities ?? props.Health_Facilties)],
               ['Schools', count(props.Schools)],
               ['Evacuation centres', count(props.Evacuation_Centres)],
-              ['Distance from track', String(props.Track_distance ?? '')],
+              ['Distance from track', trackDistanceText(props.Track_distance)],
             ],
             props.WindSpeed_kmph ? `Forecast winds up to ${props.WindSpeed_kmph} km/h` : null
           )
@@ -279,7 +289,7 @@ function addOverlay(
               ],
               ['Area', String(props.Region ?? '')],
               ['Forecast wind', props.WindSpeed_kmph ? `${props.WindSpeed_kmph} km/h` : '–'],
-              ['Distance from track', String(props.Track_distance ?? '')],
+              ['Distance from track', trackDistanceText(props.Track_distance)],
               ['In a floodplain', inFloodplain ? 'Yes' : 'No'],
             ],
             props.Danger ? String(props.Danger) : null

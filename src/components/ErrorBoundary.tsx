@@ -124,20 +124,9 @@ class ErrorBoundary extends Component<Props, State> {
 
             <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
               <p className="text-sm text-blue-300">
-                <strong>Need help?</strong> If this problem persists, please{' '}
-                <a href="mailto:support@example.com" className="underline hover:text-blue-200">
-                  contact support
-                </a>{' '}
-                or{' '}
-                <a
-                  href="https://github.com/yourusername/yourrepo/issues"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-blue-200"
-                >
-                  report an issue
-                </a>
-                .
+                {/* The links here were placeholders (support@example.com, a template GitHub repo) */}
+                <strong>Need help?</strong> If this problem persists, reload the page; if it still
+                fails, tell the dashboard team what you were doing when it happened.
               </p>
             </div>
           </div>

@@ -11,6 +11,10 @@ interface CountryPageProps {
   params: Promise<{ country: string }>;
 }
 
+// Only the listed countries exist: any other slug is a 404 before the page starts streaming.
+// Rendered with notFound() instead, the root loading screen had already sent status 200.
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   const tenantCountryCode = getTenantCountryCodeFromEnv();
   if (tenantCountryCode) {

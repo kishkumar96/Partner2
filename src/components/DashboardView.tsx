@@ -280,6 +280,10 @@ export default function DashboardView({
   const [viewModeChoice, setViewModeChoice] = useState<'event' | 'planning' | null>(
     urlState.viewMode ?? null
   );
+  // Set by a deliberate change of mode, event or scenario: the next address update adds a history
+  // entry, so the browser's Back button returns to the previous view instead of leaving the app.
+  // Defaults the page settles on itself still replace the address.
+  const userNavigatedRef = useRef(false);
   const initialShowMapControls = urlState.showMapControls ?? true;
   const [showFilters, setShowFilters] = useState(
     initialShowMapControls ? false : (urlState.showFilters ?? false)
@@ -680,8 +684,25 @@ export default function DashboardView({
 
         lastReplacedUrlRef.current = newUrl;
 
-        // Use replace to avoid cluttering browser history
-        router.replace(newUrl, { scroll: false });
+        const viewOf = (state: Partial<MapURLState>) =>
+          JSON.stringify([
+            state.events ?? [],
+            state.viewMode ?? null,
+            state.hazardScenarioProduct ?? null,
+            state.hazardScenarioSlr ?? null,
+            state.hazardScenarioReturnPeriod ?? null,
+            state.hazardScenarioEvent ?? null,
+          ]);
+        const changesView =
+          viewOf(deserializeMapState(new URLSearchParams(window.location.search))) !==
+          viewOf(fullState);
+        if (userNavigatedRef.current && changesView) {
+          userNavigatedRef.current = false;
+          router.push(newUrl, { scroll: false });
+        } else {
+          // Map moves, panels and defaults: no history entry for those
+          router.replace(newUrl, { scroll: false });
+        }
       }, 300);
     },
     [
@@ -1076,230 +1097,6 @@ export default function DashboardView({
     },
     []
   );
-
-  const tourSteps = useMemo<GuidedTourStep[]>(() => {
-    const baseSteps: GuidedTourStep[] = [
-      {
-        title: `Welcome to the ${process.env.NEXT_PUBLIC_APP_NAME || 'Tropical Cyclone Rapid Impact Assessment Tool'}`,
-        body: 'This overview bar gives you the current country context, the active dashboard lens, and the fastest path into the rest of the workflow.',
-        selector: '[data-tour="dashboard-hero"]',
-        category: 'Overview',
-        targetLabel: 'Dashboard header',
-        placement: 'bottom',
-        tips: [
-          'Click the country name to switch between Pacific Island nations',
-          'The event timestamp shows when disaster data was captured',
-        ],
-      },
-      {
-        title: 'Filter Your Data',
-        body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
-        selector: '[data-tour="filter-primary-controls"]',
-        category: 'Inputs',
-        targetLabel: 'Filter controls',
-        placement: 'right',
-        tips: [
-          'Start by selecting an event to see available disasters',
-          'Combine hazard and sector filters for targeted analysis',
-          'The map updates automatically as you apply filters',
-        ],
-      },
-      {
-        title: 'Control the Map View',
-        body: 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
-        selector: '[data-tour="tools-menu"]',
-        category: 'Map',
-        targetLabel: 'Tools menu',
-        placement: 'bottom',
-        tips: [
-          'Switch between Loss (damage) and Wind (intensity) visualization modes',
-          'Adjust layer opacity to see through overlays to the basemap',
-          'Toggle individual layers on/off to focus on specific data',
-        ],
-        keyboardShortcut: 'M',
-      },
-    ];
-
-    // Add map visualization mode step (if map controls available)
-    baseSteps.push({
-      title: 'Map Visualization Modes',
-      body: 'Switch between Loss mode (showing damage patterns) and Wind mode (showing wind speed intensity). Each mode reveals different aspects of disaster impacts.',
-      selector: '[data-tour="map-style-selector"]',
-      category: 'Map',
-      targetLabel: 'Visualization mode',
-      placement: 'right',
-      tips: [
-        'Loss mode: Best for seeing damaged buildings and infrastructure',
-        'Wind mode: Displays wind speed shading from THREDDS server data',
-      ],
-    });
-
-    // Add layer opacity step
-    baseSteps.push({
-      title: 'Adjust Layer Transparency',
-      body: 'Control the opacity of overlay layers to balance visibility between disaster data and the underlying basemap.',
-      selector: '[data-tour="opacity-control"]',
-      category: 'Map',
-      targetLabel: 'Layer opacity',
-      placement: 'right',
-      tips: [
-        'Lower opacity helps see street names and basemap features',
-        'Higher opacity emphasizes the disaster impact visualization',
-      ],
-    });
-
-    baseSteps.push({
-      title: 'Dive into the Data',
-      body: 'The workspace holds detailed tables and charts where you move from visual scanning into actual evidence.',
-      selector: '[data-tour="data-workspace-panel"]',
-      category: 'Analysis',
-      targetLabel: 'Data workspace',
-      placement: 'top',
-      tips: [
-        'Regional Impacts: District-level summaries with sortable columns',
-        'Buildings & Roads: Asset-level damage with coordinates',
-        'Analytics: Comparison charts across regions and sectors',
-      ],
-    });
-
-    // Conditionally add asset damage steps if data is available
-    if (damagedBuildings || damagedRoads) {
-      baseSteps.push({
-        title: 'Inspect Asset-Level Damage',
-        body: 'View individual damaged buildings and road segments with severity ratings, precise coordinates, and damage classifications.',
-        selector: '[data-tour="asset-tabs"]',
-        category: 'Analysis',
-        targetLabel: 'Asset inspection',
-        placement: 'top',
-        tips: [
-          'Click any row to zoom the map to that asset location',
-          'Use search and sort to find specific damage patterns',
-          'Export filtered results for detailed field assessments',
-        ],
-      });
-    }
-
-    baseSteps.push({
-      title: 'Get the Big Picture',
-      body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
-      selector: '[data-tour="summary-panel"]',
-      category: 'Summary',
-      targetLabel: 'Summary panel',
-      placement: 'left',
-      tips: [
-        'Headline numbers update instantly as you filter data',
-        'Charts show impact distribution across regions and sectors',
-        'Perfect for creating executive summaries',
-      ],
-    });
-
-    // Conditionally add cyclone animation step if forecast data exists
-    if (cycloneForecast && cycloneForecast.length > 0) {
-      baseSteps.push({
-        title: 'Cyclone Track Animation',
-        body: 'Watch the cyclone evolution over time with animated wind swaths, intensity changes, and forecast prediction cone.',
-        selector: '[data-tour="story-mode-button"]',
-        category: 'Map',
-        targetLabel: 'Animation controls',
-        placement: 'right',
-        tips: [
-          'Play/pause to control the animation timeline',
-          'Click any timestep to jump to that moment',
-          "Wind glow effects show the storm's intensity visually",
-        ],
-        keyboardShortcut: 'Space',
-      });
-    }
-
-    baseSteps.push({
-      title: 'Share & Export Your Findings',
-      body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
-      selector: '[data-tour="export-controls"]',
-      category: 'Output',
-      targetLabel: 'Export controls',
-      placement: 'bottom',
-      tips: [
-        'Map Export: High-res PNG with current filters applied',
-        'PDF Preview: Full report with maps, charts, and tables',
-        'Data Export: CSV/Excel for further analysis in other tools',
-      ],
-      keyboardShortcut: 'E',
-    });
-
-    return baseSteps;
-  }, [cycloneForecast, damagedBuildings, damagedRoads]);
-
-  useEffect(() => {
-    if (!isTourOpen) return;
-
-    const currentStep = tourSteps[tourStepIndex];
-    if (!currentStep) return;
-
-    switch (currentStep.selector) {
-      case '[data-tour="dashboard-hero"]':
-        setShowFilters(false);
-        setShowMapControls(false);
-        setShowSummary(false);
-        break;
-      case '[data-tour="filter-primary-controls"]':
-        openFilterPanel('filters');
-        setShowSummary(false);
-        break;
-      case '[data-tour="tools-menu"]':
-        openMapPanel();
-        setShowSummary(false);
-        break;
-      case '[data-tour="map-style-selector"]':
-        // Keep map panel open to show the visualization mode selector
-        openMapPanel();
-        setShowSummary(false);
-        break;
-      case '[data-tour="opacity-control"]':
-        // Keep map panel open to show opacity slider
-        openMapPanel();
-        setShowSummary(false);
-        break;
-      case '[data-tour="summary-panel"]':
-        openSummaryPanel();
-        break;
-      case '[data-tour="data-workspace-panel"]':
-        setShowAnalytics(true);
-        setShowFilters(false);
-        setShowMapControls(false);
-        setShowSummary(false);
-        break;
-      case '[data-tour="asset-tabs"]':
-        // Ensure analytics workspace is open and visible
-        setShowAnalytics(true);
-        setShowFilters(false);
-        setShowMapControls(false);
-        setShowSummary(false);
-        break;
-      case '[data-tour="story-mode-button"]':
-        // Keep cyclone controls visible if available
-        if (cycloneForecast && cycloneForecast.length > 0) {
-          openMapPanel();
-          setShowCycloneControls(true);
-        }
-        setShowSummary(false);
-        break;
-      case '[data-tour="export-controls"]':
-        setShowFilters(false);
-        setShowMapControls(false);
-        setShowSummary(false);
-        break;
-      default:
-        break;
-    }
-  }, [
-    isTourOpen,
-    tourStepIndex,
-    tourSteps,
-    openFilterPanel,
-    openMapPanel,
-    openSummaryPanel,
-    cycloneForecast,
-  ]);
 
   const encodeCanvasToBlob = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob> => {
     if (typeof canvas.toBlob === 'function') {
@@ -1816,6 +1613,234 @@ export default function DashboardView({
       ? 'forecast'
       : 'assessment';
 
+  // The guided tour: its steps depend on the mode, so they come after it
+  const tourSteps = useMemo<GuidedTourStep[]>(() => {
+    const baseSteps: GuidedTourStep[] = [
+      {
+        title: `Welcome to ${process.env.NEXT_PUBLIC_APP_NAME || 'Pacific Disaster Impact & Exposure'}`,
+        body: 'The header says what you are looking at: the country, and under it the storm, advisory or event on screen. The mode switch beside it chooses the kind of evidence: a forecast, a post-disaster analysis, a planning scenario or a past event.',
+        selector: '[data-tour="dashboard-hero"]',
+        category: 'Overview',
+        targetLabel: 'Dashboard header',
+        placement: 'bottom',
+        tips: [
+          'Press EVENT to choose a storm, advisory or past event; advisories are listed under their storm',
+          'An amber note beside it says when the forecast on screen is not the latest, or is getting old',
+        ],
+      },
+      {
+        title: 'Filter Your Data',
+        body: 'Use filters to narrow the analysis by event, hazard, sector, date range, and geography before you inspect the map or export a report.',
+        selector: '[data-tour="filter-primary-controls"]',
+        category: 'Inputs',
+        targetLabel: 'Filter controls',
+        placement: 'right',
+        tips: [
+          'Start by selecting an event to see available disasters',
+          'Combine hazard and sector filters for targeted analysis',
+          'The map updates automatically as you apply filters',
+        ],
+      },
+      {
+        title: 'Control the Map View',
+        body: 'Open Tools → Map controls to change the visual story: shading mode, visible overlays, opacity, cyclone playback, and the hazard scenario. Tools also holds metadata, country comparison and this tour.',
+        selector: '[data-tour="tools-menu"]',
+        category: 'Map',
+        targetLabel: 'Tools menu',
+        placement: 'bottom',
+        tips: [
+          'Switch between Loss (damage) and Wind (intensity) visualization modes',
+          'Adjust layer opacity to see through overlays to the basemap',
+          'Toggle individual layers on/off to focus on specific data',
+        ],
+        keyboardShortcut: 'M',
+      },
+    ];
+
+    // Shading mode and opacity are Post Disaster, Scenario and History controls; Forecast has
+    // its own overlay list, so these two steps would point at nothing there
+    if (analysisMode !== 'forecast') {
+      baseSteps.push({
+        title: 'Map Visualization Modes',
+        body: 'Switch between Loss mode (showing damage patterns) and Wind mode (showing wind speed intensity). Each mode reveals different aspects of disaster impacts.',
+        selector: '[data-tour="map-style-selector"]',
+        category: 'Map',
+        targetLabel: 'Visualization mode',
+        placement: 'right',
+        tips: [
+          'Loss mode: Best for seeing damaged buildings and infrastructure',
+          'Wind mode: Displays wind speed shading from THREDDS server data',
+        ],
+      });
+
+      // Add layer opacity step
+      baseSteps.push({
+        title: 'Adjust Layer Transparency',
+        body: 'Control the opacity of overlay layers to balance visibility between disaster data and the underlying basemap.',
+        selector: '[data-tour="opacity-control"]',
+        category: 'Map',
+        targetLabel: 'Layer opacity',
+        placement: 'right',
+        tips: [
+          'Lower opacity helps see street names and basemap features',
+          'Higher opacity emphasizes the disaster impact visualization',
+        ],
+      });
+    }
+
+    baseSteps.push({
+      title: 'Dive into the Data',
+      body: 'The workspace holds detailed tables and charts where you move from visual scanning into actual evidence.',
+      selector: '[data-tour="data-workspace-panel"]',
+      category: 'Analysis',
+      targetLabel: 'Data workspace',
+      placement: 'top',
+      tips: [
+        'Regional Impacts: District-level summaries with sortable columns',
+        'Buildings & Roads: Asset-level damage with coordinates',
+        'Analytics: Comparison charts across regions and sectors',
+      ],
+    });
+
+    // Conditionally add asset damage steps if data is available
+    if (damagedBuildings || damagedRoads) {
+      baseSteps.push({
+        title: 'Inspect Asset-Level Damage',
+        body: 'View individual damaged buildings and road segments with severity ratings, precise coordinates, and damage classifications.',
+        selector: '[data-tour="asset-tabs"]',
+        category: 'Analysis',
+        targetLabel: 'Asset inspection',
+        placement: 'top',
+        tips: [
+          'Click any row to zoom the map to that asset location',
+          'Use search and sort to find specific damage patterns',
+          'Export filtered results for detailed field assessments',
+        ],
+      });
+    }
+
+    baseSteps.push({
+      title: 'Get the Big Picture',
+      body: 'The summary panel condenses the current selection into headline metrics, insights, and supporting charts for rapid briefing.',
+      selector: '[data-tour="summary-panel"]',
+      category: 'Summary',
+      targetLabel: 'Summary panel',
+      placement: 'left',
+      tips: [
+        'Headline numbers update instantly as you filter data',
+        'Charts show impact distribution across regions and sectors',
+        'Perfect for creating executive summaries',
+      ],
+    });
+
+    // Conditionally add cyclone animation step if forecast data exists
+    if (cycloneForecast && cycloneForecast.length > 0) {
+      baseSteps.push({
+        title: 'Cyclone Track Animation',
+        body: 'Watch the cyclone evolution over time with animated wind swaths, intensity changes, and forecast prediction cone.',
+        selector: '[data-tour="story-mode-button"]',
+        category: 'Map',
+        targetLabel: 'Animation controls',
+        placement: 'right',
+        tips: [
+          'Play/pause to control the animation timeline',
+          'Click any timestep to jump to that moment',
+          "Wind glow effects show the storm's intensity visually",
+        ],
+        keyboardShortcut: 'Space',
+      });
+    }
+
+    baseSteps.push({
+      title: 'Share & Export Your Findings',
+      body: 'When the view is ready, export the map, preview the PDF report, or download the structured data. This is the handoff point for reporting.',
+      selector: '[data-tour="export-controls"]',
+      category: 'Output',
+      targetLabel: 'Export controls',
+      placement: 'bottom',
+      tips: [
+        'Map Export: High-res PNG with current filters applied',
+        'PDF Preview: Full report with maps, charts, and tables',
+        'Data Export: CSV/Excel for further analysis in other tools',
+      ],
+      keyboardShortcut: 'E',
+    });
+
+    return baseSteps;
+  }, [cycloneForecast, damagedBuildings, damagedRoads, analysisMode]);
+
+  useEffect(() => {
+    if (!isTourOpen) return;
+
+    const currentStep = tourSteps[tourStepIndex];
+    if (!currentStep) return;
+
+    switch (currentStep.selector) {
+      case '[data-tour="dashboard-hero"]':
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="filter-primary-controls"]':
+        openFilterPanel('filters');
+        setShowSummary(false);
+        break;
+      case '[data-tour="tools-menu"]':
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="map-style-selector"]':
+        // Keep map panel open to show the visualization mode selector
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="opacity-control"]':
+        // Keep map panel open to show opacity slider
+        openMapPanel();
+        setShowSummary(false);
+        break;
+      case '[data-tour="summary-panel"]':
+        openSummaryPanel();
+        break;
+      case '[data-tour="data-workspace-panel"]':
+        setShowAnalytics(true);
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="asset-tabs"]':
+        // Ensure analytics workspace is open and visible
+        setShowAnalytics(true);
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      case '[data-tour="story-mode-button"]':
+        // Keep cyclone controls visible if available
+        if (cycloneForecast && cycloneForecast.length > 0) {
+          openMapPanel();
+          setShowCycloneControls(true);
+        }
+        setShowSummary(false);
+        break;
+      case '[data-tour="export-controls"]':
+        setShowFilters(false);
+        setShowMapControls(false);
+        setShowSummary(false);
+        break;
+      default:
+        break;
+    }
+  }, [
+    isTourOpen,
+    tourStepIndex,
+    tourSteps,
+    openFilterPanel,
+    openMapPanel,
+    openSummaryPanel,
+    cycloneForecast,
+  ]);
+
   const assessmentGapInfo = useMemo(
     () =>
       assessmentGap(
@@ -1953,6 +1978,7 @@ export default function DashboardView({
 
   const handleAnalysisModeChange = useCallback(
     (mode: AnalysisMode) => {
+      userNavigatedRef.current = true;
       if (mode === 'forecast' || mode === 'assessment') {
         setViewModeChoice('event');
         const target = mode === 'forecast' ? forecastRecord : assessmentRecord;
@@ -2002,6 +2028,7 @@ export default function DashboardView({
   // Choosing an event or advisory is choosing its mode too, as the mode tabs do
   const handlePickEvent = useCallback(
     (id: string) => {
+      userNavigatedRef.current = true;
       setViewModeChoice('event');
       setModeEventId(id);
       const isModeEvent = (eventId: string) =>
@@ -2014,6 +2041,35 @@ export default function DashboardView({
     },
     [forecastRuns, assessmentRecord]
   );
+
+  // Back and Forward: put the address's mode, event and scenario back. The page reads the address
+  // only when it opens, so without this Back changed the address but not the view.
+  useEffect(() => {
+    const onPopState = () => {
+      const state = deserializeMapState(new URLSearchParams(window.location.search));
+      const events = state.events ?? [];
+      setViewModeChoice(state.viewMode ?? null);
+      if (events.length === 1 && isModeEventId(events[0], forecastRuns, assessmentRecord?.id)) {
+        setModeEventId(events[0]);
+        setFilters(prev => ({ ...prev, selectedEvents: [] }));
+      } else {
+        setModeEventId(null);
+        setFilters(prev => ({ ...prev, selectedEvents: events }));
+      }
+      setHazardScenarioSelection(
+        state.hazardScenarioProduct
+          ? {
+              product: state.hazardScenarioProduct,
+              slrScenarioM: state.hazardScenarioSlr ?? 0,
+              returnPeriodYears: state.hazardScenarioReturnPeriod ?? null,
+              eventLabel: state.hazardScenarioEvent ?? null,
+            }
+          : null
+      );
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [forecastRuns, assessmentRecord]);
 
   // The header's "Active event context" and the Metadata chip both used to
   // read activeCycloneName unconditionally -- for a country like Cook
@@ -3089,7 +3145,7 @@ export default function DashboardView({
                         variant="pill"
                         status={advisoryStatus}
                         onSwitchToLatest={
-                          forecastRecord ? () => setModeEventId(forecastRecord.id) : undefined
+                          forecastRecord ? () => handlePickEvent(forecastRecord.id) : undefined
                         }
                       />
                     )}
@@ -3495,7 +3551,7 @@ export default function DashboardView({
               forecastSetup={{
                 runs: forecastRuns,
                 activeRunId: activeEventRecord?.id ?? null,
-                onRunSelect: setModeEventId,
+                onRunSelect: handlePickEvent,
                 onOpenLayers: () => {
                   openMapPanel();
                   setShowSummary(false);
@@ -3610,7 +3666,10 @@ export default function DashboardView({
               hazardScenarioLayers={isPlanningMode ? planningScenarioLayers : []}
               hazardScenarioSelection={effectiveHazardScenario}
               hazardScenarioCurve={hazardScenarioCurve}
-              onHazardScenarioChange={setHazardScenarioSelection}
+              onHazardScenarioChange={selection => {
+                userNavigatedRef.current = true;
+                setHazardScenarioSelection(selection);
+              }}
             />
           </div>
         </div>
@@ -3914,7 +3973,7 @@ export default function DashboardView({
                   latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
                   statusShownAbove: true,
                   onSwitchToLatest: forecastRecord
-                    ? () => setModeEventId(forecastRecord.id)
+                    ? () => handlePickEvent(forecastRecord.id)
                     : undefined,
                   onSelectAdvisory: setModeEventId,
                 }}
