@@ -1726,11 +1726,13 @@ export default function ExportButtons({
             type="button"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
+            aria-label="Export"
+            title="Export: PDF, CSV or map image"
             onClick={() => setMenuOpen(open => !open)}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-600/60 bg-slate-700/35 px-3 py-1.5 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
-            Export
+            <span className="hidden 2xl:inline">Export</span>
             <ChevronDown
               className={`h-4 w-4 transition-transform ${menuOpen ? 'rotate-180' : ''}`}
               aria-hidden="true"

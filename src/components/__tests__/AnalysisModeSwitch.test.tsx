@@ -126,7 +126,7 @@ describe('AnalysisModeSwitch', () => {
     );
   });
 
-  it('names the abbreviation in the phone dropdown too', () => {
+  it('names the abbreviation in the dropdown too, and only the name', () => {
     render(
       <AnalysisModeSwitch
         available={['forecast', 'assessment', 'history']}
@@ -135,9 +135,9 @@ describe('AnalysisModeSwitch', () => {
       />
     );
     expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
-      'Forecast (REF): Forecast exposure',
-      'Post Disaster Analysis: Post-event impact',
-      'History: Historical event',
+      'Forecast (REF)',
+      'Post Disaster Analysis',
+      'History',
     ]);
   });
 

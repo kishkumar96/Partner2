@@ -105,4 +105,21 @@ describe('AdvisoryStatusBanner', () => {
     expect(banner).toHaveTextContent('Latest advisory, but issued 19 Oct 12:00 UTC (14 days ago)');
     expect(banner).toHaveTextContent('Check for a newer forecast before acting on it');
   });
+
+  it('fits beside the event picker as a pill, with a way to the latest', () => {
+    const status: AdvisoryStatus = {
+      kind: 'older',
+      issuedAt: '2026-10-19T00:00:00Z',
+      age: { hours: 300, label: '13 days ago', stale: true },
+      newer: { issuedAt: '2026-10-19T12:00:00Z', count: 2 },
+    };
+    const onSwitch = jest.fn();
+    render(<AdvisoryStatusBanner variant="pill" status={status} onSwitchToLatest={onSwitch} />);
+    const pill = screen.getByTestId('advisory-banner');
+    expect(pill).toHaveAttribute('data-variant', 'pill');
+    expect(pill).toHaveTextContent('Not the latest · 2 newer');
+    expect(pill).toHaveAttribute('title', expect.stringContaining('latest 19 Oct 12:00 UTC'));
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to latest' }));
+    expect(onSwitch).toHaveBeenCalledTimes(1);
+  });
 });

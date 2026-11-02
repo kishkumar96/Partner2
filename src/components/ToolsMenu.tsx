@@ -68,10 +68,12 @@ export default function ToolsMenu({ items, className = '' }: ToolsMenuProps) {
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         data-tour="tools-menu"
+        aria-label="Tools"
+        title="Tools"
         className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-600/60 bg-slate-700/35 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700/55 sm:text-sm"
       >
         <Wrench className="h-4 w-4" aria-hidden="true" />
-        <span>Tools</span>
+        <span className="hidden 2xl:inline">Tools</span>
         <ChevronDown
           className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
           aria-hidden="true"

@@ -61,7 +61,8 @@ interface AnalysisModeSwitchProps {
 
 /**
  * The one first decision: which kind of evidence am I looking at?
- * A segmented control from tablet width up, a compact dropdown on phones.
+ * A segmented control from 1280px, where the header's one row has room for it; a compact
+ * dropdown below that.
  */
 export default function AnalysisModeSwitch({
   available,
@@ -73,12 +74,12 @@ export default function AnalysisModeSwitch({
   if (modes.length === 0) return null;
 
   return (
-    <div className="w-full sm:w-auto">
+    <div className="w-full md:w-auto">
       <div
         role="group"
         aria-label="Analysis mode"
         aria-busy={disabled || undefined}
-        className="hidden max-w-full flex-wrap gap-1 rounded-lg border border-slate-600/60 bg-slate-900/50 p-1 sm:inline-flex"
+        className="hidden max-w-full flex-wrap gap-1 rounded-lg border border-slate-600/60 bg-slate-900/50 p-1 xl:inline-flex"
       >
         {modes.map(mode => {
           const { label, acronym, fullName } = ANALYSIS_MODES[mode];
@@ -117,7 +118,7 @@ export default function AnalysisModeSwitch({
           );
         })}
       </div>
-      <label className="sm:hidden">
+      <label className="xl:hidden">
         <span className="sr-only">Analysis mode</span>
         <select
           value={active}
@@ -126,10 +127,11 @@ export default function AnalysisModeSwitch({
           className="w-full rounded-lg border border-slate-600/60 bg-slate-900/70 px-2.5 py-1.5 text-xs font-semibold text-slate-100"
         >
           {modes.map(mode => (
+            // The name only: the dropdown is as wide as its longest option, and it shares the
+            // header's one row; the event line beside it says what is shown
             <option key={mode} value={mode} title={modeTooltip(mode)}>
               {ANALYSIS_MODES[mode].label}
-              {ANALYSIS_MODES[mode].acronym ? ` (${ANALYSIS_MODES[mode].acronym})` : ''}:{' '}
-              {ANALYSIS_MODES[mode].status}
+              {ANALYSIS_MODES[mode].acronym ? ` (${ANALYSIS_MODES[mode].acronym})` : ''}
             </option>
           ))}
         </select>

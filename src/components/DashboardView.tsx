@@ -2934,8 +2934,8 @@ export default function DashboardView({
     <div className="flex flex-col h-screen bg-transparent overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 glass-panel border-b border-white/10 px-4 py-2.5 sm:px-6">
-        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-2">
-          <div className="flex min-w-0 flex-col gap-2 md:order-1">
+        <div className="flex flex-col gap-2 md:flex-row md:flex-nowrap md:items-center md:gap-x-3">
+          <div className="flex min-w-0 flex-col gap-2 md:order-1 md:flex-1">
             {/* Three to a row: in one scrolling row, six chips needed 600px of a 390px phone and Data was cut off */}
             <div className="grid grid-cols-3 gap-1.5 md:hidden">
               <button
@@ -3048,7 +3048,7 @@ export default function DashboardView({
                   countryCode={selectedCountry}
                   aria-label={COUNTRIES[selectedCountry].name}
                   title={COUNTRIES[selectedCountry].name}
-                  size="4rem"
+                  size="2.75rem"
                   className="block"
                 />
               </div>
@@ -3062,9 +3062,7 @@ export default function DashboardView({
                     reports), not "Rapid Impact Assessment": it sits above the
                     mode switch and read as the name of the Assessment mode. */}
                 <h1 className="min-w-0">
-                  <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    Pacific Disaster Impact &amp; Exposure
-                  </span>{' '}
+                  <span className="sr-only">Pacific Disaster Impact &amp; Exposure</span>{' '}
                   <span className="block text-xl font-semibold leading-tight tracking-tight text-white">
                     {COUNTRIES[selectedCountry].name}
                   </span>
@@ -3077,13 +3075,25 @@ export default function DashboardView({
                   </p>
                 ) : !isPlanningMode && eventPickerHasChoices ? (
                   // Forecast and Post Disaster: the line is the event picker itself
-                  <EventPicker
-                    label={eventPickerLabel}
-                    stormGroups={stormGroups}
-                    observedEvents={observedEventOptions}
-                    activeId={activeEventRecord?.id ?? null}
-                    onPick={handlePickEvent}
-                  />
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <EventPicker
+                      label={eventPickerLabel}
+                      stormGroups={stormGroups}
+                      observedEvents={observedEventOptions}
+                      activeId={activeEventRecord?.id ?? null}
+                      onPick={handlePickEvent}
+                    />
+                    {(advisoryStatus?.kind === 'older' ||
+                      advisoryStatus?.kind === 'latest-aging') && (
+                      <AdvisoryStatusBanner
+                        variant="pill"
+                        status={advisoryStatus}
+                        onSwitchToLatest={
+                          forecastRecord ? () => setModeEventId(forecastRecord.id) : undefined
+                        }
+                      />
+                    )}
+                  </div>
                 ) : (
                   <ViewStatusLine
                     className="mt-0.5"
@@ -3114,7 +3124,7 @@ export default function DashboardView({
 
           {/* Export actions sit right of the title. From 1720px everything fits one line, with
               the mode tabs and panel buttons between them; below that, those take a second line. */}
-          <div className="min-w-0 md:order-2 md:ml-auto min-[1720px]:order-3 min-[1720px]:ml-0">
+          <div className="min-w-0 md:order-3 md:flex-shrink-0">
             <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
               <div
                 className="flex min-w-max items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1"
@@ -3276,7 +3286,7 @@ export default function DashboardView({
               </div>
             </div>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2 md:order-3 md:basis-full md:gap-x-4 min-[1720px]:order-2 min-[1720px]:ml-auto min-[1720px]:basis-auto">
+          <div className="flex min-w-0 items-center gap-2 md:order-2 md:flex-shrink-0 md:gap-x-3">
             {/* Always shown, disabled while loading: hiding it moved the buttons under the cursor */}
             <AnalysisModeSwitch
               available={shownAnalysisModes}
@@ -3284,8 +3294,8 @@ export default function DashboardView({
               onChange={handleAnalysisModeChange}
               disabled={isLoadingData}
             />
-            <div className="hidden min-w-0 md:ml-auto md:flex min-[1720px]:ml-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1">
+            <div className="hidden min-w-0 md:flex">
+              <div className="flex min-w-0 items-center gap-1 rounded-xl border border-slate-700/40 bg-slate-900/35 p-1">
                 <button
                   onClick={() => openFilterPanel('filters')}
                   className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -3296,9 +3306,10 @@ export default function DashboardView({
                   aria-pressed={showFilters && filterPanelTab === 'filters'}
                   aria-label={showFilters ? 'Filters panel open' : 'Open data filters'}
                   data-tour="filter-panel-toggle"
+                  title="Filters"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  <span>Filters</span>
+                  <span className="hidden 2xl:inline">Filters</span>
                 </button>
                 <button
                   onClick={() => setShowAnalytics(current => !current)}
@@ -3310,9 +3321,10 @@ export default function DashboardView({
                   aria-pressed={showAnalytics}
                   aria-label={showAnalytics ? 'Hide data workspace' : 'Show data workspace'}
                   data-tour="data-workspace-toggle"
+                  title="Data tables"
                 >
                   <BarChart3 className="h-4 w-4" />
-                  <span>Data</span>
+                  <span className="hidden 2xl:inline">Data</span>
                 </button>
                 <button
                   onClick={() => setShowSummary(current => !current)}
@@ -3324,9 +3336,10 @@ export default function DashboardView({
                   aria-pressed={showSummary}
                   aria-label={showSummary ? 'Hide impact summary' : 'Show impact summary'}
                   data-tour="summary-panel-toggle"
+                  title="Impact summary"
                 >
                   <ClipboardList className="h-4 w-4" />
-                  <span>Impact</span>
+                  <span className="hidden 2xl:inline">Impact</span>
                 </button>
                 <button
                   type="button"
@@ -3338,11 +3351,14 @@ export default function DashboardView({
                   }`}
                   aria-expanded={showMetadata}
                   aria-controls="dashboard-metadata"
+                  aria-label={`Context${activeFilterCount > 0 ? `, ${activeFilterCount} filters` : ''}`}
+                  title="Context: country, event, filters and sources"
                 >
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${showMetadata ? 'rotate-180' : ''}`}
                   />
-                  <span>Context{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</span>
+                  <span className="hidden 2xl:inline">Context</span>
+                  {activeFilterCount > 0 && <span>{activeFilterCount}</span>}
                 </button>
               </div>
             </div>
@@ -3439,18 +3455,6 @@ export default function DashboardView({
 
         {!showAnalytics && !showSummary && (
           <TopInsightsCards insights={headlineMetrics} className="mt-2" />
-        )}
-
-        {(advisoryStatus?.kind === 'older' || advisoryStatus?.kind === 'latest-aging') && (
-          <div className="mt-1.5">
-            <AdvisoryStatusBanner
-              variant="bar"
-              status={advisoryStatus}
-              onSwitchToLatest={
-                forecastRecord ? () => setModeEventId(forecastRecord.id) : undefined
-              }
-            />
-          </div>
         )}
       </header>
 

@@ -17,11 +17,51 @@ export default function AdvisoryStatusBanner({
 }: {
   status: AdvisoryStatus;
   onSwitchToLatest?: () => void;
-  /** 'bar' is one slim line for under the page header; 'card' is for inside a panel */
-  variant?: 'card' | 'bar';
+  /** 'pill' sits beside the event picker in the header; 'bar' is one slim line; 'card' is for inside a panel */
+  variant?: 'card' | 'bar' | 'pill';
 }) {
   const issued = status.issuedAt ? utcStamp(status.issuedAt) : null;
   const age = status.age?.label;
+
+  if (variant === 'pill' && (status.kind === 'older' || status.kind === 'latest-aging')) {
+    // Amber, in the header's one row, beside the advisory it is about: no row of its own
+    const older = status.kind === 'older' && status.newer;
+    return (
+      <span
+        role="status"
+        data-testid="advisory-banner"
+        data-state={older ? 'older' : 'aging'}
+        data-variant="pill"
+        title={
+          older
+            ? `Not the latest forecast: ${status.newer!.count} newer, latest ${utcStamp(status.newer!.issuedAt)}`
+            : `Latest advisory, but issued ${issued}${age ? ` (${age})` : ''}. Check for a newer forecast before acting on it.`
+        }
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold leading-snug text-amber-100"
+      >
+        {older ? (
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-300" aria-hidden="true" />
+        ) : (
+          <Clock className="h-3.5 w-3.5 flex-shrink-0 text-amber-300" aria-hidden="true" />
+        )}
+        <span className="truncate">
+          {older
+            ? `Not the latest · ${status.newer!.count} newer`
+            : `Issued ${age ?? issued} · check for newer`}
+        </span>
+        {older && onSwitchToLatest && (
+          // The negative margin keeps a 44px tap target without making the row taller
+          <button
+            type="button"
+            onClick={onSwitchToLatest}
+            className="-my-3 min-h-[44px] flex-shrink-0 rounded-full px-1.5 text-amber-50 underline underline-offset-2 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+          >
+            Switch to latest
+          </button>
+        )}
+      </span>
+    );
+  }
 
   if (status.kind === 'older' && status.newer) {
     const { count } = status.newer;
