@@ -17,11 +17,12 @@ import re
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from event.models import Event
 from event_type.models import EventType
+from risk_information.models import RiskInformation
 
 from .models import ModelRun, ModelTrigger
 
@@ -238,7 +239,12 @@ def forecast_runs_for_event(event: Event) -> list[dict]:
             models__name__iregex=r"rapid[ _-]?exposure",
         )
         .select_related("tc_track")
-        .prefetch_related("risk_information")
+        # Only ids and names are read here. The rows' geometry is megabytes of JSON per row,
+        # and decoding it for every run of every event made the event list take 3-4 s.
+        .defer("tc_track__geometry")
+        .prefetch_related(
+            Prefetch("risk_information", queryset=RiskInformation.objects.only("id", "model_run"))
+        )
         .distinct()
     )
     out = []
