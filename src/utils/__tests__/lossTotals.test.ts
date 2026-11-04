@@ -1,8 +1,9 @@
 import { withTotalLossFromParts } from '@/utils/lossTotals';
 
-const area = (props: Record<string, unknown>) => ({
-  type: 'Feature' as const,
-  geometry: null,
+// The areas' shapes don't matter here, so the geometry is a stand-in point
+const area = (props: Record<string, unknown>): GeoJSON.Feature => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [0, 0] },
   properties: props,
 });
 

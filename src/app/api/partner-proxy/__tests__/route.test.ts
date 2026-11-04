@@ -41,10 +41,7 @@ describe('partner-proxy forwarded headers', () => {
     expect(response.headers.get('cache-control')).toBe(
       'private, max-age=120, stale-while-revalidate=600'
     );
-    const sent = new Headers(
-      (fetchMock.mock.calls[0] as unknown[])[1] &&
-        ((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).headers
-    );
+    const sent = new Headers(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit)?.headers);
     expect(sent.get('accept')).toBe('application/json');
     expect(sent.get('accept-language')).toBe('en');
     // The shared API answers 400 to our host name in X-Forwarded-Host
