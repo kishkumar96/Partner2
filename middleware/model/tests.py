@@ -981,6 +981,23 @@ class TcRunnerHelperTests(SimpleTestCase):
         self.write("regional-summary.csv", "Region\n")
         self.runner.check_track_output(self.out)
 
+    def test_pdie_2026_outputs_get_the_dataset_types_of_the_older_ones(self):
+        Path = __import__("pathlib").Path
+        for name, dataset_type in {
+            "event-loss-table.csv": "national_summary",
+            "event-loss-admin1-area-table.csv": "regional_summary",
+            "event-loss-admin1-area-map.gpkg": "regional_impacts",
+            "event-loss-building-map.gpkg": "damaged_buildings",
+            "event-loss-road-map.gpkg": "damaged_roads",
+            "event-loss-admin2-area-table.csv": "",
+        }.items():
+            self.assertEqual(self.runner.dataset_type_for(Path(name)), dataset_type, name)
+
+    def test_the_features_map_is_not_uploaded(self):
+        for name in ("event-loss-table.csv", "event-loss-features-map.gpkg", "notes.txt"):
+            self.write(name, "x")
+        self.assertEqual([p.name for p in self.runner.run_outputs(self.out)], ["event-loss-table.csv"])
+
     def test_results_country_is_the_one_with_the_most_people_exposed(self):
         self.write(
             "total-exposed-by-country.csv",

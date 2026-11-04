@@ -70,7 +70,26 @@ DATASET_TYPE_BY_FILENAME = {
     "floodplain-exposure.geojson": "forecast_floodplain",
     "damaged-buildings.geojson": "damaged_buildings",
     "damaged-roads.geojson": "damaged_roads",
+    # PDIE 2026 outputs; the dashboard reads them as the older ones above
+    "event-loss-table.csv": "national_summary",
+    "event-loss-admin1-area-table.csv": "regional_summary",
+    "event-loss-admin1-area-map.gpkg": "regional_impacts",
+    "event-loss-building-map.gpkg": "damaged_buildings",
+    "event-loss-road-map.gpkg": "damaged_roads",
 }
+
+# Every feature the model touched (78 MB, 314k features for Tonga): too big to store as a
+# row's geometry, and the building and road maps already hold the damaged ones
+SKIPPED_OUTPUTS = {"event-loss-features-map.gpkg"}
+
+
+def run_outputs(output_dir):
+    """The files a run uploads, in a stable order."""
+    return sorted(
+        p
+        for p in output_dir.rglob("*")
+        if p.suffix.lower() in OUTPUT_SUFFIXES and p.name.lower() not in SKIPPED_OUTPUTS
+    )
 
 
 def dataset_type_for(path):
@@ -398,7 +417,7 @@ def process(job, api, backend, work_dir, validate_cmd):
         except RunFailed as e:
             raise RunFailed(f"{label} failed: {e.args[0]}", *e.args[1:]) from None
 
-    outputs = sorted(p for p in output_dir.rglob("*") if p.suffix.lower() in OUTPUT_SUFFIXES)
+    outputs = run_outputs(output_dir)
     if not outputs:
         raise RunFailed(f"no {'/'.join(sorted(OUTPUT_SUFFIXES))} outputs in {output_dir}", external_url)
     for path in outputs:

@@ -7,6 +7,7 @@ import tempfile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from rest_framework import status
+from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from country.models import Country
@@ -116,6 +117,20 @@ class RiskInformationDeferLargeAssetsTests(APITestCase):
             self.list_url, {"country": self.country.pk, "defer_large_assets": "true"}
         )
         self.assertIsNone(self._geometry_by_id(response)[floodplain_row.pk])
+
+    def test_defer_large_assets_nulls_pdie_2026_building_and_road_maps(self):
+        rows = [
+            RiskInformation.objects.create(title=name, country=self.country, upload=make_upload(f"{name}.geojson"))
+            for name in ("event-loss-building-map", "event-loss-road-map")
+        ]
+        area_map = RiskInformation.objects.create(
+            title="event-loss-admin1-area-map", country=self.country, upload=make_upload("event-loss-admin1-area-map.geojson")
+        )
+        response = self.client.get(self.list_url, {"country": self.country.pk, "defer_large_assets": "true"})
+        geometry_by_id = self._geometry_by_id(response)
+        for row in rows:
+            self.assertIsNone(geometry_by_id[row.pk])
+        self.assertIsNotNone(geometry_by_id[area_map.pk])
 
     def test_without_the_flag_all_geometry_is_present(self):
         response = self.client.get(self.list_url, {"country": self.country.pk})
@@ -294,3 +309,23 @@ class RiskScenarioBreakdownApiTests(APITestCase):
         self.assertEqual(
             [(r["name"], r["sector"], r["total_loss"]) for r in response.data["results"]], [("Wharf", "Ports", 5)]
         )
+
+
+class GeopackageConversionTests(SimpleTestCase):
+    def test_a_layer_in_web_mercator_comes_out_in_lon_lat(self):
+        try:
+            import geopandas as gpd
+            from shapely.geometry import Point
+        except ImportError:
+            self.skipTest("geopandas is not installed")
+        from .utils import convert_uploaded_file_to_geometry
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "event-loss-road-map.gpkg")
+            # Nuku'alofa, as the 2026 PDIE road map writes it (EPSG:3857)
+            gpd.GeoDataFrame({"Loss": [1.0]}, geometry=[Point(-19478160.0, -2414470.0)], crs=3857).to_file(path)
+            with open(path, "rb") as handle:
+                geometry = convert_uploaded_file_to_geometry(file_obj=handle, filename="event-loss-road-map.gpkg", file_path=path)
+        lon, lat = geometry["features"][0]["geometry"]["coordinates"]
+        self.assertAlmostEqual(lon, -174.97, places=1)
+        self.assertAlmostEqual(lat, -21.20, places=1)

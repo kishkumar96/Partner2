@@ -42,6 +42,10 @@ class RiskInformationSerializer(serializers.ModelSerializer):
         "damaged road",
         "floodplain-exposure",
         "floodplain exposure",
+        # PDIE 2026 names for the damaged buildings and roads, and every feature hit
+        "event-loss-building-map",
+        "event-loss-road-map",
+        "event-loss-features-map",
     )
 
     def to_representation(self, instance):

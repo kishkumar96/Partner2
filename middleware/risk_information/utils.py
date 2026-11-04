@@ -11,6 +11,14 @@ SUPPORTED_EXTENSIONS = {"geojson", "csv", "gpkg"}
 logger = logging.getLogger(__name__)
 
 
+def _lonlat_geojson(gdf) -> dict:
+    """A layer as GeoJSON in lon/lat. RiskScape writes some layers in EPSG:3857 or 3832
+    (the 2026 PDIE road and population maps), which the map would draw in the wrong place."""
+    if gdf.crs is not None and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(4326)
+    return json.loads(gdf.to_json())
+
+
 def convert_uploaded_file_to_geometry(
     *,
     file_obj,
@@ -72,7 +80,7 @@ def convert_uploaded_file_to_geometry(
 
             try:
                 gdf = pyogrio.read_dataframe(path, layer=layer_name) if layer_name else pyogrio.read_dataframe(path)
-                return json.loads(gdf.to_json())
+                return _lonlat_geojson(gdf)
             except Exception:
                 pass
         except Exception:
@@ -87,7 +95,7 @@ def convert_uploaded_file_to_geometry(
         # First attempt: default engine.
         try:
             gdf = gpd.read_file(path)
-            return json.loads(gdf.to_json())
+            return _lonlat_geojson(gdf)
         except Exception:
             pass
 
@@ -99,7 +107,7 @@ def convert_uploaded_file_to_geometry(
             if not layers:
                 return None
             gdf = gpd.read_file(path, layer=layers[0])
-            return json.loads(gdf.to_json())
+            return _lonlat_geojson(gdf)
         except Exception:
             logger.exception("Failed to convert gpkg to geojson for %s (path=%s)", filename, path)
             return None
