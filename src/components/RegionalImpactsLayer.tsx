@@ -578,7 +578,10 @@ export default function RegionalImpactsLayer({
                 { name: 'Productive', key: 'Sector.Productive.Loss' },
                 { name: 'Public', key: 'Sector.Public.Loss' },
                 { name: 'Residential', key: 'Sector.Residential.Loss' },
+                { name: 'Health', key: 'Sector.Health.Loss' },
+                { name: 'Emergency management', key: 'Sector.Emergency management.Loss' },
                 { name: 'Other', key: 'Sector.Other.Loss' },
+                { name: 'Unknown', key: 'Sector.Unknown.Loss' },
               ];
 
               const sectorLines = sectors

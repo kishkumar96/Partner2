@@ -31,6 +31,7 @@ import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
 import type { HazardScenarioSelection, RealWMSLayer } from '@/data/realThreddsLayers';
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { withTotalLossFromParts } from '@/utils/lossTotals';
+import { legacyAssetFeatures, withLegacyImpactNames } from '@/utils/pdieOutputs';
 import { buildForecastExposure } from '@/utils/forecastExposure';
 import { previousAdvisory } from '@/utils/forecastComparison';
 import { buildForecastTimeline } from '@/utils/forecastTimeline';
@@ -780,6 +781,8 @@ export function convertRegionalImpactsBySectorToEvents(
     'Productive',
     'Public',
     'Residential',
+    'Health',
+    'Emergency management',
     'Other',
     'Unknown',
   ];
@@ -1299,6 +1302,12 @@ function inferLogicalDatasetTypeFromFilename(filename: string): PartnerRiskDataK
   const lowered = filename.trim().toLowerCase();
   if (!lowered) return null;
 
+  // PDIE 2026 outputs; the admin2 tables, population and features maps aren't drawn yet
+  if (lowered.includes('event-loss-admin1-area-map')) return 'regionalImpacts';
+  if (lowered.includes('event-loss-admin1-area-table')) return 'regionalSummary';
+  if (lowered.includes('event-loss-table')) return 'nationalSummary';
+  if (lowered.includes('event-loss-building-map')) return 'damagedBuildings';
+  if (lowered.includes('event-loss-road-map')) return 'damagedRoads';
   if (lowered.includes('regional-impacts-by-sector')) return 'regionalImpactsBySector';
   if (lowered.includes('regional-impacts')) return 'regionalImpacts';
   if (lowered.includes('regional-summary-by-sector')) return 'regionalSummaryBySector';
@@ -1452,7 +1461,7 @@ function mergePartnerRiskBundle(
 export function extractPartnerRiskBundle(
   riskRows: Array<Record<string, unknown>>
 ): PartnerRiskBundle {
-  return riskRows.reduce((bundle, row) => {
+  const merged = riskRows.reduce((bundle, row) => {
     const key = inferPartnerRiskKey(row, row.geometry);
     if (!key) return bundle;
     // A floodplain row the server could not compute geometry for (its file is missing or empty, or
@@ -1472,6 +1481,7 @@ export function extractPartnerRiskBundle(
     }
     return next;
   }, createEmptyPartnerRiskBundle());
+  return withLegacyImpactNames(merged);
 }
 
 function dedupePartnerRiskRows(
@@ -2075,7 +2085,9 @@ export async function fetchPartnerRiskInformationGeometry(
       return null;
     }
 
-    return extractFeatureCollectionFromValue((payload as Record<string, unknown>).geometry);
+    return legacyAssetFeatures(
+      extractFeatureCollectionFromValue((payload as Record<string, unknown>).geometry)
+    );
   } catch {
     return null;
   }
