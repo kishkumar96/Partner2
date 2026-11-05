@@ -270,7 +270,8 @@ describe('Facilities tab', () => {
     const list = screen.getByTestId('facility-list');
     expect(list).toHaveTextContent('Araura');
     expect(list).toHaveTextContent('Enuamanu school');
-    expect(list).toHaveTextContent('Possible Gale Winds (63 km/h)');
+    expect(list).toHaveTextContent('Possible Gale Winds (63–88 km/h)');
+    expect(list).not.toHaveTextContent('(63 km/h)');
     expect(list).toHaveTextContent('Hospital');
     expect(list).toHaveTextContent('In floodplain');
   });

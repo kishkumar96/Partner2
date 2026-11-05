@@ -37,7 +37,7 @@ import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastSummaryView from './ForecastSummaryView';
 import { buildForecastInsight } from '@/utils/forecastInsight';
 import { strongestBandLabel, type TimelinePoint } from '@/utils/forecastTimeline';
-import { parseWindBand, windAreaLabel } from '@/utils/windScale';
+import { parseWindBand, windAreaLabel, windRange } from '@/utils/windScale';
 import { compareForecasts } from '@/utils/forecastComparison';
 import type { ResponsePriority } from '@/utils/useResponsePriority';
 
@@ -552,6 +552,11 @@ function OperationalPriorities({ exposure }: { exposure: ForecastExposure }) {
   );
 }
 
+function facilityBand(danger: string | null) {
+  const band = parseWindBand(danger);
+  return band ? ` (${windRange(band.kind)})` : '';
+}
+
 /** The limits of the forecast, in plain words. */
 function WindScaleKey() {
   return (
@@ -971,7 +976,8 @@ export function FacilityList({
               <td className="py-1.5 px-2">{facility.area}</td>
               <td className="py-1.5 px-2">
                 {facility.danger ?? 'Not exposed'}
-                {facility.windKmph != null ? ` (${Math.round(facility.windKmph)} km/h)` : ''}
+                {/* REF's WindSpeed_kmph is the band's lower limit, not the wind at the facility */}
+                {facilityBand(facility.danger)}
               </td>
               <td className="py-1.5 px-2 text-slate-400">{detail(facility)}</td>
             </tr>
