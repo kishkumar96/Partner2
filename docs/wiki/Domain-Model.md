@@ -11,7 +11,7 @@ The mode switch at the top of a country page (`components/AnalysisModeSwitch.tsx
 | `scenarios` | Scenarios | What could happen at a given return period and sea-level rise? | Hazard catalogue and scenario loss tables |
 | `history` | History | What happened in previous cyclones and swell events? | Past observed events |
 
-**REF** (Rapid Exposure Forecast) and **PDIE** (Post-Disaster Impact Estimate) are **different RiskScape models** with different outputs. REF counts what lies inside each wind band of a forecast track. PDIE estimates damage and loss, in money, buildings and road km, from the best track. Do not mix their tables.
+**REF** (Rapid Exposure Forecast) and **PDIE** (Pacific Disaster Impact & Exposure) are **different RiskScape models** with different outputs. REF counts what lies inside each wind band of a forecast track. PDIE estimates damage and loss, in money, buildings and road km, from the best track. Do not mix their tables.
 
 ## Entities
 

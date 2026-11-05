@@ -12,11 +12,11 @@
 | **Event kind** | `forecast`, `observed` or `scenario`, from the event type's name (`eventTypeKind`) |
 | **Fallback event** | A curated event in `config/events/` shown when the API has none |
 | **Forecast track** | An official SPC/RSMC Nadi forecast; drives REF |
-| **GEM** | SPC's Geoscience, Energy and Maritime division, which runs THREDDS and the server |
+| **GEM** | The SPC division behind `gemthreddshpc` (THREDDS) and `opmthredds.gem` (the server) |
 | **Middleware** | The Django Partner API in `middleware/` (our copy) |
 | **Model run** | One execution of a model; links a track, result files and hazards |
-| **PDIE** | Post-Disaster Impact Estimate: RiskScape damage and loss model on the best track |
-| **PDNA** | Post-Disaster Needs Assessment; the name of the on-prem PDIE pipeline |
+| **PDIE** | Pacific Disaster Impact & Exposure: the RiskScape damage and loss model run on the best track |
+| **pdna** | The name of the on-prem pipeline that runs the PDIE model on best tracks (`setup_tc_pipelines`) |
 | **Planning scenario** | A hazard at a return period and sea-level rise, with its losses |
 | **Proxy route** | `/api/partner-proxy/[...path]`, through which the browser reaches the API and THREDDS |
 | **`proxy.ts`** | Next 16's request proxy (was `middleware.ts`): routing, auth gate, tenant lock |
@@ -24,7 +24,7 @@
 | **Regional impact** | One area's numbers within an event |
 | **Return period** | The average interval between events of that size (e.g. 100-year) |
 | **Risk information** | One result file on the API (a table or a map) |
-| **RiskScape** | NIWA's risk modelling platform (`riskscape.nz`) |
+| **RiskScape** | The risk modelling platform the models run on (`riskscape.nz`) |
 | **SLR** | Sea-level rise, in metres, of a scenario |
 | **Strict country** | A country that never falls back to local files |
 | **Tenant lock** | `TENANT_COUNTRY`: one deployment serves one country |
