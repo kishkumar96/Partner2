@@ -8,10 +8,10 @@ The one place that says what is current. Agents and people: read this first, upd
 - **Don't:** edit `/data/Partner2` (the user's own working tree, with uncommitted changes), or share a checkout with another session.
 
 ## Deployed
-- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): deployed **30 Oct 16:53** from `5c11468` on `integration/ready-to-build` (archive md5 `636ff8f452d7a721510d0dee624fbeb5`), build id `qI_OVGzDBykMsRkvJMmZA`. Still reads our own API (`PARTNER_API_BASE_URL` unchanged). Rollback tag: `partner2-partner2:rollback-202610301653` (the 22 Oct build).
+- **Live dashboard** (https://opmthredds.gem.spc.int/partner2): deployed **30 Oct 16:53** from `5c11468` on `integration/ready-to-build` (archive md5 `636ff8f452d7a721510d0dee624fbeb5`), build id `qI_OVGzDBykMsRkvJMmZA`. Reads the shared API: the running `partner2-dashboard` container has `PARTNER_API_BASE_URL=https://pacific-disaster-api.spc.int` (checked 5 Nov). The app should use only that API. Rollback tag: `partner2-partner2:rollback-202610301653` (the 22 Oct build).
 - **How to deploy** (the server cannot run `next build`): see "Deploying a prebuilt image" in `DEPLOYMENT.md`. The switch script `~/deploy-new-image.sh` (copy in `scripts/ops/`) refuses an old image before changing anything, and checks the served build id after.
 - **After a deploy:** write the commit and the new build id here.
-- **Data source:** the live proxy points at our API (`opmthredds.gem.spc.int`). Not switched to the shared API: see `docs/SHARED_API.md` (risk data is 112 MB per page there).
+- **Data source:** the shared API, `pacific-disaster-api.spc.int` (Anuj's), only. The middleware on opmthredds (`opmthredds.gem.spc.int/partner_api`) has its own, different data and is not the app's source. See `docs/SHARED_API.md`.
 
 ## The shared API's conventions (read before testing it)
 - Its filters are **routes**, not query parameters: the only one so far is `GET /event/country/{country_id}/` (found in `/partner_api/schema/`; `event/?country=` also works). Re-read the schema after he changes anything: `curl -s https://pacific-disaster-api.spc.int/partner_api/schema/`.

@@ -62,7 +62,7 @@ It never asks for the `risk_information` listing. `prepareEventRows` in `src/uti
 
 Measured against the live API (30 October): Cook Islands with Wati shown, 1.2 MB in 53 requests; Meena 27 MB, the first Lola 39 MB, Harold 24 MB. The observed storms are heavy because their damaged-buildings and damaged-roads rows carry full geometry (Lola's buildings row alone is 32 MB). Only a list without `geometry` (ask 3 above) fixes that, because the dashboard cannot tell which ids are heavy before reading them.
 
-Elsewhere: scenario losses come from Wasabi (`src/utils/scenarioLosses.ts`) and flood depths from the zarr pointer row, straight from the bucket. Data to tidy: runs 4 and 9 are both the 18 Oct 12Z Wati advisory, and run 4 has no track.
+Elsewhere: scenario losses come from Wasabi (`src/utils/scenarioLosses.ts`) and flood depths from the zarr pointer row, straight from the bucket. Data to tidy: run 4 is the **19 Oct 12Z** Wati advisory (its files are titled `TC Wati 2026101912`) but its run says `2026101812` and `model_run_time` 18 Oct 12:00, and it has no track. So the advisory list shows 18 Oct 12Z twice and leaves out the newest advisory (checked 5 Nov). Anuj: rename run 4 to `2026101912`, set its time to 2026-10-19T12:00Z and link the 19 Oct 12Z track.
 
 ## Test it yourself
 ```bash
