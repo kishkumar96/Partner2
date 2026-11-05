@@ -14,8 +14,8 @@ flowchart TB
   end
   subgraph Next[Next.js server :3002 dev / :3112 prod]
     PX[src/proxy.ts<br/>routing, auth gate, tenant lock]
-    PP[/api/partner-proxy/...]
-    EV[/api/events, /api/cyclone, /api/auth/*,<br/>/api/operator/*, /api/health, /api/config/]
+    PP["/api/partner-proxy/..."]
+    EV["/api/events, /api/cyclone, /api/auth/*,<br/>/api/operator/*, /api/health, /api/config"]
   end
   LOADER --> PP
   LOADER --> EV

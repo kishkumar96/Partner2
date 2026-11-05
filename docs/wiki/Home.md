@@ -32,7 +32,7 @@ flowchart LR
   THREDDS[(THREDDS WMS<br/>gemthreddshpc.spc.int)]
   WASABI[(Wasabi bucket<br/>hazard zarr, scenario losses)]
   subgraph Dashboard [Next.js dashboard]
-    PROXY[/api/partner-proxy/] --> UI[Country dashboard<br/>map, tables, charts, PDF]
+    PROXY["/api/partner-proxy"] --> UI[Country dashboard<br/>map, tables, charts, PDF]
   end
   API --> PROXY
   THREDDS --> PROXY
