@@ -89,5 +89,6 @@ Read `WORKING.md` first: it names the shared working branch, what is deployed, a
 ## Conventions
 - Path alias `@/` → `src/`. Prettier + ESLint enforced on commit. Keep comments sparing and explain *why*.
 - Country is identified by `CountryCode` (`'VU'|'WS'|'TO'|'CK'`) in code and by slug in URLs; convert with `utils/countrySlug.ts`.
-- Adding a country or event: update `types/thredds.ts` (`COUNTRIES`), `countrySlug.ts`, `countryConfigs.ts`, `partnerApiService.ts` country lists, and `eventRecords.ts`; see `docs/ADDING_CYCLONE_DATA.md`.
+- Adding a country or a fallback event: edit `config/` and run `npm run config:generate` (see `config/README.md`); `CountryCode`, `COUNTRIES` and the slug maps are generated from it. A country's areas and hazard/sector lists are still in `src/data/countryConfigs.ts`.
+- Long-form docs for people: `docs/wiki/` (start at `Home.md`).
 - Commits: conventional style (`feat(scope):`, `fix(scope):`); the author is the person who commits. Do not add `Co-Authored-By` or "Generated with" attribution lines for AI tools.

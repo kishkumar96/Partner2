@@ -386,11 +386,10 @@ HARD_GATE=true npm run perf:ci
 
 ## 📚 Documentation
 
+- **[Project wiki](docs/wiki/Home.md)** - Start here: architecture, data sources, model outputs, configuration, backend, runners, deployment, troubleshooting
 - **[Deployment Guide](DEPLOYMENT.md)** - Complete deployment instructions
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Security Policy](SECURITY.md)** - Security best practices
-- **[API Documentation](docs/API.md)** - API reference (coming soon)
-- **[User Guide](docs/USER_GUIDE.md)** - End-user documentation (coming soon)
 
 ## 🎨 Key Features Deep Dive
 
