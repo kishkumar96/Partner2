@@ -223,6 +223,21 @@ describe('CycloneAnimationLayer', () => {
     expect(container).toBeInTheDocument();
   });
 
+  it('detaches its deck.gl overlay from the map on unmount', () => {
+    (mockMap.addControl as jest.Mock).mockClear();
+    (mockMap.removeControl as jest.Mock).mockClear();
+    const { unmount } = render(
+      <CycloneAnimationLayer map={mockMap} forecastTrack={sampleForecast} />
+    );
+    const added = (mockMap.addControl as jest.Mock).mock.calls.map(call => call[0]);
+    expect(added.length).toBeGreaterThan(0);
+    // a map being torn down has no style left, which the older cleanup treats as "nothing to do"
+    (mockMap.getStyle as jest.Mock).mockReturnValueOnce(undefined);
+    unmount();
+    const removed = (mockMap.removeControl as jest.Mock).mock.calls.map(call => call[0]);
+    for (const overlay of added) expect(removed).toContain(overlay);
+  });
+
   it('calls onClose when close button is clicked', () => {
     const onClose = jest.fn();
     render(

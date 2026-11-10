@@ -507,6 +507,22 @@ export default function CycloneAnimationLayer({
     [buildDeckLayers, sanitizeDeckLayers]
   );
 
+  // The overlay owns a WebGL device on the map's context. Detach it whenever the map goes away
+  // (and under React strict mode's mount/unmount/mount), or a second overlay is created against
+  // the same context and deck.gl throws "WebGL context already attached to device".
+  useEffect(() => {
+    return () => {
+      const overlay = deckOverlayRef.current;
+      deckOverlayRef.current = null;
+      if (!overlay || !map) return;
+      try {
+        map.removeControl(overlay as any);
+      } catch {
+        // the map may already be torn down
+      }
+    };
+  }, [map]);
+
   // Pre-compute all geometries on initial load for performance
   useEffect(() => {
     if (!map || !forecastTrack || forecastTrack.length === 0) return;
