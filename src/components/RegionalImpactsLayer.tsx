@@ -632,7 +632,7 @@ export default function RegionalImpactsLayer({
             const popupContent = `
             <div style="padding: 8px; font-family: system-ui, sans-serif;">
               <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
-                ${regionName}
+                ${escapePopupText(regionName)}
               </h3>
               ${
                 windCategory
