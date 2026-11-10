@@ -1,0 +1,21 @@
+# Validate commit message format
+# Format: type(scope): subject
+# Example: feat(map): add new layer toggle
+
+commit_msg=$(cat "$1")
+
+# Check if commit message matches conventional commit format
+if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: .{1,}$"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "Commit message must follow conventional commits format:"
+    echo "  type(scope): subject"
+    echo ""
+    echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert"
+    echo ""
+    echo "Example: feat(map): add new layer toggle"
+    echo "Example: fix(dashboard): resolve data loading issue"
+    exit 1
+fi
+
+echo "✅ Commit message format is valid"

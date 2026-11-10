@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+*.lcov
+.nyc_output
 
 # next.js
 /.next/
@@ -19,19 +21,34 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+lerna-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files - never commit filled-in environment files, only .env.example
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+.env*.local
+
+# accidental network capture files - can contain live session cookies
+*.har
+
+# stray editor backup/workspace files
+*.backup
+*.code-workspace
 
 # vercel
 .vercel
@@ -39,3 +56,134 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.idea
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.loadpath
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+.parcel-cache
+
+# Build artifacts
+*.tgz
+.npm
+.eslintcache
+.stylelintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Python virtual environments
+.venv/
+.venv-pdf/
+venv/
+env/
+ENV/
+
+# Python compiled files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python distribution / packaging
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+# src/lib holds application source, not Python build output
+!src/lib/
+lib64/
+# ...but src/lib is application code, not a Python build directory (new files there were being ignored)
+!src/lib/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Lighthouse reports
+lighthouse-report.html
+lighthouse-report.json
+.lighthouseci
+reports/lighthouse/
+reports/perf/
+
+# Test/debug artifacts -regenerated locally, may contain request headers/cookies
+reports/
+*.har
+
+# Playwright
+playwright-report/
+test-results/
+
+# Bundle analyzer
+.analyze
+stats.json
+
+
+# Object-storage (Wasabi) keys: never commit
+wasabi.env
+*.wasabi.env
+.envtest
+
+# local logs and scratch output
+dev.log
+test.txt
+stats.txt
+npmtest.txt
+localhost_*.html

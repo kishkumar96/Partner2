@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "configVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "defaultCountry": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "countries": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      }
+    }
+  },
+  "required": ["configVersion", "schemaVersion", "defaultCountry", "countries"],
+  "additionalProperties": false
+}

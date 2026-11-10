@@ -1,0 +1,28 @@
+{
+  "$schema": "../events.schema.json",
+  "country": "VU",
+  "events": [
+    {
+      "id": "tc-lola-2024",
+      "name": "Tropical Cyclone Lola",
+      "date": "2024-01-30",
+      "hazardId": "tropical-cyclone",
+      "location": {
+        "lat": -17.7333,
+        "lng": 168.3167
+      },
+      "bbox": [
+        165,
+        -21,
+        170,
+        -13
+      ],
+      "trackFile": "cyclone-track.geojson",
+      "isDefault": true,
+      "aliases": [
+        "lola",
+        "tropical cyclone lola"
+      ]
+    }
+  ]
+}

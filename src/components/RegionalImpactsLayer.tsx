@@ -1,0 +1,864 @@
+/**
+ * Component to load and display regional impacts GeoJSON layer
+ */
+
+import { useEffect, useRef } from 'react';
+import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
+import {
+  createRegionalFillOpacity,
+  createRegionalLineColor,
+  createRegionalLineWidth,
+  LAYER_OPACITY,
+  createLossColorExpression,
+  createWindColorExpression,
+} from '@/utils/colorSystem';
+import { getBeforeLayerId } from '@/utils/layerOrder';
+import { debugLogger } from '@/utils/debugLogger';
+import { loadGeoJSON } from '@/utils/dataLoader';
+import { CountryCode } from '@/types/thredds';
+import {
+  DATA_PATH,
+  enrichRegionalImpactsWithSummary,
+  getCountryDataFilePath,
+  loadRegionalSummary,
+} from '@/utils/realDataLoader';
+import { isPartnerApiCountryEnabled, isPartnerApiEnabled } from '@/services/partnerApiService';
+import type { LegendSettings } from '@/data/realThreddsLayers';
+import { windDangerColorExpression } from '@/utils/forecastExposure';
+import { formatCount } from '@/utils/formatters';
+
+function escapePopupText(value: unknown): string {
+  return String(value ?? '').replace(
+    /[&<>"']/g,
+    character =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!
+  );
+}
+
+function formatPopupNumber(value: unknown): string {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? formatCount(parsed) : '0';
+}
+
+function safeIsStyleLoaded(map: MapLibreMap | null): boolean {
+  if (!map) return false;
+  try {
+    const styleLoaded = map.isStyleLoaded();
+    return !!map.getStyle() && styleLoaded === true;
+  } catch {
+    return false;
+  }
+}
+
+const REGIONAL_SOURCE_ID = 'regional-impacts';
+const REGIONAL_FILL_LAYER_ID = 'regional-impacts-fill';
+const REGIONAL_LINE_LAYER_ID = 'regional-impacts-line';
+const REGIONAL_EXTRUSION_LAYER_ID = 'regional-impacts-extrusion';
+
+function getFeatureRegionName(props: Record<string, unknown>): string {
+  const value = props['Region.Region'] ?? props.Region ?? props.region_name;
+  return typeof value === 'string' && value.trim() ? value.trim() : 'Unknown Region';
+}
+
+function getFeatureRegionId(props: Record<string, unknown>): string {
+  const value = props['Region.ID'] ?? props.Region_ID ?? props['Region.Region'] ?? props.Region;
+  return typeof value === 'string' || typeof value === 'number'
+    ? String(value).trim()
+    : 'unknown-region';
+}
+
+function removeRegionalLayersAndSource(map: MapLibreMap) {
+  if (map.getLayer(REGIONAL_EXTRUSION_LAYER_ID)) {
+    map.removeLayer(REGIONAL_EXTRUSION_LAYER_ID);
+  }
+  if (map.getLayer(REGIONAL_FILL_LAYER_ID)) {
+    map.removeLayer(REGIONAL_FILL_LAYER_ID);
+  }
+  if (map.getLayer(REGIONAL_LINE_LAYER_ID)) {
+    map.removeLayer(REGIONAL_LINE_LAYER_ID);
+  }
+  if (map.getSource(REGIONAL_SOURCE_ID)) {
+    map.removeSource(REGIONAL_SOURCE_ID);
+  }
+}
+
+/**
+ * Creates a MapLibre 'step' expression from dynamic legend thresholds.
+ * This should ideally be in colorSystem.ts but is placed here for demonstration.
+ * @param field The GeoJSON property to base the steps on.
+ * @param thresholds An array of legend thresholds.
+ * @returns A MapLibre expression specification.
+ */
+function createDynamicColorExpression(
+  field: string,
+  thresholds: { value: number; color: string }[]
+): maplibregl.ExpressionSpecification {
+  const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);
+
+  const stops: (string | number)[] = [];
+  sortedThresholds.forEach(threshold => {
+    if (isFinite(threshold.value)) {
+      stops.push(threshold.value, threshold.color);
+    }
+  });
+
+  // The last color is for values >= the last finite stop.
+  const fallbackColor = sortedThresholds.find(t => !isFinite(t.value))?.color || '#cccccc';
+
+  return ['step', ['get', field], fallbackColor, ...stops];
+}
+
+interface RegionalImpactsLayerProps {
+  map: MapLibreMap | null;
+  visible: boolean;
+  mapStyle?: 'loss' | 'wind' | 'satellite' | 'street';
+  selectedRegion?: string | null;
+  onRegionSelect?: (regionId: string | null) => void;
+  styleChangeCounter?: number;
+  countryCode?: CountryCode | null;
+  regionalImpactsData?: GeoJSON.FeatureCollection | null;
+  regionalSummaryData?: Array<Record<string, unknown>>;
+  /** 0–100 opacity scale for regional fill layers */
+  layerOpacityScale?: number;
+  // Custom legend settings
+  legendSettings?: LegendSettings;
+  /** Rapid Exposure Forecast: shade by forecast wind band, not loss */
+  forecastDanger?: boolean;
+  /** Reports what the layer is drawing, for the localhost-only debug panel in MapView */
+  onDebugStateChange?: (state: RegionalImpactsDebugState) => void;
+}
+
+export interface RegionalImpactsDebugState {
+  countryCode: CountryCode | null;
+  mapStyle: 'loss' | 'wind' | 'satellite' | 'street';
+  visible: boolean;
+  loading: boolean;
+  error: string | null;
+  featureCount: number;
+  sectorFeatureCount: number;
+  hasTotalLoss: boolean;
+  hasMaxWindGusts: boolean;
+  selectedRegion: string | null;
+}
+
+export default function RegionalImpactsLayer({
+  map,
+  visible,
+  mapStyle = 'loss',
+  selectedRegion = null,
+  onRegionSelect,
+  styleChangeCounter = 0,
+  countryCode = null,
+  regionalImpactsData = null,
+  regionalSummaryData = [],
+  layerOpacityScale = 70,
+  legendSettings,
+  forecastDanger = false,
+  onDebugStateChange,
+}: RegionalImpactsLayerProps) {
+  // Store event handlers as refs to enable proper cleanup
+  const handlersRef = useRef<{
+    handleClick?: (e: any) => void;
+    handleMouseEnter?: () => void;
+    handleMouseLeave?: () => void;
+  }>({});
+
+  // Cache regional impacts data to avoid refetching
+  const dataCache = useRef<{
+    geojson?: any;
+    sectorGeojson?: any;
+    cachedCountry?: CountryCode | null;
+  }>({});
+
+  // Track if we're currently loading to prevent race conditions
+  const isLoadingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const loadEventListenerRef = useRef<(() => void) | null>(null);
+  const layersAddedRef = useRef(false);
+  const selectedRegionRef = useRef<string | null>(selectedRegion);
+  const onRegionSelectRef = useRef<typeof onRegionSelect>(onRegionSelect);
+  const mapStyleRef = useRef(mapStyle);
+  const layerOpacityScaleRef = useRef(layerOpacityScale);
+  const legendSettingsRef = useRef(legendSettings);
+  const forecastDangerRef = useRef(forecastDanger);
+  const regionalSummaryDataRef = useRef(regionalSummaryData);
+
+  useEffect(() => {
+    if (!onDebugStateChange) return;
+    const features = regionalImpactsData?.features ?? [];
+    const has = (key: string) =>
+      features.some(feature => key in ((feature.properties ?? {}) as Record<string, unknown>));
+    onDebugStateChange({
+      countryCode: countryCode ?? null,
+      mapStyle,
+      visible,
+      loading: false,
+      error: null,
+      featureCount: features.length,
+      sectorFeatureCount: 0,
+      hasTotalLoss: has('Total_Loss'),
+      hasMaxWindGusts: has('Max_Wind_Gusts'),
+      selectedRegion: selectedRegion ?? null,
+    });
+  }, [onDebugStateChange, regionalImpactsData, countryCode, mapStyle, visible, selectedRegion]);
+
+  useEffect(() => {
+    selectedRegionRef.current = selectedRegion;
+  }, [selectedRegion]);
+
+  useEffect(() => {
+    mapStyleRef.current = mapStyle;
+    layerOpacityScaleRef.current = layerOpacityScale;
+    legendSettingsRef.current = legendSettings;
+    forecastDangerRef.current = forecastDanger;
+  }, [mapStyle, layerOpacityScale, legendSettings, forecastDanger]);
+
+  useEffect(() => {
+    regionalSummaryDataRef.current = regionalSummaryData;
+  }, [regionalSummaryData]);
+
+  useEffect(() => {
+    onRegionSelectRef.current = onRegionSelect;
+  }, [onRegionSelect]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!map || !visible) {
+      console.log(`❌ RegionalImpactsLayer: Skipping load (map: ${!!map}, visible: ${visible})`);
+      return;
+    }
+
+    // Prevent concurrent loading
+    if (isLoadingRef.current) {
+      console.log('⏳ RegionalImpactsLayer: Already loading, skipping...');
+      return;
+    }
+
+    const loadRegionalImpacts = async () => {
+      if (!mountedRef.current) {
+        console.log('🚫 Component unmounted, aborting load');
+        return;
+      }
+
+      isLoadingRef.current = true;
+
+      try {
+        debugLogger.info('Loading regional impacts layer', 'map-source');
+        console.log(
+          `📊 Loading RegionalImpactsLayer (mapStyle: ${mapStyle}, selectedRegion: ${selectedRegion})`
+        );
+        console.log(
+          `🗺️ Map instance exists: ${!!map}, Map loaded: ${map.loaded()}, Style loaded: ${safeIsStyleLoaded(map)}`
+        );
+
+        // Load both regional impacts and sector-specific data with caching
+        // Use cached data if available to avoid refetching on style changes
+        let geojson, sectorGeojson;
+
+        const effectiveCountry = countryCode ?? 'VU';
+        const basePath = DATA_PATH[effectiveCountry];
+        const partnerApiActive =
+          isPartnerApiEnabled() && isPartnerApiCountryEnabled(effectiveCountry);
+        const regionalImpactsPath = getCountryDataFilePath(
+          effectiveCountry,
+          'regional-impacts.geojson'
+        );
+        const regionalImpactsBySectorPath = getCountryDataFilePath(
+          effectiveCountry,
+          'regional-impacts-by-sector.geojson'
+        );
+
+        // Data passed in from the dashboard always wins over the cache: it
+        // changes with the Hazards filter (scoped loss), and serving the
+        // cached copy would leave the map showing the previous selection.
+        if (
+          !regionalImpactsData &&
+          dataCache.current.geojson &&
+          dataCache.current.cachedCountry === effectiveCountry
+        ) {
+          console.log('✅ Using cached regional impacts data');
+          geojson = dataCache.current.geojson;
+          sectorGeojson = dataCache.current.sectorGeojson;
+        } else if (regionalImpactsData) {
+          console.log('✅ Using regional impacts data from dashboard state');
+          geojson = enrichRegionalImpactsWithSummary(
+            regionalImpactsData,
+            regionalSummaryDataRef.current as Array<Record<string, unknown>> | null | undefined
+          );
+          sectorGeojson = null;
+          dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
+        } else if (partnerApiActive) {
+          // Partner API data hasn't resolved into dashboard state yet; this
+          // effect re-runs once it does (regionalImpactsData is a dependency
+          // below), so this is an expected wait, not a failure.
+          console.log('⏳ Partner API regional impacts data not ready yet, will retry when loaded');
+          isLoadingRef.current = false;
+          return;
+        } else {
+          if (!mountedRef.current) {
+            console.log('🚫 Component unmounted during load, aborting');
+            isLoadingRef.current = false;
+            return;
+          }
+
+          console.log('🔄 Fetching regional impacts data from server...');
+          const [regionalResult, sectorResult, regionalSummary] = await Promise.all([
+            loadGeoJSON(regionalImpactsPath || `${basePath}/regional-impacts.geojson`, {
+              cache: true,
+            }),
+            loadGeoJSON(
+              regionalImpactsBySectorPath || `${basePath}/regional-impacts-by-sector.geojson`,
+              { cache: true }
+            ),
+            loadRegionalSummary({ basePath, countryCode: effectiveCountry }),
+          ]);
+
+          if (!mountedRef.current) {
+            console.log('🚫 Component unmounted after fetch, aborting');
+            isLoadingRef.current = false;
+            return;
+          }
+
+          console.log('📥 Regional impacts fetch result:', {
+            hasData: !!regionalResult.data,
+            error: regionalResult.error?.message,
+            cached: regionalResult.cached,
+            featureCount: regionalResult.data?.features?.length || 0,
+          });
+
+          console.log('📥 Sector impacts fetch result:', {
+            hasData: !!sectorResult.data,
+            error: sectorResult.error?.message,
+            cached: sectorResult.cached,
+            featureCount: sectorResult.data?.features?.length || 0,
+          });
+
+          if (!regionalResult.data) {
+            console.error('❌ Failed to load regional impacts data:', regionalResult.error);
+            debugLogger.warn('Could not load regional impacts data', 'map-source');
+            isLoadingRef.current = false;
+            return;
+          }
+
+          geojson = enrichRegionalImpactsWithSummary(
+            regionalResult.data,
+            regionalSummary as Array<Record<string, unknown>> | null | undefined
+          );
+          sectorGeojson = sectorResult.data || null;
+
+          // Cache for future use
+          dataCache.current = { geojson, sectorGeojson, cachedCountry: effectiveCountry };
+          console.log(`✅ Cached regional impacts data (${geojson.features?.length || 0} regions)`);
+        }
+
+        const sourceId = REGIONAL_SOURCE_ID;
+        const fillLayerId = REGIONAL_FILL_LAYER_ID;
+
+        // Remove existing layers and source if present
+        try {
+          removeRegionalLayersAndSource(map);
+        } catch (e) {
+          debugLogger.warn('Error removing existing regional impacts layers', 'map-layer', e);
+        }
+
+        // Create sector data lookup by region
+        const sectorDataByRegion = new Map<string, any>();
+        if (sectorGeojson?.features) {
+          sectorGeojson.features.forEach((feature: any) => {
+            const region = feature.properties?.Region || feature.properties?.ID;
+            if (region) {
+              sectorDataByRegion.set(region, feature.properties);
+            }
+          });
+        }
+
+        // Function to add layers
+        const addLayers = () => {
+          // Prevent multiple simultaneous additions
+          if (layersAddedRef.current) {
+            console.log('⏭️ Layers already added, skipping duplicate add');
+            return;
+          }
+
+          console.log(
+            '🎨 addLayers() called - Map loaded:',
+            map.loaded(),
+            ', Style loaded:',
+            safeIsStyleLoaded(map)
+          );
+
+          // Check if source already exists and remove it first to prevent "already exists" error
+          if (map.getSource(sourceId)) {
+            console.log('⚠️ Source already exists, removing...');
+            try {
+              removeRegionalLayersAndSource(map);
+              console.log('✅ Removed existing layers and source');
+            } catch (e) {
+              console.error('❌ Error removing existing source:', e);
+              debugLogger.warn('Error removing existing source before re-adding', 'map-source', e);
+            }
+          }
+
+          // Add source
+          console.log(
+            `📦 Adding source '${sourceId}' with ${geojson.features?.length || 0} features`
+          );
+          map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojson,
+          });
+          console.log('✅ Source added successfully');
+
+          // Define color expressions using unified color system
+          const currentMapStyle = mapStyleRef.current;
+          const currentLegendSettings = legendSettingsRef.current;
+          const currentSelectedRegion = selectedRegionRef.current;
+          const currentOpacityScale = layerOpacityScaleRef.current;
+
+          const lossColorExpression = currentLegendSettings
+            ? createDynamicColorExpression('Total_Loss', currentLegendSettings.loss)
+            : createLossColorExpression(countryCode);
+
+          const windColorExpression = currentLegendSettings
+            ? createDynamicColorExpression('Max_Wind_Gusts', currentLegendSettings.wind)
+            : createWindColorExpression();
+
+          // Use deterministic z-order system for consistent layer placement
+          const fillBeforeId = getBeforeLayerId(map, 'regional-impacts-fill');
+
+          // Add fill layer for regions with dynamic color based on mapStyle
+          // World-class design: Extremely subtle choropleth with clear boundaries
+          // Focus on boundary definition rather than fill - industry best practice
+          console.log(
+            `🗺️ Adding regional-impacts-fill layer (mapStyle: ${currentMapStyle}, beforeId: ${fillBeforeId})`
+          );
+          try {
+            map.addLayer(
+              {
+                id: 'regional-impacts-fill',
+                type: 'fill',
+                source: sourceId,
+                paint: {
+                  'fill-color': forecastDangerRef.current
+                    ? (windDangerColorExpression() as maplibregl.ExpressionSpecification)
+                    : currentMapStyle === 'wind'
+                      ? windColorExpression
+                      : lossColorExpression,
+                  // Use unified opacity system from colorSystem.ts
+                  'fill-opacity': createRegionalFillOpacity(
+                    forecastDangerRef.current ? 'wind' : (currentMapStyle as 'wind' | 'loss'),
+                    currentSelectedRegion,
+                    currentOpacityScale / 100
+                  ) as any,
+                },
+              },
+              fillBeforeId
+            );
+            console.log(
+              `✅ Regional impacts FILL layer added successfully (${geojson.features?.length || 0} features)`
+            );
+          } catch (e) {
+            console.error('❌ Error adding fill layer:', e);
+            throw e;
+          }
+
+          // Enable smooth transitions for animated region updates
+          map.setPaintProperty(fillLayerId, 'fill-color-transition', {
+            duration: 800,
+            delay: 0,
+          });
+          map.setPaintProperty(fillLayerId, 'fill-opacity-transition', {
+            duration: 500,
+            delay: 0,
+          });
+
+          // Add outline layer with selection highlighting
+          // World-class design: Crisp boundaries for professional choropleth visualization
+          const lineBeforeId = getBeforeLayerId(map, 'regional-impacts-line');
+          console.log(`🗺️ Adding regional-impacts-line layer (beforeId: ${lineBeforeId})`);
+          try {
+            map.addLayer(
+              {
+                id: 'regional-impacts-line',
+                type: 'line',
+                source: sourceId,
+                paint: {
+                  'line-color': createRegionalLineColor(currentSelectedRegion) as any,
+                  'line-width': createRegionalLineWidth(currentSelectedRegion) as any,
+                  'line-opacity': [
+                    'case',
+                    [
+                      'any',
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region.ID'], '']],
+                        currentSelectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region_ID'], '']],
+                        currentSelectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region.Region'], '']],
+                        currentSelectedRegion || '',
+                      ],
+                      [
+                        '==',
+                        ['to-string', ['coalesce', ['get', 'Region'], '']],
+                        currentSelectedRegion || '',
+                      ],
+                    ],
+                    1.0, // Fully visible selected
+                    LAYER_OPACITY.regional.outline, // Crisp visible boundaries
+                  ],
+                },
+              },
+              lineBeforeId
+            );
+            console.log('✅ Regional impacts LINE layer added successfully');
+          } catch (e) {
+            console.error('❌ Error adding line layer:', e);
+            throw e;
+          }
+
+          // Store event handlers for proper cleanup
+          handlersRef.current.handleClick = (e: any) => {
+            if (!e.features || e.features.length === 0) return;
+
+            const feature = e.features[0];
+            const props = feature.properties;
+            const regionName = getFeatureRegionName(props);
+            const regionId = getFeatureRegionId(props);
+
+            // Update selected region (for filtering charts/analytics)
+            if (onRegionSelectRef.current) {
+              const isAlreadySelected =
+                selectedRegionRef.current === regionId || selectedRegionRef.current === regionName;
+              onRegionSelectRef.current(isAlreadySelected ? null : regionId);
+            }
+
+            // REF uses exposure columns rather than loss columns. Show an
+            // exposure-specific popup so a map click answers the same
+            // question as the forecast summary instead of displaying $0 loss.
+            if (forecastDangerRef.current) {
+              const danger = String(props.Overall_Winds ?? props.Danger ?? 'Not exposed');
+              const maxWind = Number(props.Max_WindSpeed_kmph ?? props.WindSpeed_kmph);
+              const popupContent = `
+                <div style="padding:12px 36px 12px 12px;font-family:system-ui,sans-serif;font-size:12px;color:#e2e8f0;">
+                  <h3 style="margin:0 0 6px;font-size:14px;font-weight:700;color:#f8fafc;">${escapePopupText(regionName)}</h3>
+                  <p style="margin:2px 0;"><strong>Forecast wind:</strong> ${escapePopupText(danger)}${Number.isFinite(maxWind) ? ` (${Math.round(maxWind)} km/h)` : ''}</p>
+                  <p style="margin:2px 0;"><strong>People exposed:</strong> ${formatPopupNumber(props.Exposed_Population)}</p>
+                  <p style="margin:2px 0;"><strong>Buildings exposed:</strong> ${formatPopupNumber(props.Exposed_Buildings)}</p>
+                  <p style="margin:2px 0;"><strong>Building value exposed:</strong> $${formatPopupNumber(props.Exposed_Building_Value)}</p>
+                  <p style="margin:2px 0;"><strong>In floodplains:</strong> ${formatPopupNumber(props.Population_in_Floodplains)} people</p>
+                </div>`;
+              new maplibregl.Popup({ maxWidth: '280px' })
+                .setLngLat(e.lngLat)
+                .setHTML(popupContent)
+                .addTo(map);
+              return;
+            }
+
+            // Get sector-specific data for this region
+            const sectorData = sectorDataByRegion.get(regionName);
+
+            let sectorBreakdown = '';
+            if (sectorData) {
+              const sectors = [
+                { name: 'Education', key: 'Sector.Education.Loss' },
+                { name: 'Infrastructure', key: 'Sector.Infrastructure.Loss' },
+                { name: 'Productive', key: 'Sector.Productive.Loss' },
+                { name: 'Public', key: 'Sector.Public.Loss' },
+                { name: 'Residential', key: 'Sector.Residential.Loss' },
+                { name: 'Health', key: 'Sector.Health.Loss' },
+                { name: 'Emergency management', key: 'Sector.Emergency management.Loss' },
+                { name: 'Other', key: 'Sector.Other.Loss' },
+                { name: 'Unknown', key: 'Sector.Unknown.Loss' },
+              ];
+
+              const sectorLines = sectors
+                .map(sector => {
+                  const loss = Number(sectorData[sector.key]) || 0;
+                  if (loss > 0) {
+                    return `<p style="margin: 2px 0 2px 16px;">• ${sector.name}: $${loss.toLocaleString()}</p>`;
+                  }
+                  return '';
+                })
+                .filter(Boolean)
+                .join('');
+
+              if (sectorLines) {
+                sectorBreakdown = `
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+                  <p style="margin: 4px 0; font-weight: bold;">Sector Breakdown:</p>
+                  ${sectorLines}
+                </div>
+              `;
+              }
+            }
+
+            // Determine wind category
+            const windSpeed = Number(props.Max_Wind_Gusts) || 0;
+            let windCategory = '';
+            let windColor = '#f0f9ff';
+            if (windSpeed >= 252) {
+              windCategory = 'Category 5 Hurricane';
+              windColor = '#075985';
+            } else if (windSpeed >= 165) {
+              windCategory = 'Category 4 Hurricane';
+              windColor = '#0369a1';
+            } else if (windSpeed >= 118) {
+              windCategory = 'Category 2-3 Hurricane';
+              windColor = '#0284c7';
+            } else if (windSpeed >= 88) {
+              windCategory = 'Category 1 Hurricane';
+              windColor = '#0ea5e9';
+            } else if (windSpeed >= 63) {
+              windCategory = 'Tropical Storm';
+              windColor = '#38bdf8';
+            } else if (windSpeed >= 25) {
+              windCategory = 'Tropical Depression';
+              windColor = '#7dd3fc';
+            }
+
+            const popupContent = `
+            <div style="padding: 8px; font-family: system-ui, sans-serif;">
+              <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
+                ${escapePopupText(regionName)}
+              </h3>
+              ${
+                windCategory
+                  ? `
+                <div style="background: ${windColor}; color: ${windSpeed >= 88 ? 'white' : '#0f172a'}; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; font-weight: bold;">
+                  Wind Category: ${windCategory}
+                </div>
+              `
+                  : ''
+              }
+              <div style="font-size: 12px;">
+                <p style="margin: 4px 0;"><strong>Max Wind Gusts:</strong> ${windSpeed} km/h</p>
+                <p style="margin: 4px 0;"><strong>Avg Wind Gusts:</strong> ${Number(props.Average_Wind_Gusts || 0)} km/h</p>
+                <p style="margin: 4px 0;"><strong>Total Loss:</strong> $${Number(props.Total_Loss || 0).toLocaleString()}</p>
+                <p style="margin: 4px 0;"><strong>Buildings Damaged:</strong> ${Number(props.Damaged_Buildings || 0).toLocaleString()}</p>
+                <p style="margin: 4px 0;"><strong>Population Affected:</strong> ${Number(props.Population_Exposed_To_Any_Hazard || 0).toLocaleString()}</p>
+                ${sectorBreakdown}
+              </div>
+            </div>
+          `;
+
+            new maplibregl.Popup().setLngLat(e.lngLat).setHTML(popupContent).addTo(map);
+          };
+
+          handlersRef.current.handleMouseEnter = () => {
+            map.getCanvas().style.cursor = 'pointer';
+          };
+
+          handlersRef.current.handleMouseLeave = () => {
+            map.getCanvas().style.cursor = '';
+          };
+          layersAddedRef.current = true;
+          console.log('✅ Regional impacts layer loaded successfully with all event listeners');
+          isLoadingRef.current = false;
+        };
+
+        // Check if style is loaded before adding layers
+        console.log('🔍 Checking map style status...');
+        console.log(`   - Map isStyleLoaded(): ${safeIsStyleLoaded(map)}`);
+        console.log(`   - Map loaded(): ${map.loaded()}`);
+
+        if (!mountedRef.current) {
+          console.log('🚫 Component unmounted before adding layers, aborting');
+          isLoadingRef.current = false;
+          return;
+        }
+
+        if (safeIsStyleLoaded(map)) {
+          console.log('✅ Map style is loaded, adding layers immediately');
+          addLayers();
+        } else {
+          // Wait for "idle", not "load": "load" fires once per map, so when
+          // this runs after it (other sources still loading, so
+          // isStyleLoaded() is false) it would wait forever and the damage
+          // shading never appears. "idle" fires whenever loading finishes.
+          console.log('⏳ Map still loading, waiting for "idle" event');
+
+          // Remove any existing load listener to prevent duplicates
+          if (loadEventListenerRef.current) {
+            console.log('🧹 Removing previous load listener');
+            map.off('idle', loadEventListenerRef.current);
+          }
+
+          // Create and store the listener
+          loadEventListenerRef.current = () => {
+            if (!mountedRef.current) {
+              console.log('🚫 Component unmounted before load event, skipping');
+              isLoadingRef.current = false;
+              return;
+            }
+            console.log('🎉 Map "idle" event fired, now adding layers');
+            addLayers();
+          };
+
+          map.once('idle', loadEventListenerRef.current);
+        }
+      } catch (error) {
+        console.error('❌ CRITICAL ERROR loading regional impacts:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        debugLogger.error('Failed to load regional impacts layer', 'map-layer', error);
+        isLoadingRef.current = false;
+      }
+    };
+
+    // Wait for map to be fully loaded before adding layers
+    let styleLoadListener: (() => void) | null = null;
+
+    console.log('🔍 Setting up regional impacts layer loader...');
+    console.log(`   - Map exists: ${!!map}`);
+    console.log(`   - Visible: ${visible}`);
+    console.log(`   - Map isStyleLoaded: ${safeIsStyleLoaded(map)}`);
+    console.log(`   - Map loaded: ${map.loaded()}`);
+
+    if (!safeIsStyleLoaded(map)) {
+      console.log('⏳ Map not ready, waiting for styledata or idle (ONCE)');
+      // 'styledata' alone can have fired already when data arrives while
+      // other sources are still loading; 'idle' always follows
+      const listener = () => {
+        map.off('styledata', listener);
+        map.off('idle', listener);
+        console.log('🎉 Map ready, calling loadRegionalImpacts');
+        loadRegionalImpacts();
+      };
+      styleLoadListener = listener;
+      map.on('styledata', listener);
+      map.on('idle', listener);
+    } else {
+      console.log('✅ Map is ready, calling loadRegionalImpacts immediately');
+      loadRegionalImpacts();
+    }
+
+    // Cleanup
+    return () => {
+      if (!map) return;
+
+      console.log('🧹 Cleaning up RegionalImpactsLayer');
+
+      // Remove styledata listener if it was registered
+      if (styleLoadListener) {
+        map.off('styledata', styleLoadListener);
+        map.off('idle', styleLoadListener);
+      }
+
+      // Remove load listener if it was registered
+      if (loadEventListenerRef.current) {
+        map.off('idle', loadEventListenerRef.current);
+        loadEventListenerRef.current = null;
+      }
+
+      const fillLayerId = REGIONAL_FILL_LAYER_ID;
+
+      try {
+        // Remove event listeners
+        if (handlersRef.current.handleClick) {
+          map.off('click', fillLayerId, handlersRef.current.handleClick);
+        }
+        if (handlersRef.current.handleMouseEnter) {
+          map.off('mouseenter', fillLayerId, handlersRef.current.handleMouseEnter);
+        }
+        if (handlersRef.current.handleMouseLeave) {
+          map.off('mouseleave', fillLayerId, handlersRef.current.handleMouseLeave);
+        }
+
+        // Remove layers and source -only when the style is still accessible.
+        // On full page unmount the map can be partially destroyed; isStyleLoaded()
+        // returns false (or throws) in that state, so we skip layer removal safely.
+        if (safeIsStyleLoaded(map)) {
+          removeRegionalLayersAndSource(map);
+        }
+
+        // Reset flags regardless
+        layersAddedRef.current = false;
+        isLoadingRef.current = false;
+      } catch (e) {
+        // Any error here means the map was destroyed or style removed before cleanup ran.
+        // MapLibre throws 'There is no style added to the map.' (a plain Error, not TypeError)
+        // when isStyleLoaded() is called after the style has been torn down. This is expected
+        // on full page unmount and is not actionable -suppress all cleanup errors silently.
+        layersAddedRef.current = false;
+        isLoadingRef.current = false;
+      }
+    };
+  }, [map, visible, styleChangeCounter, countryCode, regionalImpactsData]); // styleChangeCounter needed to recreate layers after basemap changes
+
+  // Separate effect to update colors when style changes (without recreating layers)
+  useEffect(() => {
+    if (!map || !visible) return;
+
+    // Wait for style to be loaded before accessing layers
+    if (!safeIsStyleLoaded(map)) return;
+
+    const fillLayerId = 'regional-impacts-fill';
+    const lineLayerId = 'regional-impacts-line';
+
+    try {
+      if (map.getLayer(fillLayerId)) {
+        const colorExpression = forecastDanger
+          ? (windDangerColorExpression() as maplibregl.ExpressionSpecification)
+          : legendSettings
+            ? createDynamicColorExpression(
+                mapStyle === 'wind' ? 'Max_Wind_Gusts' : 'Total_Loss',
+                mapStyle === 'wind' ? legendSettings.wind : legendSettings.loss
+              )
+            : mapStyle === 'wind'
+              ? createWindColorExpression()
+              : createLossColorExpression(countryCode);
+        const opacityExpression = createRegionalFillOpacity(
+          forecastDanger ? 'wind' : (mapStyle as 'wind' | 'loss'),
+          selectedRegion,
+          layerOpacityScale / 100
+        );
+
+        // Smoothly transition to new color scheme using setPaintProperty only
+        map.setPaintProperty(fillLayerId, 'fill-color', colorExpression);
+        map.setPaintProperty(fillLayerId, 'fill-opacity', opacityExpression as any);
+
+        // Update line highlighting based on selection using unified helpers
+        if (map.getLayer(lineLayerId)) {
+          map.setPaintProperty(
+            lineLayerId,
+            'line-color',
+            createRegionalLineColor(selectedRegion) as any
+          );
+          map.setPaintProperty(
+            lineLayerId,
+            'line-width',
+            createRegionalLineWidth(selectedRegion) as any
+          );
+        }
+
+        console.log(`Switched to ${mapStyle} color scheme via setPaintProperty`);
+      }
+    } catch (e) {
+      console.warn('Error updating map style:', e);
+    }
+  }, [
+    map,
+    visible,
+    mapStyle,
+    selectedRegion,
+    styleChangeCounter,
+    layerOpacityScale,
+    countryCode,
+    legendSettings,
+    forecastDanger,
+  ]);
+
+  return null;
+}

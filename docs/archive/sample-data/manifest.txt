@@ -1,0 +1,569 @@
+Pipeline-ID: Cyclone-PDIE
+Pipeline-Description: 
+Start-Time: 2025-01-31T09:41:32.4081573
+Finish-Time: 2025-01-31T10:52:32.9175026
+
+Riskscape Version
+-----------------
+Engine: 1.8.0
+engine: 1.8.0
+cli: 1.8.0
+defaults: 1.8.0
+postgis: 1.8.0
+beta: 1.8.0
+cpython: 1.8.0
+jython: 1.8.0
+wizard: 1.8.0
+wizard-cli: 1.8.0
+
+Host Information
+----------------
+User: judithg
+Host: FJ211224.corp.spc.int
+
+Pipeline Outputs
+----------------
+regional-impacts-by-sector.geojson (size=2652044, checksum=null)
+cyclone-track.geojson (size=420, checksum=null)
+regional-summary-by-sector.csv (size=5578, checksum=null)
+regional-summary.csv (size=5528, checksum=null)
+impact-by-asset-type.csv (size=1574, checksum=null)
+regional-impacts.geojson (size=2680510, checksum=null)
+impact-by-sector.csv (size=1688, checksum=null)
+exposure-by-cluster.geojson (size=309083, checksum=null)
+national-summary.csv (size=3260, checksum=null)
+damaged-buildings.gpkg (size=12865536, checksum=null)
+damaged-roads.gpkg (size=442368, checksum=null)
+pipeline.txt (size=22218, checksum=null)
+manifest.txt (checksum=616d5da1178f9943f5e1a819c9f2bd8f570c4646629eef3a21349fa3d9ac0ff8)
+
+Pipeline Structure
+------------------
+
+Step-save_7: save
+  Parameters: 
+    name : [impact-by-asset-type]
+    format : [csv]
+  Depends On: 
+    group_1
+
+Step-save_5: save
+  Parameters: 
+    name : [damaged-buildings]
+    format : [geopackage]
+  Depends On: 
+    select_31
+
+Step-save_9: save
+  Parameters: 
+    name : [regional-summary-by-sector]
+    format : [csv]
+  Depends On: 
+    sort_2
+
+Step-save_10: save
+  Parameters: 
+    name : [regional-impacts-by-sector]
+    format : [geojson]
+  Depends On: 
+    group_4
+
+Step-save_2: save
+  Parameters: 
+    name : [regional-summary]
+    format : [csv]
+  Depends On: 
+    sort
+
+Step-save_3: save
+  Parameters: 
+    name : [national-summary]
+    format : [csv]
+  Depends On: 
+    select_28
+
+Step-save: save
+  Parameters: 
+    name : [cyclone-track]
+    format : [geojson]
+  Depends On: 
+    tc_track
+
+Step-save_6: save
+  Parameters: 
+    name : [damaged-roads]
+    format : [geopackage]
+  Depends On: 
+    select_33
+
+Step-save_1: save
+  Parameters: 
+    name : [regional-impacts]
+    format : [geojson]
+  Depends On: 
+    filter_admin2_regions
+
+Step-save_8: save
+  Parameters: 
+    name : [impact-by-sector]
+    format : [csv]
+  Depends On: 
+    sort_1
+
+Step-save_4: save
+  Parameters: 
+    name : [exposure-by-cluster]
+    format : [geojson]
+  Depends On: 
+    select_29
+
+Step-group_1: group
+  Parameters: 
+    select : [StructDeclaration[{*, round(sum(Loss)) as Total_Loss, round(sum(wind_loss)) as Total_Wind_Loss, round(sum(fluvial_loss)) as Total_Fluvial_Loss, round(sum(coastal_loss)) as Total_Coastal_Loss, round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value, round(sum(exposure.Value)) as Total_Value, count(Exposed) as Number_Exposed, count(Loss > 0) as Number_Damaged, count(*) as Total_Number, bucket_range(pick: Loss, range: [1, 100, 1000, 10000, 100000], select: {count(*) as Number, round(if_null(sum(Loss), 0.0)) as Total_Loss}) as By_Loss}]]
+    by : [PropertyAccess[exposure.Asset]]
+  Depends On: 
+    filter_3
+
+Step-select_31: select
+  Parameters: 
+    select : [StructDeclaration[{*, reproject(geom, 'EPSG:4326') as geom}]]
+  Depends On: 
+    select_30
+
+Step-sort_2: sort
+  Parameters: 
+    by : [ListDeclaration[[Region, Sector]]]
+  Depends On: 
+    group_3
+
+Step-group_4: group
+  Parameters: 
+    select : [StructDeclaration[{map_region.*, bucket(by: Asset_Type, pick: b -> b = Sector, select: {round(if_null(sum(Loss), 0.0)) as Loss, round(if_null(sum(wind_loss), 0.0)) as Wind_Loss, round(if_null(sum(fluvial_loss), 0.0)) as Fluvial_Loss, round(if_null(sum(coastal_loss), 0.0)) as Coastal_Loss, round(if_null(sum(if_then_else(Exposed, exposure.Value, 0.0)), 0.0)) as Exposed_Value, round(if_null(sum(exposure.Value), 0.0)) as Total_Value, count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings, count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings, count(exposure.Asset = 'Building') as Total_Number_Buildings, round(if_null(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0)), 0.0)) as Building_Loss, round(if_null(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0)), 0.0)) as Exposed_Building_Value, round(if_null(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0)), 0.0)) as Total_Building_Value}, buckets: {Education: 'Education', Infrastructure: 'Infrastructure', Productive: 'Productive', Public: 'Public', Other: 'Other', Residential: 'Residential'}) as Sector}]]
+    by : [StructDeclaration[{map_region}]]
+  Depends On: 
+    asset_event_impact_table
+
+Step-sort: sort
+  Parameters: 
+    by : [PropertyAccess[Region]]
+  Depends On: 
+    regional_event_impact
+
+Step-select_28: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'National' as Region}]]
+  Depends On: 
+    national_event_impact
+
+Step-tc_track: select
+  Parameters: 
+    select : [StructDeclaration[{combine_points(points, a_point) as geom}]]
+  Depends On: 
+    group
+
+Step-select_33: select
+  Parameters: 
+    select : [StructDeclaration[{*, reproject(geom, 'EPSG:4326') as geom}]]
+  Depends On: 
+    select_32
+
+Step-filter_admin2_regions: filter
+  Parameters: 
+    filter : [BinaryOperation[Region.Level = 'Admin2']]
+  Depends On: 
+    aggregate_impact
+
+Step-sort_1: sort
+  Parameters: 
+    by : [PropertyAccess[Sector]]
+  Depends On: 
+    group_2
+
+Step-select_29: select
+  Parameters: 
+    select : [StructDeclaration[{exposure.*, table_region.Region as Admin1_Region, map_region.Region as Admin2_Region, WindGust_kmph, Fluvial_Inundation_m, Coastal_Inundation_m}]]
+  Depends On: 
+    filter
+
+Step-filter_3: filter
+  Parameters: 
+    filter : [BinaryOperation[exposure.Asset != 'Population']]
+  Depends On: 
+    event_impact_table
+
+Step-select_30: select
+  Parameters: 
+    select : [StructDeclaration[{exposure.*, round(exposure.Value) as Value, table_region.Region as Admin1_Region, map_region.Region as Admin2_Region, WindGust_kmph, Fluvial_Inundation_m, Coastal_Inundation_m, round(wind_loss) as Wind_Loss, round(fluvial_loss) as Fluvial_Flood_Loss, round(coastal_loss) as Coastal_Flood_Loss, round(Loss) as Loss}]]
+  Depends On: 
+    filter_1
+
+Step-group_3: group
+  Parameters: 
+    select : [StructDeclaration[{*, round(sum(Loss)) as Total_Loss, round(sum(wind_loss)) as Total_Wind_Loss, round(sum(fluvial_loss)) as Total_Fluvial_Loss, round(sum(coastal_loss)) as Total_Coastal_Loss, round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value, round(sum(exposure.Value)) as Total_Value, count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings, count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings, count(exposure.Asset = 'Building') as Total_Number_Buildings, round(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0))) as Building_Loss, round(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Exposed_Building_Value, round(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Building_Value, bucket_range(pick: Loss, range: [1, 100, 1000, 10000, 100000], select: {count(*) as Number, round(if_null(sum(Loss), 0.0)) as Total_Loss}) as By_Loss}]]
+    by : [StructDeclaration[{Sector, table_region.Region}]]
+  Depends On: 
+    asset_event_impact_table
+
+Step-asset_event_impact_table: filter
+  Parameters: 
+    filter : [BinaryOperation[exposure.Asset != 'Population' and exposure.Value > 0]]
+  Depends On: 
+    event_impact_table
+
+Step-regional_event_impact: select
+  Parameters: 
+    select : [StructDeclaration[{Region.ID as Region_ID, *, Region.Region as Region}]]
+  Depends On: 
+    filter_admin1_regions
+
+Step-national_event_impact: filter
+  Parameters: 
+    filter : [BinaryOperation[Region.Level = 'National']]
+  Depends On: 
+    aggregate_impact
+
+Step-group: group
+  Parameters: 
+    select : [StructDeclaration[{to_list({geom: centroid(geom), line: "__linenum"}) as points, mode(geom) as a_point}]]
+  Depends On: 
+    input_TC_track
+
+Step-select_32: select
+  Parameters: 
+    select : [StructDeclaration[{exposure.*, round(exposure.Value) as Value, table_region.Region as Admin1_Region, map_region.Region as Admin2_Region, WindGust_kmph, Fluvial_Inundation_m, Coastal_Inundation_m, Road_km, round(fluvial_loss) as Fluvial_Flood_Loss, round(coastal_loss) as Coastal_Flood_Loss, round(Loss) as Loss}]]
+  Depends On: 
+    filter_2
+
+Step-aggregate_impact: group
+  Parameters: 
+    select : [StructDeclaration[{{Region.*, geom} as Region, round(mean(windspeed_kmph)) as Average_Wind_Gusts, round(max(windspeed_kmph)) as Max_Wind_Gusts, count(exposure.Asset = 'Building' and Exposed_Wind) as Buildings_Exposed_To_Wind, count(exposure.Asset = 'Building' and Exposed_Fluvial) as Buildings_Exposed_To_Fluvial_Flooding, count(exposure.Asset = 'Building' and Exposed_Coastal) as Buildings_Exposed_To_Coastal_Flooding, count(exposure.Asset = 'Building' and Exposed) as Buildings_Exposed_To_Any_Hazard, count(exposure.Asset = 'Building' and Loss > 0) as Damaged_Buildings, count(exposure.Asset = 'Building' and Exposed and exposure.UseType = 'Residential') as Exposed_Residential_Buildings, count(exposure.Asset = 'Building' and Exposed and exposure.UseType != 'Residential') as Exposed_Nonresidential_Buildings, count(exposure.Asset = 'Building') as Total_Buildings, round(sum(building_loss)) as Building_Loss, round(sum(if_then_else(exposure.UseType = 'Residential', building_loss, 0.0))) as Residential_Building_Loss, round(sum(if_then_else(exposure.UseType != 'Residential', building_loss, 0.0))) as Nonresidential_Building_Loss, round(sum(if_then_else(Exposed, Building_Value, 0.0))) as Exposed_Building_Value, round(sum(Building_Value)) as Total_Building_Value, round(sum(if_then_else(Exposed_Wind, Population, 0.0))) as Population_Exposed_To_Wind, round(sum(if_then_else(Exposed_Fluvial, Population, 0.0))) as Population_Exposed_To_Fluvial_Flooding, round(sum(if_then_else(Exposed_Coastal, Population, 0.0))) as Population_Exposed_To_Coastal_Flooding, round(sum(if_then_else(Exposed, Population, 0.0))) as Population_Exposed_To_Any_Hazard, round(sum(Population)) as Total_Population, count(exposure.Asset = 'Population' and Exposed) as Exposed_Households, count(exposure.Asset = 'Population') as Total_Households, round(sum(if_then_else(Exposed_Flood, Road_km, 0.0)), 2) as Road_km_Exposed_To_Flooding, round(sum(if_then_else(Loss > 0, Road_km, 0.0)), 2) as Damaged_Road_km, round(sum(Road_km), 2) as Total_Road_km, round(sum(if_then_else(Exposed_Flood, Road_Value, 0.0))) as Road_Value_Exposed_To_Flooding, round(sum(road_loss)) as Road_Loss, round(sum(Road_Value)) as Total_Road_Value, round(sum(if_then_else(Exposed, Infrastructure_Value, 0.0))) as Exposed_Infrastructure_Value, round(sum(infrastructure_loss)) as Infrastructure_Loss, round(sum(Infrastructure_Value)) as Total_Infrastructure_Value, count(infrastructure and Exposed) as Exposed_Infrastructure, count(infrastructure and Loss > 0) as Damaged_Infrastructure, count(infrastructure) as Total_Infrastructure, round(sum(if_then_else(Exposed, Crop_Value, 0.0))) as Exposed_Crop_Value, round(sum(crop_loss)) as Crop_Loss, round(sum(Crop_Value)) as Total_Crop_Value, count(Exposed and exposure.Asset = 'Evacuation Centre') as Exposed_Evacuation_Centres, count(exposure.Asset = 'Evacuation Centre') as Total_Evacuation_Centres, count(Exposed and exposure.Asset = 'Health Facility') as Exposed_Health_Facilties, count(exposure.Asset = 'Health Facility') as Total_Health_Facilties, count(Exposed and exposure.Asset = 'School') as Exposed_Schools, count(exposure.Asset = 'School') as Total_Schools, round(sum(if_then_else(Exposed_Wind, Total_Value, 0.0))) as Total_Exposed_Value_To_Wind, round(sum(if_then_else(Exposed_Fluvial, Total_Value, 0.0))) as Total_Exposed_Value_To_Fluvial_Flooding, round(sum(if_then_else(Exposed_Coastal, Total_Value, 0.0))) as Total_Exposed_Value_To_Coastal_Flooding, round(sum(if_then_else(Exposed, Total_Value, 0.0))) as Total_Exposed_Value_To_Any_Hazard, round(sum(Total_Value)) as Total_Value, round(sum(wind_loss)) as Total_Wind_Loss, round(sum(fluvial_loss)) as Total_Fluvial_Loss, round(sum(coastal_loss)) as Total_Coastal_Loss, round(sum(Loss)) as Total_Loss, bucket_range(pick: windspeed_kmph, range: [83, 125, 164, 224, 280], select: {count(exposure.Asset = 'Building') as Buildings, round(if_null(sum(Population), 0.0)) as Population, round(if_null(sum(Loss), 0.0)) as Total_Loss}) as Wind_Gusts_kmph, bucket_range(pick: max(coastal_inundation, fluvial_inundation), range: [0.01, 0.5, 1.0, 1.5, 2.0], select: {count(exposure.Asset = 'Building') as Buildings, round(if_null(sum(Population), 0.0)) as Population, round(if_null(sum(Loss), 0.0)) as Total_Loss}) as Inundation_Depth}]]
+    by : [StructDeclaration[{Region, geom}]]
+  Depends On: 
+    unnest_regions
+
+Step-group_2: group
+  Parameters: 
+    select : [StructDeclaration[{*, round(sum(Loss)) as Total_Loss, round(sum(wind_loss)) as Total_Wind_Loss, round(sum(fluvial_loss)) as Total_Fluvial_Loss, round(sum(coastal_loss)) as Total_Coastal_Loss, round(sum(if_then_else(Exposed, exposure.Value, 0.0))) as Total_Exposed_Value, round(sum(exposure.Value)) as Total_Value, count(Exposed and exposure.Asset = 'Building') as Number_Exposed_Buildings, count(Loss > 0 and exposure.Asset = 'Building') as Number_Damaged_Buildings, count(exposure.Asset = 'Building') as Total_Number_Buildings, round(sum(if_then_else(exposure.Asset = 'Building', Loss, 0.0))) as Building_Loss, round(sum(if_then_else(Exposed and exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Exposed_Building_Value, round(sum(if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0))) as Total_Building_Value, bucket_range(pick: Loss, range: [1, 100, 1000, 10000, 100000], select: {count(*) as Number, round(if_null(sum(Loss), 0.0)) as Total_Loss}) as By_Loss}]]
+    by : [PropertyAccess[Sector]]
+  Depends On: 
+    asset_event_impact_table
+
+Step-filter: filter
+  Parameters: 
+    filter : [BinaryOperation[Exposed and (exposure.Asset = 'Health Facility' or exposure.Asset = 'School' or exposure.Asset = 'Evacuation Centre')]]
+  Depends On: 
+    event_impact_table
+
+Step-event_impact_table: select
+  Parameters: 
+    select : [StructDeclaration[{*, Exposed_Wind or Exposed_Fluvial or Exposed_Coastal as Exposed, Exposed_Fluvial or Exposed_Coastal as Exposed_Flood, if_then_else(exposure.Asset = 'Building', Loss, 0.0) as building_loss, if_then_else(exposure.Asset = 'Road', Loss, 0.0) as road_loss, if_then_else(infrastructure, Loss, 0.0) as infrastructure_loss, if_then_else(exposure.Asset = 'Crop', Loss, 0.0) as crop_loss, round(windspeed_kmph) as WindGust_kmph, round(fluvial_inundation, 2) as Fluvial_Inundation_m, round(coastal_inundation, 2) as Coastal_Inundation_m}]]
+  Depends On: 
+    select_26
+
+Step-filter_1: filter
+  Parameters: 
+    filter : [BinaryOperation[Loss > 0 and exposure.Asset = 'Building']]
+  Depends On: 
+    event_impact_table
+
+Step-filter_admin1_regions: filter
+  Parameters: 
+    filter : [BinaryOperation[Region.Level = 'Admin1']]
+  Depends On: 
+    aggregate_impact
+
+Step-input_TC_track: input
+  Parameters: 
+    relation : [FunctionCall[bookmark('FMS-Track', {location: '../../hazard/vu_hazard/TC/Lola/20231023T030000Z_Official_Forecast_Track_2324_01F_Lola.csv'})]]
+
+Step-filter_2: filter
+  Parameters: 
+    filter : [BinaryOperation[Loss > 0 and exposure.Asset = 'Road']]
+  Depends On: 
+    event_impact_table
+
+Step-unnest_regions: unnest
+  Parameters: 
+    to-unnest : [ListDeclaration[[Region, geom]]]
+  Depends On: 
+    select_27
+
+Step-select_26: select
+  Parameters: 
+    select : [StructDeclaration[{*, windspeed_kmph > 105 as Exposed_Wind, fluvial_inundation > 0.15 as Exposed_Fluvial, coastal_inundation > 0.05 as Exposed_Coastal, if_then_else(exposure.Asset = 'Population', exposure.Value, 0.0) as Population, if_then_else(exposure.Asset = 'Building', exposure.Value, 0.0) as Building_Value, if_then_else(infrastructure, exposure.Value, 0.0) as Infrastructure_Value, if_then_else(exposure.Asset = 'Road', exposure.Value, 0.0) as Road_Value, if_then_else(exposure.Asset = 'Crop', exposure.Value, 0.0) as Crop_Value, if_then_else(exposure.Asset = 'Road', size / 1000.0, 0.0) as Road_km, if_then_else(exposure.Asset != 'Population', exposure.Value, 0.0) as Total_Value, min(fluvial_loss + coastal_loss + wind_loss, exposure.Value) as Loss}]]
+  Depends On: 
+    select_25
+
+Step-select_27: select
+  Parameters: 
+    select : [StructDeclaration[{*, [null_of('geometry'), table_region.geom, map_region.geom] as geom, [{null_of('text') as ID, null_of('text') as Region, 'National' as Level}, {table_region.ID, table_region.Region, 'Admin1' as Level}, {map_region.ID, map_region.Region, 'Admin2' as Level}] as Region}]]
+  Depends On: 
+    event_impact_table
+
+Step-select_25: select
+  Parameters: 
+    select : [StructDeclaration[{*, min(exposure.Value - (fluvial_loss + coastal_loss), wind_loss) as wind_loss}]]
+  Depends On: 
+    select_24
+
+Step-select_24: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_then_else(fluvial_loss > coastal_loss, fluvial_loss, 0.0) as fluvial_loss, if_then_else(coastal_loss >= fluvial_loss, coastal_loss, 0.0) as coastal_loss}]]
+  Depends On: 
+    select_23
+
+Step-select_23: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_then_else(exposure.Asset = 'Bridge', 0.0, fluvial_loss) as fluvial_loss}]]
+  Depends On: 
+    raw_results
+
+Step-raw_results: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_null(fluvial_loss, 0.0) as fluvial_loss, if_null(coastal_loss, 0.0) as coastal_loss, if_null(wind_loss, 0.0) as wind_loss, if_null(windspeed_kmph, 0.0) as windspeed_kmph, if_null(fluvial_inundation, 0.0) as fluvial_inundation, if_null(coastal_inundation, 0.0) as coastal_inundation, if_null(infrastructure, false) as infrastructure}]]
+  Depends On: 
+    select_22
+
+Step-select_22: select
+  Parameters: 
+    select : [StructDeclaration[{*, Flood_Loss(exposure, fluvial_inundation).Direct_Loss as fluvial_loss, Flood_Loss(exposure, coastal_inundation).Direct_Loss as coastal_loss, wind_damage(exposure, windspeed_kmph).Loss_p50 as wind_loss}]]
+  Depends On: 
+    select_21
+
+Step-select_21: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_then_else(fluvial_inundation > 0.15, fluvial_inundation, null_of('floating')) as fluvial_inundation, if_then_else(coastal_inundation > 0.05, coastal_inundation, null_of('floating')) as coastal_inundation}]]
+  Depends On: 
+    select_20
+
+Step-select_20: select
+  Parameters: 
+    select : [StructDeclaration[{*, max(coastal_inundation) as coastal_inundation, max(fluvial_inundation) as fluvial_inundation}]]
+  Depends On: 
+    select_19
+
+Step-select_19: select
+  Parameters: 
+    select : [StructDeclaration[{*, map(coastal_inundation, x -> if_then_else(str(x) = 'NaN', null_of('floating'), x)) as coastal_inundation, map(fluvial_inundation, x -> if_then_else(str(x) = 'NaN', null_of('floating'), x)) as fluvial_inundation}]]
+  Depends On: 
+    select_18
+
+Step-select_18: select
+  Parameters: 
+    select : [StructDeclaration[{*, windspeed_ms * 3.6 as windspeed_kmph, map(coastal_inundation, h -> h.sampled) as coastal_inundation, map(fluvial_inundation, h -> h.sampled) as fluvial_inundation}]]
+  Depends On: 
+    select_17
+
+Step-select_17: select
+  Parameters: 
+    select : [StructDeclaration[{*, sample_one(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/local_wind.tif')) as windspeed_ms, sample(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/_merged.tif')) as coastal_inundation, sample(exposure, bookmark('../../hazard/vu_hazard/TC/Lola/Pluvial-Fluvial_TC_LolaSouthSanto_hmax_UTM_nan.tif')) as fluvial_inundation}]]
+  Depends On: 
+    exposures_and_regions
+
+Step-exposures_and_regions: select
+  Parameters: 
+    select : [StructDeclaration[{*, sample_one(exposure, to_coverage(bookmark(bookmark('VU_Area_Councils'))), 10000) as map_region, sample_one(exposure, to_coverage(bookmark(bookmark('VU_Provinces'))), 10000) as table_region}]]
+  Depends On: 
+    select_16
+
+Step-select_16: select
+  Parameters: 
+    select : [StructDeclaration[{*, merge(exposure, {geom, exposure.Value * scale_factor as Value, InputType as Asset}) as exposure}]]
+  Depends On: 
+    select_15
+
+Step-select_15: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_then_else(can_segment and size > 0, size / orig_size, 1.0) as scale_factor}]]
+  Depends On: 
+    measure
+
+Step-measure: select
+  Parameters: 
+    select : [StructDeclaration[{*, measure(geom) as size}]]
+  Depends On: 
+    unnest
+
+Step-unnest: unnest
+  Parameters: 
+    to-unnest : [PropertyAccess[geom]]
+  Depends On: 
+    select_14
+
+Step-select_14: select
+  Parameters: 
+    select : [StructDeclaration[{*, if_then_else(can_segment, geom, [exposure.geom]) as geom}]]
+  Depends On: 
+    segment
+
+Step-segment: select
+  Parameters: 
+    select : [StructDeclaration[{*, measure(exposure.geom) as orig_size, segment(exposure.geom, 10) as geom}]]
+  Depends On: 
+    select_13
+
+Step-select_13: select
+  Parameters: 
+    select : [StructDeclaration[{*, switch(InputType, default: false, cases: [{in: ['Road', 'Port', 'Airport'], return: true}]) as can_segment}]]
+  Depends On: 
+    all_exposures
+
+Step-all_exposures: union
+  Parameters: 
+  Depends On: 
+    select
+    select_1
+    select_2
+    select_3
+    select_4
+    select_5
+    select_6
+    select_7
+    select_8
+    select_9
+    select_10
+    select_11
+    select_12
+
+Step-select: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Population' as InputType}]]
+  Depends On: 
+    input_population
+
+Step-select_1: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Building' as InputType, switch(exposure.UseType, cases: [{in: ['Commercial', 'Industrial'], return: 'Productive'}, {in: ['Educational'], return: 'Education'}, {in: ['Infrastructure'], return: 'Infrastructure'}, {in: ['Instituional', 'Public'], return: 'Public'}, {in: ['Other', 'Out building'], return: 'Other'}, {in: ['Residential'], return: 'Residential'}], default: 'Unknown') as Sector}]]
+  Depends On: 
+    input_buildings
+
+Step-select_2: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Evacuation Centre' as InputType}]]
+  Depends On: 
+    input_evac_centres
+
+Step-select_3: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Health Facility' as InputType}]]
+  Depends On: 
+    input_health_facilities
+
+Step-select_4: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'School' as InputType}]]
+  Depends On: 
+    input_schools
+
+Step-select_5: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Road' as InputType, 'Infrastructure' as Sector}]]
+  Depends On: 
+    input_roads
+
+Step-select_6: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Crop' as InputType, 'Productive' as Sector}]]
+  Depends On: 
+    input_crops
+
+Step-select_7: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Airport' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_airports
+
+Step-select_8: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Port' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_ports
+
+Step-select_9: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Power' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_power
+
+Step-select_10: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Telecommunication' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_telecom
+
+Step-select_11: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Water' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_water
+
+Step-select_12: select
+  Parameters: 
+    select : [StructDeclaration[{*, 'Bridge' as InputType, 'Infrastructure' as Sector, true as infrastructure}]]
+  Depends On: 
+    input_bridges
+
+Step-input_population: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Household_Population')]]
+
+Step-input_buildings: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_PCRAFI_Buildings')]]
+
+Step-input_evac_centres: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Evacuation_Centres')]]
+
+Step-input_health_facilities: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Health_Facilities')]]
+
+Step-input_schools: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Schools')]]
+
+Step-input_roads: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Roads')]]
+
+Step-input_crops: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Crops')]]
+
+Step-input_airports: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Airports')]]
+
+Step-input_ports: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Ports')]]
+
+Step-input_power: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Power')]]
+
+Step-input_telecom: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Telecom_Towers')]]
+
+Step-input_water: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Water')]]
+
+Step-input_bridges: input
+  Parameters: 
+    name : [exposure]
+    relation : [FunctionCall[bookmark('VU_Bridges')]]

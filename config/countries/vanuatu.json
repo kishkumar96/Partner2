@@ -1,0 +1,27 @@
+{
+  "$schema": "../schema.json",
+  "code": "VU",
+  "slug": "vanuatu",
+  "name": "Vanuatu",
+  "fullName": "Republic of Vanuatu",
+  "viewport": {
+    "center": [
+      166.9592,
+      -15.3767
+    ],
+    "zoom": 7
+  },
+  "partnerApi": {
+    "aliases": [
+      "vanuatu",
+      "republic of vanuatu"
+    ]
+  },
+  "terminology": {
+    "focusAreaSingular": "District",
+    "focusAreaPlural": "Districts",
+    "broaderAreaSingular": "Province",
+    "broaderAreaPlural": "Provinces",
+    "nationalLabel": "National"
+  }
+}

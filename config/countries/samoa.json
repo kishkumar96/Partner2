@@ -1,0 +1,27 @@
+{
+  "$schema": "../schema.json",
+  "code": "WS",
+  "slug": "samoa",
+  "name": "Samoa",
+  "fullName": "Independent State of Samoa",
+  "viewport": {
+    "center": [
+      -172.1046,
+      -13.759
+    ],
+    "zoom": 9
+  },
+  "partnerApi": {
+    "aliases": [
+      "samoa",
+      "independent state of samoa"
+    ]
+  },
+  "terminology": {
+    "focusAreaSingular": "District",
+    "focusAreaPlural": "Districts",
+    "broaderAreaSingular": "District",
+    "broaderAreaPlural": "Districts",
+    "nationalLabel": "National"
+  }
+}

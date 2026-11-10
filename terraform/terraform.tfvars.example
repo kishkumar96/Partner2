@@ -1,0 +1,8 @@
+# Production Environment Variables
+
+environment        = "production"
+aws_region         = "us-east-1"
+domain_name        = "yourdomain.com"
+alert_email        = "alerts@yourdomain.com"
+
+# Database and cache configuration will be loaded from sensitive variables

@@ -1,0 +1,62 @@
+{
+  "$schema": "../layers.schema.json",
+  "country": "WS",
+  "datasetBasePath": "/POP/Partner2/case_study2/hazard/ws_hazard/TC/Gita",
+  "layers": [
+    {
+      "id": "ws-tc-gita-wind",
+      "eventId": "tc-gita-samoa-2018",
+      "name": "TC Gita Wind Hazard",
+      "ncFile": "SA_savaii_upolu_local_wind.nc",
+      "layerName": "Depth",
+      "description": "Wind hazard from TC Gita",
+      "hazardType": "wind",
+      "bbox": [
+        -172.809220222,
+        -14.079136103075408,
+        -171.3973987012869,
+        -13.434475695
+      ],
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:4326",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.1,47.79",
+        "numColorBands": 50,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "extend",
+        "logScale": false
+      }
+    },
+    {
+      "id": "ws-tc-gita-inundation",
+      "eventId": "tc-gita-samoa-2018",
+      "name": "TC Gita Flood Hazard",
+      "ncFile": "WS_merged.nc",
+      "layerName": "Depth",
+      "description": "Flood/inundation hazard from TC Gita (WS_merged.nc)",
+      "hazardType": "flood",
+      "bbox": [
+        -172.809220222,
+        -14.079136103075408,
+        -171.3973987012869,
+        -13.434475695
+      ],
+      "maxNativeZoom": 15,
+      "styleConfig": {
+        "wmsVersion": "1.1.1",
+        "crs": "EPSG:3857",
+        "styles": "default-scalar/x-Sst",
+        "time": "2022-06-14T00:00:00.000Z",
+        "colorScaleRange": "0.01,5",
+        "numColorBands": 20,
+        "aboveMaxColor": "extend",
+        "belowMinColor": "transparent",
+        "bgColor": "transparent",
+        "logScale": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$"
+    },
+    "datasetBasePath": {
+      "type": "string",
+      "pattern": "^\\/[A-Za-z0-9_\\-./]+$"
+    },
+    "layers": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "eventId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "ncFile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "layerName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "hazardType": {
+            "type": "string",
+            "enum": ["wind", "flood", "inundation", "cyclone", "fluvial-depth"]
+          },
+          "bbox": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              }
+            ],
+            "additionalItems": false,
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "maxNativeZoom": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 22
+          },
+          "styleConfig": {
+            "type": "object",
+            "properties": {
+              "wmsVersion": {
+                "type": "string",
+                "enum": ["1.1.1", "1.3.0"]
+              },
+              "crs": {
+                "type": "string",
+                "enum": ["EPSG:4326", "EPSG:3857"]
+              },
+              "styles": {
+                "type": "string",
+                "minLength": 1
+              },
+              "colorScaleRange": {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$"
+              },
+              "numColorBands": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 250
+              },
+              "aboveMaxColor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "belowMinColor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "bgColor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "logScale": {
+                "type": "boolean"
+              },
+              "time": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "additionalProperties": false
+          },
+          "datasetPath": {
+            "type": "string",
+            "pattern": "^\\/[A-Za-z0-9_\\-./]+$"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ncFile",
+          "layerName",
+          "description",
+          "hazardType",
+          "bbox",
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["country", "datasetBasePath", "layers"],
+  "additionalProperties": false
+}

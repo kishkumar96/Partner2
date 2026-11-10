@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: climate-dashboard
+  namespace: production
+  labels:
+    app: climate-dashboard
+    version: v1
+spec:
+  replicas: 3
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: climate-dashboard
+  template:
+    metadata:
+      labels:
+        app: climate-dashboard
+        version: v1
+    spec:
+      containers:
+      - name: climate-dashboard
+        image: ghcr.io/kishkumar96/partner2-dashboard:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3112
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: climate-dashboard-config
+        env:
+        - name: PORT
+          value: "3112"
+        - name: HOSTNAME
+          value: "0.0.0.0"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: climate-dashboard-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: climate-dashboard-secrets
+              key: redis-url
+        - name: NEXT_PUBLIC_SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: climate-dashboard-secrets
+              key: sentry-dsn
+              optional: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        startupProbe:
+          tcpSocket:
+            port: 3112
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+        livenessProbe:
+          tcpSocket:
+            port: 3112
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /partner2/api/health
+            port: 3112
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - climate-dashboard
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30

@@ -1,0 +1,79 @@
+{
+  "order": ["VU", "WS", "TO", "CK"],
+  "slugToCode": {
+    "vanuatu": "VU",
+    "samoa": "WS",
+    "tonga": "TO",
+    "cook-islands": "CK"
+  },
+  "countries": {
+    "VU": {
+      "code": "VU",
+      "slug": "vanuatu",
+      "name": "Vanuatu",
+      "fullName": "Republic of Vanuatu",
+      "center": [166.9592, -15.3767],
+      "zoom": 7,
+      "partnerApiAliases": ["vanuatu", "republic of vanuatu"],
+      "ui": {
+        "appName": "Vanuatu Tropical Cyclone Rapid Impact Assessment Tool",
+        "focusAreaSingular": "District",
+        "focusAreaPlural": "Districts",
+        "broaderAreaSingular": "Province",
+        "broaderAreaPlural": "Provinces",
+        "nationalLabel": "National"
+      }
+    },
+    "WS": {
+      "code": "WS",
+      "slug": "samoa",
+      "name": "Samoa",
+      "fullName": "Independent State of Samoa",
+      "center": [-172.1046, -13.759],
+      "zoom": 9,
+      "partnerApiAliases": ["samoa", "independent state of samoa"],
+      "ui": {
+        "appName": "Samoa Tropical Cyclone Rapid Impact Assessment Tool",
+        "focusAreaSingular": "District",
+        "focusAreaPlural": "Districts",
+        "broaderAreaSingular": "District",
+        "broaderAreaPlural": "Districts",
+        "nationalLabel": "National"
+      }
+    },
+    "TO": {
+      "code": "TO",
+      "slug": "tonga",
+      "name": "Tonga",
+      "fullName": "Kingdom of Tonga",
+      "center": [-175.198, -21.179],
+      "zoom": 8,
+      "partnerApiAliases": ["tonga", "kingdom of tonga"],
+      "ui": {
+        "appName": "Tonga Tropical Cyclone Rapid Impact Assessment Tool",
+        "focusAreaSingular": "District",
+        "focusAreaPlural": "Districts",
+        "broaderAreaSingular": "District",
+        "broaderAreaPlural": "Districts",
+        "nationalLabel": "National"
+      }
+    },
+    "CK": {
+      "code": "CK",
+      "slug": "cook-islands",
+      "name": "Cook Islands",
+      "fullName": "Cook Islands",
+      "center": [-159.7777, -21.2367],
+      "zoom": 11,
+      "partnerApiAliases": ["cook islands"],
+      "ui": {
+        "appName": "Cook Islands Tropical Cyclone Rapid Impact Assessment Tool",
+        "focusAreaSingular": "Region",
+        "focusAreaPlural": "Regions",
+        "broaderAreaSingular": "Region",
+        "broaderAreaPlural": "Regions",
+        "nationalLabel": "National"
+      }
+    }
+  }
+}

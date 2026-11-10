@@ -1,0 +1,12 @@
+{
+  "$schema": "./release.schema.json",
+  "configVersion": "1.0.0",
+  "schemaVersion": 1,
+  "defaultCountry": "VU",
+  "countries": [
+    "vanuatu",
+    "samoa",
+    "tonga",
+    "cook-islands"
+  ]
+}

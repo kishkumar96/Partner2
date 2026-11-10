@@ -1,0 +1,11 @@
+echo "🚀 Running pre-push checks..."
+
+# Run full test suite (without global coverage gate)
+echo "🧪 Running full test suite..."
+npm test || exit 1
+
+# Run build to ensure it works
+echo "🏗️  Building application..."
+npm run build || exit 1
+
+echo "✅ All pre-push checks passed!"
