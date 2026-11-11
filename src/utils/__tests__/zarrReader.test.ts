@@ -24,6 +24,48 @@ function fakeFetch(overrides: Record<string, () => Response> = {}): jest.Mock {
 
 const tc = (r: number, s: number, y: number, x: number) => r * 100 + s * 10 + y + x / 10;
 
+describe('ZarrHttpStore retries', () => {
+  const chunk = 'probabilistic/tc/slr/0';
+  const originalDelays = ZarrHttpStore.retryDelaysMs;
+  beforeEach(() => {
+    ZarrHttpStore.retryDelaysMs = [0, 0];
+  });
+  afterEach(() => {
+    ZarrHttpStore.retryDelaysMs = originalDelays;
+  });
+
+  it('reads a chunk that was throttled once and then served', async () => {
+    let calls = 0;
+    const store = new ZarrHttpStore(
+      BASE,
+      fakeFetch({
+        [chunk]: () => {
+          calls += 1;
+          return calls === 1
+            ? new Response('', { status: 503 })
+            : new Response(readFileSync(join(ROOT, chunk)));
+        },
+      })
+    );
+    expect(await store.vector('probabilistic/tc/slr')).toEqual([0, 0.5]);
+    expect(calls).toBe(2);
+  });
+
+  it('gives up after the retries, and does not retry a missing chunk or a hard error', async () => {
+    const throttled = jest.fn(() => new Response('', { status: 503 }));
+    await expect(
+      new ZarrHttpStore(BASE, fakeFetch({ [chunk]: throttled })).vector('probabilistic/tc/slr')
+    ).rejects.toThrow('HTTP 503');
+    expect(throttled).toHaveBeenCalledTimes(3); // the read, then two retries
+
+    const hard = jest.fn(() => new Response('', { status: 500 }));
+    await expect(
+      new ZarrHttpStore(BASE, fakeFetch({ [chunk]: hard })).vector('probabilistic/tc/slr')
+    ).rejects.toThrow('HTTP 500');
+    expect(hard).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ZarrHttpStore', () => {
   it('reads metadata once, from the consolidated file', async () => {
     const fetchMock = fakeFetch();

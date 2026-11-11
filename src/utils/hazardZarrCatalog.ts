@@ -24,6 +24,8 @@ export interface ZarrCatalog {
   scenarios: ZarrCatalogScenario[];
   /** [west, south, east, north] per product */
   bounds: Record<string, [number, number, number, number]>;
+  /** Some product could not be read (a server error, not a missing upload); do not remember this listing */
+  partial?: boolean;
 }
 
 const unique = (values: Array<number | string>) => new Set(values).size === values.length;
@@ -39,6 +41,7 @@ function usable(values: Array<number | string>, kind: 'number' | 'label'): boole
 /** Every scenario of every product the store has, skipping a product whose upload is incomplete. */
 export async function listHazardScenarios(store: ZarrHttpStore): Promise<ZarrCatalog> {
   const catalog: ZarrCatalog = { scenarios: [], bounds: {} };
+  const failures: unknown[] = [];
   for (const [source, { group, dim }] of Object.entries(HAZARD_PRODUCTS)) {
     try {
       await store.arrayMeta(`${group}/depth`);
@@ -47,32 +50,45 @@ export async function listHazardScenarios(store: ZarrHttpStore): Promise<ZarrCat
         continue;
       throw error;
     }
-    const [slrValues, selectorValues] = await Promise.all([
-      store.vector(`${group}/slr`),
-      store.vector(`${group}/${dim}`),
-    ]);
-    const isEvent = dim === 'event';
-    if (!usable(slrValues, 'number') || !usable(selectorValues, isEvent ? 'label' : 'number')) {
-      console.warn(
-        `Hazard store: '${group}' has no readable ${dim} labels or slr values (incomplete upload?), skipping.`
-      );
-      continue;
-    }
-    catalog.bounds[source] = await hazardProductBounds(store, source);
-    const selectors = [...selectorValues].sort((a, b) =>
-      isEvent ? 0 : (a as number) - (b as number)
-    );
-    for (const slr of [...(slrValues as number[])].sort((a, b) => a - b)) {
-      for (const selector of selectors) {
-        catalog.scenarios.push({
-          source,
-          slr,
-          selector: String(selector),
-          returnPeriodYears: isEvent ? null : (selector as number),
-          eventLabel: isEvent ? (selector as string) : null,
-        });
+    try {
+      const [slrValues, selectorValues] = await Promise.all([
+        store.vector(`${group}/slr`),
+        store.vector(`${group}/${dim}`),
+      ]);
+      const isEvent = dim === 'event';
+      if (!usable(slrValues, 'number') || !usable(selectorValues, isEvent ? 'label' : 'number')) {
+        console.warn(
+          `Hazard store: '${group}' has no readable ${dim} labels or slr values (incomplete upload?), skipping.`
+        );
+        continue;
       }
+      const bounds = await hazardProductBounds(store, source);
+      const selectors = [...selectorValues].sort((a, b) =>
+        isEvent ? 0 : (a as number) - (b as number)
+      );
+      catalog.bounds[source] = bounds;
+      for (const slr of [...(slrValues as number[])].sort((a, b) => a - b)) {
+        for (const selector of selectors) {
+          catalog.scenarios.push({
+            source,
+            slr,
+            selector: String(selector),
+            returnPeriodYears: isEvent ? null : (selector as number),
+            eventLabel: isEvent ? (selector as string) : null,
+          });
+        }
+      }
+    } catch (error) {
+      // One product failing (say a throttled chunk) must not discard the products that read fine.
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      failures.push(error);
+      console.warn(`Hazard store: '${group}' could not be read, skipping.`, error);
     }
+  }
+  if (failures.length > 0) {
+    // Nothing readable at all: report the failure, so it is retried instead of remembered as empty.
+    if (catalog.scenarios.length === 0) throw failures[0];
+    catalog.partial = true;
   }
   return catalog;
 }
@@ -139,13 +155,18 @@ export function zarrStoreUrls(hazardRows: Array<Record<string, unknown>>): strin
 
 const catalogs = new Map<string, Promise<ZarrCatalog>>();
 
-/** One listing per store address; a failure is not remembered, so the next load tries again. */
+/** One listing per store address; a failed or partial listing is not remembered, so the next load tries again. */
 function catalogOf(storeUrl: string): Promise<ZarrCatalog> {
   let catalog = catalogs.get(storeUrl);
   if (!catalog) {
     catalog = listHazardScenarios(storeFor(storeUrl));
     catalogs.set(storeUrl, catalog);
-    catalog.catch(() => catalogs.delete(storeUrl));
+    catalog.then(
+      listed => {
+        if (listed.partial) catalogs.delete(storeUrl);
+      },
+      () => catalogs.delete(storeUrl)
+    );
   }
   return catalog;
 }

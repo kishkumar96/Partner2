@@ -53,11 +53,22 @@ const HALF_UPLOADED = {
 const storeOver = (fetchMock: jest.Mock) =>
   new ZarrHttpStore(BASE, fetchMock as unknown as typeof fetch);
 
+const DEFAULT_RETRY_DELAYS = ZarrHttpStore.retryDelaysMs;
+
+/** The fixture store, except that one file is always throttled, the way Wasabi sheds load. */
+function throttling(inner: jest.Mock, suffix: string): jest.Mock {
+  return jest.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).endsWith(suffix) ? new Response('', { status: 503 }) : inner(input, init)
+  );
+}
+
 beforeEach(() => {
   clearZarrCatalogCache();
+  ZarrHttpStore.retryDelaysMs = []; // no waiting between retries in tests
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 afterEach(() => {
+  ZarrHttpStore.retryDelaysMs = DEFAULT_RETRY_DELAYS;
   jest.restoreAllMocks();
   delete process.env.NEXT_PUBLIC_HAZARD_ZARR_DIRECT;
 });
@@ -117,6 +128,22 @@ describe('listHazardScenarios', () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining("'swell_driven' has no readable event labels")
     );
+  });
+
+  it("keeps the products that read fine when one product's chunk is throttled", async () => {
+    const store = storeOver(throttling(fixtureFetch(), '/historical_tcs/slr/0'));
+    const catalog = await listHazardScenarios(store);
+    expect(catalog.scenarios.filter(s => s.source === 'tc')).toHaveLength(8);
+    expect(catalog.scenarios.some(s => s.source === 'historical_tcs')).toBe(false);
+    expect(catalog.partial).toBe(true);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining("'historical_tcs' could not be read"),
+      expect.anything()
+    );
+  });
+
+  it('does not mark a complete listing as partial', async () => {
+    expect((await listHazardScenarios(storeOver(fixtureFetch()))).partial).toBeUndefined();
   });
 
   it('passes on a failure to read the store, rather than offering a half list', async () => {
@@ -244,6 +271,13 @@ describe('loadZarrHazardLayers', () => {
       expect.stringContaining('could not be read'),
       expect.anything()
     );
+    global.fetch = fixtureFetch() as unknown as typeof fetch;
+    expect(await loadZarrHazardLayers('CK', 'Cook Islands', rows)).toHaveLength(14);
+  });
+
+  it('offers what it could read when one product is throttled, and reads the store again next time', async () => {
+    global.fetch = throttling(fixtureFetch(), '/historical_tcs/slr/0') as unknown as typeof fetch;
+    expect(await loadZarrHazardLayers('CK', 'Cook Islands', rows)).toHaveLength(8);
     global.fetch = fixtureFetch() as unknown as typeof fetch;
     expect(await loadZarrHazardLayers('CK', 'Cook Islands', rows)).toHaveLength(14);
   });

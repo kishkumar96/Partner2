@@ -83,6 +83,9 @@ function decodeUtf32(bytes: Uint8Array, width: number): string {
 }
 
 export class ZarrHttpStore {
+  /** Waits before each retry of a throttled chunk read; tests set this to [] */
+  static retryDelaysMs: number[] = [250, 750];
+
   private consolidated: Promise<Record<string, unknown>> | null = null;
 
   constructor(
@@ -142,9 +145,14 @@ export class ZarrHttpStore {
     meta: ZarrArrayMeta
   ): Promise<Uint8Array | null> {
     const separator = meta.dimension_separator ?? '.';
-    const response = await this.fetchImpl(this.url(`${path}/${index.join(separator)}`), {
-      signal: this.signal,
-    });
+    const chunkUrl = this.url(`${path}/${index.join(separator)}`);
+    let response = await this.fetchImpl(chunkUrl, { signal: this.signal });
+    // Object stores shed load with 429/503 and succeed moments later; a missing chunk (404) never does.
+    for (const delay of ZarrHttpStore.retryDelaysMs) {
+      if (response.status !== 429 && response.status !== 503) break;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      response = await this.fetchImpl(chunkUrl, { signal: this.signal });
+    }
     if (response.status === 404) return null;
     if (!response.ok)
       throw new ZarrError(
