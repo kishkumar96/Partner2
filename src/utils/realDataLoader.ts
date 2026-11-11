@@ -1692,12 +1692,35 @@ function partnerResponseCacheEnabled(): boolean {
   return typeof window !== 'undefined' && process.env.NODE_ENV !== 'test';
 }
 
-async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promise<unknown> {
-  if (!partnerResponseCacheEnabled()) return fetchPartnerCollectionUncached(url, signal);
+/**
+ * A `shouldRead` for a batch of by-id reads: false for a large body whose size an earlier one in
+ * the batch already had. The shared API holds some uploads twice (the same 8.5 MB damaged-buildings
+ * file under three ids); the rows are collapsed to one afterwards anyway, so the repeats are not
+ * worth downloading and parsing. A response without a known size is always read.
+ */
+export function skipRepeatedLargeBodies(minBytes = 1_000_000): (response: Response) => boolean {
+  const seen = new Set<string>();
+  return response => {
+    const size =
+      response.headers.get('x-upstream-content-length') ?? response.headers.get('content-length');
+    if (!size || !(Number(size) >= minBytes)) return true;
+    if (seen.has(size)) return false;
+    seen.add(size);
+    return true;
+  };
+}
+
+async function fetchPartnerCollection(
+  url: string,
+  signal?: AbortSignal,
+  shouldRead?: (response: Response) => boolean
+): Promise<unknown> {
+  if (!partnerResponseCacheEnabled())
+    return fetchPartnerCollectionUncached(url, signal, shouldRead);
   if (missingPartnerPaths.has(partnerPathOf(url))) return null;
   const hit = partnerResponseCache.get(url);
   if (hit && Date.now() - hit.at < PARTNER_RESPONSE_TTL_MS) return JSON.parse(hit.body);
-  const payload = await fetchPartnerCollectionUncached(url, signal);
+  const payload = await fetchPartnerCollectionUncached(url, signal, shouldRead);
   // A failed or aborted request answers null; asking again later is right for those
   if (payload != null && !signal?.aborted) {
     const body = JSON.stringify(payload);
@@ -1708,7 +1731,11 @@ async function fetchPartnerCollection(url: string, signal?: AbortSignal): Promis
   return payload;
 }
 
-async function fetchPartnerCollectionUncached(url: string, signal?: AbortSignal): Promise<unknown> {
+async function fetchPartnerCollectionUncached(
+  url: string,
+  signal?: AbortSignal,
+  shouldRead?: (response: Response) => boolean
+): Promise<unknown> {
   const normalizePartnerProxyUrl = (nextUrl: string): string => {
     if (typeof window === 'undefined') {
       return nextUrl;
@@ -1737,6 +1764,10 @@ async function fetchPartnerCollectionUncached(url: string, signal?: AbortSignal)
       if (response.status === 404 && partnerResponseCacheEnabled()) {
         missingPartnerPaths.add(partnerPathOf(url));
       }
+      return null;
+    }
+    if (shouldRead && !shouldRead(response)) {
+      void response.body?.cancel().catch(() => undefined);
       return null;
     }
 
@@ -2046,10 +2077,11 @@ async function fetchEventRiskRowsById(
 ): Promise<Array<Record<string, unknown>>> {
   if (eventRecords.length === 0) return [];
   const active = resolveActiveEventRecord(countryCode, eventRecords, selectedEventIds, dateRange);
+  const shouldRead = skipRepeatedLargeBodies();
   const rows = await mapWithConcurrency(
     active.backendRiskIds ?? [],
     PARTNER_BY_ID_CONCURRENCY,
-    rowId => fetchPartnerCollection(`${riskInformationUrl}${rowId}/`, signal)
+    rowId => fetchPartnerCollection(`${riskInformationUrl}${rowId}/`, signal, shouldRead)
   );
   return rows.flatMap(asDetailRow);
 }

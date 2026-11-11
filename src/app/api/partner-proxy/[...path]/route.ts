@@ -217,6 +217,10 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
     }
     responseHeaders.set(key, value);
   }
+  // The body is re-streamed without a length, so pass the upstream's on: a caller can then
+  // decline a large body it already has (the same upload stored twice) before downloading it.
+  const upstreamLength = upstream.headers.get('content-length');
+  if (upstreamLength) responseHeaders.set('X-Upstream-Content-Length', upstreamLength);
 
   // Add browser/CDN caching for WMS tile requests (GET only, successful responses)
   if (request.method === 'GET' && upstream.status === 200 && isThreddsRequest) {

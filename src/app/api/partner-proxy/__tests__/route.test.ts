@@ -71,4 +71,20 @@ describe('partner-proxy forwarded headers', () => {
     );
     expect(other.status).toBe(404);
   });
+
+  it("passes on the upstream body's size, which the re-streamed response no longer carries", async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response('{"id":12}', {
+          status: 200,
+          headers: { 'content-type': 'application/json', 'content-length': '8503954' },
+        })
+    ) as unknown as typeof fetch;
+    const response = await GET(
+      new NextRequest('https://x/partner2/api/partner-proxy/partner_api/v1/risk_information/12/'),
+      { params: Promise.resolve({ path: ['partner_api', 'v1', 'risk_information', '12'] }) }
+    );
+    expect(response.headers.get('x-upstream-content-length')).toBe('8503954');
+    expect(response.headers.get('content-length')).toBeNull();
+  });
 });
