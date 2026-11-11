@@ -25,6 +25,8 @@ The one place that says what is current. Agents and people: read this first, upd
 
 ## Open items
 - Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and give rows 49 (Wati run 4, real data, do not delete) and 23 a country, rotate the API password.
+- Anuj, Cook Islands Meena (event 2, model run 16; checked 2026-11-11): `damaged-buildings` is uploaded three times (rows 11, 12, 13, identical geometry, 8.5 MB each); keep 11 and delete 12 and 13. Rows 16, 17 and 18 are three near-identical "impact by asset type". The by-sector GeoJSON (row 22) sums Rarotonga to $32.4M but the summary CSVs (rows 23, 24) say $39.82M; the dashboard shows the first. The loader skips repeats of a large body (`skipRepeatedLargeBodies`), so the duplicates cost little once the proxy passes `X-Upstream-Content-Length`.
+- Wasabi `spc-zarr-file/hazard_catalog.zarr`: `synthetic_tcs` and `swell_driven` have their arrays declared but no label chunks (`slr/0`, `event/0` answer 404), so the dashboard skips those two products. Re-upload them.
 - On GitHub: protect `main` and require the `CI passed` check.
 - Scenario losses are on Wasabi (`spc-zarr-file/scenario_losses/v1`, Cook Islands only); rerun `publish_scenario_losses --replace` after importing new scenarios.
 - Branches and worktrees (cleaned up on 2026-10-28; the old merged ones and the five that held unmerged commits are gone, and the two real changes among them were cherry-picked here):
