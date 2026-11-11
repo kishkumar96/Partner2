@@ -49,6 +49,7 @@ import {
 } from '@/utils/partnerEvents';
 import { listCountryCodes } from '@/config/registry';
 import { loadZarrHazardLayers, mergeHazardLayers, zarrStoreUrls } from '@/utils/hazardZarrCatalog';
+import type { DataSource } from '@/utils/dataSourceLabel';
 import { hazardZarrEnabled, parseHazardTileUrl } from '@/utils/hazardZarr';
 import {
   loadBreakdownRows,
@@ -2812,12 +2813,9 @@ export async function loadAllRealData(
   const eventMetadataSource: 'partner_api' | 'local_files' = partnerData.eventMeta
     ? 'partner_api'
     : 'local_files';
-  const riskDataSource: 'partner_api' | 'local_files' =
-    partnerData.riskData.regionalImpacts ||
-    partnerData.riskData.regionalSummary.length > 0 ||
-    partnerData.riskData.impactByAsset.length > 0
-      ? 'partner_api'
-      : 'local_files';
+  const riskDataSource: DataSource = hasPartnerRiskData(partnerData.riskData)
+    ? 'partner_api'
+    : 'local_files';
   const hazardLayerSource: 'partner_api' | 'static_config' =
     partnerData.hazardLayers.length > 0 ? 'partner_api' : 'static_config';
   if (process.env.NODE_ENV !== 'production') {
@@ -3185,12 +3183,29 @@ export async function loadAllRealData(
   };
 }
 
+/** Whether the API supplied any of the risk tables, in any of the forms the dashboard reads. */
+export function hasPartnerRiskData(riskData: PartnerRiskBundle): boolean {
+  return Boolean(
+    riskData.regionalImpacts ||
+    riskData.regionalImpactsBySector ||
+    riskData.exposureByCluster ||
+    riskData.regionalSummary.length > 0 ||
+    riskData.regionalSummaryBySector.length > 0 ||
+    riskData.impactByAsset.length > 0 ||
+    riskData.impactBySector.length > 0 ||
+    riskData.nationalSummary.length > 0
+  );
+}
+
 export async function loadSupplementaryRealData(
   options: Omit<RealDataLoadOptions, 'includeDamagedAssets' | 'includeSupplementaryData'> & {
     regionalSummary: Array<Record<string, unknown>>;
   }
 ): Promise<
-  Pick<
+  {
+    /** Where the risk tables came from, which the first pass can only guess at */
+    riskDataSource: DataSource;
+  } & Pick<
     RealDataLoadResult,
     | 'nationalSummary'
     | 'impactByAsset'
@@ -3312,6 +3327,7 @@ export async function loadSupplementaryRealData(
   }
 
   return {
+    riskDataSource: hasPartnerRiskData(partnerData.riskData) ? 'partner_api' : 'local_files',
     nationalSummary: (effectiveNationalSummary || []) as any,
     impactByAsset: (effectiveImpactByAsset || []) as any,
     impactBySector: (impactBySector || []) as any,

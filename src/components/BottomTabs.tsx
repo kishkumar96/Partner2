@@ -700,7 +700,10 @@ export default function BottomTabs({
                       <th className="px-4 py-2 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                         {getAggregationLabel()}
                       </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
+                      <th
+                        className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"
+                        title="Where the data has no population count, this is estimated as 4 people per exposed building."
+                      >
                         Population
                       </th>
                       <th className="px-4 py-2 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">

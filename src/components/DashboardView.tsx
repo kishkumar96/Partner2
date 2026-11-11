@@ -74,6 +74,7 @@ import {
   listForecastRuns,
 } from '@/utils/forecastRuns';
 import AssessmentPendingNotice from '@/components/AssessmentPendingNotice';
+import { withRiskSource } from '@/utils/dataSourceLabel';
 import { LoadingDataWorkspace, LoadingSummaryPanel } from '@/components/LoadingPanels';
 import {
   loadAllRealData,
@@ -2851,6 +2852,8 @@ export default function DashboardView({
             });
           }
 
+          // The first pass may have found no risk tables yet; this pass says where they came from
+          setDevDataSourceLabel(label => withRiskSource(label, supplementary.riskDataSource));
           if (supplementary.nationalSummary) setNationalSummary(supplementary.nationalSummary);
           if (supplementary.impactByAsset) setImpactByAssetType(supplementary.impactByAsset);
           if (supplementary.impactBySector) setImpactBySector(supplementary.impactBySector);
