@@ -23,6 +23,7 @@ The one place that says what is current. Agents and people: read this first, upd
 |---|---|---|---|
 | Claude (for kishank) | Forecast map: dateline fix, advisory start points, earlier tracks, release scrubber, date/time labels (uncommitted; checks: tsc, jest, prettier run here) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
 | Claude (for kishank) | Forecast map: wind radii by quadrant overlay (REF maps drew only a bare track); `import_ref_run` warns when a track has no radii (uncommitted; tsc, jest, prettier run here; middleware tests need Postgres, not run) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
+| Claude (for kishank) | Mobile redesign step 1: panel state, URL fields (`panel`, `eez`), `useIsMobile`; no UI wired yet. EEZ data still awaited. | `agent/claude/mobile-foundation` in `~/Partner2-mobile`; merges back here same day | 2026-11-19 |
 
 ## Open items
 - Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and give rows 49 (Wati run 4, real data, do not delete) and 23 a country, rotate the API password.
