@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import { ChevronDown, ChevronUp, Layers as LayersIcon } from 'lucide-react';
 import { getBeforeLayerId } from '@/utils/layerOrder';
@@ -10,10 +10,13 @@ import {
   FACILITY_COLORS,
   FLOODPLAIN_COLOR,
   PRIORITY_COLORS,
+  ORIGIN_COLORS,
   TRACK_COLOR,
 } from '@/utils/forecastColors';
 import type { ForecastLayerControls } from '@/utils/useForecastLayers';
 import { formatCount } from '@/utils/formatters';
+import ReleaseScrubber from '@/components/ReleaseScrubber';
+import { unwrapAntimeridian } from '@/utils/antimeridian';
 
 /**
  * Map overlays for a Rapid Exposure Forecast: forecast wind swaths, distance
@@ -22,7 +25,16 @@ import { formatCount } from '@/utils/formatters';
  * in Map Controls (see ForecastLayersSection and useForecastLayers).
  */
 
-type OverlayId = 'track' | 'swaths' | 'rings' | 'facilities' | 'floodplain' | 'priority';
+type OverlayId =
+  | 'track'
+  | 'swaths'
+  | 'rings'
+  | 'facilities'
+  | 'floodplain'
+  | 'priority'
+  | 'origins'
+  | 'releases'
+  | 'times';
 
 const SOURCES: Record<OverlayId, string> = {
   track: 'forecast-cyclone-track',
@@ -31,6 +43,9 @@ const SOURCES: Record<OverlayId, string> = {
   facilities: 'forecast-facilities',
   floodplain: 'forecast-floodplain',
   priority: 'forecast-priority',
+  origins: 'forecast-advisory-origins',
+  releases: 'forecast-advisory-tracks',
+  times: 'forecast-track-times',
 };
 
 function escapeHtml(value: unknown): string {
@@ -76,15 +91,31 @@ const dangerLineColor = [
   windDangerColor(null),
 ] as unknown as maplibregl.ExpressionSpecification;
 
+interface OverlayActions {
+  /** Switch the dashboard to another advisory of the storm */
+  selectAdvisory?: (runId: string) => void;
+}
+
+// The basemap's glyph set (see DamagedBuildingsLayer); text only shows if the style has glyphs
+const LABEL_FONT = ['Open Sans Bold', 'Arial Unicode MS Bold'];
+const LABEL_PAINT = {
+  'text-color': '#1e1b4b',
+  'text-halo-color': '#ffffff',
+  'text-halo-width': 1.6,
+};
+
 function addOverlay(
   map: MapLibreMap,
   id: OverlayId,
   data: GeoJSON.FeatureCollection,
-  onClick: (layerId: string, handler: (e: maplibregl.MapLayerMouseEvent) => void) => void
+  onClick: (layerId: string, handler: (e: maplibregl.MapLayerMouseEvent) => void) => void,
+  actions: OverlayActions = {}
 ) {
   const source = SOURCES[id];
   if (map.getSource(source)) return;
-  map.addSource(source, { type: 'geojson', data });
+  // The API keeps longitudes in ±180, so a storm near the dateline would otherwise be
+  // drawn with straight lines across the whole map
+  map.addSource(source, { type: 'geojson', data: unwrapAntimeridian(data) });
 
   if (id === 'track') {
     // A white casing under a dark line, so the track reads on light and dark basemaps
@@ -186,6 +217,150 @@ function addOverlay(
           )
         )
         .addTo(map);
+    });
+  }
+
+  if (id === 'releases') {
+    map.addLayer(
+      {
+        id: 'forecast-advisory-tracks',
+        type: 'line',
+        source,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ORIGIN_COLORS.other,
+          'line-width': 2,
+          'line-dasharray': [2, 2],
+          // The newest earlier advisory reads clearest; the oldest fade towards the basemap
+          'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['coalesce', ['get', 'age'], 1],
+            0,
+            0.8,
+            6,
+            0.2,
+          ],
+        } as maplibregl.LineLayerSpecification['paint'],
+      },
+      getBeforeLayerId(map, 'forecast-advisory-tracks')
+    );
+  }
+
+  if (id === 'times') {
+    const isDay = ['==', ['get', 'kind'], 'day'] as unknown as maplibregl.ExpressionSpecification;
+    map.addLayer(
+      {
+        id: 'forecast-track-times-dot',
+        type: 'circle',
+        source,
+        paint: {
+          'circle-radius': ['case', isDay, 5.5, 3],
+          'circle-color': ['case', isDay, ORIGIN_COLORS.day, TRACK_COLOR],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1.5,
+        } as maplibregl.CircleLayerSpecification['paint'],
+      },
+      getBeforeLayerId(map, 'forecast-track-times-dot')
+    );
+    map.addLayer(
+      {
+        id: 'forecast-track-times-label',
+        type: 'symbol',
+        source,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': LABEL_FONT,
+          'text-size': ['case', isDay, 12, 10],
+          'text-anchor': 'top',
+          'text-offset': [0, 0.8],
+          // A day marker outranks an hour label when they collide
+          'symbol-sort-key': ['get', 'sortKey'],
+          'text-optional': true,
+        } as maplibregl.SymbolLayerSpecification['layout'],
+        paint: LABEL_PAINT,
+      },
+      getBeforeLayerId(map, 'forecast-track-times-label')
+    );
+  }
+
+  if (id === 'origins') {
+    const selected = [
+      '==',
+      ['get', 'selected'],
+      true,
+    ] as unknown as maplibregl.ExpressionSpecification;
+    const latest = [
+      '==',
+      ['get', 'isLatest'],
+      true,
+    ] as unknown as maplibregl.ExpressionSpecification;
+    map.addLayer(
+      {
+        id: 'forecast-advisory-origins',
+        type: 'circle',
+        source,
+        paint: {
+          'circle-radius': ['case', selected, 8, latest, 6.5, 5],
+          'circle-color': ['case', selected, ORIGIN_COLORS.selected, ORIGIN_COLORS.other],
+          'circle-opacity': ['case', selected, 1, 0.75],
+          'circle-stroke-color': ['case', latest, TRACK_COLOR, '#ffffff'],
+          'circle-stroke-width': ['case', selected, 2.5, latest, 2.5, 1.5],
+        } as maplibregl.CircleLayerSpecification['paint'],
+      },
+      getBeforeLayerId(map, 'forecast-advisory-origins')
+    );
+    map.addLayer(
+      {
+        id: 'forecast-advisory-origins-label',
+        type: 'symbol',
+        source,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': LABEL_FONT,
+          'text-size': 10,
+          'text-anchor': 'bottom',
+          'text-offset': [0, -0.9],
+          // The advisory on screen and the latest keep their label when others collide
+          'symbol-sort-key': ['case', selected, 0, latest, 1, 2],
+          'text-optional': true,
+        } as maplibregl.SymbolLayerSpecification['layout'],
+        paint: LABEL_PAINT,
+      },
+      getBeforeLayerId(map, 'forecast-advisory-origins-label')
+    );
+    onClick('forecast-advisory-origins', e => {
+      const props = (e.features?.[0]?.properties ?? {}) as Record<string, unknown>;
+      const runId = String(props.runId ?? '');
+      const isSelected = props.selected === true || props.selected === 'true';
+      const popup = new maplibregl.Popup({ maxWidth: '280px' })
+        .setLngLat(e.lngLat)
+        .setHTML(
+          popupHtml(
+            `Advisory issued ${String(props.label ?? '')}`,
+            [
+              ['Storm', String(props.storm ?? '')],
+              ['Position at', props.positionLabel ? String(props.positionLabel) : 'not recorded'],
+              ['Wind there', props.windKt ? `${props.windKt} kt` : 'not recorded'],
+              [
+                'Status',
+                props.isLatest === true || props.isLatest === 'true' ? 'Latest' : 'Earlier',
+              ],
+            ],
+            null
+          ) +
+            (isSelected
+              ? '<p style="margin:0;padding:0 12px 12px;font-size:11px;color:#94a3b8;">Showing this advisory now</p>'
+              : `<div style="padding:0 12px 12px;"><button type="button" data-advisory="${escapeHtml(runId)}" style="cursor:pointer;border:1px solid #38bdf8;background:#0c4a6e;color:#e0f2fe;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;">View this advisory</button></div>`)
+        )
+        .addTo(map);
+      popup
+        .getElement()
+        ?.querySelector('[data-advisory]')
+        ?.addEventListener('click', () => {
+          actions.selectAdvisory?.(runId);
+          popup.remove();
+        });
     });
   }
 
@@ -308,6 +483,9 @@ function removeOverlay(map: MapLibreMap, id: OverlayId) {
     facilities: ['forecast-facilities'],
     floodplain: ['forecast-floodplain-line', 'forecast-floodplain-fill'],
     priority: ['forecast-priority-line', 'forecast-priority-casing', 'forecast-priority-hit'],
+    origins: ['forecast-advisory-origins-label', 'forecast-advisory-origins'],
+    releases: ['forecast-advisory-tracks'],
+    times: ['forecast-track-times-label', 'forecast-track-times-dot'],
   };
   try {
     for (const layer of layers[id]) if (map.getLayer(layer)) map.removeLayer(layer);
@@ -327,6 +505,7 @@ export default function ForecastLayers({
   controls,
   onOpenControls,
   hiddenOverlays = [],
+  onSelectAdvisory,
 }: {
   map: MapLibreMap | null;
   controls: ForecastLayerControls;
@@ -334,7 +513,18 @@ export default function ForecastLayers({
   /** Overlays left undrawn for now without changing the user's switches, e.g. the static
    * track while the cyclone animation draws the same track */
   hiddenOverlays?: OverlayId[];
+  /** Called when someone chooses "View this advisory" on an advisory's start point */
+  onSelectAdvisory?: (runId: string) => void;
 }) {
+  // A ref, so a new callback each render doesn't tear the overlays down and redraw them
+  const selectAdvisoryRef = useRef(onSelectAdvisory);
+  useEffect(() => {
+    selectAdvisoryRef.current = onSelectAdvisory;
+  }, [onSelectAdvisory]);
+  const actions = useMemo<OverlayActions>(
+    () => ({ selectAdvisory: runId => selectAdvisoryRef.current?.(runId) }),
+    []
+  );
   const { shown, data } = controls;
   // Drawn on the map: switched on AND this run has the data (a switch can be on for
   // a layer the run lacks, e.g. the REF input track)
@@ -346,7 +536,7 @@ export default function ForecastLayers({
     ? (Object.keys(SOURCES) as OverlayId[]).map(id => {
         const collection = data[id];
         return shown[id] && !hiddenOverlays.includes(id) && collection ? (
-          <Overlay key={id} map={map} id={id} data={collection} />
+          <Overlay key={id} map={map} id={id} data={collection} actions={actions} />
         ) : null;
       })
     : null;
@@ -363,13 +553,23 @@ export default function ForecastLayers({
         <LayersIcon className="h-3.5 w-3.5" aria-hidden="true" />
         Layers · {controls.activeCount}
       </button>
-      <ForecastLegend active={active} />
+      {controls.releaseSteps?.length >= 2 && (
+        <ReleaseScrubber steps={controls.releaseSteps} onSelect={onSelectAdvisory} />
+      )}
+      <ForecastLegend active={active} timeZone={controls.timeZoneName} />
     </>
   );
 }
 
 /** What everything drawn on the forecast map means. */
-export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> }) {
+export function ForecastLegend({
+  active,
+  timeZone,
+}: {
+  active: Partial<Record<OverlayId, boolean>>;
+  /** Name of the zone the time labels use, e.g. "UTC" */
+  timeZone?: string;
+}) {
   // Collapsed to start with: open, it covers the islands the forecast is about
   const [open, setOpen] = useState(false);
 
@@ -427,7 +627,10 @@ export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> 
             active.floodplain ||
             active.rings ||
             active.track ||
-            active.priority) && (
+            active.priority ||
+            active.origins ||
+            active.releases ||
+            active.times) && (
             <ul className="space-y-1">
               {active.facilities && (
                 <li>
@@ -489,6 +692,56 @@ export function ForecastLegend({ active }: { active: Record<OverlayId, boolean> 
                   Distance from track (25 km rings)
                 </li>
               )}
+              {active.origins && (
+                <li className="space-y-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full border-2 border-white"
+                      style={{ backgroundColor: ORIGIN_COLORS.selected }}
+                      aria-hidden="true"
+                    />
+                    Start of the advisory on screen
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <span
+                      className="h-2 w-2 flex-shrink-0 rounded-full border border-white"
+                      style={{ backgroundColor: ORIGIN_COLORS.other }}
+                      aria-hidden="true"
+                    />
+                    Start of the storm&apos;s other advisories (outlined: the latest)
+                  </span>
+                </li>
+              )}
+              {active.releases && (
+                <li className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 flex-shrink-0 border-t-2 border-dashed"
+                    style={{ borderColor: ORIGIN_COLORS.other }}
+                    aria-hidden="true"
+                  />
+                  Earlier advisories&apos; tracks (fainter when older)
+                </li>
+              )}
+              {active.times && (
+                <li className="space-y-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full border-2 border-white"
+                      style={{ backgroundColor: ORIGIN_COLORS.day }}
+                      aria-hidden="true"
+                    />
+                    Day changes at midnight{timeZone ? ` (${timeZone})` : ''}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <span
+                      className="h-1.5 w-1.5 flex-shrink-0 rounded-full border border-white"
+                      style={{ backgroundColor: TRACK_COLOR }}
+                      aria-hidden="true"
+                    />
+                    Forecast time every 6 hours
+                  </span>
+                </li>
+              )}
               {active.track && (
                 <li className="flex items-center gap-1.5">
                   <span
@@ -512,10 +765,12 @@ function Overlay({
   map,
   id,
   data,
+  actions,
 }: {
   map: MapLibreMap;
   id: OverlayId;
   data: GeoJSON.FeatureCollection;
+  actions: OverlayActions;
 }) {
   useEffect(() => {
     const handlers: Array<[string, (e: maplibregl.MapLayerMouseEvent) => void]> = [];
@@ -532,7 +787,7 @@ function Overlay({
     const tryAdd = (): boolean => {
       if (done) return true;
       try {
-        addOverlay(map, id, data, onClick);
+        addOverlay(map, id, data, onClick, actions);
         done = true;
         return true;
       } catch {
@@ -557,7 +812,7 @@ function Overlay({
       for (const [layerId, handler] of handlers) map.off('click', layerId, handler);
       removeOverlay(map, id);
     };
-  }, [map, id, data]);
+  }, [map, id, data, actions]);
 
   return null;
 }

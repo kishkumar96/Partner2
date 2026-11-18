@@ -1,5 +1,6 @@
 'use client';
 
+import type { AdvisoryReleases } from '@/utils/advisoryReleases';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
@@ -477,11 +478,6 @@ export default function DashboardView({
     activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
     selectedCountry
   );
-  const forecastLayerControls = useForecastLayers(
-    forecastExposure,
-    selectedCountry,
-    responsePriority?.features ?? null
-  );
   const [isLoadingDamage, setIsLoadingDamage] = useState({ buildings: false, roads: false });
   const [damageLoadError, setDamageLoadError] = useState<string | null>(null);
   const isLoadingDamageRef = useRef(isLoadingDamage);
@@ -515,6 +511,21 @@ export default function DashboardView({
   const [regionalSummaryBySector, setRegionalSummaryBySector] = useState<any[]>([]);
   const [cycloneTrackData, setCycloneTrackData] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cycloneForecast, setCycloneForecast] = useState<any>(null);
+  const [advisoryReleases, setAdvisoryReleases] = useState<AdvisoryReleases | null>(null);
+  const forecastLayerExtras = useMemo(
+    () => ({
+      advisoryReleases,
+      activeRunId: activeEventRecord?.id ?? null,
+      trackPoints: Array.isArray(cycloneForecast) ? cycloneForecast : null,
+    }),
+    [advisoryReleases, activeEventRecord?.id, cycloneForecast]
+  );
+  const forecastLayerControls = useForecastLayers(
+    forecastExposure,
+    selectedCountry,
+    responsePriority?.features ?? null,
+    forecastLayerExtras
+  );
   const derivedRegions = useMemo(() => {
     if (regionalSummary.length === 0) {
       return [];
@@ -2654,6 +2665,7 @@ export default function DashboardView({
     setRegionalSummaryBySector([]);
     setCycloneTrackData(null);
     setCycloneForecast(null);
+    setAdvisoryReleases(null);
     setExpandedEvents([]);
     setEvents([]);
     setPartnerHazardLayers([]);
@@ -2804,6 +2816,10 @@ export default function DashboardView({
 
       if (realData.damagedBuildings) {
         setDamagedBuildings(realData.damagedBuildings);
+      }
+
+      if (realData.advisoryReleases !== undefined) {
+        setAdvisoryReleases(realData.advisoryReleases);
       }
 
       if (realData.cycloneForecast) {
@@ -3859,6 +3875,7 @@ export default function DashboardView({
               <ForecastLayers
                 map={mapInstance}
                 controls={forecastLayerControls}
+                onSelectAdvisory={setModeEventId}
                 // The animation draws the same track; two copies would only thicken the line
                 hiddenOverlays={
                   showCycloneControls && canAnimateCyclone && cycloneForecast ? ['track'] : []

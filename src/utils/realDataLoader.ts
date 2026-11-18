@@ -2,6 +2,7 @@
  * Utility to load real data from the project data files
  */
 
+import { buildAdvisoryReleases, type AdvisoryReleases } from '@/utils/advisoryReleases';
 import { Event, RegionalImpact } from '@/types';
 import type { RealDataLoadResult } from '@/types/realData';
 import {
@@ -2368,6 +2369,8 @@ async function loadPartnerApiCountryData(
   hazardLayers: RealWMSLayer[];
   forecastTrackUrl: string | null;
   forecastPoints: CycloneForecastPoint[] | null;
+  /** The start of every advisory's own track, to show how the forecast moved between releases */
+  advisoryReleases?: AdvisoryReleases | null;
   /** Lazily builds (and memoises) a non-primary event's risk bundle. */
   getEventRiskData: (eventId: string) => PartnerRiskBundle | undefined;
 }> {
@@ -2684,6 +2687,11 @@ async function loadPartnerApiCountryData(
       ),
       forecastTrackUrl,
       forecastPoints,
+      advisoryReleases: buildAdvisoryReleases(
+        toArrayPayload(cyclonePayload),
+        eventRecords,
+        countryCode
+      ),
       getEventRiskData,
     };
   } catch (_error) {
@@ -3148,6 +3156,7 @@ export async function loadAllRealData(
   return {
     cycloneTrack: effectiveCycloneTrack,
     cycloneForecast: (cycloneForecast as any) || null,
+    advisoryReleases: partnerApiActive ? (partnerData.advisoryReleases ?? null) : null,
     forecastExposure,
     previousForecast,
     forecastTimeline,

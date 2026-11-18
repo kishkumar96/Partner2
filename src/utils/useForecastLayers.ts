@@ -2,6 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPartnerRiskInformationGeometry } from '@/utils/realDataLoader';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import type { CountryCode } from '@/types/thredds';
+import {
+  releaseSteps,
+  selectAdvisoryReleases,
+  type AdvisoryReleases,
+  type ReleaseStep,
+} from '@/utils/advisoryReleases';
+import {
+  buildTrackTimeLabels,
+  timeZoneName,
+  type TimeZoneMode,
+  type TrackTimePoint,
+} from '@/utils/trackTimeLabels';
 
 export type ForecastOverlayId =
   | 'track'
@@ -9,7 +21,10 @@ export type ForecastOverlayId =
   | 'rings'
   | 'facilities'
   | 'floodplain'
-  | 'priority';
+  | 'priority'
+  | 'origins'
+  | 'releases'
+  | 'times';
 
 export interface ForecastLayerOption {
   id: ForecastOverlayId;
@@ -32,6 +47,23 @@ export interface ForecastLayerControls {
   activeCount: number;
   /** e.g. "Wind swaths · Facilities", or "None shown" */
   summary: string;
+  /** Whether date and time labels are in UTC or the country's own time */
+  /** The storm's advisories, oldest first, for the release scrubber (empty with fewer than two) */
+  releaseSteps: ReleaseStep[];
+  timeZoneMode: TimeZoneMode;
+  setTimeZoneMode: (mode: TimeZoneMode) => void;
+  /** "UTC" or e.g. "UTC+13", for the switch and legend */
+  timeZoneName: string;
+}
+
+/** What the advisory and time-label overlays are drawn from. */
+export interface ForecastLayerExtras {
+  /** The start of every advisory of the country's storms */
+  advisoryReleases: AdvisoryReleases | null;
+  /** The advisory on screen (its start point is highlighted) */
+  activeRunId: string | null;
+  /** The shown run's track points, with times */
+  trackPoints: TrackTimePoint[] | null;
 }
 
 const DEFAULT_SHOWN: Record<ForecastOverlayId, boolean> = {
@@ -41,6 +73,9 @@ const DEFAULT_SHOWN: Record<ForecastOverlayId, boolean> = {
   facilities: true,
   floodplain: false,
   priority: false,
+  origins: true,
+  releases: true,
+  times: true,
 };
 
 /**
@@ -52,7 +87,8 @@ export function useForecastLayers(
   exposure: ForecastExposure | null,
   countryCode: CountryCode,
   /** The areas with their operational priority, for the outline layer */
-  priorityFeatures: GeoJSON.FeatureCollection | null = null
+  priorityFeatures: GeoJSON.FeatureCollection | null = null,
+  extras: ForecastLayerExtras | null = null
 ): ForecastLayerControls | null {
   const layers = exposure?.layers ?? null;
   const floodplainRowId = layers?.floodplainRowId ?? null;
@@ -60,6 +96,20 @@ export function useForecastLayers(
   const [floodplain, setFloodplain] = useState<GeoJSON.FeatureCollection | null>(null);
   const [floodplainState, setFloodplainState] = useState<'idle' | 'loading' | 'failed'>('idle');
   const floodplainRequested = useRef(false);
+  const [timeZoneMode, setTimeZoneMode] = useState<TimeZoneMode>('utc');
+
+  const releases = useMemo(
+    () => selectAdvisoryReleases(extras?.advisoryReleases ?? null, extras?.activeRunId ?? null),
+    [extras?.advisoryReleases, extras?.activeRunId]
+  );
+  const timeLabels = useMemo(
+    () => buildTrackTimeLabels(extras?.trackPoints, { mode: timeZoneMode, countryCode }),
+    [extras?.trackPoints, timeZoneMode, countryCode]
+  );
+  const zoneName = useMemo(
+    () => timeZoneName(timeZoneMode, countryCode),
+    [timeZoneMode, countryCode]
+  );
 
   // A different forecast starts from its defaults and must not keep the
   // previous forecast's multi-megabyte floodplain geometry.
@@ -149,6 +199,29 @@ export function useForecastLayers(
         available: !!layers.trackDistance,
       },
     ];
+    all.push(
+      {
+        id: 'origins',
+        label: 'Start of each advisory',
+        short: 'Advisory starts',
+        available: !!releases,
+        note: 'Where the storm was when each advisory was issued. Click one to open it.',
+      },
+      {
+        id: 'releases',
+        label: 'Earlier forecast tracks',
+        short: 'Earlier tracks',
+        available: !!releases && releases.tracks.features.length > 0,
+        note: 'Each earlier advisory’s whole track, fainter the older it is.',
+      },
+      {
+        id: 'times',
+        label: 'Dates and times along the track',
+        short: 'Track times',
+        available: !!timeLabels,
+        note: 'Hour labels every 6 hours, and a marker at each midnight where the date changes.',
+      }
+    );
     const options = all.filter(option => option.available);
     if (options.length === 0) return null;
     const active = options.filter(option => shown[option.id]);
@@ -163,10 +236,29 @@ export function useForecastLayers(
         facilities: layers.facilities,
         floodplain,
         priority: priorityFeatures,
+        origins: releases?.origins ?? null,
+        releases: releases && releases.tracks.features.length > 0 ? releases.tracks : null,
+        times: timeLabels,
       },
       floodplainState,
       activeCount: active.length,
       summary: active.length > 0 ? active.map(option => option.short).join(' · ') : 'None shown',
+      releaseSteps: releaseSteps(releases),
+      timeZoneMode,
+      setTimeZoneMode,
+      timeZoneName: zoneName,
     };
-  }, [exposure, layers, shown, toggle, floodplain, floodplainState, priorityFeatures]);
+  }, [
+    exposure,
+    layers,
+    shown,
+    toggle,
+    floodplain,
+    floodplainState,
+    priorityFeatures,
+    releases,
+    timeLabels,
+    timeZoneMode,
+    zoneName,
+  ]);
 }

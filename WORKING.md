@@ -21,7 +21,7 @@ The one place that says what is current. Agents and people: read this first, upd
 ## In progress
 | Who | What | Branch/worktree | Since |
 |---|---|---|---|
-| (nobody) | | | |
+| Claude (for kishank) | Forecast map: dateline fix, advisory start points, earlier tracks, release scrubber, date/time labels (uncommitted; checks: tsc, jest, prettier run here) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
 
 ## Open items
 - Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and give rows 49 (Wati run 4, real data, do not delete) and 23 a country, rotate the API password.

@@ -32,6 +32,34 @@ export default function ForecastLayersSection({
             )}
           </label>
           {option.note && <p className="ml-5 text-[10px] text-slate-400">{option.note}</p>}
+          {option.id === 'times' && controls.shown.times && (
+            <div
+              role="radiogroup"
+              aria-label="Time zone for the labels"
+              className="ml-5 mt-1 inline-flex overflow-hidden rounded-md border border-slate-600 text-[10px]"
+            >
+              {(['utc', 'local'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={controls.timeZoneMode === mode}
+                  onClick={() => controls.setTimeZoneMode(mode)}
+                  className={`px-2 py-0.5 font-semibold ${
+                    controls.timeZoneMode === mode
+                      ? 'bg-sky-500/30 text-sky-100'
+                      : 'text-slate-300 hover:bg-slate-700/50'
+                  }`}
+                >
+                  {mode === 'utc'
+                    ? 'UTC'
+                    : controls.timeZoneMode === 'local'
+                      ? controls.timeZoneName
+                      : 'Local time'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

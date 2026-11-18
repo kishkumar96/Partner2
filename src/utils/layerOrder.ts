@@ -60,12 +60,17 @@ export const LAYER_ORDER = {
   'intensity-heatmap': 35,
 
   // Cyclone tracks and forecasts
+  'forecast-advisory-tracks': 38,
   'forecast-track-distance-line': 39,
   'cyclone-forecast-track-line': 40,
   'cyclone-forecast-points': 41,
   'cyclone-historical-track': 42,
   'forecast-cyclone-track-casing': 43,
   'forecast-cyclone-track-line': 44,
+  'forecast-track-times-dot': 45,
+  'forecast-track-times-label': 46,
+  'forecast-advisory-origins': 47,
+  'forecast-advisory-origins-label': 48,
 
   // Damaged infrastructure
   'damaged-roads-layer': 50,

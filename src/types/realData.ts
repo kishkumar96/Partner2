@@ -1,4 +1,5 @@
 import type { TimelinePoint } from '@/utils/forecastTimeline';
+import type { AdvisoryReleases } from '@/utils/advisoryReleases';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import type { RealWMSLayer } from '@/data/realThreddsLayers';
 import type { EventRecord } from '@/data/eventRecords';
@@ -162,6 +163,8 @@ export interface RealDataLoadResult {
   regionalSummary: RegionalSummaryRow[];
   regionalSummaryBySector: RegionalSummaryBySectorRow[];
   cycloneForecast: CycloneForecastPoint[] | null;
+  /** Where each advisory of the country's storms begins (partner API only) */
+  advisoryReleases?: AdvisoryReleases | null;
   regionalImpactsData?: any[]; // RegionalImpact[] - structured impact data per region
   sectorSpecificEvents?: any[]; // Event[] - sector-specific events for filtering
   dataSourceInfo?: {

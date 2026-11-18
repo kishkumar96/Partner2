@@ -12,3 +12,10 @@ export const PRIORITY_COLORS: Record<string, string> = {
   green: '#16a34a',
   grey: '#64748b',
 };
+
+/** Advisory start points and the day markers on a track */
+export const ORIGIN_COLORS = {
+  selected: '#f59e0b',
+  other: '#a78bfa',
+  day: '#f97316',
+};
