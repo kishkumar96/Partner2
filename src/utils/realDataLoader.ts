@@ -13,6 +13,7 @@ import {
 import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
 import { COUNTRIES, CountryCode } from '@/types/thredds';
+import { scopeBundleToCountry } from '@/utils/countryScope';
 import {
   createPartnerEventId,
   type EventRecord,
@@ -1226,6 +1227,8 @@ interface PartnerRiskBundle {
   // actually switched on, instead of every page load paying for it.
   damagedBuildingsRowId: string | null;
   damagedRoadsRowId: string | null;
+  /** Other countries the run's tables also covered, left out of this dashboard (see countryScope) */
+  neighbouringCountries?: string[];
 }
 
 function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
@@ -2554,7 +2557,10 @@ async function loadPartnerApiCountryData(
           ? bundle.impactByAsset
           : extractPartnerImpactByAssetRows(rows),
     });
-    const activeRiskBundle = withFallbackTables(riskData, riskRows);
+    // A run covers a storm's whole footprint: keep this dashboard to its own country's rows
+    const scopeToCountry = (bundle: PartnerRiskBundle): PartnerRiskBundle =>
+      scopeBundleToCountry(bundle, COUNTRIES[countryCode]?.name);
+    const activeRiskBundle = scopeToCountry(withFallbackTables(riskData, riskRows));
     const eventRiskCache = new Map<string, PartnerRiskBundle>();
     const getEventRiskData = (eventId: string): PartnerRiskBundle | undefined => {
       if (eventId === activeEventRecord.id) return activeRiskBundle;
@@ -2569,7 +2575,9 @@ async function loadPartnerApiCountryData(
       const eventRiskRows = dedupePartnerRiskRows(
         scopeRiskRowsToEvent(countryRiskRows, eventRecord, eventRecords)
       );
-      const bundle = withFallbackTables(extractPartnerRiskBundle(eventRiskRows), eventRiskRows);
+      const bundle = scopeToCountry(
+        withFallbackTables(extractPartnerRiskBundle(eventRiskRows), eventRiskRows)
+      );
       eventRiskCache.set(eventId, bundle);
       return bundle;
     };
@@ -3120,6 +3128,7 @@ export async function loadAllRealData(
     // Only the event's own linked track, never a local fallback for another storm
     eventTrack: partnerData.cycloneTrack,
     floodplainRowId: partnerData.riskData.forecastFloodplainRowId,
+    neighbouringCountries: partnerData.riskData.neighbouringCountries,
   });
 
   // The advisory before this one, so the dashboard can say what changed

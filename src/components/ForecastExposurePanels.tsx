@@ -448,7 +448,9 @@ export function ForecastExposureSummary({
             <p className="text-xs font-medium text-sky-200/90" data-testid="forecast-signal-short">
               {FORECAST_SIGNAL}
             </p>
-            {showInfo && <ForecastInfo event={event} />}
+            {showInfo && (
+              <ForecastInfo event={event} neighbouringCountries={exposure.neighbouringCountries} />
+            )}
             {!bannerShown && !statusShownAbove && <AdvisoryAgeLine event={event} />}
             {previous && <AdvisoryChange exposure={exposure} previous={previous} />}
             {totals ? (
@@ -635,8 +637,35 @@ function AdvisoryAgeLine({ event }: { event: EventRecord | null }) {
   );
 }
 
+/**
+ * A storm's footprint crosses borders, so the model output can also name another country's areas. They are
+ * left out of every figure here; this says so, so nobody wonders where they went.
+ */
+export function NeighbourNote({ countries }: { countries: string[] }) {
+  if (countries.length === 0) return null;
+  const names =
+    countries.length === 1
+      ? countries[0]
+      : `${countries.slice(0, -1).join(', ')} and ${countries[countries.length - 1]}`;
+  return (
+    <p
+      className="rounded-lg border border-slate-700/60 bg-slate-800/60 p-3 text-xs text-slate-300"
+      data-testid="neighbour-note"
+    >
+      This forecast also reaches {names}. Their areas are not shown or counted here; use that
+      country’s own dashboard.
+    </p>
+  );
+}
+
 /** What sits behind the (i) button: the explanation, the run's provenance, and how to read it. */
-function ForecastInfo({ event }: { event: EventRecord | null }) {
+function ForecastInfo({
+  event,
+  neighbouringCountries = [],
+}: {
+  event: EventRecord | null;
+  neighbouringCountries?: string[];
+}) {
   return (
     <div
       id="forecast-info"
@@ -647,6 +676,7 @@ function ForecastInfo({ event }: { event: EventRecord | null }) {
     >
       <ForecastNote />
       <ForecastFreshness event={event} />
+      <NeighbourNote countries={neighbouringCountries} />
       <WindScaleKey />
       <HowToRead />
     </div>

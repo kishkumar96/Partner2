@@ -100,6 +100,8 @@ export interface ForecastExposure {
     /** risk_information row to fetch floodplain-exposure from when shown */
     floodplainRowId: string | null;
   };
+  /** Other countries the run also covers (a storm's footprint crosses borders); left out of every figure */
+  neighbouringCountries?: string[];
 }
 
 /**
@@ -318,6 +320,8 @@ export function buildForecastExposure(tables: {
   /** The track linked to the event, used when the run kept no track of its own */
   eventTrack?: GeoJSON.FeatureCollection | null;
   floodplainRowId?: string | null;
+  /** Other countries the run's tables covered, already left out (see countryScope) */
+  neighbouringCountries?: string[];
 }): ForecastExposure | null {
   const regionalRows = tables.regional.filter(isForecastExposureRow);
   const nationalRow = tables.national.find(isForecastExposureRow);
@@ -376,6 +380,7 @@ export function buildForecastExposure(tables: {
           : null,
       floodplainRowId: tables.floodplainRowId ?? null,
     },
+    neighbouringCountries: tables.neighbouringCountries ?? [],
   };
 }
 
