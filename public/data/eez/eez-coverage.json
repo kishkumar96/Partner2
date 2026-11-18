@@ -1,0 +1,316 @@
+{
+  "source": {
+    "name": "World EEZ v12, low resolution (eez_v12_lowres)",
+    "publisher": "Flanders Marine Institute (VLIZ), Marine Regions",
+    "url": "https://www.marineregions.org/downloads.php",
+    "citation": "Flanders Marine Institute (2023). Maritime Boundaries Geodatabase: Maritime Boundaries and Exclusive Economic Zones (200NM), version 12. https://www.marineregions.org/. https://doi.org/10.14284/632",
+    "licence": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+    "terms": "Visual context only: the publisher states the data has no legal value and is not for legal, economic, navigational or resource purposes.",
+    "retrieved": "2026-11-19",
+    "source_zip": "World_EEZ_v12_20231025_LR.zip",
+    "source_zip_sha256": "5be66b2b2038b489ee9ad1675ae9c1ef3ac7b10fa016e6a6e8796fb37d31e55a"
+  },
+  "processing": {
+    "selection": "Pacific Community members, plus Norfolk Island, the US minor outlying islands and two overlapping claims (Wake, Matthew and Hunter). Joint-regime areas, Hawaii, Easter Island and Asia-Pacific rim states are not included.",
+    "simplify_degrees": 0.04,
+    "dateline": "Zones crossing +-180 are merged into one polygon with longitudes past 180.",
+    "min_hole_area_deg2": 0.02,
+    "holes_kept": 69,
+    "holes_dropped_as_specks": 1501,
+    "coordinate_decimals": 2
+  },
+  "assets": {
+    "pacific-eez.geojson": {
+      "bytes": 49828,
+      "sha256": "f11aa244825ca14431da06cb2a7fc209697c2249f4967b465c46ab8ac413f710"
+    },
+    "eez-labels.geojson": {
+      "bytes": 4203,
+      "sha256": "a97df65e3c63cbeb99af3ffce52cafbfc88a383a11854d3fbf75fa0b6b79eff5"
+    },
+    "total_bytes": 54031,
+    "budget_bytes": 256000
+  },
+  "zones": [
+    {
+      "name": "Australian Exclusive Economic Zone (Norfolk Island)",
+      "iso": "NFK",
+      "territory": "Norfolk Island",
+      "sovereign": "Australia",
+      "type": "200NM",
+      "mrgid": 8310,
+      "country": ""
+    },
+    {
+      "name": "British Exclusive Economic Zone (Pitcairn)",
+      "iso": "PCN",
+      "territory": "Pitcairn",
+      "sovereign": "United Kingdom",
+      "type": "200NM",
+      "mrgid": 8439,
+      "country": ""
+    },
+    {
+      "name": "Fijian Exclusive Economic Zone",
+      "iso": "FJI",
+      "territory": "Fiji",
+      "sovereign": "Fiji",
+      "type": "200NM",
+      "mrgid": 8325,
+      "country": ""
+    },
+    {
+      "name": "French Exclusive Economic Zone (French Polynesia)",
+      "iso": "PYF",
+      "territory": "French Polynesia",
+      "sovereign": "France",
+      "type": "200NM",
+      "mrgid": 8440,
+      "country": ""
+    },
+    {
+      "name": "French Exclusive Economic Zone (New Caledonia)",
+      "iso": "NCL",
+      "territory": "New Caledonia",
+      "sovereign": "France",
+      "type": "200NM",
+      "mrgid": 8312,
+      "country": ""
+    },
+    {
+      "name": "French Exclusive Economic Zone (Wallis and Futuna)",
+      "iso": "WLF",
+      "territory": "Wallis and Futuna",
+      "sovereign": "France",
+      "type": "200NM",
+      "mrgid": 8454,
+      "country": ""
+    },
+    {
+      "name": "Kiribati Exclusive Economic Zone (Gilbert Islands)",
+      "iso": "KIR",
+      "territory": "Gilbert Islands",
+      "sovereign": "Kiribati",
+      "type": "200NM",
+      "mrgid": 8488,
+      "country": ""
+    },
+    {
+      "name": "Kiribati Exclusive Economic Zone (Line Group)",
+      "iso": "KIR",
+      "territory": "Line Group",
+      "sovereign": "Kiribati",
+      "type": "200NM",
+      "mrgid": 8441,
+      "country": ""
+    },
+    {
+      "name": "Kiribati Exclusive Economic Zone (Phoenix Group)",
+      "iso": "KIR",
+      "territory": "Phoenix Group",
+      "sovereign": "Kiribati",
+      "type": "200NM",
+      "mrgid": 8450,
+      "country": ""
+    },
+    {
+      "name": "Marshallese Exclusive Economic Zone",
+      "iso": "MHL",
+      "territory": "Marshall Islands",
+      "sovereign": "Marshall Islands",
+      "type": "200NM",
+      "mrgid": 8318,
+      "country": ""
+    },
+    {
+      "name": "Micronesian Exclusive Economic Zone",
+      "iso": "FSM",
+      "territory": "Micronesia",
+      "sovereign": "Micronesia",
+      "type": "200NM",
+      "mrgid": 8316,
+      "country": ""
+    },
+    {
+      "name": "Nauruan Exclusive Economic Zone",
+      "iso": "NRU",
+      "territory": "Nauru",
+      "sovereign": "Nauru",
+      "type": "200NM",
+      "mrgid": 8317,
+      "country": ""
+    },
+    {
+      "name": "New Zealand Exclusive Economic Zone (Cook Islands)",
+      "iso": "COK",
+      "territory": "Cook Islands",
+      "sovereign": "New Zealand",
+      "type": "200NM",
+      "mrgid": 8446,
+      "country": "CK"
+    },
+    {
+      "name": "New Zealand Exclusive Economic Zone (Niue)",
+      "iso": "NIU",
+      "territory": "Niue",
+      "sovereign": "New Zealand",
+      "type": "200NM",
+      "mrgid": 8447,
+      "country": ""
+    },
+    {
+      "name": "New Zealand Exclusive Economic Zone (Tokelau)",
+      "iso": "TKL",
+      "territory": "Tokelau",
+      "sovereign": "New Zealand",
+      "type": "200NM",
+      "mrgid": 8449,
+      "country": ""
+    },
+    {
+      "name": "Overlapping claim Matthew and Hunter Islands: France / Vanuatu",
+      "iso": "",
+      "territory": "Matthew and Hunter Islands",
+      "sovereign": "France",
+      "type": "Overlapping claim",
+      "mrgid": 48948,
+      "country": ""
+    },
+    {
+      "name": "Overlapping claim Wake Island / Enenkio: United States / Marshall Islands",
+      "iso": "UMI",
+      "territory": "Wake Island / Enenkio",
+      "sovereign": "United States",
+      "type": "Overlapping claim",
+      "mrgid": 8319,
+      "country": ""
+    },
+    {
+      "name": "Palauan Exclusive Economic Zone",
+      "iso": "PLW",
+      "territory": "Palau",
+      "sovereign": "Palau",
+      "type": "200NM",
+      "mrgid": 8315,
+      "country": ""
+    },
+    {
+      "name": "Papua New Guinean Exclusive Economic Zone",
+      "iso": "PNG",
+      "territory": "Papua New Guinea",
+      "sovereign": "Papua New Guinea",
+      "type": "200NM",
+      "mrgid": 8324,
+      "country": ""
+    },
+    {
+      "name": "Samoan Exclusive Economic Zone",
+      "iso": "WSM",
+      "territory": "Samoa",
+      "sovereign": "Samoa",
+      "type": "200NM",
+      "mrgid": 8445,
+      "country": "WS"
+    },
+    {
+      "name": "Solomon Islands Exclusive Economic Zone",
+      "iso": "SLB",
+      "territory": "Solomon Islands",
+      "sovereign": "Solomon Islands",
+      "type": "200NM",
+      "mrgid": 8314,
+      "country": ""
+    },
+    {
+      "name": "Tongan Exclusive Economic Zone",
+      "iso": "TON",
+      "territory": "Tonga",
+      "sovereign": "Tonga",
+      "type": "200NM",
+      "mrgid": 8448,
+      "country": "TO"
+    },
+    {
+      "name": "Tuvaluan Exclusive Economic Zone",
+      "iso": "TUV",
+      "territory": "Tuvalu",
+      "sovereign": "Tuvalu",
+      "type": "200NM",
+      "mrgid": 8326,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (American Samoa)",
+      "iso": "ASM",
+      "territory": "American Samoa",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 8444,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Guam)",
+      "iso": "GUM",
+      "territory": "Guam",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 48957,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Howland and Baker Islands)",
+      "iso": "UMI",
+      "territory": "Howland and Baker Islands",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 8451,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Jarvis Islands)",
+      "iso": "UMI",
+      "territory": "Jarvis Island",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 8442,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Johnston Atoll)",
+      "iso": "UMI",
+      "territory": "Johnston Atoll",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 8452,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Northern Mariana Islands)",
+      "iso": "MNP",
+      "territory": "Northern Mariana Islands",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 48980,
+      "country": ""
+    },
+    {
+      "name": "United States Exclusive Economic Zone (Palmyra Atoll)",
+      "iso": "UMI",
+      "territory": "Palmyra Atoll",
+      "sovereign": "United States",
+      "type": "200NM",
+      "mrgid": 8443,
+      "country": ""
+    },
+    {
+      "name": "Vanuatuan Exclusive Economic Zone",
+      "iso": "VUT",
+      "territory": "Vanuatu",
+      "sovereign": "Vanuatu",
+      "type": "200NM",
+      "mrgid": 8313,
+      "country": "VU"
+    }
+  ],
+  "licence_file": "LICENSE, TERMS OF USE & CITATION\nLICENSE\nMarine Regions’ data is licensed under CC-By (https://creativecommons.org/licenses/by/4.0/).\nPlease contact us for other uses of the Licensed Material beyond license terms.\nWe kindly request our users not to make our products available for download elsewhere and to always refer to marineregions.org for the most up-to-date products and services.\n\n\nTERMS OF USE\nMarine Regions is not meant to be used for legal, economical (in the sense of exploration of natural resources) or navigational purposes.\nIt is developed solely for scientific, educational and research purposes.\n\nVLIZ can in no case be held accountable or liable for faults, of any nature, that might occur in the usage of Marine Regions.\nAll those who wish to use Marine Regions do so completely at own risk/under own responsibility and according to the License conditions and the Terms of Use.\nVLIZ expresses no opinion about the legal state neither of any country, territory or area nor concerning its delimitation, frontier or borders.\nThe data has no legal value whatsoever.\n\nMarine Regions can be used according to the terms and conditions mentioned in the CC-BY license (CC-BY, https://creativecommons.org/licenses/by/4.0/).\nThe provisions above in no way replace the provisions of the CC-license.\nIf any of the abovementioned provisions divert from or contradict the provisions of the CC-license in any way, the CC-license provisions prevail.\n\n\nFEEDBACK\nIf Marine Regions' data is used for a publication or product, we kindly request to inform us (info@marineregions.org) and we'll add the publication to our users page (http://marineregions.org/stats_pubs.php).\n\nFeedback of the users of Marine Regions is more than welcome.\nIn case you notice mistakes, incompleteness or are willing to join us in this endeavor, please feel free to open an issue or start a discussion on our public GitHub forum (https://github.com/lifewatch/marineregions-issues), or contact us on info@marineregions.org if it concerns sensitive information that should not be shared publicly.\n\n\nCITATION\nFlanders Marine Institute (2023). Maritime Boundaries Geodatabase: Maritime Boundaries and Exclusive Economic Zones (200NM), version 12. Available online at https://www.marineregions.org/. https://doi.org/10.14284/632\n\n\n\n"
+}
