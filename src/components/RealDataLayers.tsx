@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import { CountryCode, COUNTRIES } from '@/types/thredds';
 import { FilterState } from '@/types';
@@ -136,6 +136,13 @@ export function getHazardTypesToShow(
   return hazardTypesToShow;
 }
 
+/** A hazard scenario that could not be drawn */
+export interface HazardLayerIssue {
+  layerId: string;
+  /** The scenario's name, e.g. "Cook Islands tc flood depth — SLR 0m, 100yr return period" */
+  name: string;
+}
+
 interface RealDataLayersProps {
   map: MapLibreMap | null;
   countryCode: CountryCode | null; // Allow null to load all countries
@@ -147,6 +154,11 @@ interface RealDataLayersProps {
   showWindLayer?: boolean;
   showInundationLayer?: boolean;
   onLoadingChange?: (isLoading: boolean) => void;
+  /**
+   * Told when a hazard scenario could not be drawn (and with null once one is), so the page can say so:
+   * the console was the only place a failed read showed, and the map just stayed bare.
+   */
+  onHazardLayerIssue?: (issue: HazardLayerIssue | null) => void;
   onActiveLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
   /** False while the dashboard's own data is loading. Hazard raster requests wait
@@ -177,6 +189,7 @@ export default function RealDataLayers({
   showWindLayer = true,
   showInundationLayer = true,
   onLoadingChange,
+  onHazardLayerIssue,
   onActiveLayersChange,
   partnerHazardLayers = [],
   dataReady = true,
@@ -190,6 +203,19 @@ export default function RealDataLayers({
   // Hazard layers the map still wants. A scenario read from the Zarr store arrives after the pass that
   // asked for it, so it checks here whether it should be visible by the time it is ready.
   const wantedHazardLayerIdsRef = useRef<Set<string>>(new Set());
+  // Scenarios read from the Zarr store take seconds: the map is bare until each arrives, and "loading"
+  // used to be cleared the moment the read was started, not when it ended
+  const pendingZarrLayerIdsRef = useRef<Set<string>>(new Set());
+  const onHazardLayerIssueRef = useRef(onHazardLayerIssue);
+  useEffect(() => {
+    onHazardLayerIssueRef.current = onHazardLayerIssue;
+  }, [onHazardLayerIssue]);
+  // The layer an open issue is about, so the issue goes away when that scenario is no longer wanted
+  const hazardIssueLayerIdRef = useRef<string | null>(null);
+  const reportHazardIssue = useCallback((issue: HazardLayerIssue | null) => {
+    hazardIssueLayerIdRef.current = issue?.layerId ?? null;
+    onHazardLayerIssueRef.current?.(issue);
+  }, []);
 
   // Click the map to read the flood depth of a scenario drawn from the Zarr store
   useEffect(() => {
@@ -951,6 +977,7 @@ export default function RealDataLayers({
                         console.warn(
                           `Hazard layer ${layerId} has no server tiles to fall back on.`
                         );
+                        reportHazardIssue({ layerId, name: layer.name });
                         return;
                       }
                       if (!map.getSource(sourceId)) {
@@ -996,6 +1023,8 @@ export default function RealDataLayers({
                       // Read the scenario's depth raster straight from the Zarr store and lay it
                       // on the map as one picture; the server's tiles are the fallback.
                       wantedHazardLayerIdsRef.current.add(layerId);
+                      pendingZarrLayerIdsRef.current.add(layerId);
+                      onLoadingChange?.(true);
                       const tileBeforeId = [
                         'damaged-buildings-clusters',
                         'cyclone-forecast-track-line',
@@ -1008,10 +1037,19 @@ export default function RealDataLayers({
                         isWanted: () => wantedHazardLayerIdsRef.current.has(layerId),
                         onFallback: addTileLayer,
                       })
-                        .catch(error =>
-                          console.warn(`Hazard layer ${layerId} failed to load:`, error)
-                        )
-                        .finally(markLoaded);
+                        .then(result => {
+                          if (result === 'added') reportHazardIssue(null);
+                        })
+                        .catch(error => {
+                          console.warn(`Hazard layer ${layerId} failed to load:`, error);
+                          reportHazardIssue({ layerId, name: layer.name });
+                        })
+                        .finally(() => {
+                          markLoaded();
+                          pendingZarrLayerIdsRef.current.delete(layerId);
+                          // the page is loading hazards until the last picture is in
+                          if (pendingZarrLayerIdsRef.current.size === 0) onLoadingChange?.(false);
+                        });
                       return;
                     }
 
@@ -1272,6 +1310,10 @@ export default function RealDataLayers({
         // to planning scenarios) would otherwise stay on the map.
         const wantedLayerIds = new Set(allActiveLayers.map(layer => `wms-layer-${layer.id}`));
         wantedHazardLayerIdsRef.current = wantedLayerIds;
+        // an issue about a scenario the user has moved on from is no longer worth showing
+        if (hazardIssueLayerIdRef.current && !wantedLayerIds.has(hazardIssueLayerIdRef.current)) {
+          reportHazardIssue(null);
+        }
         (map.getStyle()?.layers ?? []).forEach(styleLayer => {
           if (!styleLayer.id.startsWith('wms-layer-') || wantedLayerIds.has(styleLayer.id)) return;
           try {
@@ -1290,7 +1332,8 @@ export default function RealDataLayers({
         console.error(`Error loading WMS layers:`, error);
       } finally {
         loadingStateRef.current = { ...loadingStateRef.current, hazards: false };
-        onLoadingChange?.(false);
+        // pictures still being read keep the page "loading"; the last one to arrive clears it
+        if (pendingZarrLayerIdsRef.current.size === 0) onLoadingChange?.(false);
       }
     };
 
@@ -1377,6 +1420,7 @@ export default function RealDataLayers({
     hazardLayerMode,
     onActiveLayersChange,
     onLoadingChange,
+    reportHazardIssue,
   ]); // Re-load WMS layers when basemap, hazard filters, or layer visibility changes
 
   // Apply immediate visibility updates so toggles feel responsive even before layer reload completes.

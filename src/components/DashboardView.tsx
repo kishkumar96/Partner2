@@ -96,6 +96,8 @@ import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
 import type { EezStatus, MapViewCommand } from '@/utils/pacificEez';
+import HazardLayerStatus from '@/components/HazardLayerStatus';
+import type { HazardLayerIssue } from '@/components/RealDataLayers';
 import {
   drawExportFooter,
   exportPixelRatio,
@@ -351,6 +353,10 @@ export default function DashboardView({
 
   // Layers loading state
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+  // A hazard scenario that could not be drawn, and a counter to try the hazard layers again
+  const [hazardLayerIssue, setHazardLayerIssue] = useState<HazardLayerIssue | null>(null);
+  const [hazardRetryKey, setHazardRetryKey] = useState(0);
+  useEffect(() => setHazardLayerIssue(null), [selectedCountry]);
 
   const openFilterPanel = useCallback((tab: 'filters' | 'cyclone' = 'filters') => {
     setShowFilters(true);
@@ -3900,6 +3906,8 @@ export default function DashboardView({
               showWindLayer={windLayerOn}
               showInundationLayer={inundationLayerOn}
               onLayersLoadingChange={setIsLoadingLayers}
+              onHazardLayerIssue={setHazardLayerIssue}
+              hazardRetryKey={hazardRetryKey}
               onActiveWmsLayersChange={setActiveWmsLayers}
               partnerHazardLayers={partnerHazardLayers}
               hazardLayerMode={viewMode}
@@ -3952,6 +3960,15 @@ export default function DashboardView({
                 }}
               />
             )}
+
+            <HazardLayerStatus
+              loading={isHazardsLoading && (windLayerOn || inundationLayerOn) && !hazardZoomBlocked}
+              issue={hazardLayerIssue}
+              onRetry={() => {
+                setHazardLayerIssue(null);
+                setHazardRetryKey(key => key + 1);
+              }}
+            />
 
             {newAdvisory && (
               <NewAdvisoryBanner

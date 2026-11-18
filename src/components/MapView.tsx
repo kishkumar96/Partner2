@@ -22,7 +22,7 @@ import { logger } from '@/utils/logger';
 import type { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
 import type { StoryBeat } from '@/utils/cycloneStory';
 import HazardScenarioBadge from './HazardScenarioBadge';
-import RealDataLayers from './RealDataLayers';
+import RealDataLayers, { type HazardLayerIssue } from './RealDataLayers';
 import RegionalImpactsLayer, { type RegionalImpactsDebugState } from './RegionalImpactsLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
 import DamagedRoadsLayer from './DamagedRoadsLayer';
@@ -248,6 +248,10 @@ interface MapViewProps {
   showWindLayer?: boolean;
   showInundationLayer?: boolean;
   onLayersLoadingChange?: (isLoading: boolean) => void;
+  /** A hazard scenario that could not be drawn, or null once one is (see HazardLayerStatus) */
+  onHazardLayerIssue?: (issue: HazardLayerIssue | null) => void;
+  /** Bump to try the hazard layers again after a failed read */
+  hazardRetryKey?: number;
   onActiveWmsLayersChange?: (layers: RealWMSLayer[]) => void;
   partnerHazardLayers?: RealWMSLayer[];
   /** Hold hazard raster requests until the dashboard data has loaded */
@@ -313,6 +317,8 @@ export default function MapView({
   showWindLayer = true,
   showInundationLayer = true,
   onLayersLoadingChange,
+  onHazardLayerIssue,
+  hazardRetryKey = 0,
   onActiveWmsLayersChange,
   partnerHazardLayers = [],
   dataReady = true,
@@ -1419,7 +1425,7 @@ export default function MapView({
       {mapInstance && (
         <>
           <RealDataLayers
-            key={`real-data-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
+            key={`real-data-${selectedCountry}-${basemapStyle}-${styleChangeCounter}-${hazardRetryKey}`}
             map={mapInstance}
             countryCode={selectedCountry}
             visible={true}
@@ -1434,6 +1440,7 @@ export default function MapView({
             showWindLayer={showWindLayer}
             showInundationLayer={showInundationLayer}
             onLoadingChange={onLayersLoadingChange}
+            onHazardLayerIssue={onHazardLayerIssue}
             onActiveLayersChange={onActiveWmsLayersChange}
             partnerHazardLayers={partnerHazardLayers}
             dataReady={dataReady}
