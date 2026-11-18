@@ -17,7 +17,7 @@ const EARTH_RADIUS_KM = 6371;
  * -replaces the flat equirectangular approximation that distorted ring shapes
  * away from the equator.
  */
-function offsetLatLon(
+export function offsetLatLon(
   lon: number,
   lat: number,
   bearingDeg: number,

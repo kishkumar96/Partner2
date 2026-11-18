@@ -30,6 +30,9 @@ const basePath =
     : configuredBasePath;
 
 const nextConfig: NextConfig = {
+  // `next dev` otherwise rewrites the tracked AGENTS.md on every start
+  agentRules: false,
+
   // Base path for subdirectory deployment (disabled in dev for convenience)
   basePath,
 

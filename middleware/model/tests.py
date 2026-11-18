@@ -1407,3 +1407,27 @@ class PlatformBackendTests(SimpleTestCase):
 
         self.assertEqual(url, ScriptedRiskScape.RUN)
         self.assertEqual(downloaded, ["regional-summary.csv"])
+
+
+class WindRadiiCheckTests(SimpleTestCase):
+    """import_ref_run warns when an event's track cannot show the wind reach by quadrant."""
+
+    def setUp(self):
+        from model.management.commands.import_ref_run import has_wind_radii
+
+        self.has_wind_radii = has_wind_radii
+
+    def points(self, **properties):
+        return {"features": [{"properties": {"Latitude": -15, "Longitude": 168, **properties}}]}
+
+    def test_a_track_line_with_only_a_position_has_none(self):
+        self.assertFalse(self.has_wind_radii(self.points()))
+        self.assertFalse(self.has_wind_radii(None))
+
+    def test_blank_or_zero_radii_do_not_count(self):
+        self.assertFalse(self.has_wind_radii(self.points(NEGaleRadius=None, SEGaleRadius="", GaleRadius=0)))
+
+    def test_any_quadrant_or_all_round_radius_counts(self):
+        self.assertTrue(self.has_wind_radii(self.points(NEGaleRadius=120)))
+        self.assertTrue(self.has_wind_radii(self.points(NWHurricaneRadius=25)))
+        self.assertTrue(self.has_wind_radii(self.points(StormRadius=40)))

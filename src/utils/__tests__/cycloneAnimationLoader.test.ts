@@ -109,6 +109,16 @@ describe('parseForecastPointsFromGeometry (the partner API track, one property p
     });
   });
 
+  it('says whether a point carried its own radii or they were estimated from its wind', () => {
+    const bare = { Time: '2026-10-18T18:00:00Z', Latitude: -18, Longitude: -160, MEAN_WIND: 70 };
+    const points = parseForecastPointsFromGeometry(geometry(wati, bare));
+    expect(points?.[0].radiiReported).toBe(true);
+    expect(points?.[1].radiiReported).toBe(false);
+    // The estimate is a circle: all four quadrants equal
+    expect(points?.[1].galeRadiusNE).toBe(points?.[1].galeRadiusSW);
+    expect(points?.[1].galeRadiusNE).toBeGreaterThan(0);
+  });
+
   it('still reads the older MeanWind column of the CSV files', () => {
     const { MEAN_WIND: _unused, ...rest } = wati;
     const points = parseForecastPointsFromGeometry(geometry({ ...rest, MeanWind: 40 }));

@@ -66,6 +66,11 @@ export interface CycloneForecastPoint {
   dvorakTNumber: number; // Professional intensity metric (Dvorak T-number)
   currentIntensity: number; // Current intensity measure
   p5Wind: number; // Alternative wind speed metric (kt)
+  /**
+   * Whether the feed gave this point its own wind radii. False when every radius was
+   * filled in from the wind speed (a symmetric circle), so the map can say it is an estimate.
+   */
+  radiiReported?: boolean;
 }
 
 // CSV parsing now handled by unified parser utility
@@ -422,6 +427,24 @@ function buildForecastPointFromRow(
     row.HurricaneRadius ?? fallbackRadii.hurricane
   );
 
+  const radiiReported = [
+    row.NEGaleRadius,
+    row.SEGaleRadius,
+    row.SWGaleRadius,
+    row.NWGaleRadius,
+    row.NEStormRadius,
+    row.SEStormRadius,
+    row.SWStormRadius,
+    row.NWStormRadius,
+    row.NEHurricaneRadius,
+    row.SEHurricaneRadius,
+    row.SWHurricaneRadius,
+    row.NWHurricaneRadius,
+    row.GaleRadius,
+    row.StormRadius,
+    row.HurricaneRadius,
+  ].some(value => value != null);
+
   return {
     time: new Date(row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"].replace(' ', 'T').replace(/Z?$/, 'Z')),
     timeString: row["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']"],
@@ -457,6 +480,7 @@ function buildForecastPointFromRow(
     dvorakTNumber: row.FinalT ?? 0,
     currentIntensity: row.CurrentIntensity ?? 0,
     p5Wind: row.P5Wind ?? 0,
+    radiiReported,
   };
 }
 

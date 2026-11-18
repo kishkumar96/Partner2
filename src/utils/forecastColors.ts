@@ -13,6 +13,13 @@ export const PRIORITY_COLORS: Record<string, string> = {
   grey: '#64748b',
 };
 
+/** Wind-radius rings by threshold: gale (34 kt) outermost, hurricane (64 kt) innermost */
+export const WIND_RADIUS_COLORS = {
+  gale: '#f59e0b',
+  storm: '#ea580c',
+  hurricane: '#b91c1c',
+};
+
 /** Advisory start points and the day markers on a track */
 export const ORIGIN_COLORS = {
   selected: '#f59e0b',

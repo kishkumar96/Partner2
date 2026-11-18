@@ -22,6 +22,7 @@ The one place that says what is current. Agents and people: read this first, upd
 | Who | What | Branch/worktree | Since |
 |---|---|---|---|
 | Claude (for kishank) | Forecast map: dateline fix, advisory start points, earlier tracks, release scrubber, date/time labels (uncommitted; checks: tsc, jest, prettier run here) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
+| Claude (for kishank) | Forecast map: wind radii by quadrant overlay (REF maps drew only a bare track); `import_ref_run` warns when a track has no radii (uncommitted; tsc, jest, prettier run here; middleware tests need Postgres, not run) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
 
 ## Completed implementation awaiting integration
 - 2026-11-19, Codex: source-aware cyclone categories, shared badge/track/timeline, missing-data handling and regression tests complete in `agent/codex/cyclone-categories` (`/tmp/partner2-cyclone-categories`). Verified type-check, lint (warnings only), format, 1,006 Jest tests (8 existing skips), Chromium component previews at 320/390/430px, landscape and desktop, and `AUTH_REQUIRE_REDIS=false npm run build -- --webpack`. Default Turbopack cannot resolve the shared dependency symlink; production auth requires Redis configuration. Safari, live-API/WebGL integration, remote CI and middleware checks were not run. Merge is pending the other session’s uncommitted changes in the shared checkout; do not overwrite them.

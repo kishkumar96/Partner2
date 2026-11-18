@@ -61,6 +61,8 @@ export const LAYER_ORDER = {
 
   // Cyclone tracks and forecasts
   'forecast-advisory-tracks': 38,
+  'forecast-wind-radii-fill': 38.2,
+  'forecast-wind-radii-line': 38.4,
   'forecast-track-distance-line': 39,
   'cyclone-forecast-track-line': 40,
   'cyclone-forecast-points': 41,

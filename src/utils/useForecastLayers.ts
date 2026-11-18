@@ -9,7 +9,15 @@ import {
   type ReleaseStep,
 } from '@/utils/advisoryReleases';
 import {
+  buildWindRadiiAt,
+  windRadiiSteps,
+  windRadiiStepLabel,
+  type WindRadiiPoint,
+  type WindRadiiShape,
+} from '@/utils/windRadiiOverlay';
+import {
   buildTrackTimeLabels,
+  COUNTRY_TIME_ZONES,
   timeZoneName,
   type TimeZoneMode,
   type TrackTimePoint,
@@ -24,7 +32,8 @@ export type ForecastOverlayId =
   | 'priority'
   | 'origins'
   | 'releases'
-  | 'times';
+  | 'times'
+  | 'radii';
 
 export interface ForecastLayerOption {
   id: ForecastOverlayId;
@@ -32,6 +41,8 @@ export interface ForecastLayerOption {
   /** Short name for the collapsed summary, e.g. "Wind swaths" */
   short: string;
   available: boolean;
+  /** Shown but cannot be switched on, with `note` saying why */
+  disabled?: boolean;
   note?: string;
 }
 
@@ -50,6 +61,15 @@ export interface ForecastLayerControls {
   /** Whether date and time labels are in UTC or the country's own time */
   /** The storm's advisories, oldest first, for the release scrubber (empty with fewer than two) */
   releaseSteps: ReleaseStep[];
+  /** The wind-radii time control: which advisory point's rings are drawn, and how */
+  windRadii: {
+    /** One label per point with radii, oldest first; empty when the advisory gave none */
+    steps: string[];
+    step: number;
+    setStep: (step: number) => void;
+    shape: WindRadiiShape;
+    setShape: (shape: WindRadiiShape) => void;
+  };
   timeZoneMode: TimeZoneMode;
   setTimeZoneMode: (mode: TimeZoneMode) => void;
   /** "UTC" or e.g. "UTC+13", for the switch and legend */
@@ -63,7 +83,7 @@ export interface ForecastLayerExtras {
   /** The advisory on screen (its start point is highlighted) */
   activeRunId: string | null;
   /** The shown run's track points, with times */
-  trackPoints: TrackTimePoint[] | null;
+  trackPoints: Array<TrackTimePoint & Partial<WindRadiiPoint>> | null;
 }
 
 const DEFAULT_SHOWN: Record<ForecastOverlayId, boolean> = {
@@ -76,6 +96,7 @@ const DEFAULT_SHOWN: Record<ForecastOverlayId, boolean> = {
   origins: true,
   releases: true,
   times: true,
+  radii: true,
 };
 
 /**
@@ -106,9 +127,32 @@ export function useForecastLayers(
     () => buildTrackTimeLabels(extras?.trackPoints, { mode: timeZoneMode, countryCode }),
     [extras?.trackPoints, timeZoneMode, countryCode]
   );
+  const radiiPoints = useMemo(
+    () => windRadiiSteps(extras?.trackPoints as WindRadiiPoint[] | null | undefined),
+    [extras?.trackPoints]
+  );
+  const [radiiStep, setRadiiStep] = useState(0);
+  const [radiiShape, setRadiiShape] = useState<WindRadiiShape>('sector');
+  const radiiIndex = Math.min(radiiStep, Math.max(0, radiiPoints.length - 1));
+  const windRadii = useMemo(
+    () => buildWindRadiiAt(radiiPoints[radiiIndex], radiiShape),
+    [radiiPoints, radiiIndex, radiiShape]
+  );
   const zoneName = useMemo(
     () => timeZoneName(timeZoneMode, countryCode),
     [timeZoneMode, countryCode]
+  );
+
+  const radiiLabels = useMemo(
+    () =>
+      radiiPoints.map(point =>
+        windRadiiStepLabel(
+          point.time,
+          timeZoneMode === 'local' ? COUNTRY_TIME_ZONES[countryCode] : null,
+          zoneName
+        )
+      ),
+    [radiiPoints, timeZoneMode, countryCode, zoneName]
   );
 
   // A different forecast starts from its defaults and must not keep the
@@ -116,6 +160,7 @@ export function useForecastLayers(
   useEffect(() => {
     floodplainRequested.current = false;
     setShown(DEFAULT_SHOWN);
+    setRadiiStep(0);
     setFloodplain(null);
     setFloodplainState('idle');
   }, [countryCode, floodplainRowId]);
@@ -220,11 +265,22 @@ export function useForecastLayers(
         short: 'Track times',
         available: !!timeLabels,
         note: 'Hour labels every 6 hours, and a marker at each midnight where the date changes.',
+      },
+      {
+        id: 'radii',
+        label: 'Wind radii by quadrant',
+        short: 'Wind radii',
+        available: !!extras?.trackPoints?.length,
+        disabled: radiiPoints.length === 0,
+        note:
+          radiiPoints.length === 0
+            ? 'This advisory gave no wind radii, so there is nothing to draw.'
+            : 'How far gale (34 kt), storm (48 kt) and hurricane (64 kt) winds reach in each quadrant, at the time chosen below. Each is the farthest reach within its quadrant.',
       }
     );
     const options = all.filter(option => option.available);
     if (options.length === 0) return null;
-    const active = options.filter(option => shown[option.id]);
+    const active = options.filter(option => shown[option.id] && !option.disabled);
     return {
       shown,
       toggle,
@@ -239,11 +295,19 @@ export function useForecastLayers(
         origins: releases?.origins ?? null,
         releases: releases && releases.tracks.features.length > 0 ? releases.tracks : null,
         times: timeLabels,
+        radii: windRadii,
       },
       floodplainState,
       activeCount: active.length,
       summary: active.length > 0 ? active.map(option => option.short).join(' · ') : 'None shown',
       releaseSteps: releaseSteps(releases),
+      windRadii: {
+        steps: radiiLabels,
+        step: radiiIndex,
+        setStep: setRadiiStep,
+        shape: radiiShape,
+        setShape: setRadiiShape,
+      },
       timeZoneMode,
       setTimeZoneMode,
       timeZoneName: zoneName,
@@ -258,6 +322,12 @@ export function useForecastLayers(
     priorityFeatures,
     releases,
     timeLabels,
+    windRadii,
+    radiiPoints,
+    radiiLabels,
+    radiiIndex,
+    radiiShape,
+    extras?.trackPoints,
     timeZoneMode,
     zoneName,
   ]);
