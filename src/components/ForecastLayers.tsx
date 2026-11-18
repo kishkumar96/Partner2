@@ -5,7 +5,7 @@ import maplibregl, { Map as MapLibreMap } from 'maplibre-gl';
 import { ChevronDown, ChevronUp, Layers as LayersIcon } from 'lucide-react';
 import { getBeforeLayerId } from '@/utils/layerOrder';
 import { MAP_DANGER_NAMES, WIND_DANGER_ORDER, windDangerColor } from '@/utils/forecastExposure';
-import { RADIUS_OF_MAX_WINDS } from '@/utils/windScale';
+import { RADIUS_OF_MAX_WINDS, windBandShortLabel } from '@/utils/windScale';
 import {
   FACILITY_COLORS,
   FLOODPLAIN_COLOR,
@@ -677,7 +677,7 @@ export function ForecastLegend({
                   />
                   {/* "Winds" is implied by the heading; the full name stays as the tooltip */}
                   <span className="truncate" title={band}>
-                    {band.replace(/ Winds$/, '')}
+                    {windBandShortLabel(band)}
                   </span>
                 </li>
               ))}

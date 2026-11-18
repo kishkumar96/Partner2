@@ -15,6 +15,8 @@ export interface RegionSpec {
   health?: number;
   schools?: number;
   evac?: number;
+  /** The area's strongest forecast wind in km/h (REF's Max_WindSpeed_kmph) */
+  maxWindKmph?: number;
 }
 
 const rank = (label: string) => (WIND_DANGER_ORDER as readonly string[]).indexOf(label);
@@ -41,6 +43,7 @@ export function exposureFixture(options: {
     Country: country,
     Region: r.name,
     Overall_Winds: r.winds,
+    ...(r.maxWindKmph != null ? { Max_WindSpeed_kmph: r.maxWindKmph } : {}),
     Exposed_Population: r.people,
     Exposed_Buildings: r.buildings ?? Math.round(r.people / 3),
     Exposed_Health_Facilties: r.health ?? 0,

@@ -2,6 +2,7 @@
 
 import { forwardRef } from 'react';
 import { WIND_DANGER_ORDER, windDangerColor } from '@/utils/forecastExposure';
+import { windBandShortLabel } from '@/utils/windScale';
 import {
   FACILITY_COLORS,
   FLOODPLAIN_COLOR,
@@ -109,7 +110,7 @@ function Legend({ active }: { active: string[] }) {
         {bands.map(band => (
           <span key={band} style={{ marginRight: '2.5mm', whiteSpace: 'nowrap' }}>
             <Swatch color={windDangerColor(band)} />
-            {band.replace(/ Winds$/, '')}
+            {windBandShortLabel(band)}
           </span>
         ))}
       </div>

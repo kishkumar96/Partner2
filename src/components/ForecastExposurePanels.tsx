@@ -37,7 +37,7 @@ import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastSummaryView from './ForecastSummaryView';
 import { buildForecastInsight } from '@/utils/forecastInsight';
 import { strongestBandLabel, type TimelinePoint } from '@/utils/forecastTimeline';
-import { parseWindBand, windAreaLabel, windRange } from '@/utils/windScale';
+import { isCoreBand, parseWindBand, windAreaLabel, windRange } from '@/utils/windScale';
 import { compareForecasts } from '@/utils/forecastComparison';
 import type { ResponsePriority } from '@/utils/useResponsePriority';
 
@@ -46,6 +46,16 @@ import type { ResponsePriority } from '@/utils/useResponsePriority';
  * forecast winds. REF models exposure, not damage, so these panels replace
  * the loss summary and tables rather than showing every loss as $0.
  */
+
+/** "up to gale winds (63–88 km/h)", or for the core "cyclone core (about 120 km/h)" */
+function windsSubtitle(winds: string, coreSpeedKmph: number | null): string {
+  if (isCoreBand(winds)) {
+    return coreSpeedKmph != null
+      ? `cyclone core (about ${Math.round(coreSpeedKmph / 5) * 5} km/h)`
+      : 'cyclone core (strongest winds)';
+  }
+  return `${parseWindBand(winds) ? 'up to ' : ''}${windAreaLabel(winds)}`;
+}
 
 const PANEL_CLASSES =
   'w-full max-w-full h-full min-h-0 glass-panel border-l border-white/10 flex flex-col flex-shrink-0 overflow-hidden z-50 md:w-80 md:max-w-[min(320px,calc(100vw-40px))]';
@@ -258,6 +268,8 @@ export interface ForecastSummaryContext {
   timeline?: TimelinePoint[];
   /** Issue time of the newest advisory with results */
   latestIssuedAt?: string | null;
+  /** How many newer advisories of the storm exist, counted from the run list */
+  newerCount?: number;
   /** The page already shows the "not the latest forecast" notice above, so the panel leaves it out */
   statusShownAbove?: boolean;
   onSwitchToLatest?: () => void;
@@ -301,6 +313,11 @@ export function ForecastExposureSummary({
   const headerWinds = region
     ? region.overallWinds
     : (strongestBandLabel(exposure) ?? area?.overallWinds);
+  // Inside the core the strength is the storm's own maximum wind: the area's, else the strongest core area's
+  const coreSpeeds = (region ? [region] : exposure.regions)
+    .filter(a => isCoreBand(a.overallWinds) && a.maxWindKmph != null)
+    .map(a => a.maxWindKmph as number);
+  const coreSpeedKmph = coreSpeeds.length > 0 ? Math.max(...coreSpeeds) : null;
 
   const [view, setView] = useState<ForecastView>('summary');
   useEffect(() => {
@@ -321,6 +338,7 @@ export function ForecastExposureSummary({
             issuedAt,
             latestIssuedAt: summary.latestIssuedAt ?? null,
             timeline: summary.timeline ?? [],
+            newerCount: summary.newerCount,
           })
         : null,
     [summary, exposure, countryName, issuedAt]
@@ -354,9 +372,7 @@ export function ForecastExposureSummary({
         </div>
         <p className="text-xs text-slate-400 mt-1">
           {area ? area.name : 'National'}
-          {headerWinds
-            ? ` · ${parseWindBand(headerWinds) ? 'up to ' : ''}${windAreaLabel(headerWinds)}`
-            : ''}
+          {headerWinds ? ` · ${windsSubtitle(headerWinds, coreSpeedKmph)}` : ''}
         </p>
         {region && onRegionClear && (
           <button

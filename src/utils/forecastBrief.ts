@@ -1,4 +1,5 @@
 import { advisoryAge } from './forecastBriefing';
+import { windBandShortLabel } from './windScale';
 import {
   WIND_DANGER_ORDER,
   isExposedDanger,
@@ -99,7 +100,7 @@ export function formatUtc(value: string | Date | undefined): string | null {
 
 const shortName = (name: string) => name.replace(/^Tropical Cyclone\s+/i, 'TC ').trim();
 
-const shortWind = (winds: string | null) => (winds ?? '–').replace(/ Winds$/, '');
+const shortWind = (winds: string | null) => (winds ? windBandShortLabel(winds) : '–');
 
 const LEVEL_LABEL: Record<PriorityLevel, string> = {
   red: 'RED',

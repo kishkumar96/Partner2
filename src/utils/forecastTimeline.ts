@@ -1,7 +1,13 @@
 import type { EventRecord } from '@/data/eventRecords';
-import { WIND_DANGER_ORDER, isExposedDanger, type ForecastExposure } from './forecastExposure';
+import { isExposedDanger, windDangerRank, type ForecastExposure } from './forecastExposure';
 import { stormNameOf } from './forecastRuns';
-import { parseWindBand, type WindKind } from './windScale';
+import {
+  isCoreBand,
+  parseWindBand,
+  windKindForSpeed,
+  windSeverity,
+  type WindKind,
+} from './windScale';
 
 /** One advisory of a storm, reduced to what a trend needs. */
 export interface TimelinePoint {
@@ -22,11 +28,12 @@ export interface TimelinePoint {
  * Winds" while areas under it have confirmed "Gale Winds", so the areas and bands are compared too.
  */
 export function strongestBandLabel(exposure: ForecastExposure): string | null {
-  const rank = (label: string | null | undefined) =>
-    label ? (WIND_DANGER_ORDER as readonly string[]).indexOf(label) : -1;
+  const rank = (label: string | null | undefined) => windDangerRank(label);
   let best: string | null = null;
   const consider = (label: string | null | undefined) => {
-    if (label && parseWindBand(label) && rank(label) > rank(best)) best = label;
+    if (label && (parseWindBand(label) || isCoreBand(label)) && rank(label) > rank(best)) {
+      best = label;
+    }
   };
   consider(exposure.national?.overallWinds);
   exposure.regions.forEach(area => consider(area.overallWinds));
@@ -36,9 +43,26 @@ export function strongestBandLabel(exposure: ForecastExposure): string | null {
   return best;
 }
 
-/** The strongest wind kind among a forecast's exposed areas (national row included). */
+/**
+ * The strongest wind kind among a forecast's exposed areas (national row included). Inside the ring of
+ * strongest winds the kind is that of the storm's maximum wind there.
+ */
 export function strongestWind(exposure: ForecastExposure): WindKind | null {
-  return parseWindBand(strongestBandLabel(exposure))?.kind ?? null;
+  let best: WindKind | null = null;
+  const consider = (kind: WindKind | null | undefined) => {
+    if (kind && (!best || windSeverity(kind) > windSeverity(best))) best = kind;
+  };
+  const label = (name: string | null | undefined, maxWindKmph: number | null) =>
+    isCoreBand(name) ? windKindForSpeed(maxWindKmph) : parseWindBand(name)?.kind;
+  consider(label(exposure.national?.overallWinds, exposure.national?.maxWindKmph ?? null));
+  exposure.regions.forEach(area => consider(label(area.overallWinds, area.maxWindKmph)));
+  exposure.byWindDanger.forEach(band => {
+    if (isExposedDanger(band.label) && band.totals.population > 0) {
+      // The band row's WindSpeed is on REF's knot scale (34/48/64), not km/h, so it is no use for the core
+      consider(label(band.label, null));
+    }
+  });
+  return best;
 }
 
 /** People under forecast winds: the national row, else the sum of its areas. */

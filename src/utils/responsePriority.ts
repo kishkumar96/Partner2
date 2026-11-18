@@ -1,4 +1,4 @@
-import { WIND_DANGER_ORDER, type ExposureArea } from './forecastExposure';
+import { WIND_DANGER_ORDER, windDangerRank, type ExposureArea } from './forecastExposure';
 
 /**
  * "Operational priority -preliminary": a transparent, rule-based reading of a
@@ -152,7 +152,7 @@ export function sanitizeThresholds(raw: unknown): PriorityThresholds {
 export type PriorityMetrics = Record<PriorityMetric, number>;
 
 export function areaMetrics(area: ExposureArea): PriorityMetrics {
-  const band = area.overallWinds ? WIND_DANGER_ORDER.indexOf(area.overallWinds as never) : -1;
+  const band = windDangerRank(area.overallWinds, area.maxWindKmph);
   return {
     windBand: Math.max(0, band),
     people: area.exposed.population,

@@ -81,6 +81,27 @@ export function isModeEventId(
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How many advisories of the same storm were issued after `issuedAt` and have results. Counted from the
+ * run list, which names every advisory, not from the figures loaded so far: a run's exposure is fetched
+ * when it is opened, so counting loaded figures says "1 newer" however many there are.
+ */
+export function countNewerAdvisories(
+  runs: Pick<ForecastRun, 'storm' | 'issuedAt' | 'status'>[],
+  storm: string,
+  issuedAt: string | null | undefined
+): number {
+  const since = issuedAt ? Date.parse(issuedAt) : NaN;
+  if (Number.isNaN(since) || !storm) return 0;
+  const wanted = storm.toLowerCase();
+  return runs.filter(run => {
+    if ((run.storm ?? '').toLowerCase() !== wanted) return false;
+    if (run.status && run.status !== 'complete') return false;
+    const issued = Date.parse(run.issuedAt);
+    return !Number.isNaN(issued) && issued > since;
+  }).length;
+}
+
 /** The storm's own name from an SPC track name such as "2026101718_Wati". */
 export function stormNameOf(record: Pick<EventRecord, 'cycloneName' | 'name'>): string {
   return (record.cycloneName || record.name || '').replace(/^\d{8,12}_/, '').trim();

@@ -11,7 +11,14 @@ import {
   strongestWind,
   type TimelinePoint,
 } from './forecastTimeline';
-import { WIND_CATEGORIES, parseWindBand, windSeverity, type WindKind } from './windScale';
+import {
+  WIND_CATEGORIES,
+  isCoreBand,
+  parseWindBand,
+  windKindForSpeed,
+  windSeverity,
+  type WindKind,
+} from './windScale';
 
 /**
  * A forecast in plain words, for someone who has not read the tables.
@@ -30,6 +37,10 @@ export interface InsightArea {
   winds: string | null;
   kind: WindKind | null;
   possible: boolean;
+  /** Inside the ring of strongest winds, the storm's core: always definite, never "possible" */
+  core: boolean;
+  /** The area's strongest forecast wind in km/h, when REF gave one */
+  maxWindKmph: number | null;
   people: number;
   color: string;
 }
@@ -117,12 +128,16 @@ export function utcStamp(iso: string | null | undefined): string {
 }
 
 function toInsightArea(area: ExposureArea): InsightArea {
-  const band = parseWindBand(area.overallWinds);
+  const core = isCoreBand(area.overallWinds);
+  const band = core ? null : parseWindBand(area.overallWinds);
   return {
     name: area.name,
     winds: area.overallWinds,
-    kind: band?.kind ?? null,
+    // The core has no band of its own: its kind is that of the storm's maximum wind there
+    kind: core ? windKindForSpeed(area.maxWindKmph) : (band?.kind ?? null),
     possible: band?.possible ?? false,
+    core,
+    maxWindKmph: area.maxWindKmph,
     people: area.exposed.population,
     color: windDangerColor(area.overallWinds),
   };
@@ -133,9 +148,22 @@ const isExposedArea = (area: ExposureArea) =>
 
 /** The sentences about where winds are forecast or possible: the two most severe groups of areas. */
 function whereSentences(areas: InsightArea[]): string[] {
+  // The storm's core leads: the island inside it is the one to name first, with the wind it faces
+  const core = areas.filter(area => area.core).sort((a, b) => b.people - a.people);
+  const sentences: string[] = [];
+  if (core.length > 0) {
+    const speeds = core.map(area => area.maxWindKmph).filter((v): v is number => v != null);
+    const speed = speeds.length > 0 ? Math.round(Math.max(...speeds) / 5) * 5 : null;
+    const names = nameList(core.map(area => area.name));
+    sentences.push(
+      `${names} ${core.length === 1 ? 'is' : 'are'} inside the cyclone’s core${
+        speed != null ? `, with winds near ${speed} km/h` : ''
+      }.`
+    );
+  }
   const groups = new Map<string, { kind: WindKind; possible: boolean; names: string[] }>();
   for (const area of areas) {
-    if (!area.kind) continue;
+    if (!area.kind || area.core) continue;
     const key = `${area.kind}:${area.possible}`;
     const group = groups.get(key) ?? { kind: area.kind, possible: area.possible, names: [] };
     group.names.push(area.name);
@@ -144,13 +172,14 @@ function whereSentences(areas: InsightArea[]): string[] {
   const ordered = [...groups.values()].sort(
     (a, b) => windSeverity(b.kind) - windSeverity(a.kind) || Number(a.possible) - Number(b.possible)
   );
-  return ordered.slice(0, 2).map(group => {
+  const others = ordered.slice(0, core.length > 0 ? 1 : 2).map(group => {
     const winds = `${capitalise(WIND_CATEGORIES[group.kind].adjective)} winds`;
     const where = nameList(group.names);
     return group.possible
       ? `${winds} are possible in ${where}.`
       : `${winds} are forecast in ${where}.`;
   });
+  return [...sentences, ...others];
 }
 
 function trendDirection(points: TimelinePoint[]): 'rising' | 'falling' | 'steady' {
@@ -214,6 +243,8 @@ export interface InsightInput {
   /** Issue time of the newest advisory that has results */
   latestIssuedAt?: string | null;
   timeline?: TimelinePoint[];
+  /** How many newer advisories exist, counted from the run list (see countNewerAdvisories) */
+  newerCount?: number;
   now?: number;
 }
 
@@ -225,11 +256,14 @@ export function buildAdvisoryStatus({
   issuedAt = null,
   latestIssuedAt = null,
   timeline = [],
+  newerCount,
   now,
 }: {
   issuedAt?: string | null;
   latestIssuedAt?: string | null;
   timeline?: TimelinePoint[];
+  /** How many newer advisories exist, from the run list. Preferred over counting loaded figures. */
+  newerCount?: number;
   now?: number;
 }): AdvisoryStatus {
   const issuedMs = issuedAt ? Date.parse(issuedAt) : NaN;
@@ -245,7 +279,7 @@ export function buildAdvisoryStatus({
           issuedAt: latestIssuedAt as string,
           count: Math.max(
             1,
-            timeline.filter(point => Date.parse(point.issuedAt) > issuedMs).length
+            newerCount ?? timeline.filter(point => Date.parse(point.issuedAt) > issuedMs).length
           ),
         }
       : null,
@@ -259,6 +293,7 @@ export function buildForecastInsight(input: InsightInput): ForecastInsight {
     issuedAt = null,
     latestIssuedAt = null,
     timeline = [],
+    newerCount,
     now,
   } = input;
 
@@ -279,6 +314,11 @@ export function buildForecastInsight(input: InsightInput): ForecastInsight {
     confirmed = 0;
     possible = 0;
     for (const band of exposedBands) {
+      // The core is definite: its people are where the winds are forecast with most certainty
+      if (isCoreBand(band.label)) {
+        confirmed += band.totals.population;
+        continue;
+      }
       const parsed = parseWindBand(band.label);
       if (!parsed) continue;
       if (parsed.possible) possible += band.totals.population;
@@ -289,7 +329,7 @@ export function buildForecastInsight(input: InsightInput): ForecastInsight {
   const strongest = strongestWind(exposure);
   const exposedSomething = peopleExposed > 0 || buildingsExposed > 0 || areas.length > 0;
   const anyConfirmed =
-    areas.some(area => area.kind && !area.possible) ||
+    areas.some(area => area.core || (area.kind && !area.possible)) ||
     Boolean(national && national.kind && !national.possible && exposedSomething);
   const level: InsightLevel = !exposedSomething ? 'none' : anyConfirmed ? 'forecast' : 'possible';
 
@@ -323,7 +363,7 @@ export function buildForecastInsight(input: InsightInput): ForecastInsight {
     }
   }
 
-  const status = buildAdvisoryStatus({ issuedAt, latestIssuedAt, timeline, now });
+  const status = buildAdvisoryStatus({ issuedAt, latestIssuedAt, timeline, newerCount, now });
 
   const facilitiesExposed = exposure.national?.exposed;
   const health = facilitiesExposed?.healthFacilities ?? 0;

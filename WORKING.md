@@ -21,7 +21,7 @@ The one place that says what is current. Agents and people: read this first, upd
 ## In progress
 | Who | What | Branch/worktree | Since |
 |---|---|---|---|
-| (nobody) | | | |
+| Claude (for kishank) | QA report fixes: C2 (radius of maximum winds ranked as no wind) and H1 ("N newer" undercount) done and tested; C1 (cold load shows "no exposure") not yet reproduced | `agent/claude/qa-critical` in `~/Partner2-qa`; merges back after review | 2026-11-19 |
 
 ## Completed work
 - 2026-11-19: Integrated source-aware cyclone categories (badge, numbered track, timeline, provenance and missing-data handling) with the completed quadrant wind-radius overlays in source commit `fec361c`. Verified type-check, lint (warnings only), format, 1,021 Jest tests (8 existing skips), Chromium category-control previews at 320/390/430px, landscape and desktop, and a webpack production build with `AUTH_REQUIRE_REDIS=false` for local validation. The default Turbopack build cannot resolve the temporary worktree's dependency symlink. Middleware Python syntax checks passed; Django/Postgres tests could not run because Django and a test database are unavailable. Safari, live-API/WebGL integration and remote CI were not run. No deployment change.

@@ -81,15 +81,35 @@ export function windRange(kind: WindKind): string {
 /** REF also draws the ring of strongest winds around the centre; it is an area, not a wind category. */
 export const RADIUS_OF_MAX_WINDS = 'Radius of Maximum Winds';
 
+/** Whether a REF wind-area name is the ring of strongest winds around the centre. */
+export function isCoreBand(name: string | null | undefined): boolean {
+  return !!name && name.trim().toLowerCase() === RADIUS_OF_MAX_WINDS.toLowerCase();
+}
+
+/**
+ * The wind category a speed falls in (63, 89 and 118 km/h and up), or null below gale force. Used for the
+ * ring of strongest winds: it has no category of its own, its strength is the storm's own maximum wind.
+ */
+export function windKindForSpeed(kmph: number | null | undefined): WindKind | null {
+  if (kmph == null || !Number.isFinite(kmph)) return null;
+  if (kmph >= WIND_CATEGORIES.hurricane.minKmph) return 'hurricane';
+  if (kmph >= WIND_CATEGORIES.storm.minKmph) return 'storm';
+  if (kmph >= WIND_CATEGORIES.gale.minKmph) return 'gale';
+  return null;
+}
+
+/** A band for a legend swatch: "Possible Gale", and "Core (radius of max. winds)" for the ring. */
+export function windBandShortLabel(name: string): string {
+  return isCoreBand(name) ? 'Core (radius of max. winds)' : name.replace(/ Winds$/, '');
+}
+
 /**
  * Any REF wind area in plain words: "Gale Winds" -> "gale winds (63–88 km/h)",
  * "Radius of Maximum Winds" -> "inside the radius of maximum winds". Unknown names come back as given.
  */
 export function windAreaLabel(name: string | null | undefined): string | null {
   if (!name) return null;
-  if (name.trim().toLowerCase() === RADIUS_OF_MAX_WINDS.toLowerCase()) {
-    return 'inside the radius of maximum winds';
-  }
+  if (isCoreBand(name)) return 'inside the radius of maximum winds';
   return windBandLabel(name) ?? name.toLowerCase();
 }
 

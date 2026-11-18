@@ -1,3 +1,4 @@
+import { isCoreBand, windKindForSpeed } from './windScale';
 /**
  * Rapid Exposure Forecast (REF) results.
  *
@@ -101,7 +102,11 @@ export interface ForecastExposure {
   };
 }
 
-/** Danger bands from the least to the most severe, as REF names them */
+/**
+ * Danger bands from the least to the most severe, as REF names them. The one ordering every surface uses
+ * (rules, headlines, tables, legends, exports). The ring of strongest winds is last: it is the storm's
+ * core, and an area inside it is at least as exposed as any band around it.
+ */
 export const WIND_DANGER_ORDER = [
   'Not exposed',
   'Track Uncertainty',
@@ -111,10 +116,34 @@ export const WIND_DANGER_ORDER = [
   'Storm Winds',
   'Possible Hurricane Winds',
   'Hurricane Winds',
+  'Radius of Maximum Winds',
 ] as const;
 
-/** Every area name the map colours: the wind bands plus the radius of maximum winds ring */
-export const MAP_DANGER_NAMES = [...WIND_DANGER_ORDER, 'Radius of Maximum Winds'] as const;
+/** Every area name the map colours */
+export const MAP_DANGER_NAMES = WIND_DANGER_ORDER;
+
+/**
+ * How severe an area's wind band is, as an index in WIND_DANGER_ORDER; -1 for a name that is not in it.
+ *
+ * Inside the ring of strongest winds the strength is the storm's own maximum wind, so with a speed the area
+ * ranks as the definite band for it (120 km/h is Hurricane Winds, 70 km/h is Gale Winds), and below gale
+ * force as Track Uncertainty. Without a speed it ranks as the core itself, the top: an unknown speed in
+ * the core must not read as no exposure.
+ */
+export function windDangerRank(
+  label: string | null | undefined,
+  maxWindKmph?: number | null
+): number {
+  if (!label) return -1;
+  const order = WIND_DANGER_ORDER as readonly string[];
+  if (isCoreBand(label) && maxWindKmph != null && Number.isFinite(maxWindKmph)) {
+    const kind = windKindForSpeed(maxWindKmph);
+    return order.indexOf(
+      kind ? `${kind[0].toUpperCase()}${kind.slice(1)} Winds` : 'Track Uncertainty'
+    );
+  }
+  return order.indexOf(label);
+}
 
 const DANGER_COLORS: Record<string, string> = {
   'Not exposed': '#cbd5e1',

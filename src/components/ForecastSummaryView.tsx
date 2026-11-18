@@ -32,6 +32,7 @@ const AREAS_SHOWN = 3;
 
 /** "possible gale", "storm" */
 function windsShort(area: InsightArea): string {
+  if (area.core) return area.kind ? `core, ${area.kind} winds` : 'core';
   if (!area.kind) return windAreaLabel(area.winds) ?? '';
   return `${area.possible ? 'possible ' : ''}${area.kind}`;
 }

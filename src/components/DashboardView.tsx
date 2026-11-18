@@ -73,6 +73,8 @@ import {
   isModeEventId,
   groupForecastRuns,
   listForecastRuns,
+  countNewerAdvisories,
+  stormNameOf,
 } from '@/utils/forecastRuns';
 import AssessmentPendingNotice from '@/components/AssessmentPendingNotice';
 import { withRiskSource } from '@/utils/dataSourceLabel';
@@ -1595,9 +1597,23 @@ export default function DashboardView({
             issuedAt: activeEventRecord?.trackIssuedTime,
             latestIssuedAt: forecastRecord?.trackIssuedTime,
             timeline: forecastTimeline,
+            newerCount: activeEventRecord
+              ? countNewerAdvisories(
+                  forecastRuns,
+                  stormNameOf(activeEventRecord),
+                  activeEventRecord.trackIssuedTime
+                )
+              : undefined,
           })
         : null,
-    [isPlanningMode, forecastExposure, activeEventRecord, forecastRecord, forecastTimeline]
+    [
+      isPlanningMode,
+      forecastExposure,
+      activeEventRecord,
+      forecastRecord,
+      forecastTimeline,
+      forecastRuns,
+    ]
   );
   const assessmentRecord = useMemo(
     () =>
@@ -4104,6 +4120,7 @@ export default function DashboardView({
                 summary={{
                   timeline: forecastTimeline,
                   latestIssuedAt: forecastRecord?.trackIssuedTime ?? null,
+                  newerCount: advisoryStatus?.newer?.count,
                   statusShownAbove: true,
                   onSwitchToLatest: forecastRecord
                     ? () => handlePickEvent(forecastRecord.id)

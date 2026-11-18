@@ -9,6 +9,7 @@ import {
   type PriorityThresholds,
 } from '@/utils/responsePriority';
 import { WIND_DANGER_ORDER } from '@/utils/forecastExposure';
+import { isCoreBand } from '@/utils/windScale';
 
 interface Props {
   countryName: string;
@@ -171,7 +172,8 @@ export default function PriorityThresholdsEditor({
                           aria-label={`${rule.label}: forecast wind at least`}
                         >
                           {WIND_DANGER_ORDER.map((band, i) =>
-                            i === 0 ? null : (
+                            // The core is ranked by its wind speed, so it is not a step of its own
+                            i === 0 || isCoreBand(band) ? null : (
                               <option key={band} value={i}>
                                 {WIND_OPTION_LABEL(band)}
                               </option>

@@ -1,5 +1,5 @@
 import type { EventRecord } from '@/data/eventRecords';
-import { WIND_DANGER_ORDER, type ExposureArea, type ForecastExposure } from './forecastExposure';
+import { windDangerRank, type ExposureArea, type ForecastExposure } from './forecastExposure';
 import { stormNameOf } from './forecastRuns';
 
 /**
@@ -50,8 +50,7 @@ export interface ForecastChange {
 /** A change smaller than this is forecast noise, not a change worth reporting */
 const SPEED_CHANGE_KMPH = 5;
 
-const rank = (band: string | null | undefined) =>
-  band ? (WIND_DANGER_ORDER as readonly string[]).indexOf(band) : -1;
+const rank = (band: string | null | undefined) => windDangerRank(band);
 
 const isExposed = (area: ExposureArea) => area.exposed.population > 0 || area.exposed.buildings > 0;
 
