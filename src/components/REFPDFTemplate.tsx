@@ -150,7 +150,7 @@ function Table({
   table,
   maxRows = 12,
 }: {
-  table: { title: string; headers: string[]; rows: string[][] };
+  table: { title: string; headers: string[]; rows: string[][]; note?: string };
   maxRows?: number;
 }) {
   // The brief is deliberately a two-page operational product. Keep dense or
@@ -207,6 +207,17 @@ function Table({
               ))}
             </tr>
           ))}
+          {table.note && (
+            <tr>
+              <td
+                colSpan={table.headers.length}
+                data-testid="table-note"
+                style={{ padding: '1.2mm 1.5mm', color: MUTED, fontStyle: 'italic' }}
+              >
+                {table.note}
+              </td>
+            </tr>
+          )}
           {remainingRows > 0 && (
             <tr>
               <td
@@ -248,16 +259,16 @@ const REFPDFTemplate = forwardRef<HTMLDivElement, REFPDFTemplateProps>(
             >
               {brief.kicker}
             </div>
+            {/* A plain block: line-clamp is not drawn faithfully by html2canvas, which cut the title in half */}
             <div
+              data-testid="ref-brief-heading"
               style={{
                 fontSize: '20pt',
                 fontWeight: 800,
-                lineHeight: 1.15,
+                lineHeight: 1.25,
                 marginTop: '1mm',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: 2,
+                paddingBottom: '1mm',
+                overflowWrap: 'anywhere',
               }}
             >
               {brief.heading}
@@ -296,7 +307,8 @@ const REFPDFTemplate = forwardRef<HTMLDivElement, REFPDFTemplateProps>(
                 <img
                   src={mapImageUrl}
                   alt="Forecast wind exposure map"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  // contain, not cover: cover cropped the captured view to the box and cut the storm in half
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 />
               ) : (
                 <span style={{ fontSize: '9pt', color: MUTED }}>Map unavailable</span>

@@ -67,7 +67,7 @@ export interface ForecastBriefModel {
     thresholds: string;
   };
   operationalNote: string;
-  areaTable: { title: string; headers: string[]; rows: string[][] };
+  areaTable: { title: string; headers: string[]; rows: string[][]; note?: string };
   windTable: { title: string; headers: string[]; rows: string[][] };
   context: string[];
   dashboardUrl: string | null;
@@ -193,6 +193,15 @@ export function buildForecastBrief(input: ForecastBriefInput): ForecastBriefMode
 
   const areas = [...exposure.regions].sort((a, b) => b.exposed.population - a.exposed.population);
   const exposedBands = exposure.byWindDanger.filter(band => isExposedDanger(band.label));
+  // The table is for areas that matter: under forecast winds, or inside the track's uncertainty. A dozen rows of
+  // zeros push the decision context down and bury the two that are not zero; the rest are counted in one line.
+  const mattersForBrief = (area: ExposureArea) =>
+    area.exposed.population > 0 ||
+    area.exposed.buildings > 0 ||
+    area.populationInTrackUncertainty > 0 ||
+    (!!area.overallWinds && area.overallWinds !== 'Not exposed');
+  const tableAreas = areas.filter(mattersForBrief);
+  const quietAreas = areas.length - tableAreas.length;
 
   const trackSource =
     exposure.layers.cycloneTrackSource === 'run'
@@ -257,7 +266,12 @@ export function buildForecastBrief(input: ForecastBriefInput): ForecastBriefMode
     areaTable: {
       title: `EXPOSURE BY ${input.regionLabel.toUpperCase().replace(/S$/, '')}`,
       headers: ['Area', 'Strongest wind', 'People', 'Buildings', 'Health', 'In floodplain'],
-      rows: areas.map(areaRow),
+      rows: tableAreas.map(areaRow),
+      ...(quietAreas > 0
+        ? {
+            note: `${quietAreas} other ${quietAreas === 1 ? 'area' : 'areas'}: no forecast winds.`,
+          }
+        : {}),
     },
     windTable: {
       title: 'PEOPLE EXPOSED BY FORECAST WIND',

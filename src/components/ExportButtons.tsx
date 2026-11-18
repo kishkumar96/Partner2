@@ -6,6 +6,7 @@ import { menuPlacement } from '@/utils/menuPlacement';
 import { ChevronDown, Download, FileDown, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
+import { briefDashboardLink } from '@/utils/briefLink';
 import { buildForecastBrief, type ForecastBriefContext } from '@/utils/forecastBrief';
 import REFPDFTemplate from './REFPDFTemplate';
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types';
@@ -473,7 +474,8 @@ export default function ExportButtons({
           logger.warn('Map capture skipped for forecast brief:', error);
         }
       }
-      const dashboardUrl = typeof window !== 'undefined' ? window.location.href : undefined;
+      const dashboardUrl =
+        typeof window !== 'undefined' ? briefDashboardLink(window.location.href) : undefined;
       const qrCodeSrc = dashboardUrl
         ? await QRCode.toDataURL(dashboardUrl, { width: 256, margin: 1 })
         : undefined;
