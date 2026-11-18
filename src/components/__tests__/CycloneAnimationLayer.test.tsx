@@ -300,4 +300,44 @@ describe('CycloneAnimationLayer', () => {
     expect(Math.abs(end[0] - start[0])).toBeLessThanOrEqual(180);
     expect(end[0]).toBe(181);
   });
+
+  it('keeps unknown track points neutral and labels categories without guessing forecast status', () => {
+    render(
+      <CycloneAnimationLayer
+        map={mockMap}
+        forecastTrack={[
+          { ...sampleForecast[0], category: null },
+          { ...sampleForecast[1], phase: 'forecast' },
+        ]}
+      />
+    );
+    const source = (mockMap.addSource as jest.Mock).mock.calls.find(
+      call => call[0] === 'cyclone-forecast-track'
+    )![1];
+    const points = source.data.features.filter(
+      (feature: GeoJSON.Feature) => feature.geometry.type === 'Point'
+    );
+    expect(points[0].properties).toMatchObject({
+      category: null,
+      categoryColor: '#94a3b8',
+      categoryText: '?',
+      phase: 'unspecified',
+      index: 0,
+    });
+    expect(points[1].properties).toMatchObject({
+      category: 3,
+      categoryText: '3',
+      phase: 'forecast',
+      index: 1,
+    });
+    const forecastLine = (mockMap.addLayer as jest.Mock).mock.calls.find(
+      call => call[0].id === 'cyclone-category-forecast-line'
+    )![0];
+    expect(forecastLine.filter).toEqual(['==', ['get', 'phase'], 'forecast']);
+    expect(forecastLine.paint['line-dasharray']).toEqual([2, 2]);
+    const clickBinding = (mockMap.on as jest.Mock).mock.calls.find(
+      call => call[0] === 'click' && call[1] === 'cyclone-category-hit'
+    );
+    expect(clickBinding).toBeDefined();
+  });
 });

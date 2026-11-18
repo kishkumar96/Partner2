@@ -18,17 +18,26 @@ export const CycloneForecastRowSchema = z.object({
   // normalises values >180 to negative before rendering.
   Longitude: z.coerce.number().min(-180).max(360),
 
+  CategoryInvalid: z.boolean().optional(),
+  CategoryScale: z.coerce.string().nullish(),
+  WindUnit: z.coerce.string().nullish(),
+  AveragingMinutes: z
+    .union([z.literal(1), z.literal(10)])
+    .nullish()
+    .catch(null),
+  TrackPhase: z.coerce.string().nullish(),
+
   // Intensity metrics
   Symbol: z.coerce.number().nullable().optional(),
   // Negative categories represent pre-tropical-storm phases (disturbances/depressions)
   // e.g. Samoa TC Gita CSV uses -3 before the storm develops
-  Category: z.coerce.number().min(-10).max(5).nullable().optional(),
+  Category: z.number().nullable().optional(),
   Pressure: z.coerce.number().min(800).max(1020).nullable().optional(), // hPa
   PressureOCI: z.coerce.number().nullable().optional(), // Outermost closed isobar
 
   // Wind data
-  MeanWind: z.coerce.number().min(0).max(200).nullable().optional(), // knots
-  WindGust: z.coerce.number().min(0).max(250).nullable().optional(), // knots
+  MeanWind: z.coerce.number().min(0).max(500).nullable().optional(), // knots
+  WindGust: z.coerce.number().min(0).max(600).nullable().optional(), // knots
   P5Wind: z.coerce.number().nullable().optional(), // Alternative wind metric
 
   // Structural metrics
@@ -104,10 +113,10 @@ export const CycloneForecastPointSchema = z.object({
   timeString: z.string(),
   latitude: z.number(),
   longitude: z.number(),
-  category: z.number(),
-  pressure: z.number(),
-  meanWind: z.number(),
-  windGust: z.number(),
+  category: z.number().nullable(),
+  pressure: z.number().nullable(),
+  meanWind: z.number().nullable(),
+  windGust: z.number().nullable(),
   uncertainty: z.number(),
 
   // Directional radii

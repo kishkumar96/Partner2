@@ -14,7 +14,7 @@ export const CATEGORY_COLORS: Record<number, { rgba: string; rgb: [number, numbe
   3: { rgba: 'rgba(251, 146,  60, 0.34)', rgb: [251, 146, 60] },
   2: { rgba: 'rgba(250, 204,  21, 0.30)', rgb: [250, 204, 21] },
   1: { rgba: 'rgba(253, 224,  71, 0.26)', rgb: [253, 224, 71] },
-  0: { rgba: 'rgba(125, 211, 252, 0.24)', rgb: [125, 211, 252] },
+  0: { rgba: 'rgba(148, 163, 184, 0.24)', rgb: [148, 163, 184] },
 };
 
 export function noise2D(x: number, y: number, seed: number = 0): number {

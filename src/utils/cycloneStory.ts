@@ -3,6 +3,8 @@
  * Automatically identifies meaningful milestones in cyclone forecast data
  */
 
+import { getCategoryLabel as getCategoryName } from '@/theme/cycloneScale';
+import { formatCycloneMetric } from './cycloneCategory';
 import { CycloneForecastPoint } from './cycloneAnimationLoader';
 import { CountryCode } from '@/types/thredds';
 import { ArrowUp, Cloud, Flame, MapPin, Wind, Zap } from 'lucide-react';
@@ -82,20 +84,6 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 /**
  * Get category name for display
  */
-const CATEGORY_NAME_MAP: { [key: number]: string } = {
-  0: 'Tropical Depression',
-  1: 'Category 1',
-  2: 'Category 2',
-  3: 'Category 3',
-  4: 'Category 4',
-  5: 'Category 5',
-};
-
-function getCategoryName(category: number): string {
-  const mapped = CATEGORY_NAME_MAP[category];
-  return mapped !== undefined ? mapped : `Category ${category}`;
-}
-
 /**
  * Detect story beats from cyclone forecast data
  * @param forecastTrack - Array of cyclone forecast points
@@ -116,33 +104,38 @@ export function detectStoryBeats(
 
   // 1. Peak Intensity
   let maxWindIndex = 0;
-  let maxWind = forecastTrack[0].meanWind;
-  let minPressure = forecastTrack[0].pressure;
+  let maxWind = -Infinity;
+  let minPressure = Infinity;
 
-  for (let i = 1; i < forecastTrack.length; i++) {
+  for (let i = 0; i < forecastTrack.length; i++) {
     const point = forecastTrack[i];
-    if (point.meanWind > maxWind || (point.meanWind === maxWind && point.pressure < minPressure)) {
+    if (point.meanWind === null) continue;
+    if (
+      point.meanWind > maxWind ||
+      (point.meanWind === maxWind && (point.pressure ?? Infinity) < minPressure)
+    ) {
       maxWindIndex = i;
       maxWind = point.meanWind;
-      minPressure = point.pressure;
+      minPressure = point.pressure ?? Infinity;
     }
   }
 
   const peakPoint = forecastTrack[maxWindIndex];
-  beats.push({
-    id: 'peak-intensity',
-    index: maxWindIndex,
-    time: peakPoint.time,
-    title: 'Peak Intensity',
-    description: `Maximum sustained winds of ${Math.round(peakPoint.meanWind)} kt with pressure at ${Math.round(peakPoint.pressure)} hPa`,
-    severity: 5,
-    type: 'peak-intensity',
-    metrics: {
-      wind: peakPoint.meanWind,
-      pressure: peakPoint.pressure,
-      category: peakPoint.category,
-    },
-  });
+  if (Number.isFinite(maxWind))
+    beats.push({
+      id: 'peak-intensity',
+      index: maxWindIndex,
+      time: peakPoint.time,
+      title: 'Peak Intensity',
+      description: `Maximum sustained wind: ${formatCycloneMetric(peakPoint.meanWind, 'kt')}. Pressure: ${formatCycloneMetric(peakPoint.pressure, 'hPa')}.`,
+      severity: 5,
+      type: 'peak-intensity',
+      metrics: {
+        wind: peakPoint.meanWind ?? undefined,
+        pressure: peakPoint.pressure ?? undefined,
+        category: peakPoint.category ?? undefined,
+      },
+    });
 
   // 2. Rapid Intensification (6-hour window, ≥25 kt increase OR ≥20 hPa drop)
   //    Uses actual time differences rather than assuming 1-hour timesteps.
@@ -168,8 +161,14 @@ export function detectStoryBeats(
       continue;
     }
 
-    const windIncrease = current.meanWind - sixHoursPrior.meanWind;
-    const pressureDrop = sixHoursPrior.pressure - current.pressure;
+    const windIncrease =
+      current.meanWind != null && sixHoursPrior.meanWind != null
+        ? current.meanWind - sixHoursPrior.meanWind
+        : NaN;
+    const pressureDrop =
+      sixHoursPrior.pressure != null && current.pressure != null
+        ? sixHoursPrior.pressure - current.pressure
+        : NaN;
 
     if (windIncrease >= 25 || pressureDrop >= 20) {
       beats.push({
@@ -188,8 +187,8 @@ export function detectStoryBeats(
         severity: 4,
         type: 'rapid-intensification',
         metrics: {
-          wind: current.meanWind,
-          pressure: current.pressure,
+          wind: current.meanWind ?? undefined,
+          pressure: current.pressure ?? undefined,
           windChange: windIncrease,
           pressureChange: pressureDrop,
         },
@@ -197,33 +196,29 @@ export function detectStoryBeats(
     }
   }
 
-  // 3. Category Upgrades (Cat 1, Cat 3, Cat 5)
-  const categoryThresholds = [1, 3, 5];
-  const seenCategories = new Set<number>();
-
+  // Announce actual source timesteps, never fabricated intermediate categories.
   for (let i = 0; i < forecastTrack.length; i++) {
     const point = forecastTrack[i];
-    for (const threshold of categoryThresholds) {
-      if (point.category >= threshold && !seenCategories.has(threshold)) {
-        seenCategories.add(threshold);
-        const catName = getCategoryName(threshold);
-        beats.push({
-          id: `category-${threshold}`,
-          index: i,
-          time: point.time,
-          title: `${catName} Cyclone`,
-          description: `Storm upgraded to ${catName} with ${Math.round(point.meanWind)} kt winds`,
-          severity: threshold === 5 ? 5 : threshold === 3 ? 4 : 3,
-          type: 'category-upgrade',
-          metrics: {
-            category: threshold,
-            wind: point.meanWind,
-            pressure: point.pressure,
-          },
-        });
-        break; // Only one upgrade per timestep
-      }
-    }
+    const previous = forecastTrack[i - 1];
+    if (point.category == null || point.category === previous?.category) continue;
+    const upgraded =
+      previous?.category != null &&
+      point.category > previous.category &&
+      point.classification?.scale === previous.classification?.scale;
+    beats.push({
+      id: `category-${point.category}-${i}`,
+      index: i,
+      time: point.time,
+      title: `${getCategoryName(point.category)} ${upgraded ? 'Reached' : 'Recorded'}`,
+      description: `${getCategoryName(point.category)} (${point.classification?.provenance ?? 'reported'}). Sustained wind: ${formatCycloneMetric(point.meanWind, 'kt')}`,
+      severity: point.category >= 4 ? 5 : point.category >= 3 ? 4 : 3,
+      type: 'category-upgrade',
+      metrics: {
+        category: point.category ?? undefined,
+        wind: point.meanWind ?? undefined,
+        pressure: point.pressure ?? undefined,
+      },
+    });
   }
 
   // 4. Closest Approach to specified center point
@@ -262,13 +257,13 @@ export function detectStoryBeats(
     index: closestIndex,
     time: closestPoint.time,
     title: 'Closest Approach',
-    description: `Cyclone passes ${Math.round(minDistance)} km from ${getRegionName(countryCode)} at ${getCategoryName(closestPoint.category)} strength`,
+    description: `Cyclone passes ${Math.round(minDistance)} km from ${getRegionName(countryCode)} at ${getCategoryName(closestPoint.category)}`,
     severity: minDistance < 100 ? 5 : minDistance < 200 ? 4 : 3,
     type: 'closest-approach',
     metrics: {
       distance: minDistance,
-      wind: closestPoint.meanWind,
-      category: closestPoint.category,
+      wind: closestPoint.meanWind ?? undefined,
+      category: closestPoint.category ?? undefined,
     },
   });
 
@@ -294,7 +289,7 @@ export function detectStoryBeats(
     type: 'peak-uncertainty',
     metrics: {
       uncertainty: maxUncertainty,
-      wind: uncertainPoint.meanWind,
+      wind: uncertainPoint.meanWind ?? undefined,
     },
   });
 

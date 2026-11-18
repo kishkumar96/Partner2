@@ -10,6 +10,13 @@ import {
 } from '@/theme/cycloneScale';
 import { validateForecastTrack, type CycloneForecastRow } from '@/schemas/cycloneForecastSchema';
 
+import {
+  resolveCycloneCategory,
+  windInKnots,
+  type CycloneSourceContext,
+  type CycloneClassification,
+} from './cycloneCategory';
+
 type RawForecastRow = Record<string, string | number | null>;
 
 function appendDataVersion(path: string): string {
@@ -23,14 +30,20 @@ function appendDataVersion(path: string): string {
 }
 
 export interface CycloneForecastPoint {
+  classification?: CycloneClassification;
+  status?: string;
+  source?: string;
+  phase?: CycloneSourceContext['phase'];
   time: Date;
   timeString: string;
   latitude: number;
   longitude: number;
-  category: number;
-  pressure: number;
-  meanWind: number;
-  windGust: number;
+  category: number | null;
+  pressure: number | null;
+  /** Reported sustained wind converted to knots; null means unavailable or unsupported units. */
+  meanWind: number | null;
+  windGust: number | null;
+  hasEstimatedWindRadii?: boolean;
   uncertainty: number;
   galeRadiusNE: number;
   galeRadiusSE: number;
@@ -129,29 +142,17 @@ function asNumber(value: string | number | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function inferCategory(meanWind: number | null): number {
-  if (meanWind === null || meanWind < 0) return 0;
-  if (meanWind >= 137) return 5;
-  if (meanWind >= 113) return 4;
-  if (meanWind >= 96) return 3;
-  if (meanWind >= 83) return 2;
-  if (meanWind >= 64) return 1;
-  if (meanWind >= 34) return 0;
-  return -1;
-}
-
-function inferWindGust(meanWind: number | null, windGust: number | null): number {
-  if (windGust !== null) return windGust;
-  if (meanWind === null) return 0;
-  return Math.round(meanWind * 1.2);
-}
-
-function normalizeForecastRow(row: RawForecastRow): CycloneForecastRow | null {
+function normalizeForecastRow(row: RawForecastRow): Record<string, unknown> | null {
   const timeValue = firstDefined(row, ["Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']", 'Time', 'TIME']);
   const latitudeValue = asNumber(firstDefined(row, ['Latitude', 'LATITUDE', 'lat', 'LAT']));
   const longitudeValue = asNumber(firstDefined(row, ['Longitude', 'LONGITUDE', 'lon', 'LON']));
 
-  if (typeof timeValue !== 'string' || latitudeValue === null || longitudeValue === null) {
+  if (
+    typeof timeValue !== 'string' ||
+    !Number.isFinite(Date.parse(timeValue)) ||
+    latitudeValue === null ||
+    longitudeValue === null
+  ) {
     return null;
   }
 
@@ -162,19 +163,27 @@ function normalizeForecastRow(row: RawForecastRow): CycloneForecastRow | null {
   const pressure = asNumber(
     firstDefined(row, ['Pressure', 'PRESSURE_CENTRAL', 'central_pressure', 'pressure'])
   );
-  const category = asNumber(firstDefined(row, ['Category', 'CATEGORY', 'category']));
+  const rawCategory = firstDefined(row, ['Category', 'CATEGORY', 'category']);
+  const category = asNumber(rawCategory);
+  const invalidCategory = rawCategory != null && rawCategory !== '' && category == null;
   const uncertainty = asNumber(firstDefined(row, ['Uncertainty', 'UNCERTAINTY', 'uncertainty']));
 
+  const rawPeriod = firstDefined(row, ['AveragingMinutes', 'averaging_minutes']);
   return {
+    CategoryScale: firstDefined(row, ['CategoryScale', 'category_scale']),
+    WindUnit: firstDefined(row, ['WindUnit', 'wind_unit']),
+    AveragingMinutes: asNumber(rawPeriod) ?? (rawPeriod == null || rawPeriod === '' ? null : -1),
+    TrackPhase: firstDefined(row, ['TrackPhase', 'track_phase']),
     "Time[fmt=yyyy-MM-dd'T'HH:mm:ss'Z']": timeValue,
     Latitude: latitudeValue,
     Longitude: longitudeValue,
     Symbol: asNumber(firstDefined(row, ['Symbol', 'SYMBOL', 'symbol'])),
-    Category: category ?? inferCategory(meanWind),
-    Pressure: pressure ?? 1007,
+    Category: category,
+    CategoryInvalid: invalidCategory,
+    Pressure: pressure,
     PressureOCI: asNumber(firstDefined(row, ['PressureOCI', 'PRESSURE_OCI'])),
-    MeanWind: meanWind ?? 0,
-    WindGust: inferWindGust(meanWind, windGust),
+    MeanWind: meanWind,
+    WindGust: windGust,
     P5Wind: asNumber(firstDefined(row, ['P5Wind', 'P5_WIND'])),
     RadiusOCI: asNumber(firstDefined(row, ['RadiusOCI', 'RADIUS_OCI'])),
     Radius1000hPa: asNumber(firstDefined(row, ['Radius1000hPa', 'RADIUS_1000HPA'])),
@@ -304,15 +313,93 @@ function stripRsmcComments(csvText: string): string {
   return kept.join('\n');
 }
 
-function buildForecastPointFromRow(row: CycloneForecastRow): CycloneForecastPoint {
+function buildForecastPointFromRow(
+  row: CycloneForecastRow,
+  sourceContext: CycloneSourceContext = {}
+): CycloneForecastPoint {
+  const context: CycloneSourceContext = {
+    // Existing RSMC CSV / partner geometry column contract is knots (see schema).
+    // This establishes units only, never classification scale or averaging period.
+    windUnit: 'kt',
+    ...sourceContext,
+    ...(row.CategoryScale
+      ? {
+          scale: ['australian', 'saffir-simpson'].includes(row.CategoryScale)
+            ? (row.CategoryScale as CycloneSourceContext['scale'])
+            : undefined,
+        }
+      : {}),
+    ...(row.WindUnit
+      ? {
+          windUnit: ['kt', 'km/h', 'm/s'].includes(row.WindUnit)
+            ? (row.WindUnit as CycloneSourceContext['windUnit'])
+            : undefined,
+        }
+      : {}),
+    ...(row.AveragingMinutes != null
+      ? {
+          averagingMinutes:
+            row.AveragingMinutes === 1 || row.AveragingMinutes === 10
+              ? row.AveragingMinutes
+              : undefined,
+        }
+      : {}),
+    ...(row.TrackPhase
+      ? {
+          phase:
+            row.TrackPhase === 'observed' || row.TrackPhase === 'forecast'
+              ? row.TrackPhase
+              : undefined,
+        }
+      : {}),
+    source: row.DataSource ?? sourceContext.source,
+    status: row.CycloneStatus ?? sourceContext.status,
+  };
+  const classification = resolveCycloneCategory(
+    row.CategoryInvalid ? NaN : row.Category,
+    row.MeanWind ?? null,
+    context
+  );
   const longitude = normalizeLongitude(row.Longitude);
-  const category = row.Category ?? inferCategory(row.MeanWind ?? null);
-  const pressure = row.Pressure ?? 1007;
-  const meanWind = row.MeanWind ?? 0;
-  const windGust = row.WindGust ?? inferWindGust(meanWind, null);
+  const category = classification.category;
+  const pressure = row.Pressure ?? null;
+  const meanWind = windInKnots(row.MeanWind ?? null, context.windUnit);
+  const windGust = windInKnots(row.WindGust ?? null, context.windUnit);
   const uncertainty = row.Uncertainty ?? 0;
-  const fallbackRadii = estimateFallbackRadii(meanWind, category);
+  const fallbackRadii = estimateFallbackRadii(meanWind ?? 0, category ?? 0);
 
+  const hasEstimatedWindRadii = [
+    {
+      values: [
+        row.GaleRadius,
+        row.NEGaleRadius,
+        row.SEGaleRadius,
+        row.SWGaleRadius,
+        row.NWGaleRadius,
+      ],
+      fallback: fallbackRadii.gale,
+    },
+    {
+      values: [
+        row.StormRadius,
+        row.NEStormRadius,
+        row.SEStormRadius,
+        row.SWStormRadius,
+        row.NWStormRadius,
+      ],
+      fallback: fallbackRadii.storm,
+    },
+    {
+      values: [
+        row.HurricaneRadius,
+        row.NEHurricaneRadius,
+        row.SEHurricaneRadius,
+        row.SWHurricaneRadius,
+        row.NWHurricaneRadius,
+      ],
+      fallback: fallbackRadii.hurricane,
+    },
+  ].some(group => group.fallback > 0 && group.values.every(value => value == null));
   const galeRadii = resolveQuadrantRadii(
     row.NEGaleRadius,
     row.SEGaleRadius,
@@ -341,6 +428,11 @@ function buildForecastPointFromRow(row: CycloneForecastRow): CycloneForecastPoin
     latitude: row.Latitude,
     longitude,
     category,
+    classification,
+    hasEstimatedWindRadii,
+    status: context.status,
+    source: context.source,
+    phase: context.phase,
     pressure,
     meanWind,
     windGust,
@@ -375,9 +467,13 @@ function buildForecastPointFromRow(row: CycloneForecastRow): CycloneForecastPoin
  *   (e.g. '/vanuatu/cyclone-lola-forecast.csv'). Defaults to Vanuatu.
  */
 export async function loadCycloneForecastTrack(
-  options: DataLoaderOptions & { forecastFile?: string } = {}
+  options: DataLoaderOptions & { forecastFile?: string; sourceContext?: CycloneSourceContext } = {}
 ): Promise<CycloneForecastPoint[] | null> {
-  const { forecastFile = '/vanuatu/cyclone-lola-forecast.csv', ...loaderOptions } = options;
+  const {
+    forecastFile = '/vanuatu/cyclone-lola-forecast.csv',
+    sourceContext,
+    ...loaderOptions
+  } = options;
   try {
     const { data: csvText, error } = await loadTextData(appendDataVersion(forecastFile), {
       cache: true,
@@ -394,7 +490,7 @@ export async function loadCycloneForecastTrack(
     const rows = parseCSV(stripRsmcComments(csvText), { convertNaN: true });
     const normalizedRows = rows
       .map(row => normalizeForecastRow(row as RawForecastRow))
-      .filter((row): row is CycloneForecastRow => row !== null);
+      .filter((row): row is Record<string, unknown> => row !== null);
 
     // Validate all rows with Zod schema
     const validationResult = validateForecastTrack(normalizedRows);
@@ -419,7 +515,9 @@ export async function loadCycloneForecastTrack(
       return null;
     }
 
-    const points: CycloneForecastPoint[] = validationResult.data.map(buildForecastPointFromRow);
+    const points: CycloneForecastPoint[] = validationResult.data.map(row =>
+      buildForecastPointFromRow(row, sourceContext)
+    );
 
     console.log(`Loaded ${points.length} cyclone forecast points`);
     if (validationResult.warnings && validationResult.warnings.length > 0) {
@@ -441,7 +539,10 @@ export async function loadCycloneForecastTrack(
  *
  * Falls back gracefully to null so callers can chain to the CSV path.
  */
-export function parseForecastPointsFromGeometry(geometry: unknown): CycloneForecastPoint[] | null {
+export function parseForecastPointsFromGeometry(
+  geometry: unknown,
+  sourceContext?: CycloneSourceContext
+): CycloneForecastPoint[] | null {
   if (!geometry || typeof geometry !== 'object') return null;
   const fc = geometry as { type?: unknown; features?: unknown[] };
   if (fc.type !== 'FeatureCollection' || !Array.isArray(fc.features) || fc.features.length === 0) {
@@ -462,21 +563,21 @@ export function parseForecastPointsFromGeometry(geometry: unknown): CycloneForec
 
   const normalizedRows = rawRows
     .map(row => normalizeForecastRow(row))
-    .filter((row): row is CycloneForecastRow => row !== null);
+    .filter((row): row is Record<string, unknown> => row !== null);
 
   if (normalizedRows.length === 0) return null;
 
   const validationResult = validateForecastTrack(normalizedRows);
   if (!validationResult.data || validationResult.data.length === 0) return null;
 
-  return validationResult.data.map(buildForecastPointFromRow);
+  return validationResult.data.map(row => buildForecastPointFromRow(row, sourceContext));
 }
 
 /**
  * Get category color based on cyclone intensity
  * Re-exported from centralized theme for backwards compatibility
  */
-export function getCategoryColor(category: number): string {
+export function getCategoryColor(category: number | null): string {
   return getThemeCategoryColor(category);
 }
 
@@ -484,7 +585,7 @@ export function getCategoryColor(category: number): string {
  * Get category label
  * Re-exported from centralized theme for backwards compatibility
  */
-export function getCategoryLabel(category: number): string {
+export function getCategoryLabel(category: number | null): string {
   return getThemeCategoryLabel(category);
 }
 

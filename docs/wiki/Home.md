@@ -13,6 +13,7 @@ Live: <https://opmthredds.gem.spc.int/partner2> (one page per country, e.g. `/pa
 | Learn the words (event, run, advisory, REF, PDIE, scenario) | [Domain model](Domain-Model.md) and [Glossary](Glossary.md) |
 | Know where the data comes from and how it is loaded | [Data sources and loading](Data-Sources-and-Loading.md) |
 | Read or add a model output file | [Model outputs (REF and PDIE)](Model-Outputs.md) |
+| Understand cyclone category colours and source metadata | [Cyclone categories](Cyclone-Categories.md) |
 | Change a screen or a map layer | [Frontend guide](Frontend-Guide.md) |
 | Add a country, set an env var | [Configuration](Configuration.md) |
 | Protect a country with a password, lock a deployment | [Auth and tenancy](Auth-and-Tenancy.md) |

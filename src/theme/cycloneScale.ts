@@ -5,7 +5,7 @@
  */
 
 // ============================================================================
-// Category Color Scale (Saffir-Simpson Scale)
+// Category colours (classification thresholds are source-specific)
 // ============================================================================
 
 export interface CategoryScale {
@@ -48,7 +48,9 @@ export const CATEGORY_COLORS_RGBA = {
  * @param category - Cyclone category (1-5, or <1 for tropical storm)
  * @returns HEX color string
  */
-export function getCategoryColor(category: number): string {
+export function getCategoryColor(category: number | null | undefined): string {
+  if (category == null || !Number.isInteger(category) || category < 1 || category > 5)
+    return '#94a3b8';
   if (category >= 5) return CATEGORY_COLORS.category5;
   if (category >= 4) return CATEGORY_COLORS.category4;
   if (category >= 3) return CATEGORY_COLORS.category3;
@@ -63,7 +65,9 @@ export function getCategoryColor(category: number): string {
  * @param alpha - Opacity (0-1)
  * @returns RGBA color string
  */
-export function getCategoryColorRGBA(category: number, alpha: number): string {
+export function getCategoryColorRGBA(category: number | null | undefined, alpha: number): string {
+  if (category == null || !Number.isInteger(category) || category < 1 || category > 5)
+    return `rgba(148, 163, 184, ${alpha})`;
   const base = (() => {
     if (category >= 5) return CATEGORY_COLORS_RGBA.category5;
     if (category >= 4) return CATEGORY_COLORS_RGBA.category4;
@@ -78,7 +82,9 @@ export function getCategoryColorRGBA(category: number, alpha: number): string {
 /**
  * Get category label (human-readable)
  */
-export function getCategoryLabel(category: number): string {
+export function getCategoryLabel(category: number | null | undefined): string {
+  if (category == null || !Number.isInteger(category) || category < 1 || category > 5)
+    return 'Category unavailable';
   if (category >= 5) return 'Category 5';
   if (category >= 4) return 'Category 4';
   if (category >= 3) return 'Category 3';

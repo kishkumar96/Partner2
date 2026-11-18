@@ -11,6 +11,21 @@ describe('useCycloneTrackPlayback Hook', () => {
     { lat: -16.0, lon: 167.0, timestamp: '2024-01-01T12:00:00Z', intensity: 3, category: 2 },
   ] as any[];
 
+  it('clamps a selected frame when switching to a shorter track', async () => {
+    const { result, rerender } = renderHook(
+      ({ track }) => useCycloneTrackPlayback({ forecastTrack: track }),
+      { initialProps: { track: mockTrackData } }
+    );
+    act(() => {
+      result.current.controls.seekTo(2);
+    });
+    expect(result.current.state.currentIndex).toBe(2);
+    await act(async () => {
+      rerender({ track: mockTrackData.slice(0, 1) });
+    });
+    expect(result.current.state.currentIndex).toBe(0);
+  });
+
   it('initializes with default state', () => {
     const { result } = renderHook(() => useCycloneTrackPlayback({ forecastTrack: mockTrackData }));
 

@@ -8,9 +8,12 @@
 
 'use client';
 
+import { formatCycloneMetric, formatCycloneTime } from '@/utils/cycloneCategory';
+
 import { useEffect, useState } from 'react';
 import { StoryBeat } from '@/utils/cycloneStory';
 import { CycloneForecastPoint } from '@/utils/cycloneAnimationLoader';
+import { getCategoryLabel } from '@/theme/cycloneScale';
 import { TrendingUp, Wind, AlertTriangle, MapPin, Activity } from 'lucide-react';
 
 interface StoryBeatAnnotationProps {
@@ -35,12 +38,7 @@ function getBeatAnnotation(
   description: string;
   icon: React.ComponentType<any>;
 } {
-  const time = new Date(point.time).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const time = formatCycloneTime(point.time);
 
   switch (beat.type) {
     case 'peak-intensity':
@@ -48,7 +46,7 @@ function getBeatAnnotation(
         title: 'Peak Intensity',
         description:
           beat.description ||
-          `Maximum strength reached with winds of ${point.windGust.toFixed(0)} kt and pressure of ${point.pressure.toFixed(0)} hPa`,
+          `Maximum strength reached with winds of ${formatCycloneMetric(point.windGust)} kt and pressure of ${formatCycloneMetric(point.pressure)} hPa`,
         icon: Activity,
       };
 
@@ -63,10 +61,8 @@ function getBeatAnnotation(
 
     case 'category-upgrade':
       return {
-        title: `Upgraded to Category ${point.category}`,
-        description:
-          beat.description ||
-          `Cyclone intensifies to Category ${point.category} status at ${time}. Dangerous conditions developing.`,
+        title: beat.title || getCategoryLabel(point.category),
+        description: beat.description || `${getCategoryLabel(point.category)} at ${time}.`,
         icon: Wind,
       };
 

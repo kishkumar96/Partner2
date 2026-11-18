@@ -31,6 +31,12 @@ import {
   getCategoryColor,
   getCategoryLabel,
 } from '../utils/cycloneAnimationLoader';
+import { formatCycloneMetric, formatCycloneTime, cycloneScaleLabel } from '@/utils/cycloneCategory';
+import {
+  CycloneCategoryBadge,
+  CycloneCategoryTimeline,
+  CycloneCategoryLegend,
+} from './CycloneCategoryPanel';
 import { buildCumulativeWindEnvelopes } from '@/utils/forecastCone';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { SolidPolygonLayer } from 'deck.gl';
@@ -45,7 +51,7 @@ import {
 } from '../utils/cycloneStory';
 import { useCycloneTrackPlayback } from '@/hooks/useCycloneTrackPlayback';
 import { WIND_RADII_COLORS } from '@/theme/colors';
-import { CATEGORY_COLORS, CHART_COLORS } from '@/theme/cycloneScale';
+import { CHART_COLORS } from '@/theme/cycloneScale';
 import {
   CATEGORY_COLORS as WIND_GLOW_CATEGORY_COLORS,
   initWindParticles,
@@ -272,7 +278,7 @@ export default function CycloneAnimationLayer({
   const glowAnimationFrameRef = useRef<number | undefined>(undefined);
   const glowPhase = useRef<number>(0);
   const styleDataTimeoutRef = useRef<number | null>(null);
-  const lastNotifiedRef = useRef<{ category: number; index: number } | null>(null);
+  const lastNotifiedRef = useRef<{ category: number | null; index: number } | null>(null);
   const storyModeEnabled = typeof storyModeProp === 'boolean' ? storyModeProp : storyModeInternal;
   const storyBeats = storyBeatsProp ?? storyBeatsInternal;
   const displayedPositionRef = useRef<[number, number] | null>(null);
@@ -1042,8 +1048,8 @@ export default function CycloneAnimationLayer({
         cycloneX: x,
         cycloneY: y,
         radiusPixels: rPx,
-        category: cp.category,
-        meanWind: cp.meanWind,
+        category: cp.category ?? 0,
+        meanWind: cp.meanWind ?? 0,
         quality,
         beatInfo: beat ? { ...beat, storyModeEnabled: storyModeEnabledRef.current } : null,
         width: c.clientWidth,
@@ -1166,7 +1172,7 @@ export default function CycloneAnimationLayer({
         cyclonePos.x,
         cyclonePos.y,
         radiusPixels,
-        currentPoint.meanWind,
+        currentPoint.meanWind ?? 0,
         activeQuality.noiseDetail,
         glowPhase.current
       );
@@ -1269,7 +1275,7 @@ export default function CycloneAnimationLayer({
       }
 
       // Draw rain bands (spiral arcs with rotation drift)
-      if (activeQuality.rainBands > 0 && currentPoint.category >= 1) {
+      if (activeQuality.rainBands > 0 && (currentPoint.category ?? 0) >= 1) {
         const bandCount = activeQuality.rainBands;
         const bandRotationSpeed = 0.003;
         const bandPhase = phase * bandRotationSpeed;
@@ -1303,7 +1309,7 @@ export default function CycloneAnimationLayer({
       }
 
       // Draw storm eye (dark void with subtle shimmer) for high intensity storms
-      if (activeQuality.stormEye && currentPoint.category >= 2) {
+      if (activeQuality.stormEye && (currentPoint.category ?? 0) >= 2) {
         const eyeRadius = radiusPixels * 0.12; // Eye is ~12% of gale radius
 
         // Dark void center
@@ -1591,33 +1597,20 @@ export default function CycloneAnimationLayer({
 
         // Add track line source
         if (!map.getSource('cyclone-forecast-track')) {
-          // Category-color expression for track line/points (independent of swath zone palette)
-          const catColorExpr = [
-            'match',
-            ['to-number', ['get', 'category']],
-            5,
-            '#7C3AED', // violet  -Cat 5
-            4,
-            '#DC2626', // red     -Cat 4
-            3,
-            '#FB923C', // orange  -Cat 3
-            2,
-            '#FACC15', // yellow  -Cat 2
-            1,
-            '#FDE047', // lt-yel  -Cat 1
-            '#7DD3FC', // sky-bl  -tropical storm fallback
-          ] as any; // MapLibre expression -runtime type is fine
-
-          // FeatureCollection: one LineString per consecutive point-pair (colored by departure
-          // category) + one Point per timestep (for category-colored waypoint circles).
-          // MapLibre's line layer auto-filters to LineString features; circle auto-filters
-          // to Point features -no explicit geometry-type filter needed.
+          const catColorExpr = ['get', 'categoryColor'] as any;
           const unwrappedLons = unwrapTrackLongitudes(forecastTrack);
+          const propertiesFor = (point: CycloneForecastPoint, index: number) => ({
+            category: point.category,
+            categoryColor: getCategoryColor(point.category),
+            categoryText: point.category == null ? '?' : String(point.category),
+            phase: point.phase ?? 'unspecified',
+            index,
+          });
           const trackFeatures: object[] = [];
           for (let i = 0; i < forecastTrack.length - 1; i++) {
             trackFeatures.push({
               type: 'Feature',
-              properties: { category: forecastTrack[i].category },
+              properties: propertiesFor(forecastTrack[i], i),
               geometry: {
                 type: 'LineString',
                 coordinates: [
@@ -1627,14 +1620,16 @@ export default function CycloneAnimationLayer({
               },
             });
           }
-          for (let i = 0; i < forecastTrack.length; i++) {
-            const p = forecastTrack[i];
+          forecastTrack.forEach((point, i) =>
             trackFeatures.push({
               type: 'Feature',
-              properties: { category: p.category },
-              geometry: { type: 'Point', coordinates: [unwrappedLons[i], p.latitude] },
-            });
-          }
+              properties: propertiesFor(point, i),
+              geometry: {
+                type: 'Point',
+                coordinates: [unwrappedLons[i], point.latitude],
+              },
+            })
+          );
 
           map.addSource('cyclone-forecast-track', {
             type: 'geojson',
@@ -1645,6 +1640,7 @@ export default function CycloneAnimationLayer({
           map.addLayer(
             {
               id: 'cyclone-forecast-track-line',
+              filter: ['!=', ['get', 'phase'], 'forecast'],
               type: 'line',
               source: 'cyclone-forecast-track',
               layout: {
@@ -1668,11 +1664,54 @@ export default function CycloneAnimationLayer({
                 visibility: layerVisibility,
               },
               paint: {
-                'circle-radius': 4,
+                'circle-radius': 10,
                 'circle-color': catColorExpr,
                 'circle-stroke-color': '#ffffff',
                 'circle-stroke-width': 1.5,
               },
+            },
+            beforeId
+          );
+          map.addLayer(
+            {
+              id: 'cyclone-category-forecast-line',
+              type: 'line',
+              source: 'cyclone-forecast-track',
+              filter: ['==', ['get', 'phase'], 'forecast'],
+              layout: { visibility: layerVisibility },
+              paint: { 'line-color': catColorExpr, 'line-width': 2.5, 'line-dasharray': [2, 2] },
+            },
+            'cyclone-forecast-points'
+          );
+          if (map.getStyle()?.glyphs) {
+            map.addLayer(
+              {
+                id: 'cyclone-category-labels',
+                type: 'symbol',
+                source: 'cyclone-forecast-track',
+                filter: ['==', ['geometry-type'], 'Point'],
+                layout: {
+                  visibility: layerVisibility,
+                  'text-field': ['get', 'categoryText'],
+                  'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                  'text-size': 12,
+                },
+                paint: {
+                  'text-color': '#ffffff',
+                  'text-halo-color': '#0f172a',
+                  'text-halo-width': 1.5,
+                },
+              },
+              beforeId
+            );
+          }
+          map.addLayer(
+            {
+              id: 'cyclone-category-hit',
+              type: 'circle',
+              source: 'cyclone-forecast-track',
+              layout: { visibility: layerVisibility },
+              paint: { 'circle-radius': 22, 'circle-opacity': 0 },
             },
             beforeId
           );
@@ -1948,6 +1987,9 @@ export default function CycloneAnimationLayer({
         const layers = [
           'cyclone-forecast-track-line',
           'cyclone-forecast-points',
+          'cyclone-category-forecast-line',
+          'cyclone-category-labels',
+          'cyclone-category-hit',
           'cyclone-oci-layer',
           // Active wind-radius layers
           'cyclone-gale-radius-layer',
@@ -2009,16 +2051,19 @@ export default function CycloneAnimationLayer({
     // Show browser notification for high-intensity cyclones
     if ('Notification' in window && Notification.permission === 'granted') {
       const last = lastNotifiedRef.current;
-      if (point.category < 4) {
+      if ((point.category ?? 0) < 4) {
         lastNotifiedRef.current = { category: point.category, index };
         return;
       }
       const shouldNotify =
-        !last || last.category < 4 || point.category > last.category || last.index !== index;
+        !last ||
+        (last.category ?? 0) < 4 ||
+        (point.category ?? 0) > (last.category ?? 0) ||
+        last.index !== index;
       if (!shouldNotify) return;
-      if (point.category >= 4) {
-        new Notification('Cyclone Alert', {
-          body: `${getCategoryLabel(point.category)} reached at ${new Date(point.time).toLocaleString()}\nWind: ${point.meanWind.toFixed(0)} kt, Pressure: ${point.pressure.toFixed(0)} hPa`,
+      if ((point.category ?? 0) >= 4) {
+        new Notification('Cyclone track update', {
+          body: `${getCategoryLabel(point.category)} (${point.classification?.provenance ?? 'reported'}; ${cycloneScaleLabel(point.classification?.scale)}) at ${formatCycloneTime(point.time)}\nWind: ${formatCycloneMetric(point.meanWind)} kt, Pressure: ${formatCycloneMetric(point.pressure)} hPa`,
           icon: '/cyclone-icon.png',
           tag: 'cyclone-alert',
         });
@@ -2061,9 +2106,9 @@ export default function CycloneAnimationLayer({
 
       // Update spiral colors based on intensity
       const spiralColor =
-        point.category >= 4
+        (point.category ?? 0) >= 4
           ? 'rgba(255, 255, 255, 0.9)'
-          : point.category >= 2
+          : (point.category ?? 0) >= 2
             ? 'rgba(255, 255, 255, 0.85)'
             : 'rgba(255, 255, 255, 0.75)';
       const paths = el.querySelectorAll('path');
@@ -2076,9 +2121,12 @@ export default function CycloneAnimationLayer({
       }
 
       // Update rotation speeds based on intensity
-      const outerSpeed = point.category >= 3 ? '3s' : point.category >= 1 ? '4s' : '5s';
-      const middleSpeed = point.category >= 3 ? '1.8s' : point.category >= 1 ? '2.5s' : '3s';
-      const innerSpeed = point.category >= 3 ? '1s' : point.category >= 1 ? '1.5s' : '2s';
+      const outerSpeed =
+        (point.category ?? 0) >= 3 ? '3s' : (point.category ?? 0) >= 1 ? '4s' : '5s';
+      const middleSpeed =
+        (point.category ?? 0) >= 3 ? '1.8s' : (point.category ?? 0) >= 1 ? '2.5s' : '3s';
+      const innerSpeed =
+        (point.category ?? 0) >= 3 ? '1s' : (point.category ?? 0) >= 1 ? '1.5s' : '2s';
 
       const outerSpiral = el.querySelector('.cyclone-spiral-outer') as HTMLElement;
       const middleSpiral = el.querySelector('.cyclone-spiral-middle') as HTMLElement;
@@ -2098,14 +2146,14 @@ export default function CycloneAnimationLayer({
         const categoryLabel = document.createElement('strong');
         categoryLabel.style.fontSize = '12px';
         categoryLabel.style.color = categoryColor;
-        categoryLabel.textContent = getCategoryLabel(point.category);
+        categoryLabel.textContent = `${getCategoryLabel(point.category)} · ${point.classification?.provenance ?? 'reported'} · ${cycloneScaleLabel(point.classification?.scale)}`;
         div.appendChild(categoryLabel);
         div.appendChild(document.createElement('br'));
 
         const timeLabel = document.createElement('strong');
         timeLabel.textContent = 'Time:';
         div.appendChild(timeLabel);
-        div.appendChild(document.createTextNode(' ' + new Date(point.time).toLocaleString()));
+        div.appendChild(document.createTextNode(' ' + formatCycloneTime(point.time)));
         div.appendChild(document.createElement('br'));
 
         const windLabel = document.createElement('strong');
@@ -2113,7 +2161,7 @@ export default function CycloneAnimationLayer({
         div.appendChild(windLabel);
         div.appendChild(
           document.createTextNode(
-            ` ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)`
+            ` ${formatCycloneMetric(point.meanWind)} kt (Gust: ${formatCycloneMetric(point.windGust)} kt)`
           )
         );
         div.appendChild(document.createElement('br'));
@@ -2121,7 +2169,7 @@ export default function CycloneAnimationLayer({
         const pressureLabel = document.createElement('strong');
         pressureLabel.textContent = 'Pressure:';
         div.appendChild(pressureLabel);
-        div.appendChild(document.createTextNode(` ${point.pressure.toFixed(0)} hPa`));
+        div.appendChild(document.createTextNode(` ${formatCycloneMetric(point.pressure)} hPa`));
         div.appendChild(document.createElement('br'));
 
         const positionLabel = document.createElement('strong');
@@ -2210,16 +2258,19 @@ export default function CycloneAnimationLayer({
 
       // Add realistic rotating cyclone vortex with multiple spiral layers
       const spiralColor =
-        point.category >= 4
+        (point.category ?? 0) >= 4
           ? 'rgba(255, 255, 255, 0.9)'
-          : point.category >= 2
+          : (point.category ?? 0) >= 2
             ? 'rgba(255, 255, 255, 0.85)'
             : 'rgba(255, 255, 255, 0.75)';
 
       // Adjust rotation speed based on intensity (faster for stronger cyclones)
-      const outerSpeed = point.category >= 3 ? '3s' : point.category >= 1 ? '4s' : '5s';
-      const middleSpeed = point.category >= 3 ? '1.8s' : point.category >= 1 ? '2.5s' : '3s';
-      const innerSpeed = point.category >= 3 ? '1s' : point.category >= 1 ? '1.5s' : '2s';
+      const outerSpeed =
+        (point.category ?? 0) >= 3 ? '3s' : (point.category ?? 0) >= 1 ? '4s' : '5s';
+      const middleSpeed =
+        (point.category ?? 0) >= 3 ? '1.8s' : (point.category ?? 0) >= 1 ? '2.5s' : '3s';
+      const innerSpeed =
+        (point.category ?? 0) >= 3 ? '1s' : (point.category ?? 0) >= 1 ? '1.5s' : '2s';
 
       el.innerHTML = `
         <svg class="cyclone-marker-vortex" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="overflow: visible;">
@@ -2271,14 +2322,14 @@ export default function CycloneAnimationLayer({
       const categoryLabel = document.createElement('strong');
       categoryLabel.style.fontSize = '12px';
       categoryLabel.style.color = getCategoryColor(point.category);
-      categoryLabel.textContent = getCategoryLabel(point.category);
+      categoryLabel.textContent = `${getCategoryLabel(point.category)} · ${point.classification?.provenance ?? 'reported'} · ${cycloneScaleLabel(point.classification?.scale)}`;
       popupDiv.appendChild(categoryLabel);
       popupDiv.appendChild(document.createElement('br'));
 
       const timeLabel = document.createElement('strong');
       timeLabel.textContent = 'Time:';
       popupDiv.appendChild(timeLabel);
-      popupDiv.appendChild(document.createTextNode(' ' + new Date(point.time).toLocaleString()));
+      popupDiv.appendChild(document.createTextNode(' ' + formatCycloneTime(point.time)));
       popupDiv.appendChild(document.createElement('br'));
 
       const windLabel = document.createElement('strong');
@@ -2286,7 +2337,7 @@ export default function CycloneAnimationLayer({
       popupDiv.appendChild(windLabel);
       popupDiv.appendChild(
         document.createTextNode(
-          ` ${point.meanWind.toFixed(0)} kt (Gust: ${point.windGust.toFixed(0)} kt)`
+          ` ${formatCycloneMetric(point.meanWind)} kt (Gust: ${formatCycloneMetric(point.windGust)} kt)`
         )
       );
       popupDiv.appendChild(document.createElement('br'));
@@ -2294,7 +2345,7 @@ export default function CycloneAnimationLayer({
       const pressureLabel = document.createElement('strong');
       pressureLabel.textContent = 'Pressure:';
       popupDiv.appendChild(pressureLabel);
-      popupDiv.appendChild(document.createTextNode(` ${point.pressure.toFixed(0)} hPa`));
+      popupDiv.appendChild(document.createTextNode(` ${formatCycloneMetric(point.pressure)} hPa`));
       popupDiv.appendChild(document.createElement('br'));
 
       const positionLabel = document.createElement('strong');
@@ -2707,6 +2758,9 @@ export default function CycloneAnimationLayer({
         [
           'cyclone-forecast-track-line',
           'cyclone-forecast-points',
+          'cyclone-category-forecast-line',
+          'cyclone-category-labels',
+          'cyclone-category-hit',
           'cyclone-forecast-cone-layer',
           'cyclone-forecast-cone-layer-outline',
           'cyclone-oci-layer',
@@ -2742,6 +2796,19 @@ export default function CycloneAnimationLayer({
       map.off('styledata', applyVisibility);
     };
   }, [map, isVisible, buildDeckLayers, sanitizeDeckLayers]);
+
+  useEffect(() => {
+    if (!map) return;
+    const selectPoint = (event: maplibregl.MapLayerMouseEvent) => {
+      const index = event.features?.[0]?.properties?.index;
+      if (Number.isInteger(index) && index >= 0 && index < (forecastTrack?.length ?? 0))
+        seekTo(index);
+    };
+    map.on('click', 'cyclone-category-hit', selectPoint);
+    return () => {
+      map.off('click', 'cyclone-category-hit', selectPoint);
+    };
+  }, [map, forecastTrack, seekTo]);
 
   // Drag handlers for panel
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -2989,27 +3056,7 @@ export default function CycloneAnimationLayer({
           onMouseDown={e => e.stopPropagation()}
         >
           <div className="flex items-center gap-1.5 flex-1">
-            {currentPoint && (
-              <>
-                <span className="text-white text-[10px] font-semibold">
-                  {new Date(currentPoint.time).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/40 border border-slate-700/30">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: getCategoryColor(currentPoint.category) }}
-                  />
-                  <span className="text-white text-[10px] font-semibold">
-                    {getCategoryLabel(currentPoint.category)}
-                  </span>
-                </div>
-              </>
-            )}
+            {currentPoint && <CycloneCategoryBadge point={currentPoint} />}
           </div>
 
           {!isDocked && (
@@ -3129,6 +3176,18 @@ export default function CycloneAnimationLayer({
           onMouseDown={e => e.stopPropagation()}
           style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' }}
         >
+          <CycloneCategoryTimeline
+            points={forecastTrack}
+            currentIndex={currentIndex}
+            onSelect={seekTo}
+            beats={storyModeEnabled ? storyBeats : []}
+          />
+          {currentPoint?.hasEstimatedWindRadii && (
+            <p className="mb-2 text-xs text-slate-300">
+              Animation wind radii include estimates. Use local wind and exposure layers for impacts
+              at a place.
+            </p>
+          )}
           {/* Primary Intensity Metrics */}
           {currentPoint && (
             <div className="grid grid-cols-3 gap-1.5 mb-2">
@@ -3137,7 +3196,7 @@ export default function CycloneAnimationLayer({
                   WIND
                 </div>
                 <div className="text-xs font-bold text-cyan-300">
-                  {currentPoint.meanWind.toFixed(0)}{' '}
+                  {formatCycloneMetric(currentPoint.meanWind)}{' '}
                   <span className="text-[9px] text-slate-400">kt</span>
                 </div>
               </div>
@@ -3146,7 +3205,7 @@ export default function CycloneAnimationLayer({
                   GUST
                 </div>
                 <div className="text-xs font-bold text-blue-300">
-                  {currentPoint.windGust.toFixed(0)}{' '}
+                  {formatCycloneMetric(currentPoint.windGust)}{' '}
                   <span className="text-[9px] text-slate-400">kt</span>
                 </div>
               </div>
@@ -3155,7 +3214,7 @@ export default function CycloneAnimationLayer({
                   PRESSURE
                 </div>
                 <div className="text-xs font-bold text-slate-200">
-                  {currentPoint.pressure.toFixed(0)}{' '}
+                  {formatCycloneMetric(currentPoint.pressure)}{' '}
                   <span className="text-[9px] text-slate-400">hPa</span>
                 </div>
               </div>
@@ -3229,92 +3288,6 @@ export default function CycloneAnimationLayer({
                   </span>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Timeline Scrubber with Beat Markers */}
-          {forecastTrack && (
-            <div className="mb-2">
-              <div className="relative">
-                {(() => {
-                  const maxIndex = Math.max(0, forecastTrack.length - 1);
-                  const progress = maxIndex === 0 ? 0 : (currentIndex / maxIndex) * 100;
-                  return (
-                    <input
-                      id="cyclone-timeline-scrubber"
-                      name="timelineScrubber"
-                      type="range"
-                      min="0"
-                      max={maxIndex}
-                      value={currentIndex}
-                      onChange={e => seekTo(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-600/70 rounded-lg appearance-none cursor-pointer relative z-10"
-                      aria-label="Cyclone animation timeline slider"
-                      style={{
-                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${progress}%, #4B5563 ${progress}%, #4B5563 100%)`,
-                      }}
-                    />
-                  );
-                })()}
-
-                {/* Beat Markers */}
-                {storyModeEnabled &&
-                  forecastTrack.length > 1 &&
-                  storyBeats.map(beat => {
-                    const position = (beat.index / (forecastTrack.length - 1)) * 100;
-                    const beatColor =
-                      beat.type === 'peak-intensity'
-                        ? '#ef4444'
-                        : beat.type === 'rapid-intensification'
-                          ? '#f59e0b'
-                          : beat.type === 'category-upgrade'
-                            ? '#8b5cf6'
-                            : beat.type === 'closest-approach'
-                              ? '#ec4899'
-                              : '#6366f1'; // peak-uncertainty
-
-                    return (
-                      <button
-                        key={beat.id}
-                        type="button"
-                        className="absolute rounded-full border-2 border-white cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800 hover:scale-150"
-                        style={{
-                          left: `${position}%`,
-                          top: '50%',
-                          backgroundColor: beatColor,
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 20,
-                          // Larger click target (12px visible + 12px padding = 24x24px hit area)
-                          width: '12px',
-                          height: '12px',
-                          padding: '6px',
-                          boxSizing: 'content-box',
-                        }}
-                        title={`Story beat: ${beat.title}`}
-                        aria-label={`Story beat: ${beat.title} at ${beat.time.toLocaleString()}`}
-                        onClick={() => seekTo(beat.index)}
-                      />
-                    );
-                  })}
-              </div>
-
-              <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                <span>
-                  {new Date(forecastTrack[0].time).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </span>
-                <span>
-                  {currentIndex + 1}/{forecastTrack.length}
-                </span>
-                <span>
-                  {new Date(forecastTrack[forecastTrack.length - 1].time).toLocaleDateString(
-                    'en-US',
-                    { month: 'short', day: 'numeric' }
-                  )}
-                </span>
-              </div>
             </div>
           )}
 
@@ -3460,15 +3433,6 @@ export default function CycloneAnimationLayer({
     </div>
   );
 
-  const categoryLegendItems = [
-    { label: 'Category 5', color: CATEGORY_COLORS.category5 },
-    { label: 'Category 4', color: CATEGORY_COLORS.category4 },
-    { label: 'Category 3', color: CATEGORY_COLORS.category3 },
-    { label: 'Category 2', color: CATEGORY_COLORS.category2 },
-    { label: 'Category 1', color: CATEGORY_COLORS.category1 },
-    { label: 'Tropical Storm', color: CATEGORY_COLORS.tropicalStorm },
-  ] as const;
-
   const swathLegendItems = [
     {
       windType: 'hurricane' as const,
@@ -3488,23 +3452,7 @@ export default function CycloneAnimationLayer({
   ] as const;
 
   const renderCategoryLegendSection = (
-    <div className="mb-3 pb-3 border-b border-slate-700">
-      <div className="text-xs text-white font-medium mb-2">Cyclone Category</div>
-      <div className="space-y-1.5">
-        {categoryLegendItems.map(item => (
-          <div key={item.label} className="flex items-center gap-2">
-            <div
-              className="w-4 h-4 rounded-full"
-              style={{
-                backgroundColor: item.color,
-                border: '2px solid white',
-              }}
-            />
-            <div className="text-xs text-white">{item.label}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <CycloneCategoryLegend scale={currentPoint?.classification?.scale} />
   );
 
   const renderSwathLegendRows = (
@@ -3878,7 +3826,7 @@ export default function CycloneAnimationLayer({
                   style={{ backgroundColor: CHART_COLORS.pressure }}
                 ></div>
                 <div className="text-xs text-white">
-                  <div className="font-medium">Forecast Track</div>
+                  <div className="font-medium">Cyclone track</div>
                 </div>
               </div>
             </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { formatCycloneMetric, formatCycloneTime } from '@/utils/cycloneCategory';
+import { getCategoryLabel } from '@/theme/cycloneScale';
 import { useRef, useEffect, useMemo } from 'react';
 import {
   Chart as ChartJS,
@@ -15,7 +17,7 @@ import {
 import { Chart } from 'react-chartjs-2';
 import { CycloneForecastPoint } from '../utils/cycloneAnimationLoader';
 import { StoryBeat } from '../utils/cycloneStory';
-import { getCategoryColor, getBeatColor, CHART_COLORS } from '@/theme/cycloneScale';
+import { getCategoryColor, CHART_COLORS } from '@/theme/cycloneScale';
 
 ChartJS.register(
   CategoryScale,
@@ -56,9 +58,11 @@ export default function CycloneIntensityChart({
 
   // Accessibility label
   const chartAriaLabel = useMemo(() => {
-    const maxWind = Math.max(...forecastTrack.map(p => p.meanWind));
+    const maxWind = Math.max(
+      ...forecastTrack.flatMap(p => (p.meanWind == null ? [] : [p.meanWind]))
+    );
     const duration = forecastTrack.length;
-    return `Cyclone intensity chart showing wind speed over time. Maximum wind speed: ${maxWind} knots across ${duration} forecast timesteps.`;
+    return `Cyclone intensity chart showing wind speed over time. Maximum wind speed: ${Number.isFinite(maxWind) ? `${maxWind} knots` : 'unavailable'} across ${duration} track timesteps.`;
   }, [forecastTrack]);
 
   // Performance optimization: precompute all point presentation data in a single pass
@@ -71,25 +75,16 @@ export default function CycloneIntensityChart({
 
       return {
         // Labels
-        label: new Date(point.time).toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        label: formatCycloneTime(point.time),
 
         // Data values
         meanWind: point.meanWind,
-        maxGust: Math.max(point.windGust, point.meanWind),
+        maxGust: point.windGust,
         pressure: point.pressure,
 
         // Visual properties (precomputed)
         pointRadius: isCurrent ? 8 : isBeat ? 7 : 4,
-        pointColor: isCurrent
-          ? '#EF4444'
-          : beat
-            ? getBeatColor(beat.type)
-            : getCategoryColor(point.category),
+        pointColor: getCategoryColor(point.category),
         pointBorderWidth: isBeat ? 3 : 2,
         pointStyle: beat
           ? beat.type === 'peak-intensity'
@@ -193,7 +188,10 @@ export default function CycloneIntensityChart({
           afterBody: (items: any[]) => {
             const idx = items[0].dataIndex;
             const point = forecastTrack[idx];
-            const lines = [`Category: ${point.category}`, `Gust: ${point.windGust.toFixed(0)} kt`];
+            const lines = [
+              getCategoryLabel(point.category),
+              `Gust: ${formatCycloneMetric(point.windGust, 'kt')}`,
+            ];
 
             // Add beat information if this is a story beat
             const beat = beatIndices.get(idx);
@@ -277,14 +275,20 @@ export default function CycloneIntensityChart({
         const meta = chart.getDatasetMeta(0);
         if (!meta?.data?.length) return;
 
+        if (forecastTrack[Math.round(animatedIndexRef.current)]?.meanWind == null) return;
         const ctx = chart.ctx;
         const count = meta.data.length;
         const index = Math.max(0, Math.min(count - 1, animatedIndexRef.current));
         const floor = Math.floor(index);
         const ceil = Math.min(count - 1, floor + 1);
         const t = index - floor;
+        if (
+          forecastTrack[floor]?.meanWind == null ||
+          (t > 0 && forecastTrack[ceil]?.meanWind == null)
+        )
+          return;
         const p1 = meta.data[floor];
-        const p2 = meta.data[ceil];
+        const p2 = t === 0 ? p1 : meta.data[ceil];
         const x = p1.x + (p2.x - p1.x) * t;
         const y = p1.y + (p2.y - p1.y) * t;
 
@@ -297,6 +301,7 @@ export default function CycloneIntensityChart({
         const tailLength = 6;
         for (let i = 1; i <= tailLength; i += 1) {
           const idx = Math.max(0, floor - i);
+          if (forecastTrack[idx]?.meanWind == null) continue;
           const tailPoint = meta.data[idx];
           const alpha = ((tailLength - i + 1) / (tailLength + 1)) * 0.35;
           ctx.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
@@ -326,17 +331,22 @@ export default function CycloneIntensityChart({
 
         // Current point marker
         ctx.beginPath();
-        ctx.fillStyle = '#ef4444';
+        ctx.fillStyle = getCategoryColor(forecastTrack[Math.round(index)]?.category);
         ctx.arc(x, y, 4.5, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
       },
     }),
-    [beatIndices]
+    [beatIndices, forecastTrack]
   );
 
   useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      animatedIndexRef.current = currentIndex;
+      chartRef.current?.update('none');
+      return;
+    }
     const now = performance.now();
     const from = animatedIndexRef.current;
     const to = currentIndex;

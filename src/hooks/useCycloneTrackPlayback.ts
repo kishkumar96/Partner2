@@ -105,6 +105,21 @@ export function useCycloneTrackPlayback({
     onTimestepChangeRef.current = onTimestepChange;
   }, [onTimestepChange]);
 
+  // A newly selected event can have fewer frames than the previous track.
+  useEffect(() => {
+    const clamped = Math.max(0, Math.min(currentIndexRef.current, maxIndex));
+    if (clamped === currentIndexRef.current) return;
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      currentIndexRef.current = clamped;
+      setCurrentIndex(clamped);
+    });
+    return () => {
+      active = false;
+    };
+  }, [maxIndex]);
+
   // ==================== External Control Sync ====================
 
   // Sync external isPlaying

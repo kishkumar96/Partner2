@@ -1,5 +1,7 @@
 'use client';
 
+import { formatCycloneMetric, formatCycloneTime, cycloneScaleLabel } from '@/utils/cycloneCategory';
+
 import { useRef, useEffect, useState } from 'react';
 import { X, Download, Copy, Check } from 'lucide-react';
 import {
@@ -26,22 +28,18 @@ export default function CycloneShareCard({
 
   // Generate text summary
   const generateTextSummary = (): string => {
-    const date = new Date(currentPoint.time).toLocaleString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
     return `Tropical Cyclone Update
 
-${getCategoryLabel(currentPoint.category)}
-${date}
+${getCategoryLabel(currentPoint.category)} (${currentPoint.classification?.provenance ?? (currentPoint.category == null ? 'unknown' : 'reported')})
+${cycloneScaleLabel(currentPoint.classification?.scale)}
+${formatCycloneTime(currentPoint.time)}
+${currentPoint.phase ? `Track: ${currentPoint.phase}` : ''}
+${currentPoint.source ? `Source: ${currentPoint.source}` : ''}
+${currentPoint.status ? `Status: ${currentPoint.status}` : ''}
 
-  Wind: ${Math.round(currentPoint.meanWind)} kt (sustained)
-  Gusts: ${Math.round(currentPoint.windGust)} kt
-  Pressure: ${Math.round(currentPoint.pressure)} hPa
+  Sustained wind: ${formatCycloneMetric(currentPoint.meanWind, 'kt')}
+  Gusts: ${formatCycloneMetric(currentPoint.windGust, 'kt')}
+  Pressure: ${formatCycloneMetric(currentPoint.pressure, 'hPa')}
   Position: ${currentPoint.latitude.toFixed(2)}°${currentPoint.latitude >= 0 ? 'N' : 'S'}, ${currentPoint.longitude.toFixed(2)}°${currentPoint.longitude >= 0 ? 'E' : 'W'}
 
 #TropicalCyclone #Weather #DisasterPreparedness`;
@@ -79,13 +77,23 @@ ${date}
 
     // Category badge
     const categoryLabel = getCategoryLabel(currentPoint.category);
-    ctx.fillStyle = categoryColor;
-    ctx.fillRect(40, 90, 200, 50);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(40, 90, 320, 50);
+    ctx.strokeStyle = categoryColor;
+    ctx.strokeRect(40, 90, 320, 50);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(categoryLabel, 140, 123);
+    ctx.fillText(categoryLabel, 200, 123);
     ctx.textAlign = 'left';
+
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText(
+      `${cycloneScaleLabel(currentPoint.classification?.scale)} · ${currentPoint.classification?.provenance ?? (currentPoint.category == null ? 'unknown' : 'reported')}`,
+      40,
+      190
+    );
 
     // Timestamp
     const date = new Date(currentPoint.time);
@@ -98,6 +106,8 @@ ${date}
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+        timeZone: 'UTC',
+        timeZoneName: 'short',
       }),
       40,
       165
@@ -113,10 +123,10 @@ ${date}
     ctx.font = 'bold 16px Arial';
     ctx.fillText('SUSTAINED WIND', 50, metricsY + 25);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Arial';
-    ctx.fillText(`${Math.round(currentPoint.meanWind)}`, 50, metricsY + 75);
+    ctx.font = currentPoint.meanWind == null ? 'bold 28px Arial' : 'bold 48px Arial';
+    ctx.fillText(`${formatCycloneMetric(currentPoint.meanWind)}`, 50, metricsY + 75);
     ctx.font = '20px Arial';
-    ctx.fillText('kt', 160, metricsY + 75);
+    if (currentPoint.meanWind != null) ctx.fillText('kt', 160, metricsY + 75);
 
     // Gust box
     ctx.fillStyle = 'rgba(139, 92, 246, 0.2)';
@@ -125,10 +135,10 @@ ${date}
     ctx.font = 'bold 16px Arial';
     ctx.fillText('GUSTS', 290, metricsY + 25);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Arial';
-    ctx.fillText(`${Math.round(currentPoint.windGust)}`, 290, metricsY + 75);
+    ctx.font = currentPoint.windGust == null ? 'bold 28px Arial' : 'bold 48px Arial';
+    ctx.fillText(`${formatCycloneMetric(currentPoint.windGust)}`, 290, metricsY + 75);
     ctx.font = '20px Arial';
-    ctx.fillText('kt', 400, metricsY + 75);
+    if (currentPoint.windGust != null) ctx.fillText('kt', 400, metricsY + 75);
 
     // Pressure box
     ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
@@ -137,8 +147,8 @@ ${date}
     ctx.font = 'bold 16px Arial';
     ctx.fillText('PRESSURE', 530, metricsY + 25);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 48px Arial';
-    ctx.fillText(`${Math.round(currentPoint.pressure)}`, 530, metricsY + 75);
+    ctx.font = currentPoint.pressure == null ? 'bold 28px Arial' : 'bold 48px Arial';
+    ctx.fillText(`${formatCycloneMetric(currentPoint.pressure)}`, 530, metricsY + 75);
     ctx.font = '20px Arial';
     ctx.fillText('hPa', 680, metricsY + 75);
 
@@ -165,21 +175,28 @@ ${date}
 
       // Draw sparkline
       const historyPoints = cycloneData.slice(0, currentIndex + 1);
-      const maxWind = Math.max(...historyPoints.map(p => p.meanWind));
-      const minWind = Math.min(...historyPoints.map(p => p.meanWind));
+      const winds = historyPoints.flatMap(p => (p.meanWind == null ? [] : [p.meanWind]));
+      const maxWind = Math.max(...winds);
+      const minWind = Math.min(...winds);
       const windRange = maxWind - minWind || 1;
 
       ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 2;
       ctx.beginPath();
 
+      let connected = false;
       historyPoints.forEach((point, i) => {
+        if (point.meanWind == null) {
+          connected = false;
+          return;
+        }
         const x = 40 + (i / (historyPoints.length - 1 || 1)) * sparklineWidth;
         const normalizedWind = (point.meanWind - minWind) / windRange;
         const y = sparklineY + 30 + (1 - normalizedWind) * sparklineHeight;
 
-        if (i === 0) {
+        if (!connected) {
           ctx.moveTo(x, y);
+          connected = true;
         } else {
           ctx.lineTo(x, y);
         }
@@ -187,15 +204,17 @@ ${date}
 
       ctx.stroke();
 
-      // Current point highlight
-      const lastX = 40 + sparklineWidth;
-      const lastNormalized = (currentPoint.meanWind - minWind) / windRange;
-      const lastY = sparklineY + 30 + (1 - lastNormalized) * sparklineHeight;
+      if (currentPoint.meanWind != null) {
+        // Current point highlight
+        const lastX = 40 + sparklineWidth;
+        const lastNormalized = (currentPoint.meanWind - minWind) / windRange;
+        const lastY = sparklineY + 30 + (1 - lastNormalized) * sparklineHeight;
 
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 5, 0, 2 * Math.PI);
-      ctx.fill();
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     }
 
     // Footer

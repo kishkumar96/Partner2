@@ -33,7 +33,7 @@ describe('loadCycloneForecastTrack', () => {
     expect(result?.[0].latitude).toBe(-15.4);
     expect(result?.[0].longitude).toBeCloseTo(172.1, 6);
     expect(result?.[0]).toMatchObject({
-      category: -3,
+      category: null,
       pressure: 1007,
       meanWind: 20,
       windGust: 24,
@@ -41,7 +41,7 @@ describe('loadCycloneForecastTrack', () => {
     });
   });
 
-  it('accepts partner analysis-track headers and fills missing intensity defaults', async () => {
+  it('accepts partner headers without fabricating a category or gust', async () => {
     loadTextData.mockResolvedValue({
       data: [
         'TIME,LATITUDE,LONGITUDE,SYMBOL,CATEGORY,PRESSURE_CENTRAL,PRESSURE_OCI,WIND_SPD,WIND_GUST,UNCERTAINTY,NE_GALE_RADIUS,SE_GALE_RADIUS,SW_GALE_RADIUS,NW_GALE_RADIUS',
@@ -58,10 +58,10 @@ describe('loadCycloneForecastTrack', () => {
       timeString: '2026-04-01 18:00:00',
       latitude: -10,
       longitude: 173,
-      category: 0,
+      category: null,
       pressure: 1007,
       meanWind: 35,
-      windGust: 42,
+      windGust: null,
       uncertainty: 0,
     });
   });
@@ -115,7 +115,7 @@ describe('parseForecastPointsFromGeometry (the partner API track, one property p
     expect(points?.[0].meanWind).toBe(40);
   });
 
-  it('keeps a late forecast point with no wind or category, as 0 and category 0', () => {
+  it('keeps a late point without inventing wind or category', () => {
     const late = {
       Time: '2026-10-21T12:00:00Z',
       Latitude: -34.6,
@@ -124,6 +124,6 @@ describe('parseForecastPointsFromGeometry (the partner API track, one property p
     };
     const points = parseForecastPointsFromGeometry(geometry(wati, late));
     expect(points).toHaveLength(2);
-    expect(points?.[1]).toMatchObject({ meanWind: 0, category: 0, latitude: -34.6 });
+    expect(points?.[1]).toMatchObject({ meanWind: null, category: null, latitude: -34.6 });
   });
 });
