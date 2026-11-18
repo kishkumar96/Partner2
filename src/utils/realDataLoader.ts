@@ -2724,11 +2724,25 @@ async function loadPartnerApiCountryData(
 // caller reuses the first's in-flight/just-settled request instead of
 // re-issuing all four resource fetches. Falls back to a fresh fetch whenever
 // the params actually differ, so this never changes what data a caller sees.
-const inFlightPartnerApiCountryData = new Map<
-  string,
-  ReturnType<typeof loadPartnerApiCountryData>
->();
+interface SharedPartnerLoad {
+  promise: ReturnType<typeof loadPartnerApiCountryData>;
+  /** Cancels the shared request. Its own controller, never a caller's signal (see below). */
+  controller: AbortController;
+  /** Callers still waiting on it, so one caller leaving does not cancel it for the others */
+  subscribers: number;
+  settled: boolean;
+}
 
+const inFlightPartnerApiCountryData = new Map<string, SharedPartnerLoad>();
+
+/**
+ * The request is shared, so it must not run on any one caller's abort signal. The dashboard restarts a load
+ * by aborting the old one and asking again (a new advisory picked, React's double mount in development): if
+ * the shared request ran on the first caller's signal, the second caller joined a request that was already
+ * aborted and got an empty answer, which the page reported as "this run returned no exposure results".
+ * The shared request has its own controller instead, cancelled only once every caller has gone, and an
+ * entry nobody is waiting on is dropped at once so the next caller starts a fresh request.
+ */
 function loadPartnerApiCountryDataDeduped(
   countryCode: CountryCode,
   signal?: AbortSignal,
@@ -2736,21 +2750,52 @@ function loadPartnerApiCountryDataDeduped(
   dateRange?: { start?: string; end?: string }
 ): ReturnType<typeof loadPartnerApiCountryData> {
   const cacheKey = `${countryCode}:${JSON.stringify(selectedEventIds)}:${JSON.stringify(dateRange ?? null)}`;
-  const existing = inFlightPartnerApiCountryData.get(cacheKey);
-  if (existing) {
-    return existing;
+  let shared = inFlightPartnerApiCountryData.get(cacheKey);
+  if (!shared) {
+    const controller = new AbortController();
+    const created: SharedPartnerLoad = {
+      promise: loadPartnerApiCountryData(
+        countryCode,
+        controller.signal,
+        selectedEventIds,
+        dateRange
+      ).finally(() => {
+        created.settled = true;
+        if (inFlightPartnerApiCountryData.get(cacheKey) === created) {
+          inFlightPartnerApiCountryData.delete(cacheKey);
+        }
+      }),
+      controller,
+      subscribers: 0,
+      settled: false,
+    };
+    shared = created;
+    inFlightPartnerApiCountryData.set(cacheKey, shared);
   }
 
-  const promise = loadPartnerApiCountryData(
-    countryCode,
-    signal,
-    selectedEventIds,
-    dateRange
-  ).finally(() => {
-    inFlightPartnerApiCountryData.delete(cacheKey);
-  });
-  inFlightPartnerApiCountryData.set(cacheKey, promise);
-  return promise;
+  const entry = shared;
+  entry.subscribers += 1;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    entry.subscribers -= 1;
+    if (entry.subscribers > 0 || entry.settled) return;
+    if (inFlightPartnerApiCountryData.get(cacheKey) === entry) {
+      inFlightPartnerApiCountryData.delete(cacheKey);
+    }
+    entry.controller.abort();
+  };
+  if (signal?.aborted) {
+    release();
+  } else if (signal) {
+    signal.addEventListener('abort', release, { once: true });
+    void entry.promise.then(
+      () => signal.removeEventListener('abort', release),
+      () => signal.removeEventListener('abort', release)
+    );
+  }
+  return entry.promise;
 }
 
 export async function fetchEventRecords(
