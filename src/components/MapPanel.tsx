@@ -49,6 +49,7 @@ import {
 import { COUNTRIES, type CountryCode } from '@/types/thredds';
 import { CollapsibleLegendPanel } from '@/components/legend';
 import { BASEMAP_STYLES } from '@/utils/basemaps';
+import { EEZ_SOURCE_NOTE, type EezStatus, type MapViewCommand } from '@/utils/pacificEez';
 import LossCurveSelector from '@/components/LossCurveSelector';
 import type { HazardScenarioCurve } from '@/utils/realDataLoader';
 
@@ -118,6 +119,16 @@ interface MapPanelProps {
   /** Current basemap style URL (one of BASEMAP_STYLES) */
   basemapStyle?: string;
   onBasemapChange?: (style: string) => void;
+  /** Pacific EEZ outlines: the switch, load state and view shortcuts. Omit to hide the section. */
+  eez?: {
+    visible: boolean;
+    onVisibleChange: (visible: boolean) => void;
+    status: EezStatus;
+    onRetry: () => void;
+    onView: (kind: MapViewCommand['kind']) => void;
+    /** Whether the selected country has an EEZ of its own to frame */
+    hasCountryEez: boolean;
+  };
 
   // Layer toggles
   showWindLayer?: boolean;
@@ -189,6 +200,7 @@ const MapPanel = memo(function MapPanel({
   onMapStyleChange,
   basemapStyle,
   onBasemapChange,
+  eez,
   showWindLayer = true,
   windLayersAvailable = true,
   showInundationLayer = true,
@@ -233,6 +245,7 @@ const MapPanel = memo(function MapPanel({
   showOverlayRows = true,
 }: MapPanelProps) {
   const [expandedSections, setExpandedSections] = useState({
+    geographic: true,
     basemap: false,
     shading: true,
     overlays: true,
@@ -551,6 +564,78 @@ const MapPanel = memo(function MapPanel({
                   >
                     Wind intensity
                   </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Geographic context: the Pacific EEZ outlines and ways to frame them */}
+        {eez && (
+          <div className="mx-3 mt-2 rounded-xl border border-slate-700/50 bg-slate-900/45 overflow-hidden">
+            <SectionHeader
+              controls="map-panel-section-geographic"
+              icon={
+                <MapIcon className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" aria-hidden="true" />
+              }
+              title="Geographic context"
+              summary={eez.visible ? 'Pacific EEZ on' : 'Pacific EEZ off'}
+              expanded={expandedSections.geographic}
+              onToggle={() => toggleSection('geographic')}
+            />
+            {expandedSections.geographic && (
+              <div
+                id="map-panel-section-geographic"
+                className="space-y-2 px-4 pb-3 pt-2 border-t border-slate-700/40 bg-slate-900/35"
+              >
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={eez.visible}
+                    onChange={event => eez.onVisibleChange(event.target.checked)}
+                    className="accent-sky-400"
+                  />
+                  <span>Pacific EEZ boundaries</span>
+                </label>
+                <p className="ml-5 text-[10px] text-slate-400">{EEZ_SOURCE_NOTE}</p>
+                {eez.visible && eez.status === 'loading' && (
+                  <p role="status" className="ml-5 text-[10px] text-slate-400">
+                    Loading outlines…
+                  </p>
+                )}
+                {eez.visible && eez.status === 'failed' && (
+                  <div
+                    role="alert"
+                    className="ml-5 flex items-center gap-2 text-[10px] text-amber-200"
+                  >
+                    <span>The outlines didn’t load. The rest of the map is unaffected.</span>
+                    <button
+                      type="button"
+                      onClick={eez.onRetry}
+                      className="rounded border border-amber-400/50 px-2 py-0.5 font-semibold hover:bg-amber-500/10"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                <div className="ml-5 flex flex-wrap gap-1.5" role="group" aria-label="Map view">
+                  {(
+                    [
+                      ['overview', 'Pacific overview', true],
+                      ['country', 'Back to country', true],
+                      ['countryEez', 'Show country EEZ', eez.hasCountryEez && eez.visible],
+                    ] as const
+                  ).map(([kind, text, enabled]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      disabled={!enabled}
+                      onClick={() => eez.onView(kind)}
+                      className="rounded-md border border-slate-600 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:bg-slate-700/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {text}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

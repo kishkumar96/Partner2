@@ -26,6 +26,8 @@ import RealDataLayers from './RealDataLayers';
 import RegionalImpactsLayer, { type RegionalImpactsDebugState } from './RegionalImpactsLayer';
 import DamagedBuildingsLayer from './DamagedBuildingsLayer';
 import DamagedRoadsLayer from './DamagedRoadsLayer';
+import PacificEezLayer from './PacificEezLayer';
+import { applyMapViewCommand, type EezStatus, type MapViewCommand } from '@/utils/pacificEez';
 import CycloneAnimationLayer from './CycloneAnimationLayer';
 import CycloneAnimationToggle from './CycloneAnimationToggle';
 import CycloneStoryOverlay from './CycloneStoryOverlay';
@@ -255,6 +257,13 @@ interface MapViewProps {
   showImpactShading?: boolean;
   /** Shade areas by Rapid Exposure Forecast wind band instead of loss */
   forecastDanger?: boolean;
+  /** Pacific EEZ outlines under the data overlays. Off unless the dashboard turns them on. */
+  showEez?: boolean;
+  onEezStatusChange?: (status: EezStatus) => void;
+  /** Bump to try the EEZ files again after a failure */
+  eezRetryKey?: number;
+  /** A view change asked for by the controls: Pacific overview, back to the country, or its EEZ */
+  viewCommand?: MapViewCommand | null;
   /** Event layers only, planning-scenario layers only, or both */
   hazardLayerMode?: HazardLayerMode;
   damagedBuildings?: GeoJSON.FeatureCollection<GeoJSON.Geometry, BuildingProperties> | null;
@@ -310,6 +319,10 @@ export default function MapView({
   hazardScenarioSelection,
   showImpactShading = true,
   forecastDanger = false,
+  showEez = false,
+  onEezStatusChange,
+  eezRetryKey = 0,
+  viewCommand = null,
   hazardLayerMode = 'all',
   damagedBuildings,
   damagedRoads,
@@ -690,6 +703,16 @@ export default function MapView({
       });
     }
   }, [selectedCountry, mapLoaded]);
+
+  // View changes asked for by the Map Controls. Each request carries a nonce, so asking for the same view
+  // twice (after panning away) still moves the map. The command already handled on mount is not replayed.
+  const handledViewCommandRef = useRef<number | null>(viewCommand?.nonce ?? null);
+  useEffect(() => {
+    if (!viewCommand || !mapLoaded || !map.current) return;
+    if (handledViewCommandRef.current === viewCommand.nonce) return;
+    handledViewCommandRef.current = viewCommand.nonce;
+    void applyMapViewCommand(map.current, viewCommand.kind, selectedCountry ?? null);
+  }, [viewCommand, mapLoaded, selectedCountry]);
 
   useEffect(() => {
     if (typeof isCyclonePlaying !== 'boolean') return;
@@ -1442,6 +1465,15 @@ export default function MapView({
             thresholds={legendSettings?.buildings}
             visible={!!damagedBuildings}
             styleChangeCounter={styleChangeCounter}
+          />
+          <PacificEezLayer
+            key={`pacific-eez-${basemapStyle}-${styleChangeCounter}`}
+            map={mapInstance}
+            visible={showEez}
+            selectedCountry={selectedCountry ?? ''}
+            dark={typeof basemapStyle === 'string' && /dark/i.test(basemapStyle)}
+            retryKey={eezRetryKey}
+            onStatusChange={onEezStatusChange}
           />
           <DamagedRoadsLayer
             key={`damaged-roads-${selectedCountry}-${basemapStyle}-${styleChangeCounter}`}
