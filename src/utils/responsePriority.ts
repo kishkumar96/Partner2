@@ -1,7 +1,7 @@
 import { WIND_DANGER_ORDER, windDangerRank, type ExposureArea } from './forecastExposure';
 
 /**
- * "Operational priority -preliminary": a transparent, rule-based reading of a
+ * "Operational priority (preliminary)": a transparent, rule-based reading of a
  * Rapid Exposure Forecast that says where to act first. It supports human
  * decisions; it does not declare an emergency. The rules are editable and kept
  * per country (see priorityStorage), because what counts as "many people" or

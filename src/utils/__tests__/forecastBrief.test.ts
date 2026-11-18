@@ -120,6 +120,24 @@ describe('formatUtc', () => {
 });
 
 describe('buildForecastBrief', () => {
+  it('writes "preliminary" in brackets, with no stray hyphen', () => {
+    const model = buildForecastBrief(
+      input({
+        priority: {
+          results: prioritise(
+            [{ name: 'Tanna', area: area('Tanna', 'Gale Winds', { population: 50 }) }],
+            defaultThresholds(),
+            3
+          ),
+          thresholds: defaultThresholds(),
+        },
+      } as never)
+    );
+    expect(model.priorities.preliminary).toBe(
+      'Operational priority (preliminary). Supports decisions; does not declare an emergency.'
+    );
+  });
+
   it('names the event, country and times on page 1', () => {
     const b = buildForecastBrief(input());
     expect(b.kicker).toBe('RAPID EXPOSURE FORECAST · OPERATIONAL BRIEF');

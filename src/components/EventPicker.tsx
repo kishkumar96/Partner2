@@ -172,7 +172,7 @@ export default function EventPicker({
               {storms.length > 0 && (
                 <section aria-label="Forecast storms">
                   <h3 className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300/90">
-                    Forecast (REF)
+                    Forecast
                   </h3>
                   {storms.map(group => (
                     <div key={group.storm} className="mb-1">

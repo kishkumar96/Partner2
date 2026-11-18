@@ -3951,7 +3951,7 @@ export default function DashboardView({
                     Loading {COUNTRIES[selectedCountry].name}...
                   </h3>
                   <p className="text-sm text-slate-300">
-                    Fetching hazard layers and impact data from THREDDS server
+                    Getting the latest forecasts, hazard layers and impact data
                   </p>
                 </div>
               </div>

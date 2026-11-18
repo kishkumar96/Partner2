@@ -224,7 +224,7 @@ export function buildForecastBrief(input: ForecastBriefInput): ForecastBriefMode
       show: !!input.priority && priorityRows.length > 0,
       heading: 'RESPONSE PRIORITIES',
       preliminary:
-        'Operational priority -preliminary. Supports decisions; does not declare an emergency.',
+        'Operational priority (preliminary). Supports decisions; does not declare an emergency.',
       rows: priorityRows,
       overflow:
         redCount > 5

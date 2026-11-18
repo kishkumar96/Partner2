@@ -45,8 +45,7 @@ export default function CountrySelector({
               <div className="flex-1">
                 <p className="text-xs font-medium text-blue-200">Data Source</p>
                 <p className="text-xs text-blue-300 mt-1">
-                  Loading hazard layers and cyclone tracks from THREDDS server for{' '}
-                  {COUNTRIES[selectedCountry].name}
+                  Loading hazard layers and cyclone tracks for {COUNTRIES[selectedCountry].name}
                 </p>
               </div>
             </div>

@@ -13,11 +13,11 @@ const BASE_PATH = getConfiguredBasePath(process.env.NODE_ENV === 'production' ? 
 // Enhanced metadata for SEO
 export const metadata: Metadata = {
   title: {
-    default: `${APP_NAME} | Real-Time Climate Risk Assessment`,
+    default: APP_NAME,
     template: `%s | ${APP_NAME}`,
   },
   description:
-    'Advanced WebGIS platform for country-level climate risk intelligence, hazard monitoring, and disaster impact analysis.',
+    'Forecast exposure, post-event impact and hazard scenarios for Pacific island countries.',
   keywords: [
     'climate risk',
     'disaster management',
@@ -60,9 +60,9 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: APP_URL,
     siteName: APP_NAME,
-    title: `${APP_NAME} | Real-Time Climate Risk Assessment`,
+    title: APP_NAME,
     description:
-      'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis.',
+      'Forecast exposure, post-event impact and hazard scenarios for Pacific island countries.',
     images: [
       {
         url: `${APP_URL}/og-image.png`,
@@ -76,11 +76,10 @@ export const metadata: Metadata = {
   // Twitter Card metadata
   twitter: {
     card: 'summary_large_image',
-    title: `${APP_NAME} | Real-Time Climate Risk Assessment`,
+    title: APP_NAME,
     description:
-      'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis.',
+      'Forecast exposure, post-event impact and hazard scenarios for Pacific island countries.',
     images: [`${APP_URL}/og-image.png`],
-    creator: '@yourtwitterhandle',
   },
 
   // Icons and manifest
@@ -139,7 +138,7 @@ export default function RootLayout({
               '@type': 'WebApplication',
               name: APP_NAME,
               description:
-                'Advanced WebGIS platform for country-level climate risk intelligence and disaster impact analysis',
+                'Forecast exposure, post-event impact and hazard scenarios for Pacific island countries.',
               url: APP_URL,
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web Browser',
@@ -149,7 +148,7 @@ export default function RootLayout({
                 priceCurrency: 'USD',
               },
               featureList: [
-                'Real-time cyclone tracking',
+                'Cyclone forecast exposure',
                 'Impact assessment',
                 'Regional risk analysis',
                 'Interactive mapping',
