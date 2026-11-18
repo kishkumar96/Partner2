@@ -14,6 +14,7 @@ import { parseCSV } from './csvParser';
 import { loadGeoJSON, loadTextData, type DataLoaderOptions } from './dataLoader';
 import { COUNTRIES, CountryCode } from '@/types/thredds';
 import { scopeBundleToCountry } from '@/utils/countryScope';
+import { withoutProxyTrailingSlash } from '@/utils/partnerProxyPath';
 import {
   createPartnerEventId,
   type EventRecord,
@@ -1764,7 +1765,10 @@ async function fetchPartnerCollectionUncached(
   };
 
   try {
-    const response = await fetch(normalizePartnerProxyUrl(url), { signal, cache: 'no-store' });
+    const response = await fetch(withoutProxyTrailingSlash(normalizePartnerProxyUrl(url)), {
+      signal,
+      cache: 'no-store',
+    });
     if (!response.ok) {
       if (response.status === 404 && partnerResponseCacheEnabled()) {
         missingPartnerPaths.add(partnerPathOf(url));
@@ -2843,14 +2847,13 @@ export async function loadAllRealData(
     dateRange,
   } = options;
   const basePath = DATA_PATH[countryCode];
-  const partnerData = await loadPartnerApiCountryDataDeduped(
-    countryCode,
-    signal,
-    selectedEventIds,
-    dateRange
-  );
+  // Independent of each other, so asked together: the event registry used to wait for the whole partner
+  // chain (country, events, every model run and track), which added that chain's length to every load
+  const [partnerData, fetchedEventRecords] = await Promise.all([
+    loadPartnerApiCountryDataDeduped(countryCode, signal, selectedEventIds, dateRange),
+    fetchEventRecords(countryCode, signal),
+  ]);
   const partnerApiActive = isPartnerApiEnabled() && isPartnerApiCountryEnabled(countryCode);
-  const fetchedEventRecords = await fetchEventRecords(countryCode, signal);
   const eventRecords = partnerApiActive
     ? fetchedEventRecords.filter(record => record.countryCode === countryCode)
     : resolveEventRecords(countryCode, fetchedEventRecords);

@@ -1,4 +1,4 @@
-import { partnerTargetPath } from '../partnerProxyPath';
+import { partnerTargetPath, withoutProxyTrailingSlash } from '../partnerProxyPath';
 
 describe('partnerTargetPath', () => {
   it('adds the trailing slash Django wants to its list and detail endpoints', () => {
@@ -34,5 +34,43 @@ describe('partnerTargetPath', () => {
   it('passes through anything that is not a Partner API path', () => {
     expect(partnerTargetPath('thredds/wms/POP/file.nc')).toBe('thredds/wms/POP/file.nc');
     expect(partnerTargetPath('other/thing')).toBe('other/thing');
+  });
+});
+
+describe('withoutProxyTrailingSlash', () => {
+  const proxy = '/api/partner-proxy/partner_api/v1';
+
+  it('drops the trailing slash Next would redirect, keeping the query', () => {
+    expect(withoutProxyTrailingSlash(`${proxy}/event/?country=3&page_size=200`)).toBe(
+      `${proxy}/event?country=3&page_size=200`
+    );
+    expect(withoutProxyTrailingSlash(`${proxy}/risk_information/297/`)).toBe(
+      `${proxy}/risk_information/297`
+    );
+    expect(withoutProxyTrailingSlash(`${proxy}/country/`)).toBe(`${proxy}/country`);
+  });
+
+  it('works with a base path and an absolute URL', () => {
+    expect(withoutProxyTrailingSlash(`/partner2${proxy}/model_run/36/`)).toBe(
+      `/partner2${proxy}/model_run/36`
+    );
+    expect(withoutProxyTrailingSlash(`https://dash.example.org${proxy}/event/?x=1#top`)).toBe(
+      `https://dash.example.org${proxy}/event?x=1#top`
+    );
+  });
+
+  it('leaves a URL with no trailing slash, and anything that is not the proxy, alone', () => {
+    expect(withoutProxyTrailingSlash(`${proxy}/event?country=3`)).toBe(`${proxy}/event?country=3`);
+    expect(
+      withoutProxyTrailingSlash('https://pacific-disaster-api.spc.int/partner_api/v1/event/')
+    ).toBe('https://pacific-disaster-api.spc.int/partner_api/v1/event/');
+    expect(withoutProxyTrailingSlash('/api/events?country=CK')).toBe('/api/events?country=CK');
+  });
+
+  it('keeps a slash inside the path and strips a doubled one at the end', () => {
+    expect(withoutProxyTrailingSlash(`${proxy}/hazard_tiles/tc/0.25/12/3/4.png?x=1`)).toBe(
+      `${proxy}/hazard_tiles/tc/0.25/12/3/4.png?x=1`
+    );
+    expect(withoutProxyTrailingSlash(`${proxy}/event//`)).toBe(`${proxy}/event`);
   });
 });

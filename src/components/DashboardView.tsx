@@ -2010,6 +2010,10 @@ export default function DashboardView({
   // Until the first load returns there is no event, so the mode is a guess (it reads as Assessment).
   // Showing that guess flashed "No Impact Data Available" before the real view replaced it.
   const modeUnresolved = isLoadingData && !activeEventRecord && !isPlanningMode;
+  // A forecast's figures belong to the advisory that was on screen. While the next one loads they are
+  // stale (QA H7: the old advisory's numbers stayed readable under the spinner), so the panels show their
+  // loading state instead of a figure that no longer matches the header.
+  const figuresStale = isLoadingData && !isPlanningMode && !!forecastExposure;
   const canAnimateCyclone =
     !modeUnresolved && (analysisMode === 'assessment' || analysisMode === 'forecast');
 
@@ -4038,7 +4042,7 @@ export default function DashboardView({
             )}
           </div>
 
-          {showAnalytics && !isPlanningMode && forecastExposure && (
+          {showAnalytics && !isPlanningMode && forecastExposure && !figuresStale && (
             <ForecastExposureTables
               exposure={forecastExposure}
               areaLabel={countryUi.broaderAreaSingular}
@@ -4048,7 +4052,7 @@ export default function DashboardView({
               }
             />
           )}
-          {showAnalytics && modeUnresolved && <LoadingDataWorkspace />}
+          {showAnalytics && (modeUnresolved || figuresStale) && <LoadingDataWorkspace />}
           {showAnalytics && !modeUnresolved && (isPlanningMode || !forecastExposure) && (
             <BottomTabs
               events={countryEvents}
@@ -4104,7 +4108,7 @@ export default function DashboardView({
             </button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
-            {modeUnresolved ? (
+            {modeUnresolved || figuresStale ? (
               <LoadingSummaryPanel countryName={COUNTRIES[selectedCountry].name} />
             ) : !isPlanningMode && forecastExposure ? (
               <ForecastExposureSummary

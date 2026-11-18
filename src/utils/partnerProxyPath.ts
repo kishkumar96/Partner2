@@ -17,6 +17,17 @@ function ensureTrailingSlash(path: string): string {
   return path.endsWith('/') ? path : `${path}/`;
 }
 
+/**
+ * A same-origin partner-proxy URL without the trailing slash on its path. Next answers
+ * `/api/partner-proxy/partner_api/v1/event/?country=3` with a 308 to `.../event?country=3`, so asking
+ * with the slash costs the browser a second round trip for every request. The proxy route puts the slash
+ * Django wants back on (see partnerTargetPath), so nothing upstream changes. Other URLs are returned as
+ * they are.
+ */
+export function withoutProxyTrailingSlash(url: string): string {
+  return url.replace(/(\/api\/partner-proxy\/[^?#]*?)\/+(?=[?#]|$)/, '$1');
+}
+
 export function partnerTargetPath(rawPath: string): string {
   if (!rawPath.startsWith('partner_api/')) return rawPath;
   if (FILE_ENDPOINT_PREFIXES.some(prefix => rawPath.startsWith(prefix))) return rawPath;

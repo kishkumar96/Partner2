@@ -268,26 +268,38 @@ export async function prepareEventRows(
     };
   }
   const runIds = [...new Set(eventRows.flatMap(row => toIdList(row.model_runs)))];
-  const runs = await mapWithConcurrency(runIds, PARTNER_BY_ID_CONCURRENCY, id =>
-    readDetail(`${urls.modelRun}${id}/`)
-  );
+  const known = new Set(trackRows.map(row => toIdString(row.id)));
+  // A run's track is read as soon as its run is, in the same slot, not after every run has been: the
+  // second batch of requests no longer waits for the last of the first. A track shared by several runs
+  // is read once.
+  const trackReads = new Map<string, Promise<Row | null>>();
+  const readTrackOnce = (id: string) => {
+    let read = trackReads.get(id);
+    if (!read) {
+      read = readDetail(`${urls.cycloneTrack}${id}/`);
+      trackReads.set(id, read);
+    }
+    return read;
+  };
+  const runs = await mapWithConcurrency(runIds, PARTNER_BY_ID_CONCURRENCY, async id => {
+    const run = await readDetail(`${urls.modelRun}${id}/`);
+    const trackId = run ? toIdString(run.tc_track) : null;
+    if (urls.cycloneTrack && trackId !== null && !known.has(trackId)) await readTrackOnce(trackId);
+    return run;
+  });
   const runsById = new Map<string, Row>();
   runs.forEach((run, index) => {
     if (run) runsById.set(runIds[index], run);
   });
-  const known = new Set(trackRows.map(row => toIdString(row.id)));
-  const missingTrackIds = urls.cycloneTrack
-    ? [
-        ...new Set(
-          [...runsById.values()]
-            .map(run => toIdString(run.tc_track))
-            .filter((id): id is string => id !== null && !known.has(id))
-        ),
-      ]
-    : [];
-  const extraTracks = await mapWithConcurrency(missingTrackIds, PARTNER_BY_ID_CONCURRENCY, id =>
-    readDetail(`${urls.cycloneTrack}${id}/`)
-  );
+  // In run order, whatever order the reads finished in, so the result does not depend on timing
+  const trackIdsInRunOrder = [
+    ...new Set(
+      runIds
+        .map(id => toIdString(runsById.get(id)?.tc_track))
+        .filter((id): id is string => id !== null && trackReads.has(id))
+    ),
+  ];
+  const extraTracks = await Promise.all(trackIdsInRunOrder.map(id => trackReads.get(id)!));
   const allTracks = [...trackRows, ...extraTracks.filter((row): row is Row => !!row)];
   return {
     eventRows: annotateEventTypeNames(

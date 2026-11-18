@@ -500,6 +500,96 @@ describe('prepareEventRows', () => {
     });
   });
 
+  describe('reading many runs', () => {
+    const run = (id: number, track: number) => ({
+      id,
+      model_run_time: `2026-11-18T${String(id % 24).padStart(2, '0')}:00:00Z`,
+      tc_track: track,
+      risks: [id * 10],
+    });
+
+    it('reads a run’s track as soon as the run is read, without waiting for the other runs', async () => {
+      const finished: string[] = [];
+      const slowRun = (url: string) =>
+        new Promise<Record<string, unknown> | null>(resolve => {
+          // Run 2 is slow. If tracks waited for every run, track/101 would start after run/2 ends.
+          const delay = url === 'run/2/' ? 20 : 0;
+          setTimeout(() => {
+            finished.push(url);
+            const id = Number(url.split('/')[1]);
+            resolve(url.startsWith('run/') ? run(id, 100 + id) : { id, cyclone_name: `t${id}` });
+          }, delay);
+        });
+      const started: string[] = [];
+      const readInOrder = jest.fn(async (url: string) => {
+        started.push(url);
+        return slowRun(url);
+      });
+      await prepareEventRows(
+        [{ id: 1, title: 'X', event_type: 1, country: 3, model_runs: [1, 2] }],
+        [],
+        async () => types,
+        readInOrder,
+        urls
+      );
+      expect(started.indexOf('track/101/')).toBeGreaterThan(-1);
+      expect(started.indexOf('track/101/')).toBeLessThan(finished.indexOf('run/2/') + 1);
+      expect(finished.indexOf('track/101/')).toBeLessThan(finished.indexOf('run/2/'));
+    });
+
+    it('reads a track shared by several runs once', async () => {
+      const readShared = jest.fn(async (url: string) =>
+        url.startsWith('run/') ? run(Number(url.split('/')[1]), 7) : { id: 7, cyclone_name: 'one' }
+      );
+      const out = await prepareEventRows(
+        [{ id: 1, title: 'X', event_type: 1, country: 3, model_runs: [1, 2, 3] }],
+        [],
+        async () => types,
+        readShared,
+        urls
+      );
+      expect(readShared.mock.calls.filter(([url]) => url === 'track/7/')).toHaveLength(1);
+      expect(out.trackRows.map(t => t.id)).toEqual([7]);
+    });
+
+    it('does not read a track the track list already has', async () => {
+      const readKnown = jest.fn(async (url: string) =>
+        url.startsWith('run/') ? run(Number(url.split('/')[1]), 7) : null
+      );
+      const out = await prepareEventRows(
+        [{ id: 1, title: 'X', event_type: 1, country: 3, model_runs: [1] }],
+        [{ id: 7, cyclone_name: 'listed' }],
+        async () => types,
+        readKnown,
+        urls
+      );
+      expect(readKnown.mock.calls.map(([url]) => url)).toEqual(['run/1/']);
+      expect(out.trackRows.map(t => t.id)).toEqual([7]);
+    });
+
+    it('returns the extra tracks in run order, whichever finished first', async () => {
+      const readOrder = jest.fn(
+        (url: string) =>
+          new Promise<Record<string, unknown> | null>(resolve => {
+            const id = Number(url.split('/')[1]);
+            // Run 1's track is the slowest to arrive
+            setTimeout(
+              () => resolve(url.startsWith('run/') ? run(id, 100 + id) : { id, cyclone_name: 't' }),
+              url === 'track/101/' ? 15 : 0
+            );
+          })
+      );
+      const out = await prepareEventRows(
+        [{ id: 1, title: 'X', event_type: 1, country: 3, model_runs: [1, 2, 3] }],
+        [],
+        async () => types,
+        readOrder,
+        urls
+      );
+      expect(out.trackRows.map(t => t.id)).toEqual([101, 102, 103]);
+    });
+  });
+
   it('reads nothing for our API, whose events list their own risks', async () => {
     const ours = {
       id: 10,

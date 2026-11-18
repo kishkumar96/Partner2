@@ -15,6 +15,17 @@ export interface CapturedResponse {
 export interface PartnerApiReplay {
   /** Every URL requested, in order */
   requests: string[];
+  /**
+   * Same-origin proxy URLs asked for with a trailing slash. Next answers those with a 308 to the slash-less
+   * URL, so each costs the browser a second round trip. Counted, and charged as an extra hop in `roundTrips`.
+   */
+  redirects: () => number;
+  /**
+   * The longest chain of requests where each waited for an earlier one to finish, redirects included: the
+   * number of network round trips a load needs even with unlimited parallelism. Fewer is faster on a slow
+   * link, whatever the request count.
+   */
+  roundTrips: () => number;
   /** Requests the capture had no answer for (answered 404) */
   misses: string[];
   restore: () => void;
@@ -41,13 +52,31 @@ export function installPartnerApiReplay(
   const originalFlag = process.env.NEXT_PUBLIC_ENABLE_PARTNER_API;
   process.env.NEXT_PUBLIC_ENABLE_PARTNER_API = 'true';
 
+  let redirects = 0;
+  let finishedDepth = 0;
+  const macrotask = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+  const isSlashedProxyUrl = (url: string) => {
+    try {
+      const parsed = new URL(url, 'http://localhost');
+      return parsed.pathname.includes('/api/partner-proxy/') && parsed.pathname.endsWith('/');
+    } catch {
+      return false;
+    }
+  };
+
   const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
   g.fetch = async (input: unknown, init?: { signal?: AbortSignal }) => {
     const url = String(input);
     if (init?.signal?.aborted) throw abortError();
+    // A request that starts after others finished depends on them: one level deeper than the last finished
+    const redirected = isSlashedProxyUrl(url);
+    if (redirected) redirects += 1;
+    const depth = finishedDepth + (redirected ? 2 : 1);
     // A real request takes time, and an abort can land while it is in flight
-    await Promise.resolve();
+    await macrotask();
+    if (redirected) await macrotask();
     if (init?.signal?.aborted) throw abortError();
+    finishedDepth = Math.max(finishedDepth, depth);
     requests.push(url);
     const path = pathOf(url);
     const hit =
@@ -74,6 +103,8 @@ export function installPartnerApiReplay(
   return {
     requests,
     misses,
+    redirects: () => redirects,
+    roundTrips: () => finishedDepth,
     restore() {
       g.fetch = originalFetch;
       if (originalFlag === undefined) delete process.env.NEXT_PUBLIC_ENABLE_PARTNER_API;

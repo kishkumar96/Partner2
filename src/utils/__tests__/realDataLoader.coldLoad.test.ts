@@ -36,7 +36,7 @@ const summary = (result: Awaited<ReturnType<Loader['loadAllRealData']>>) => ({
 });
 
 const XAVIER_12Z = { active: '9-run-35', areas: 13, people: 533 };
-const partnerRequests = () => replay.requests.filter(url => url.includes('/partner_api/v1/event/'));
+const partnerRequests = () => replay.requests.filter(url => url.includes('/partner_api/v1/event'));
 
 describe('cold load of advisory 9-run-35', () => {
   it('shows its exposure: 13 Cook Islands areas and 533 people', async () => {
@@ -96,7 +96,7 @@ describe('loads that share a request', () => {
     ]);
     expect(summary(a)).toEqual(XAVIER_12Z);
     expect(summary(b)).toEqual(XAVIER_12Z);
-    expect(partnerRequests().filter(url => /event\/\?country=/.test(url))).toHaveLength(1);
+    expect(partnerRequests().filter(url => /event\/?\?country=/.test(url))).toHaveLength(1);
   });
 
   it('keep going for the caller that stays when the other leaves', async () => {
@@ -114,5 +114,32 @@ describe('loads that share a request', () => {
     only.abort('not needed');
     await abandoned.catch(() => undefined);
     expect(summary(await loader.loadAllRealData(options))).toEqual(XAVIER_12Z);
+  });
+});
+
+describe('what a cold load costs (QA H6)', () => {
+  // The numbers are this advisory's today: 29 model runs, 25 tracks and 9 risk rows have to be read one by
+  // one on the shared API. The budget is on round trips, which is what a slow link pays for.
+  it('makes no redirected requests: the proxy is asked for the URL it serves, without the slash', async () => {
+    await loader.loadAllRealData(options);
+    expect(replay.redirects()).toBe(0);
+  });
+
+  it('needs about half the round trips it did (30 before, 15 now)', async () => {
+    await loader.loadAllRealData(options);
+    expect(replay.roundTrips()).toBeLessThanOrEqual(16);
+  });
+
+  it('does not ask for more than it did: 70 requests', async () => {
+    await loader.loadAllRealData(options);
+    expect(replay.requests.length).toBeLessThanOrEqual(70);
+  });
+
+  it('asks the event registry at the same time as the partner API, not after it', async () => {
+    await loader.loadAllRealData(options);
+    const registry = replay.requests.findIndex(url => url.includes('/api/events'));
+    const lastRun = replay.requests.map(url => url.includes('/model_run/')).lastIndexOf(true);
+    expect(registry).toBeGreaterThanOrEqual(0);
+    expect(registry).toBeLessThan(lastRun);
   });
 });

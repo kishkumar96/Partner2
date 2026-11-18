@@ -1,5 +1,6 @@
 import type { CountryCode } from '@/types/thredds';
 import { getConfiguredBasePath, prependBasePath } from '@/utils/basePath';
+import { withoutProxyTrailingSlash } from '@/utils/partnerProxyPath';
 import { getCountryByCode, listCountries, listCountryCodes } from '@/config/registry';
 
 export type PartnerApiResource =
@@ -247,7 +248,7 @@ export async function fetchPartnerCountries(
 
   const endpoints = buildPartnerApiEndpoints(baseUrl);
   cachedPartnerCountriesPromise = (async () => {
-    const response = await fetch(endpoints.resource.country);
+    const response = await fetch(withoutProxyTrailingSlash(endpoints.resource.country));
     if (!response.ok) {
       throw new Error(`Failed to fetch partner countries: ${response.status}`);
     }
