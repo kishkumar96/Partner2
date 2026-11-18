@@ -9,6 +9,7 @@
  */
 
 import { BASEMAP_STYLES } from '@/utils/basemaps';
+import { SHARED_MOBILE_PANELS, type SharedMobilePanel } from '@/utils/mobilePanel';
 
 /**
  * Map state that can be persisted in URL
@@ -42,6 +43,17 @@ export interface MapURLState {
   showFilters?: boolean;
   showMapControls?: boolean;
   showSummary?: boolean;
+  /**
+   * The phone layout's open panel (`panel=impacts`). Omitted means the plain map. Never set by
+   * desktop, and the sheet's height is not shared.
+   */
+  mobilePanel?: SharedMobilePanel;
+
+  /**
+   * Pacific EEZ outlines. Omitted means on; only an explicit off is written (`eez=off`), so a link
+   * that turned them off still has them off when opened.
+   */
+  eezVisible?: boolean;
 
   // Hazard scenario (SLR x return-period/event pick out of a multi-scenario
   // catalog, currently Cook Islands only) -- the user's explicit choice, not
@@ -96,6 +108,8 @@ export function serializeMapState(state: MapURLState): URLSearchParams {
   if (state.showMapControls) params.set('map', 'true');
   if (state.showSummary) params.set('summary', 'true');
   if (state.viewMode) params.set('mode', state.viewMode);
+  if (state.mobilePanel) params.set('panel', state.mobilePanel);
+  if (state.eezVisible === false) params.set('eez', 'off');
 
   if (state.hazardScenarioProduct) {
     params.set('hazProduct', state.hazardScenarioProduct);
@@ -162,6 +176,12 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
   if (params.get('filters') === 'true') state.showFilters = true;
   if (params.get('map') === 'true') state.showMapControls = true;
   if (params.get('summary') === 'true') state.showSummary = true;
+  const panel = params.get('panel');
+  if (panel && (SHARED_MOBILE_PANELS as readonly string[]).includes(panel)) {
+    state.mobilePanel = panel as SharedMobilePanel;
+  }
+  const eez = params.get('eez');
+  if (eez === 'off' || eez === '0' || eez === 'false') state.eezVisible = false;
   const mode = params.get('mode');
   if (mode === 'event' || mode === 'planning') state.viewMode = mode;
 

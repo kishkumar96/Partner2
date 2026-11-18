@@ -93,6 +93,7 @@ import {
 import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
+import type { EezStatus, MapViewCommand } from '@/utils/pacificEez';
 import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { normalizeHazardIds } from '@/utils/hazardIds';
@@ -243,6 +244,16 @@ export default function DashboardView({
   const [extrusionMode, setExtrusionMode] = useState<'none' | 'loss' | 'wind'>('none');
   const [extrusionExaggeration, setExtrusionExaggeration] = useState(1);
   const [basemapStyle, setBasemapStyle] = useState(() => getInitialBasemap(urlState.basemap));
+  // Pacific EEZ outlines: on unless a shared link turned them off
+  const [showEez, setShowEez] = useState(urlState.eezVisible ?? true);
+  const [eezStatus, setEezStatus] = useState<EezStatus>('idle');
+  const [eezRetryKey, setEezRetryKey] = useState(0);
+  const [mapViewCommand, setMapViewCommand] = useState<MapViewCommand | null>(null);
+  const mapViewNonceRef = useRef(0);
+  const requestMapView = useCallback((kind: MapViewCommand['kind']) => {
+    mapViewNonceRef.current += 1;
+    setMapViewCommand({ kind, nonce: mapViewNonceRef.current });
+  }, []);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const initialHazards = new Set(normalizedUrlHazards);
   const [showWindLayer, setShowWindLayer] = useState(
@@ -681,6 +692,7 @@ export default function DashboardView({
           hazardScenarioReturnPeriod: hazardScenarioSelection?.returnPeriodYears ?? undefined,
           hazardScenarioEvent: hazardScenarioSelection?.eventLabel ?? undefined,
           viewMode: viewModeChoice ?? undefined,
+          eezVisible: showEez,
           // Merge with any partial updates
           ...state,
         };
@@ -731,6 +743,7 @@ export default function DashboardView({
       showSummary,
       hazardScenarioSelection,
       viewModeChoice,
+      showEez,
       pathname,
       router,
     ]
@@ -751,6 +764,7 @@ export default function DashboardView({
     effectiveEventIds,
     hazardScenarioSelection,
     viewModeChoice,
+    showEez,
     updateUrl,
   ]);
 
@@ -3765,6 +3779,15 @@ export default function DashboardView({
               onResetUserPreferences={handleResetUserPreferences}
               basemapStyle={basemapStyle}
               onBasemapChange={handleBasemapChange}
+              eez={{
+                visible: showEez,
+                onVisibleChange: setShowEez,
+                status: eezStatus,
+                onRetry: () => setEezRetryKey(key => key + 1),
+                onView: requestMapView,
+                // All four dashboard countries have a zone of their own (checked by the asset test)
+                hasCountryEez: true,
+              }}
               hazardScenarioLayers={isPlanningMode ? planningScenarioLayers : []}
               hazardScenarioSelection={effectiveHazardScenario}
               hazardScenarioCurve={hazardScenarioCurve}
@@ -3829,6 +3852,10 @@ export default function DashboardView({
               selectedCountry={selectedCountry}
               mapStyle={mapStyle}
               basemapStyle={basemapStyle}
+              showEez={showEez}
+              onEezStatusChange={setEezStatus}
+              eezRetryKey={eezRetryKey}
+              viewCommand={mapViewCommand}
               is3DView={is3DView}
               extrusionMode={extrusionMode}
               extrusionExaggeration={extrusionExaggeration}

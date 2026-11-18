@@ -42,6 +42,12 @@ export const LAYER_ORDER = {
   'wms-storm-surge-layer': 12,
   'wms-wave-height-layer': 13,
 
+  // Pacific EEZ context: above the WMS rasters, below every data overlay
+  'pacific-eez-outline': 16,
+  'pacific-eez-selected': 17,
+  'pacific-eez-labels': 18,
+  'pacific-eez-labels-minor': 19,
+
   // Rapid Exposure Forecast overlays (see ForecastLayers)
   'forecast-floodplain-fill': 32,
   'forecast-floodplain-line': 33,
