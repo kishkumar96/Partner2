@@ -132,3 +132,81 @@ describe('advisory starts and track times', () => {
     );
   });
 });
+
+describe('wind radii', () => {
+  const ring = (lon: number): GeoJSON.FeatureCollection => ({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { kind: 'gale', threshold: '34 kt', at: '2026-11-19T00:00:00.000Z' },
+        geometry: {
+          type: 'Polygon',
+          // A ring around 179.5°E that spills past 180° and arrives wrapped to -179.x
+          coordinates: [
+            [
+              [lon, -15],
+              [-179.2, -15.5],
+              [-179.4, -14.5],
+              [lon, -15],
+            ],
+          ],
+        },
+      },
+    ],
+  });
+
+  function drawn(shown: boolean) {
+    const sources: Record<string, { data: GeoJSON.FeatureCollection }> = {};
+    const layers: string[] = [];
+    const removed: string[] = [];
+    const map = new Proxy(
+      {
+        addSource: (id: string, spec: { data: GeoJSON.FeatureCollection }) => {
+          sources[id] = spec;
+        },
+        addLayer: (spec: { id: string }) => layers.push(spec.id),
+        removeLayer: (id: string) => removed.push(id),
+        removeSource: jest.fn(),
+        getSource: (id: string) => (sources[id] ? {} : undefined),
+        getLayer: (id: string) => (layers.includes(id) ? {} : undefined),
+        getStyle: () => ({ layers: [] }),
+      } as Record<string, unknown>,
+      { get: (target, key: string) => target[key] ?? jest.fn() }
+    );
+    const controls = {
+      shown: { radii: shown },
+      toggle: jest.fn(),
+      options: [{ id: 'radii', label: 'r', short: 'r', available: true }],
+      data: { radii: ring(179.5) },
+      floodplainState: 'idle',
+      activeCount: 1,
+      summary: 'r',
+      timeZoneName: 'UTC',
+    } as unknown as ForecastLayerControls;
+    const view = render(
+      <ForecastLayers map={map as never} controls={controls} onOpenControls={jest.fn()} />
+    );
+    return { sources, layers, removed, view };
+  }
+
+  it('adds a fill and an outline, and hands MapLibre a ring that does not cross the map', () => {
+    const { sources, layers } = drawn(true);
+    expect(layers).toEqual(
+      expect.arrayContaining(['forecast-wind-radii-fill', 'forecast-wind-radii-line'])
+    );
+    const polygon = sources['forecast-wind-radii'].data.features[0].geometry as GeoJSON.Polygon;
+    const lons = polygon.coordinates[0].map(p => p[0]);
+    lons.slice(1).forEach((lon, i) => expect(Math.abs(lon - lons[i])).toBeLessThan(180));
+  });
+
+  it('adds nothing when switched off, and removes its layers when unmounted', () => {
+    const off = drawn(false);
+    expect(off.layers).toEqual([]);
+    const on = drawn(true);
+    on.view.unmount();
+    expect(on.removed).toEqual(
+      expect.arrayContaining(['forecast-wind-radii-line', 'forecast-wind-radii-fill'])
+    );
+  });
+});

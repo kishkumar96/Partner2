@@ -12,6 +12,7 @@ import {
   PRIORITY_COLORS,
   ORIGIN_COLORS,
   TRACK_COLOR,
+  WIND_RADIUS_COLORS,
 } from '@/utils/forecastColors';
 import type { ForecastLayerControls } from '@/utils/useForecastLayers';
 import { formatCount } from '@/utils/formatters';
@@ -34,7 +35,8 @@ type OverlayId =
   | 'priority'
   | 'origins'
   | 'releases'
-  | 'times';
+  | 'times'
+  | 'radii';
 
 const SOURCES: Record<OverlayId, string> = {
   track: 'forecast-cyclone-track',
@@ -46,6 +48,7 @@ const SOURCES: Record<OverlayId, string> = {
   origins: 'forecast-advisory-origins',
   releases: 'forecast-advisory-tracks',
   times: 'forecast-track-times',
+  radii: 'forecast-wind-radii',
 };
 
 function escapeHtml(value: unknown): string {
@@ -245,6 +248,70 @@ function addOverlay(
       },
       getBeforeLayerId(map, 'forecast-advisory-tracks')
     );
+  }
+
+  if (id === 'radii') {
+    const kindColor = [
+      'match',
+      ['get', 'kind'],
+      'hurricane',
+      WIND_RADIUS_COLORS.hurricane,
+      'storm',
+      WIND_RADIUS_COLORS.storm,
+      WIND_RADIUS_COLORS.gale,
+    ] as unknown as maplibregl.ExpressionSpecification;
+    map.addLayer(
+      {
+        id: 'forecast-wind-radii-fill',
+        type: 'fill',
+        source,
+        paint: {
+          'fill-color': kindColor,
+          'fill-opacity': 0.12,
+        },
+      },
+      getBeforeLayerId(map, 'forecast-wind-radii-fill')
+    );
+    map.addLayer(
+      {
+        id: 'forecast-wind-radii-line',
+        type: 'line',
+        source,
+        paint: { 'line-color': kindColor, 'line-width': 1.5, 'line-opacity': 0.85 },
+      },
+      getBeforeLayerId(map, 'forecast-wind-radii-line')
+    );
+    onClick('forecast-wind-radii-fill', e => {
+      // Every threshold's rings overlap here, so list all of them, not just the top one
+      const hits = map.queryRenderedFeatures(e.point, { layers: ['forecast-wind-radii-fill'] });
+      const rings = hits.length > 0 ? hits : (e.features ?? []);
+      const order = ['hurricane', 'storm', 'gale'];
+      const rows = [...rings]
+        .sort(
+          (a, b) =>
+            order.indexOf(String(a.properties?.kind)) - order.indexOf(String(b.properties?.kind))
+        )
+        .map((feature): [string, string] => {
+          const p = (feature.properties ?? {}) as Record<string, unknown>;
+          const nm = (value: unknown) => count(value);
+          const widest = Math.max(...[p.ne, p.se, p.sw, p.nw].map(value => Number(value) || 0));
+          return [
+            String(p.threshold ?? ''),
+            `NE ${nm(p.ne)} · SE ${nm(p.se)} · SW ${nm(p.sw)} · NW ${nm(p.nw)} nm (up to ${count(widest * 1.852)} km)`,
+          ];
+        });
+      const at = String(rings[0]?.properties?.at ?? '');
+      new maplibregl.Popup({ maxWidth: '280px' })
+        .setLngLat(e.lngLat)
+        .setHTML(
+          popupHtml(
+            'Wind reach by quadrant',
+            [['Forecast time', `${at.replace('T', ' ').slice(0, 16)}Z`], ...rows],
+            null
+          )
+        )
+        .addTo(map);
+    });
   }
 
   if (id === 'times') {
@@ -486,6 +553,7 @@ function removeOverlay(map: MapLibreMap, id: OverlayId) {
     origins: ['forecast-advisory-origins-label', 'forecast-advisory-origins'],
     releases: ['forecast-advisory-tracks'],
     times: ['forecast-track-times-label', 'forecast-track-times-dot'],
+    radii: ['forecast-wind-radii-line', 'forecast-wind-radii-fill'],
   };
   try {
     for (const layer of layers[id]) if (map.getLayer(layer)) map.removeLayer(layer);
@@ -528,7 +596,9 @@ export default function ForecastLayers({
   const { shown, data } = controls;
   // Drawn on the map: switched on AND this run has the data (a switch can be on for
   // a layer the run lacks, e.g. the REF input track)
-  const available = new Set(controls.options.map(option => option.id));
+  const available = new Set(
+    controls.options.filter(option => !option.disabled).map(option => option.id)
+  );
   const active = Object.fromEntries(
     (Object.keys(SOURCES) as OverlayId[]).map(id => [id, shown[id] && available.has(id)])
   ) as Record<OverlayId, boolean>;
@@ -630,6 +700,7 @@ export function ForecastLegend({
             active.priority ||
             active.origins ||
             active.releases ||
+            active.radii ||
             active.times) && (
             <ul className="space-y-1">
               {active.facilities && (
@@ -720,6 +791,32 @@ export function ForecastLegend({
                     aria-hidden="true"
                   />
                   Earlier advisories&apos; tracks (fainter when older)
+                </li>
+              )}
+              {active.radii && (
+                <li className="space-y-0.5">
+                  {(
+                    [
+                      ['gale', 'Gale (34 kt) reach'],
+                      ['storm', 'Storm (48 kt) reach'],
+                      ['hurricane', 'Hurricane (64 kt) reach'],
+                    ] as const
+                  ).map(([kind, text]) => (
+                    <span key={kind} className="flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-3 flex-shrink-0 rounded-sm border"
+                        style={{
+                          borderColor: WIND_RADIUS_COLORS[kind],
+                          backgroundColor: `${WIND_RADIUS_COLORS[kind]}33`,
+                        }}
+                        aria-hidden="true"
+                      />
+                      {text}
+                    </span>
+                  ))}
+                  <span className="block text-slate-400">
+                    Farthest reach within each quadrant, at the time chosen in Map Controls.
+                  </span>
                 </li>
               )}
               {active.times && (

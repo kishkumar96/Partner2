@@ -54,6 +54,59 @@ describe('useForecastLayers', () => {
     expect(c.summary).toBe('Track · Wind swaths · Facilities');
   });
 
+  describe('wind radii', () => {
+    const quadrants = {
+      galeRadiusNE: 120,
+      galeRadiusSE: 60,
+      galeRadiusSW: 30,
+      galeRadiusNW: 60,
+      radiiReported: true,
+    };
+    const at = (hour: number, extra: Record<string, unknown> = quadrants) => ({
+      time: new Date(Date.UTC(2026, 10, 19, hour)),
+      latitude: -15,
+      longitude: 168,
+      ...extra,
+    });
+    const extras = (trackPoints: ReturnType<typeof at>[] | null) => ({
+      advisoryReleases: null,
+      activeRunId: null,
+      trackPoints,
+    });
+    const radiiOption = (c: ForecastLayerControls) => c.options.find(o => o.id === 'radii');
+
+    it('draws the first point with radii and steps through the rest', () => {
+      const { result } = renderHook(() =>
+        useForecastLayers(exposure(), 'VU', null, extras([at(0), at(6), at(12)]))
+      );
+      expect(radiiOption(result.current!)?.disabled).toBe(false);
+      expect(result.current!.windRadii.steps).toHaveLength(3);
+      const drawn = () => result.current?.data.radii?.features[0].properties?.at;
+      expect(drawn()).toBe('2026-11-19T00:00:00.000Z');
+      act(() => result.current!.windRadii.setStep(2));
+      expect(drawn()).toBe('2026-11-19T12:00:00.000Z');
+      act(() => result.current!.windRadii.setShape('smooth'));
+      expect(result.current!.windRadii.shape).toBe('smooth');
+    });
+
+    it('says so, and draws nothing, when the advisory gave no radii', () => {
+      const { result } = renderHook(() =>
+        useForecastLayers(exposure(), 'VU', null, extras([at(0, {}), at(6, {})]))
+      );
+      const option = radiiOption(result.current!);
+      expect(option).toMatchObject({ disabled: true });
+      expect(option?.note).toMatch(/no wind radii/i);
+      expect(result.current!.data.radii).toBeNull();
+      // A disabled layer is not counted as shown
+      expect(result.current!.summary).not.toMatch(/wind radii/i);
+    });
+
+    it('is not offered without track points', () => {
+      const { result } = renderHook(() => useForecastLayers(exposure(), 'VU', null, extras(null)));
+      expect(radiiOption(result.current!)).toBeUndefined();
+    });
+  });
+
   it('updates the count and summary when a layer is switched off', () => {
     const { result } = renderHook(() => useForecastLayers(exposure(), 'VU'));
     act(() => result.current!.toggle('track'));

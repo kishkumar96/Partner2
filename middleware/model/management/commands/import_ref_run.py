@@ -92,6 +92,17 @@ def track_points(path: Path) -> dict:
     return points
 
 
+def has_wind_radii(geometry) -> bool:
+    """Whether any point of a track carries a wind radius (NEGaleRadius, ...HurricaneRadius, or the
+    all-round GaleRadius/StormRadius/HurricaneRadius), the columns the dashboard draws its
+    quadrant rings from. A track made from a run's line has none, only latitude and longitude."""
+    for feature in (geometry or {}).get("features") or []:
+        for key, value in ((feature or {}).get("properties") or {}).items():
+            if key.endswith(("GaleRadius", "StormRadius", "HurricaneRadius")) and value not in (None, "", 0):
+                return True
+    return False
+
+
 def is_empty_feature_collection(path: Path) -> bool:
     """A GeoJSON overlay with no features, e.g. no floodplain mapped for the country."""
     if path.suffix.lower() not in (".geojson", ".json"):
@@ -239,6 +250,14 @@ class Command(BaseCommand):
 
         if skipped:
             self.stdout.write(f"Skipped empty outputs: {', '.join(skipped)}.")
+        if not has_wind_radii(track.geometry):
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Track {track.pk} has no wind radii (gale/storm/hurricane by quadrant), so the "
+                    "dashboard cannot draw the forecast's wind reach. Import the advisory's CSV track "
+                    "and pass it with --track to get them."
+                )
+            )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Event {event.pk} '{title}' for {country.short_name}: track {track.pk}, "
