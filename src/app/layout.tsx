@@ -86,6 +86,7 @@ export const metadata: Metadata = {
   // Icons and manifest
   icons: {
     icon: [{ url: prependBasePath('/favicon.ico', BASE_PATH), sizes: 'any' }],
+    apple: [{ url: prependBasePath('/icons/icon-192.png', BASE_PATH), sizes: '192x192' }],
   },
   manifest: prependBasePath('/manifest.json', BASE_PATH),
 

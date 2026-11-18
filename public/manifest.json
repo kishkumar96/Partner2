@@ -1,11 +1,17 @@
 {
-  "name": "Resilience Atlas",
-  "short_name": "Atlas",
-  "description": "Operational WebGIS platform for country-level hazard, exposure, and impact intelligence",
-  "start_url": "/partner2/",
+  "name": "Tropical Cyclone Rapid Impact Assessment Tool",
+  "short_name": "TC Impact",
+  "description": "Forecast exposure, post-event impact and hazard scenarios for Pacific island countries",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#3b82f6",
+  "theme_color": "#0f172a",
   "orientation": "any",
-  "categories": ["business", "weather", "utilities"]
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["weather", "utilities"]
 }
