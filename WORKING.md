@@ -21,11 +21,10 @@ The one place that says what is current. Agents and people: read this first, upd
 ## In progress
 | Who | What | Branch/worktree | Since |
 |---|---|---|---|
-| Claude (for kishank) | Forecast map: dateline fix, advisory start points, earlier tracks, release scrubber, date/time labels (uncommitted; checks: tsc, jest, prettier run here) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
-| Claude (for kishank) | Forecast map: wind radii by quadrant overlay (REF maps drew only a bare track); `import_ref_run` warns when a track has no radii (uncommitted; tsc, jest, prettier run here; middleware tests need Postgres, not run) | `integration/ready-to-build` in `~/Partner2` | 2026-11-19 |
+| (nobody) | | | |
 
-## Completed implementation awaiting integration
-- 2026-11-19, Codex: source-aware cyclone categories, shared badge/track/timeline, missing-data handling and regression tests complete in `agent/codex/cyclone-categories` (`/tmp/partner2-cyclone-categories`). Verified type-check, lint (warnings only), format, 1,006 Jest tests (8 existing skips), Chromium component previews at 320/390/430px, landscape and desktop, and `AUTH_REQUIRE_REDIS=false npm run build -- --webpack`. Default Turbopack cannot resolve the shared dependency symlink; production auth requires Redis configuration. Safari, live-API/WebGL integration, remote CI and middleware checks were not run. Merge is pending the other session’s uncommitted changes in the shared checkout; do not overwrite them.
+## Completed work
+- 2026-11-19: Integrated source-aware cyclone categories (badge, numbered track, timeline, provenance and missing-data handling) with the completed quadrant wind-radius overlays in source commit `fec361c`. Verified type-check, lint (warnings only), format, 1,021 Jest tests (8 existing skips), Chromium category-control previews at 320/390/430px, landscape and desktop, and a webpack production build with `AUTH_REQUIRE_REDIS=false` for local validation. The default Turbopack build cannot resolve the temporary worktree's dependency symlink. Middleware Python syntax checks passed; Django/Postgres tests could not run because Django and a test database are unavailable. Safari, live-API/WebGL integration and remote CI were not run. No deployment change.
 
 ## Open items
 - Anuj (shared API): filters on `risk_information` (`event`, `model_run`, `country`), a light list view without geometry, link the 44 unattached risk rows to events, public read of `model_run`, a home for `risk_scenario`, correct `country` on cyclone tracks, remove track 220 and give rows 49 (Wati run 4, real data, do not delete) and 23 a country, rotate the API password.
