@@ -1,5 +1,7 @@
 import { advisoryAge } from './forecastBriefing';
 import { windBandShortLabel } from './windScale';
+import { COUNTRY_TIME_ZONES, timeZoneName } from './trackTimeLabels';
+import type { CountryCode } from '@/types/thredds';
 import {
   WIND_DANGER_ORDER,
   isExposedDanger,
@@ -18,6 +20,8 @@ import type { PriorityLevel, PriorityResult } from './responsePriority';
 export interface ForecastBriefInput {
   exposure: ForecastExposure;
   countryName: string;
+  /** For the country's own time next to UTC. Without it the brief is in UTC only. */
+  countryCode?: CountryCode;
   eventName: string;
   /** Forecast-track issue time (ISO) */
   issuedAt?: string;
@@ -136,6 +140,40 @@ function freshnessOf(input: ForecastBriefInput): BriefFreshness {
   };
 }
 
+/**
+ * " · 08:00 Wed 18 Nov Cook Islands time (UTC-10)": the advisory time as the country's own officers read it, with
+ * the weekday (across the dateline a day is easy to get wrong). Empty without a country, or a time that is not one.
+ */
+function localTimeNote(
+  issuedAt: string | undefined,
+  countryCode: CountryCode | undefined,
+  countryName: string
+): string {
+  const date = issuedAt ? new Date(issuedAt) : null;
+  if (!date || Number.isNaN(date.getTime()) || !countryCode) return '';
+  const timeZone = COUNTRY_TIME_ZONES[countryCode];
+  if (!timeZone) return '';
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+        .formatToParts(date)
+        .map(part => [part.type, part.value])
+    );
+    const zone = timeZoneName('local', countryCode, date);
+    return ` · ${parts.hour}:${parts.minute} ${parts.weekday} ${parts.day} ${parts.month} ${countryName} time (${zone})`;
+  } catch {
+    return '';
+  }
+}
+
 function areaRow(area: ExposureArea): string[] {
   return [
     area.name,
@@ -213,7 +251,7 @@ export function buildForecastBrief(input: ForecastBriefInput): ForecastBriefMode
   return {
     kicker: 'RAPID EXPOSURE FORECAST · OPERATIONAL BRIEF',
     heading: `${shortName(input.eventName)} · ${input.countryName}`,
-    timesLine: `${issued ? `Track issued: ${issued}` : 'Track issue time not recorded'} · Generated: ${generated}`,
+    timesLine: `${issued ? `Track issued: ${issued}${localTimeNote(input.issuedAt, input.countryCode, input.countryName)}` : 'Track issue time not recorded'} · Generated: ${generated}`,
     freshness: freshnessOf(input),
     mapCaption: `Forecast wind exposure. Map shows: ${input.layerSummary}. Track: ${trackSource}.`,
     disclaimer:

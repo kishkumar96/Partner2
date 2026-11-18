@@ -7,6 +7,7 @@ import { ChevronDown, Download, FileDown, FileSpreadsheet, Loader2 } from 'lucid
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import { forecastCsvRows, type ForecastExportMeta } from '@/utils/forecastBriefing';
 import { briefDashboardLink } from '@/utils/briefLink';
+import { withMapFramedOn } from '@/utils/briefMapFrame';
 import { buildForecastBrief, type ForecastBriefContext } from '@/utils/forecastBrief';
 import REFPDFTemplate from './REFPDFTemplate';
 import { Event, ExposureData, EconomicDamageData, Hazard, Sector } from '@/types';
@@ -160,6 +161,8 @@ interface ExportButtonsProps {
   forecastMeta?: ForecastExportMeta;
   /** With a forecast showing, the PDF is the two-page exposure brief built from this */
   forecastBrief?: ForecastBriefContext;
+  /** Where the brief's map should be framed: the islands and the part of the track near them */
+  getForecastFocusBounds?: () => unknown;
   /** 'inline' is the row of buttons; 'menu' folds them into one "Export" menu */
   layout?: 'inline' | 'menu';
   /** Further actions for the menu layout (for example the map image), each closing the menu on use */
@@ -198,6 +201,7 @@ export default function ExportButtons({
   forecastExposure = null,
   forecastMeta,
   forecastBrief,
+  getForecastFocusBounds,
   layout = 'inline',
   extraActions = [],
 }: ExportButtonsProps) {
@@ -469,7 +473,12 @@ export default function ExportButtons({
       let mapImageUrl: string | undefined;
       if (includeMapInPdf && mapInstance) {
         try {
-          mapImageUrl = (await captureMapCanvas(mapInstance))?.toDataURL('image/png');
+          // Framed on the forecast for the capture, then the officer's own view is put back
+          mapImageUrl = (
+            await withMapFramedOn(mapInstance as never, getForecastFocusBounds?.() ?? null, () =>
+              captureMapCanvas(mapInstance)
+            )
+          )?.toDataURL('image/png');
         } catch (error) {
           logger.warn('Map capture skipped for forecast brief:', error);
         }

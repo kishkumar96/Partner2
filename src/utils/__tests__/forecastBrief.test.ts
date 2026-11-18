@@ -120,6 +120,36 @@ describe('formatUtc', () => {
 });
 
 describe('buildForecastBrief', () => {
+  describe('the advisory time in the country’s own time', () => {
+    const times = (countryCode: string | undefined, issuedAt = '2026-11-18T18:00:00Z') =>
+      buildForecastBrief(
+        input({ countryCode: countryCode as never, countryName: 'Cook Islands', issuedAt })
+      ).timesLine;
+
+    it('adds it next to UTC, with the weekday and the offset', () => {
+      expect(times('CK')).toContain(
+        'Track issued: 18 Nov 2026 18:00 UTC · 08:00 Wed 18 Nov Cook Islands time (UTC-10)'
+      );
+      expect(times('CK')).toContain('· Generated:');
+    });
+
+    it('gets the day right across the dateline: noon UTC is already Thursday in Tonga', () => {
+      expect(
+        buildForecastBrief(
+          input({ countryCode: 'TO', countryName: 'Tonga', issuedAt: '2026-11-18T12:00:00Z' })
+        ).timesLine
+      ).toContain('01:00 Thu 19 Nov Tonga time (UTC+13)');
+    });
+
+    it('is UTC only without a country, or without a usable time', () => {
+      expect(times(undefined)).toBe(
+        'Track issued: 18 Nov 2026 18:00 UTC · Generated: 08 Apr 2026 12:15 UTC'
+      );
+      expect(times('CK', 'not a time')).toContain('Track issue time not recorded');
+      expect(times('CK', 'not a time')).not.toContain('Cook Islands time');
+    });
+  });
+
   it('writes "preliminary" in brackets, with no stray hyphen', () => {
     const model = buildForecastBrief(
       input({

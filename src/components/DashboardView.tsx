@@ -852,6 +852,13 @@ export default function DashboardView({
     []
   );
 
+  // What the brief's map is framed on: the same focus the dashboard frames when a forecast opens
+  const getForecastFocusBounds = useCallback(() => {
+    if (!forecastExposure) return null;
+    const focus = forecastFocusCollection(forecastExposure, regionalImpactsGeoJSON);
+    return focus ? getGeoJsonBounds(focus) : null;
+  }, [forecastExposure, regionalImpactsGeoJSON, getGeoJsonBounds]);
+
   const zoomToData = useCallback(
     (data?: GeoJSON.FeatureCollection | null) => {
       if (!mapInstance || !data) return;
@@ -3394,10 +3401,12 @@ export default function DashboardView({
                     isPlanningMode && inundationLayerOn ? effectiveHazardScenario : null
                   }
                   forecastExposure={!isPlanningMode ? forecastExposure : null}
+                  getForecastFocusBounds={getForecastFocusBounds}
                   forecastBrief={
                     !isPlanningMode && forecastExposure
                       ? {
                           countryName: COUNTRIES[selectedCountry].name,
+                          countryCode: selectedCountry,
                           eventName: activeEventRecord?.name ?? 'Forecast',
                           issuedAt: activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
                           runCompletedAt: activeEventRecord?.modelRunFinishedAt,
