@@ -84,6 +84,8 @@ export function operationalPriorities(exposure: ForecastExposure): OperationalPr
 
 export interface ForecastExportMeta {
   eventName?: string;
+  /** The dashboard's country, written on every row so merged files can be told apart */
+  countryName?: string;
   /** Forecast track issue time */
   issuedAt?: string;
   runCompletedAt?: string;
@@ -102,11 +104,27 @@ const CSV_COLUMNS: Array<[string, (area: ExposureArea) => number]> = [
   ['evacuation_centres_exposed', area => area.exposed.evacuationCentres],
 ];
 
+/**
+ * Added after the original columns, so a partner reading the file by position still gets the same first
+ * columns. Track uncertainty is people and buildings NOT on the forecast track but within its error: they are
+ * not in the exposed figures above, and the summary only footnotes them.
+ */
+const EXTRA_CSV_COLUMNS: Array<[string, (area: ExposureArea) => number | null]> = [
+  ['strongest_wind_kmph', area => area.maxWindKmph],
+  ['people_in_track_uncertainty', area => area.populationInTrackUncertainty],
+  ['buildings_in_track_uncertainty', area => area.inTrackUncertainty.buildings],
+];
+
 /** Keeps up to two decimals (0.4 km of road must not export as 0); missing values export as 0. */
-function csvNumber(value: number | undefined): string {
+function csvNumber(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value)
     ? String(Number(value.toFixed(2)))
     : '0';
+}
+
+/** An unknown wind speed stays blank, not 0: 0 km/h would read as no wind */
+function csvOptionalNumber(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? csvNumber(value) : '';
 }
 
 /** Rows for a forecast-exposure CSV: framing and provenance first, then one row per area. */
@@ -117,11 +135,19 @@ export function forecastCsvRows(
   const rows: string[][] = [
     [`Rapid Exposure Forecast: ${FORECAST_SIGNAL}`],
     ['event', meta.eventName ?? ''],
+    ['country', meta.countryName ?? ''],
     ['forecast_track_issued', meta.issuedAt ?? ''],
     ['run_completed', meta.runCompletedAt || 'not recorded'],
     ['exported', meta.exportedAt ?? ''],
     [],
-    ['area', 'area_code', 'strongest_forecast_wind', ...CSV_COLUMNS.map(([name]) => name)],
+    [
+      'area',
+      'area_code',
+      'strongest_forecast_wind',
+      ...CSV_COLUMNS.map(([name]) => name),
+      'country',
+      ...EXTRA_CSV_COLUMNS.map(([name]) => name),
+    ],
   ];
   // The country's strongest wind is the strongest of any of its areas. REF's national row can
   // carry a milder band ("Possible Gale Winds" while Mangaia and Mauke were "Gale Winds").
@@ -142,6 +168,10 @@ export function forecastCsvRows(
       area.code ?? '',
       area.overallWinds ?? '',
       ...CSV_COLUMNS.map(([, pick]) => csvNumber(pick(area))),
+      meta.countryName ?? '',
+      ...EXTRA_CSV_COLUMNS.map(([name, pick]) =>
+        name === 'strongest_wind_kmph' ? csvOptionalNumber(pick(area)) : csvNumber(pick(area))
+      ),
     ]);
   }
   return rows;

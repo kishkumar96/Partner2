@@ -96,6 +96,15 @@ import { getFilteredData } from '@/stores/filteredDataStore';
 import { detectStoryBeats } from '@/utils/cycloneStory';
 import { deserializeMapState, serializeMapState, MapURLState } from '@/utils/urlState';
 import type { EezStatus, MapViewCommand } from '@/utils/pacificEez';
+import {
+  drawExportFooter,
+  exportPixelRatio,
+  forecastLegendItems,
+  layoutExportFooter,
+  mapExportCredits,
+  mapExportFilename,
+} from '@/utils/mapExport';
+import { formatUtc } from '@/utils/forecastBrief';
 import { highlightPoint } from '@/utils/mapHighlight';
 import { CODE_TO_SLUG } from '@/utils/countrySlug';
 import { normalizeHazardIds } from '@/utils/hazardIds';
@@ -1208,6 +1217,8 @@ export default function DashboardView({
       const sourceContainer = mapInstance.getContainer();
       const exportWidth = Math.max(sourceContainer.clientWidth, 640);
       const exportHeight = Math.max(sourceContainer.clientHeight, 480);
+      // Sharp where it fits: 2x, less on a very large map or a small device's memory budget
+      const exportRatio = exportPixelRatio(exportWidth, exportHeight);
 
       const styleSnapshot = JSON.parse(JSON.stringify(mapInstance.getStyle()));
       const center = mapInstance.getCenter();
@@ -1235,6 +1246,7 @@ export default function DashboardView({
         pitch,
         interactive: false,
         attributionControl: false,
+        pixelRatio: exportRatio,
         fadeDuration: 0,
         maxTileCacheSize: 50,
         canvasContextAttributes: { preserveDrawingBuffer: true },
@@ -1255,63 +1267,57 @@ export default function DashboardView({
       const reachedIdle = await waitForMapIdle(exportMap, 12000);
 
       const exportedCanvas = exportMap.getCanvas();
-      const footerHeight = Math.max(64, Math.round(exportedCanvas.height * 0.1));
-      const compositeCanvas = document.createElement('canvas');
-      compositeCanvas.width = exportedCanvas.width;
-      compositeCanvas.height = exportedCanvas.height + footerHeight;
-
-      const context = compositeCanvas.getContext('2d');
-      if (!context) {
-        throw new Error('Unable to create export image context.');
-      }
-
-      context.drawImage(exportedCanvas, 0, 0);
-      context.fillStyle = 'rgba(15, 23, 42, 0.95)';
-      context.fillRect(0, exportedCanvas.height, compositeCanvas.width, footerHeight);
-
+      const exportedAt = new Date();
+      const forecastFraming = forecastFramingRef.current;
       const selectedHazardNames =
         filters.selectedHazards.length > 0
           ? filters.selectedHazards
               .map(id => allHazards.find((hazard: any) => hazard.id === id)?.name || id)
               .join(', ')
           : 'All';
-      const exportedAt = new Date();
-      const timestampText = exportedAt.toLocaleString();
-      const forecastFraming = forecastFramingRef.current;
       const headerText = forecastFraming
         ? `${COUNTRIES[selectedCountry].name} Forecast Exposure Map`
         : `${COUNTRIES[selectedCountry].name} Disaster Risk Map`;
+      const issuedText = formatUtc(activeEventRecord?.trackIssuedTime || activeEventRecord?.date);
       const contextText = forecastFraming
-        ? `${FORECAST_SIGNAL} | Track issued: ${activeEventRecord?.trackIssuedTime || activeEventRecord?.date || 'unknown'}`
+        ? `${FORECAST_SIGNAL} | Track issued: ${issuedText ?? 'unknown'}`
         : `${mapStyle.toUpperCase()} view | Hazards: ${selectedHazardNames} | Opacity: ${layerOpacity}%`;
-      const attributionText =
-        'Data: Pacific Disaster Impact & Exposure / THREDDS | Basemap: OpenStreetMap contributors';
 
-      const leftX = Math.max(16, Math.round(compositeCanvas.width * 0.015));
-      const bottomY = exportedCanvas.height + footerHeight;
-      context.fillStyle = '#f8fafc';
-      context.font = `600 ${Math.max(14, Math.round(footerHeight * 0.24))}px system-ui, -apple-system, sans-serif`;
-      context.fillText(headerText, leftX, bottomY - Math.round(footerHeight * 0.62));
-      context.font = `400 ${Math.max(12, Math.round(footerHeight * 0.2))}px system-ui, -apple-system, sans-serif`;
-      context.fillStyle = '#cbd5e1';
-      context.fillText(contextText, leftX, bottomY - Math.round(footerHeight * 0.34));
-      context.fillStyle = '#94a3b8';
-      context.fillText(
-        `Exported: ${timestampText}`,
-        leftX,
-        bottomY - Math.round(footerHeight * 0.12)
-      );
-      context.textAlign = 'right';
-      context.fillText(
-        attributionText,
-        compositeCanvas.width - leftX,
-        bottomY - Math.round(footerHeight * 0.12)
-      );
-      context.textAlign = 'left';
+      // The footer is laid out to the image's own width, so no line runs off the edge, and it grows to
+      // the lines it needs (legend, credits, time) instead of cutting them off
+      const measureContext = document.createElement('canvas').getContext('2d');
+      const measureText = (text: string, font: string) => {
+        if (!measureContext) return text.length * 8 * exportRatio;
+        measureContext.font = font;
+        return measureContext.measureText(text).width;
+      };
+      const footer = layoutExportFooter(measureText, exportedCanvas.width, exportRatio, {
+        headline: headerText,
+        context: contextText,
+        exportedAt,
+        credits: mapExportCredits({ basemapStyle: String(basemapStyle), eezVisible: showEez }),
+        ...(forecastFraming
+          ? { legendTitle: 'Strongest forecast wind', legend: forecastLegendItems() }
+          : {}),
+      });
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = exportedCanvas.width;
+      compositeCanvas.height = exportedCanvas.height + footer.height;
+
+      const context = compositeCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to create export image context.');
+      }
+      context.drawImage(exportedCanvas, 0, 0);
+      drawExportFooter(context, footer, exportedCanvas.height, compositeCanvas.width);
 
       const blob = await encodeCanvasToBlob(compositeCanvas);
-      const fileDate = new Intl.DateTimeFormat('en-CA').format(exportedAt);
-      const filename = `pdie-map-${selectedCountry.toLowerCase()}-${fileDate}.png`;
+      const filename = mapExportFilename({
+        countryCode: selectedCountry,
+        eventName: activeEventRecord?.name,
+        issuedAt: forecastFraming ? activeEventRecord?.trackIssuedTime : undefined,
+        exportedAt,
+      });
 
       const navigatorWithMsSave = navigator as Navigator & {
         msSaveOrOpenBlob?: (blobData: Blob, defaultName?: string) => boolean;
@@ -1365,6 +1371,8 @@ export default function DashboardView({
     mapStyle,
     layerOpacity,
     encodeCanvasToBlob,
+    basemapStyle,
+    showEez,
   ]);
 
   const handleLogout = useCallback(async () => {
@@ -3416,6 +3424,7 @@ export default function DashboardView({
                   }
                   forecastMeta={{
                     eventName: activeEventRecord?.name,
+                    countryName: COUNTRIES[selectedCountry].name,
                     issuedAt: activeEventRecord?.trackIssuedTime || activeEventRecord?.date,
                     runCompletedAt: activeEventRecord?.modelRunFinishedAt,
                   }}

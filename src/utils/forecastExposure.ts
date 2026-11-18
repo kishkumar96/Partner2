@@ -232,10 +232,10 @@ function bandTotals(row: Row): ExposureTotals {
 }
 
 /** One REF exposure row (a province, or an area council from the run's features) as an area */
-export function toArea(row: Row, name: string): ExposureArea {
+export function toArea(row: Row, name: string, codeFallback?: string | null): ExposureArea {
   return {
     name,
-    code: text(row.Region_ID) || text(row['Region.ID']) || null,
+    code: text(row.Region_ID) || text(row['Region.ID']) || codeFallback || null,
     overallWinds: text(row.Overall_Winds) || null,
     minWindKmph: optionalNum(row.Min_WindSpeed_kmph),
     maxWindKmph: optionalNum(row.Max_WindSpeed_kmph),
@@ -253,6 +253,20 @@ export function toArea(row: Row, name: string): ExposureArea {
     populationInFloodplains: num(row.Population_in_Floodplains),
     populationInTrackUncertainty: num(row.Population_in_Track_Uncertainty),
   };
+}
+
+/** Area ids from a regional impacts layer, by lower-cased area name. First id wins for a repeated name. */
+function areaIdsByName(
+  collection: GeoJSON.FeatureCollection | null | undefined
+): Map<string, string> {
+  const ids = new Map<string, string>();
+  for (const feature of collection?.features ?? []) {
+    const props = (feature.properties ?? {}) as Row;
+    const name = text(props['Region.Region']) || text(props.Region);
+    const id = text(props['Region.ID']) || text(props.Region_ID);
+    if (name && id && !ids.has(name.trim().toLowerCase())) ids.set(name.trim().toLowerCase(), id);
+  }
+  return ids;
 }
 
 /** A REF exposure table: exposure columns and no loss columns */
@@ -320,6 +334,11 @@ export function buildForecastExposure(tables: {
   /** The track linked to the event, used when the run kept no track of its own */
   eventTrack?: GeoJSON.FeatureCollection | null;
   floodplainRowId?: string | null;
+  /**
+   * The regional impacts map layer. REF's summary table has no area id, but the layer's features carry
+   * `Region.ID`, so the ids are read from it by area name (an export's area_code was empty on every row).
+   */
+  areaFeatures?: GeoJSON.FeatureCollection | null;
   /** Other countries the run's tables covered, already left out (see countryScope) */
   neighbouringCountries?: string[];
 }): ForecastExposure | null {
@@ -327,10 +346,11 @@ export function buildForecastExposure(tables: {
   const nationalRow = tables.national.find(isForecastExposureRow);
   if (!nationalRow && regionalRows.length === 0) return null;
 
+  const idByArea = areaIdsByName(tables.areaFeatures);
   const regions = regionalRows
     // The blank-region row holds assets outside every province
     .filter(row => text(row.Region) !== '')
-    .map(row => toArea(row, text(row.Region)))
+    .map(row => toArea(row, text(row.Region), idByArea.get(text(row.Region).trim().toLowerCase())))
     .sort((a, b) => b.exposed.population - a.exposed.population);
 
   const dangerRank = (label: string) => {

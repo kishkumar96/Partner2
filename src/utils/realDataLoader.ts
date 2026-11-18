@@ -3176,6 +3176,7 @@ export async function loadAllRealData(
     // Only the event's own linked track, never a local fallback for another storm
     eventTrack: partnerData.cycloneTrack,
     floodplainRowId: partnerData.riskData.forecastFloodplainRowId,
+    areaFeatures: partnerData.riskData.regionalImpacts,
     neighbouringCountries: partnerData.riskData.neighbouringCountries,
   });
 
