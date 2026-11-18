@@ -143,6 +143,7 @@ const nextConfig: NextConfig = {
 
   // Performance budgets
   experimental: {
+    agentUpgrade: "security",
     optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2', 'maplibre-gl'],
     // Enable faster builds with Webpack 5 module federation
     esmExternals: true,
