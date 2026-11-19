@@ -717,7 +717,12 @@ export default function MapView({
     if (!viewCommand || !mapLoaded || !map.current) return;
     if (handledViewCommandRef.current === viewCommand.nonce) return;
     handledViewCommandRef.current = viewCommand.nonce;
-    void applyMapViewCommand(map.current, viewCommand.kind, selectedCountry ?? null);
+    void applyMapViewCommand(
+      map.current,
+      viewCommand.kind,
+      selectedCountry ?? null,
+      viewCommand.bounds
+    );
   }, [viewCommand, mapLoaded, selectedCountry]);
 
   useEffect(() => {

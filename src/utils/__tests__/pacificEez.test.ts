@@ -113,6 +113,25 @@ describe('applyMapViewCommand', () => {
     );
   });
 
+  it('frames the forecast on the bounds it is given, with no country needed', async () => {
+    const map = fakeMap();
+    const bounds: [number, number, number, number] = [-166, -13, -158, -9];
+    expect(await applyMapViewCommand(map, 'forecast', null, bounds)).toBe(true);
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      bounds,
+      expect.objectContaining({ duration: expect.any(Number) })
+    );
+    expect(map.flyTo).not.toHaveBeenCalled();
+  });
+
+  it('does not move the map for a forecast view with no usable bounds', async () => {
+    const map = fakeMap();
+    expect(await applyMapViewCommand(map, 'forecast', 'CK')).toBe(false);
+    expect(await applyMapViewCommand(map, 'forecast', 'CK', [NaN, -13, -158, -9])).toBe(false);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+    expect(map.flyTo).not.toHaveBeenCalled();
+  });
+
   it("flies back to the country's own landing view, not its EEZ", async () => {
     const map = fakeMap();
     await applyMapViewCommand(map, 'country', 'TO');

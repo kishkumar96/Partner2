@@ -198,6 +198,25 @@ describe('ForecastLegend', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('says what period the shading covers, even while collapsed', () => {
+    const { rerender } = render(
+      <ForecastLegend active={active} period="18 Nov 18:00 – 24 Nov 00:00 UTC" />
+    );
+    const legend = screen.getByRole('region', { name: 'Forecast legend' });
+    expect(screen.getByRole('button', { name: 'Forecast legend' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(legend).toHaveTextContent(
+      'Strongest forecast winds over 18 Nov 18:00 – 24 Nov 00:00 UTC'
+    );
+    // Without a timed track there is nothing to claim
+    rerender(<ForecastLegend active={active} period={null} />);
+    expect(screen.getByRole('region', { name: 'Forecast legend' })).not.toHaveTextContent(
+      'Strongest forecast winds over'
+    );
+  });
+
   it('always explains every wind band, since area shading is always drawn', () => {
     render(<ForecastLegend active={{ ...active, swaths: false, facilities: false }} />);
     openLegend();

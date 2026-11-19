@@ -865,6 +865,27 @@ export default function DashboardView({
     return focus ? getGeoJsonBounds(focus) : null;
   }, [forecastExposure, regionalImpactsGeoJSON, getGeoJsonBounds]);
 
+  // "Fit forecast" in Map Controls: the same focus the dashboard frames when a forecast opens, on demand,
+  // so a panned or zoomed view can always get back to the storm and the islands it is about.
+  const forecastFocusView = useMemo<MapViewCommand['bounds'] | null>(() => {
+    const bounds = getForecastFocusBounds();
+    if (!Array.isArray(bounds) || bounds.length !== 2) return null;
+    const [sw, ne] = bounds as [[number, number], [number, number]];
+    return [sw[0], sw[1], ne[0], ne[1]];
+  }, [getForecastFocusBounds]);
+  const handleMapViewRequest = useCallback(
+    (kind: MapViewCommand['kind']) => {
+      if (kind !== 'forecast') {
+        requestMapView(kind);
+        return;
+      }
+      if (!forecastFocusView) return;
+      mapViewNonceRef.current += 1;
+      setMapViewCommand({ kind, nonce: mapViewNonceRef.current, bounds: forecastFocusView });
+    },
+    [requestMapView, forecastFocusView]
+  );
+
   const zoomToData = useCallback(
     (data?: GeoJSON.FeatureCollection | null) => {
       if (!mapInstance || !data) return;
@@ -3828,7 +3849,8 @@ export default function DashboardView({
                 onVisibleChange: setShowEez,
                 status: eezStatus,
                 onRetry: () => setEezRetryKey(key => key + 1),
-                onView: requestMapView,
+                onView: handleMapViewRequest,
+                hasForecast: !isPlanningMode && forecastFocusView !== null,
                 // All four dashboard countries have a zone of their own (checked by the asset test)
                 hasCountryEez: true,
               }}

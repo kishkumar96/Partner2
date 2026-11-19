@@ -4,7 +4,12 @@ import MapPanel from '../MapPanel';
 import type { EezStatus } from '@/utils/pacificEez';
 
 function setup(
-  over: Partial<{ visible: boolean; status: EezStatus; hasCountryEez: boolean }> = {}
+  over: Partial<{
+    visible: boolean;
+    status: EezStatus;
+    hasCountryEez: boolean;
+    hasForecast: boolean;
+  }> = {}
 ) {
   const eez = {
     visible: true,
@@ -41,6 +46,24 @@ describe('MapPanel Geographic context', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to country' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show country EEZ' }));
     expect(eez.onView.mock.calls.map(c => c[0])).toEqual(['overview', 'country', 'countryEez']);
+  });
+
+  it('offers "Fit forecast" only while a forecast is open, and asks for it', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'Fit forecast' })).toBeNull();
+  });
+
+  it('asks the map to frame the forecast when "Fit forecast" is pressed', () => {
+    const eez = setup({ hasForecast: true });
+    const button = screen.getByRole('button', { name: 'Fit forecast' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(eez.onView).toHaveBeenCalledWith('forecast');
+  });
+
+  it('keeps "Fit forecast" available when the EEZ outlines are off', () => {
+    setup({ hasForecast: true, visible: false });
+    expect(screen.getByRole('button', { name: 'Fit forecast' })).toBeEnabled();
   });
 
   it('disables "Show country EEZ" when outlines are off, but keeps the other two', () => {

@@ -17,8 +17,10 @@ export type EezStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 /** A view change asked for by the controls; `nonce` makes a repeated request count as a new one */
 export interface MapViewCommand {
-  kind: 'overview' | 'country' | 'countryEez';
+  kind: 'overview' | 'country' | 'countryEez' | 'forecast';
   nonce: number;
+  /** west, south, east, north: what "forecast" frames (the islands and the track near them) */
+  bounds?: [number, number, number, number];
 }
 
 export interface EezZoneProperties {
@@ -115,11 +117,18 @@ const VIEW_PADDING = { top: 72, bottom: 72, left: 48, right: 48 };
 export async function applyMapViewCommand(
   map: ViewableMap | null,
   kind: MapViewCommand['kind'],
-  country: CountryCode | null
+  country: CountryCode | null,
+  bounds?: MapViewCommand['bounds']
 ): Promise<boolean> {
   if (!map) return false;
   if (kind === 'overview') {
     map.fitBounds(PACIFIC_OVERVIEW_BOUNDS, { padding: VIEW_PADDING, duration: 1200 });
+    return true;
+  }
+  if (kind === 'forecast') {
+    // Needs no country: the caller worked out what the forecast covers. No bounds, no move.
+    if (!bounds || bounds.length !== 4 || !bounds.every(Number.isFinite)) return false;
+    map.fitBounds(bounds, { padding: VIEW_PADDING, duration: 1200 });
     return true;
   }
   if (!country) return false;

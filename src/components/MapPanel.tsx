@@ -128,6 +128,8 @@ interface MapPanelProps {
     onView: (kind: MapViewCommand['kind']) => void;
     /** Whether the selected country has an EEZ of its own to frame */
     hasCountryEez: boolean;
+    /** Whether a forecast is open, so there is a storm and islands to frame */
+    hasForecast?: boolean;
   };
 
   // Layer toggles
@@ -621,6 +623,9 @@ const MapPanel = memo(function MapPanel({
                 <div className="ml-5 flex flex-wrap gap-1.5" role="group" aria-label="Map view">
                   {(
                     [
+                      ...(eez.hasForecast
+                        ? ([['forecast', 'Fit forecast', true]] as const)
+                        : ([] as const)),
                       ['overview', 'Pacific overview', true],
                       ['country', 'Back to country', true],
                       ['countryEez', 'Show country EEZ', eez.hasCountryEez && eez.visible],
