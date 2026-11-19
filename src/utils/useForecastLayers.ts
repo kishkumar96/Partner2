@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPartnerRiskInformationGeometry } from '@/utils/realDataLoader';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import type { CountryCode } from '@/types/thredds';
+import { forecastPeriod } from '@/utils/forecastPeriod';
 import {
   releaseSteps,
   selectAdvisoryReleases,
@@ -74,6 +75,8 @@ export interface ForecastLayerControls {
   setTimeZoneMode: (mode: TimeZoneMode) => void;
   /** "UTC" or e.g. "UTC+13", for the switch and legend */
   timeZoneName: string;
+  /** What period the wind shading covers, e.g. "18 Nov 18:00 – 24 Nov 00:00 UTC"; null without a timed track */
+  period: string | null;
 }
 
 /** What the advisory and time-label overlays are drawn from. */
@@ -141,6 +144,10 @@ export function useForecastLayers(
   const zoneName = useMemo(
     () => timeZoneName(timeZoneMode, countryCode),
     [timeZoneMode, countryCode]
+  );
+  const period = useMemo(
+    () => forecastPeriod(extras?.trackPoints, timeZoneMode, countryCode)?.label ?? null,
+    [extras?.trackPoints, timeZoneMode, countryCode]
   );
 
   const radiiLabels = useMemo(
@@ -311,6 +318,7 @@ export function useForecastLayers(
       timeZoneMode,
       setTimeZoneMode,
       timeZoneName: zoneName,
+      period,
     };
   }, [
     exposure,
@@ -328,6 +336,7 @@ export function useForecastLayers(
     radiiIndex,
     radiiShape,
     extras?.trackPoints,
+    period,
     timeZoneMode,
     zoneName,
   ]);

@@ -626,7 +626,7 @@ export default function ForecastLayers({
       {controls.releaseSteps?.length >= 2 && (
         <ReleaseScrubber steps={controls.releaseSteps} onSelect={onSelectAdvisory} />
       )}
-      <ForecastLegend active={active} timeZone={controls.timeZoneName} />
+      <ForecastLegend active={active} timeZone={controls.timeZoneName} period={controls.period} />
     </>
   );
 }
@@ -635,10 +635,14 @@ export default function ForecastLayers({
 export function ForecastLegend({
   active,
   timeZone,
+  period,
 }: {
   active: Partial<Record<OverlayId, boolean>>;
   /** Name of the zone the time labels use, e.g. "UTC" */
   timeZone?: string;
+  /** The period the wind shading covers, e.g. "18 Nov 18:00 – 24 Nov 00:00 UTC". Shown even while the
+   * legend is collapsed: the shading means nothing without the time it is for. */
+  period?: string | null;
 }) {
   // Collapsed to start with: open, it covers the islands the forecast is about
   const [open, setOpen] = useState(false);
@@ -661,6 +665,11 @@ export function ForecastLegend({
         Forecast legend
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
       </button>
+      {period && (
+        <p className="px-2.5 pb-1.5 text-[10px] leading-snug text-slate-300">
+          Strongest forecast winds over {period}
+        </p>
+      )}
       {open && (
         <div className="space-y-2 border-t border-slate-700/60 px-2.5 py-1.5">
           <div>
