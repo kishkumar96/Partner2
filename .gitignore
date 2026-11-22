@@ -187,3 +187,7 @@ test.txt
 stats.txt
 npmtest.txt
 localhost_*.html
+
+# stale build folders left by moving .next aside, and a stray disk-usage listing
+/.next.root-stale*/
+/du.txt
