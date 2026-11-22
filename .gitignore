@@ -191,3 +191,6 @@ localhost_*.html
 # stale build folders left by moving .next aside, and a stray disk-usage listing
 /.next.root-stale*/
 /du.txt
+
+# Windows "downloaded from the internet" markers: the colon makes them unusable as CI artifact paths
+*:Zone.Identifier
