@@ -95,6 +95,9 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          # This only compiles the app. The security check that runs while Next collects the API routes
+          # demands REDIS_URL in production, which CI has no reason to have: nothing here serves a request.
+          AUTH_REQUIRE_REDIS: 'false'
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
