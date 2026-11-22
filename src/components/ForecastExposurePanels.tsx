@@ -122,7 +122,22 @@ export function ForecastFreshness({ event }: { event: EventRecord | null }) {
   );
 }
 
-function runOutcome(event: EventRecord | null): { title: string; detail: string } {
+/** The run finished with results, but none for this dashboard's country (see countryScope) */
+export interface OutOfCountry {
+  country: string;
+  others: string[];
+}
+
+function joinNames(names: string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function runOutcome(
+  event: EventRecord | null,
+  outOfCountry?: OutOfCountry | null
+): { title: string; detail: string } {
   switch (event?.modelRunStatus) {
     case 'queued':
     case 'running':
@@ -141,6 +156,18 @@ function runOutcome(event: EventRecord | null): { title: string; detail: string 
         detail: event.modelRunError || 'This run was skipped before it started.',
       };
     default:
+      if (outOfCountry) {
+        const others = joinNames(outOfCountry.others);
+        return {
+          title: `This advisory has no results for ${outOfCountry.country}`,
+          detail:
+            (others
+              ? `The run has results for ${others}, but none for ${outOfCountry.country}. `
+              : 'The run has results, but none for this country. ') +
+            'Nothing from another country is shown here: use that country’s own dashboard. ' +
+            `If ${outOfCountry.country} should be in this run, the country names in it may not match what this dashboard expects, so check the run before relying on this.`,
+        };
+      }
       return {
         title: 'This run returned no exposure results',
         detail:
@@ -154,8 +181,14 @@ function runOutcome(event: EventRecord | null): { title: string; detail: string 
  * (pending, failed, superseded, or finished empty). It says which, and keeps
  * the run picker so another advisory is one click away.
  */
-export function ForecastRunStatusPanel({ event }: { event: EventRecord | null }) {
-  const outcome = runOutcome(event);
+export function ForecastRunStatusPanel({
+  event,
+  outOfCountry,
+}: {
+  event: EventRecord | null;
+  outOfCountry?: OutOfCountry | null;
+}) {
+  const outcome = runOutcome(event, outOfCountry);
   return (
     <div className={PANEL_CLASSES} data-testid="forecast-run-status-panel">
       <div className="p-4 border-b border-borderGlow bg-surface/95 backdrop-blur-sm flex-shrink-0">
