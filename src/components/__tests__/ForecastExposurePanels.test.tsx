@@ -167,6 +167,33 @@ describe('Forecast run status panel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('model dropped the track');
   });
 
+  it('says the run has results for other countries only, and shows none of them', () => {
+    render(
+      <ForecastRunStatusPanel
+        event={withStatus('complete')}
+        outOfCountry={{ country: 'Vanuatu', others: ['Cook Islands', 'Samoa', 'Tonga'] }}
+      />
+    );
+    const note = screen.getByRole('status');
+    expect(note).toHaveTextContent('This advisory has no results for Vanuatu');
+    expect(note).toHaveTextContent(
+      'results for Cook Islands, Samoa and Tonga, but none for Vanuatu'
+    );
+    expect(note).toHaveTextContent(/use that country’s own dashboard/);
+    // Not the "model did not read the track" wording: the run is fine, it is another country’s
+    expect(note).not.toHaveTextContent(/did not read the track/);
+  });
+
+  it('still reports a failed or running run as such, even if some country is out of scope', () => {
+    render(
+      <ForecastRunStatusPanel
+        event={withStatus('failed', 'model dropped the track')}
+        outOfCountry={{ country: 'Vanuatu', others: ['Samoa'] }}
+      />
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('The model run for this advisory failed');
+  });
+
   it('does not call a finished-but-empty run "no exposure"', () => {
     render(<ForecastRunStatusPanel event={withStatus('complete')} />);
     const note = screen.getByRole('status');

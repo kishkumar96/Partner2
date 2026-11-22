@@ -8,8 +8,10 @@
  * wrong for the officer and a diplomatic risk for a regional platform, so the dashboard keeps only its own.
  *
  * Rows with no country column (older runs, country-specific files) are kept: no column is not a neighbour.
- * If scoping would empty a table (the name does not match any row) the table is left whole, so a spelling
- * mismatch shows too much rather than a blank dashboard.
+ * If nothing matches the dashboard's country the tables come back EMPTY and the bundle says so
+ * (`noResultsForCountry`, with the countries the run does name). It never falls back to the whole table:
+ * for a regional platform, showing a neighbour's data to be safe about a spelling mismatch is the worse
+ * failure. The dashboard says "no results for this country" instead of drawing someone else's.
  */
 
 type Row = Record<string, unknown>;
@@ -34,10 +36,6 @@ export function scopeRows<T>(
     const country = countryOf(row);
     if (!country || same(country, countryName)) kept.push(row);
     else others.add(country);
-  }
-  // Nothing matched the name: keep the table whole rather than blank it
-  if (kept.length === 0 && rows.length > 0 && !rows.some(row => !countryOf(row))) {
-    return { rows: [...rows], others: [] };
   }
   return { rows: kept, others: [...others].sort() };
 }
@@ -86,8 +84,8 @@ export interface CountryScopable {
 export function scopeBundleToCountry<T extends CountryScopable>(
   bundle: T,
   countryName: string | null | undefined
-): T & { neighbouringCountries: string[] } {
-  if (!countryName) return { ...bundle, neighbouringCountries: [] };
+): T & { neighbouringCountries: string[]; noResultsForCountry: boolean } {
+  if (!countryName) return { ...bundle, neighbouringCountries: [], noResultsForCountry: false };
   const others = new Set<string>();
   const rowsOf = (rows: Row[]) => {
     const scoped = scopeRows(rows, countryName, rowCountry);
@@ -101,7 +99,7 @@ export function scopeBundleToCountry<T extends CountryScopable>(
   };
   const national = scopeNationalRows(bundle.forecastNational, countryName);
   national.others.forEach(name => others.add(name));
-  return {
+  const scoped = {
     ...bundle,
     regionalImpacts: featuresOf(bundle.regionalImpacts),
     regionalImpactsBySector: featuresOf(bundle.regionalImpactsBySector),
@@ -113,4 +111,18 @@ export function scopeBundleToCountry<T extends CountryScopable>(
     forecastByTrackDistance: rowsOf(bundle.forecastByTrackDistance),
     neighbouringCountries: [...others].filter(name => !same(name, countryName)).sort(),
   };
+  // The run had results, but none of them are this country's
+  const countRows = (b: CountryScopable) =>
+    [
+      b.regionalSummary,
+      b.regionalSummaryBySector,
+      b.forecastNational,
+      b.forecastByWindSpeed,
+      b.forecastByTrackDistance,
+    ].reduce((n, rows) => n + rows.length, 0) +
+    [b.regionalImpacts, b.regionalImpactsBySector, b.exposureByCluster].reduce(
+      (n, layer) => n + (layer?.features?.length ?? 0),
+      0
+    );
+  return { ...scoped, noResultsForCountry: countRows(bundle) > 0 && countRows(scoped) === 0 };
 }

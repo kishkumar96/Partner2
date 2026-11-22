@@ -64,6 +64,7 @@ import ForecastLayers from '@/components/ForecastLayers';
 import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
 import { filtersShownFor } from '@/utils/forecastFilters';
 import type { ForecastExposure } from '@/utils/forecastExposure';
+import type { RealDataLoadResult } from '@/types/realData';
 import type { TimelinePoint } from '@/utils/forecastTimeline';
 import ModeFilterPanel from '@/components/ModeFilterPanel';
 import type { EventRecord } from '@/data/eventRecords';
@@ -493,6 +494,8 @@ export default function DashboardView({
     useState<GeoJSON.FeatureCollection | null>(null);
   // Set when the active event is a Rapid Exposure Forecast (exposure, no loss)
   const [forecastExposure, setForecastExposure] = useState<ForecastExposure | null>(null);
+  const [forecastOutOfCountry, setForecastOutOfCountry] =
+    useState<RealDataLoadResult['forecastOutOfCountry']>(null);
   const [previousForecast, setPreviousForecast] = useState<{
     record: EventRecord;
     exposure: ForecastExposure;
@@ -2871,6 +2874,7 @@ export default function DashboardView({
 
       setRegionalImpactsGeoJSON(realData.regionalImpacts ?? null);
       setForecastExposure(realData.forecastExposure ?? null);
+      setForecastOutOfCountry(realData.forecastOutOfCountry ?? null);
       setPreviousForecast(realData.previousForecast ?? null);
       setForecastTimeline(realData.forecastTimeline ?? []);
       setActiveEventRecord(realData.activeEventRecord ?? null);
@@ -4190,7 +4194,10 @@ export default function DashboardView({
                 }}
               />
             ) : !isPlanningMode && activeEventRecord?.isForecast && !isLoadingData ? (
-              <ForecastRunStatusPanel event={activeEventRecord} />
+              <ForecastRunStatusPanel
+                event={activeEventRecord}
+                outOfCountry={forecastOutOfCountry}
+              />
             ) : (
               <SummaryPanel
                 notice={

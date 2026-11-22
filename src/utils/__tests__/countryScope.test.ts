@@ -98,6 +98,42 @@ describe('TC Xavier 18 Nov 12:00 as the partner API served it', () => {
     });
   });
 
+  describe('a country the run has no results for (Vanuatu)', () => {
+    const scoped = () => scopeBundleToCountry(unscoped(), 'Vanuatu');
+
+    it('shows none of the neighbours’ data in any table or map layer', () => {
+      const bundle = scoped();
+      expect(bundle.regionalSummary).toEqual([]);
+      expect(bundle.forecastNational).toEqual([]);
+      expect(bundle.forecastByWindSpeed).toEqual([]);
+      expect(bundle.forecastByTrackDistance).toEqual([]);
+      expect(bundle.regionalImpacts?.features ?? []).toHaveLength(0);
+      expect(bundle.exposureByCluster?.features ?? []).toHaveLength(0);
+    });
+
+    it('says the run had results, none for this country, and which countries it does cover', () => {
+      const bundle = scoped();
+      expect(bundle.noResultsForCountry).toBe(true);
+      expect(bundle.neighbouringCountries).toEqual(['Cook Islands', 'Samoa', 'Tonga']);
+    });
+
+    it('does the same for a misspelt name, instead of showing everyone’s data', () => {
+      const bundle = scopeBundleToCountry(unscoped(), 'Cook Isles');
+      expect(bundle.regionalSummary).toEqual([]);
+      expect(bundle.noResultsForCountry).toBe(true);
+    });
+
+    it('is not "no results" for a country the run does cover, or for a run with no rows at all', () => {
+      expect(scopeBundleToCountry(unscoped(), 'Samoa').noResultsForCountry).toBe(false);
+      expect(scopeBundleToCountry(unscoped(), 'Cook Islands').noResultsForCountry).toBe(false);
+      const empty = scopeBundleToCountry(
+        extractPartnerRiskBundle([] as Array<Record<string, unknown>>),
+        'Cook Islands'
+      );
+      expect(empty.noResultsForCountry).toBe(false);
+    });
+  });
+
   it('leaves another country’s dashboard its own rows', () => {
     const samoa = scopeBundleToCountry(unscoped(), 'Samoa');
     expect(countriesOf(samoa.regionalSummary)).toEqual(['Samoa']);
@@ -118,11 +154,11 @@ describe('scopeRows', () => {
     expect(others).toEqual(['Samoa']);
   });
 
-  it('leaves a table whole when nothing matches the name, rather than blanking it', () => {
-    const input = [{ c: 'Samoa' }, { c: 'Tonga' }];
-    const { rows, others } = scopeRows(input, 'Cook Isles', country);
-    expect(rows).toEqual(input);
-    expect(others).toEqual([]);
+  it('returns nothing, never the whole table, when no row is the dashboard’s country', () => {
+    // A spelling mismatch used to show Samoa and Tonga under the Cook Islands. Too little beats too much.
+    const { rows, others } = scopeRows([{ c: 'Samoa' }, { c: 'Tonga' }], 'Cook Isles', country);
+    expect(rows).toEqual([]);
+    expect(others).toEqual(['Samoa', 'Tonga']);
   });
 
   it('is fine with an empty table', () => {

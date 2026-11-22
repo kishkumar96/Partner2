@@ -188,6 +188,9 @@ export interface RealDataLoadResult {
   /** Rapid Exposure Forecast results, when the active event has them: what is
    * exposed to forecast winds, in place of modelled damage. */
   forecastExposure?: ForecastExposure | null;
+  /** Set when the advisory's run has results, none of them for this country: the country, and the other
+   * countries the run does name. Nothing of theirs is shown; the dashboard says so instead. */
+  forecastOutOfCountry?: { country: string; others: string[] } | null;
   /** The advisory before this one (same storm, with results), for "what changed". */
   previousForecast?: { record: EventRecord; exposure: ForecastExposure } | null;
   /** Every advisory of this storm with results, oldest first: what the trend is drawn from. */

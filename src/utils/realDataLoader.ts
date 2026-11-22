@@ -1230,6 +1230,8 @@ interface PartnerRiskBundle {
   damagedRoadsRowId: string | null;
   /** Other countries the run's tables also covered, left out of this dashboard (see countryScope) */
   neighbouringCountries?: string[];
+  /** The run had results but none for this dashboard's country (see countryScope): say so, show nothing */
+  noResultsForCountry?: boolean;
 }
 
 function createEmptyPartnerRiskBundle(): PartnerRiskBundle {
@@ -3216,6 +3218,12 @@ export async function loadAllRealData(
     cycloneForecast: (cycloneForecast as any) || null,
     advisoryReleases: partnerApiActive ? (partnerData.advisoryReleases ?? null) : null,
     forecastExposure,
+    forecastOutOfCountry: partnerData.riskData.noResultsForCountry
+      ? {
+          country: COUNTRIES[countryCode]?.name ?? countryCode,
+          others: partnerData.riskData.neighbouringCountries ?? [],
+        }
+      : null,
     previousForecast,
     forecastTimeline,
     regionalImpacts: enrichedRegionalImpacts,
