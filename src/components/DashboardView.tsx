@@ -193,6 +193,13 @@ const CountryComparisonModal = dynamic(() => import('@/components/CountryCompari
   ssr: false,
 });
 
+/**
+ * Off for now (2026-11-22). The comparison loads each country on its own default, with no shared cyclone or
+ * advisory, so its figures can describe different events side by side. Turn it back on only after it picks
+ * one event and one advisory for every country it compares. The modal and its loader stay in the code.
+ */
+const SHOW_COUNTRY_COMPARISON = false;
+
 // Which hazard each planning-scenario product belongs to, for the Hazards
 // filter in planning mode ('all' = only offered when no single hazard is picked)
 const SCENARIO_PRODUCT_HAZARD: Record<string, 'wind' | 'flood' | 'all'> = {
@@ -3495,6 +3502,7 @@ export default function DashboardView({
                       id: 'compare',
                       label: 'Compare countries',
                       icon: <Scale className="h-4 w-4" />,
+                      hidden: !SHOW_COUNTRY_COMPARISON,
                       onSelect: () => setShowCompareModal(true),
                     },
                     {
@@ -4247,7 +4255,12 @@ export default function DashboardView({
         />
       )}
 
-      <CountryComparisonModal open={showCompareModal} onClose={() => setShowCompareModal(false)} />
+      {SHOW_COUNTRY_COMPARISON && (
+        <CountryComparisonModal
+          open={showCompareModal}
+          onClose={() => setShowCompareModal(false)}
+        />
+      )}
 
       <GuidedTour
         open={isTourOpen}
