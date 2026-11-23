@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { utcStamp, type AdvisoryStatus } from '@/utils/forecastInsight';
 import { newestAdvisoryState, noNewerParts, noNewerSentence } from '@/utils/advisoryWording';
+import { defaultThresholds } from '@/utils/responsePriority';
 
 /**
  * Whether the forecast on screen is the newest, said where it cannot be missed.
@@ -50,7 +51,12 @@ export default function AdvisoryStatusBanner({
         <span className="truncate">
           {older
             ? `Not the latest · ${status.newer!.count} newer`
-            : `${quiet ? 'Last advisory' : 'No newer advisory'} · issued ${age ?? issued}`}
+            : `${quiet ? 'Latest received advisory' : 'No newer advisory'} · issued ${age ?? issued}${
+                // The same cut-off as the priority panel's default, so the header and the panel agree
+                hours != null && hours > defaultThresholds().staleAfterHours
+                  ? ' · priorities unverified'
+                  : ''
+              }`}
         </span>
         {older && onSwitchToLatest && (
           // The negative margin keeps a 44px tap target without making the row taller

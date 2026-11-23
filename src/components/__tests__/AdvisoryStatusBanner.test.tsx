@@ -131,7 +131,7 @@ describe('AdvisoryStatusBanner', () => {
     expect(onSwitch).toHaveBeenCalledTimes(1);
   });
 
-  it('the header pill says "Last advisory" once the quiet is long, and not "latest" or "check for newer"', () => {
+  it('the header pill says "Latest received advisory" once the quiet is long, and not "latest" or "check for newer"', () => {
     const quiet: AdvisoryStatus = {
       kind: 'latest-aging',
       issuedAt: '2026-10-14T12:00:00Z',
@@ -140,20 +140,33 @@ describe('AdvisoryStatusBanner', () => {
     };
     const { unmount } = render(<AdvisoryStatusBanner variant="pill" status={quiet} />);
     expect(screen.getByTestId('advisory-banner')).toHaveTextContent(
-      'Last advisory · issued 5 days ago'
+      'Latest received advisory · issued 5 days ago · priorities unverified'
     );
     expect(screen.getByTestId('advisory-banner').getAttribute('title')).toMatch(/may be over/);
     unmount();
 
-    render(
+    const { unmount: unmount2 } = render(
       <AdvisoryStatusBanner
         variant="pill"
         status={{ ...quiet, age: { hours: 30, label: '1 day ago', stale: true } }}
       />
     );
     expect(screen.getByTestId('advisory-banner')).toHaveTextContent(
-      'No newer advisory · issued 1 day ago'
+      'No newer advisory · issued 1 day ago · priorities unverified'
     );
+    unmount2();
+
+    const { unmount: unmount3 } = render(
+      <AdvisoryStatusBanner
+        variant="pill"
+        status={{ ...quiet, age: { hours: 14, label: '14 hours ago', stale: true } }}
+      />
+    );
+    expect(screen.getByTestId('advisory-banner')).toHaveTextContent(
+      'No newer advisory · issued 14 hours ago'
+    );
+    expect(screen.getByTestId('advisory-banner')).not.toHaveTextContent(/unverified/);
     expect(screen.getByTestId('advisory-banner')).not.toHaveTextContent(/check for newer/i);
+    unmount3();
   });
 });
