@@ -53,6 +53,17 @@ const LEVEL_STYLE: Record<PriorityLevel, { bg: string; fg: string }> = {
   grey: { bg: PRIORITY_COLORS.grey, fg: '#ffffff' },
 };
 
+/**
+ * An advisory too old to act on: the dashboard greys its levels out, and so does the brief. The level is still named
+ * (it is what the rules say, kept for reference) but a bright AMBER or GREEN badge on a four-day-old advisory reads as
+ * a live alert, especially on paper, where nothing else on the page changes colour.
+ */
+const UNVERIFIED_BADGE = {
+  background: '#f1f5f9',
+  color: '#475569',
+  border: '0.3mm dashed #94a3b8',
+} as const;
+
 const LEVEL_WORD: Record<PriorityLevel, string> = {
   red: 'RED',
   amber: 'AMBER',
@@ -387,11 +398,15 @@ const REFPDFTemplate = forwardRef<HTMLDivElement, REFPDFTemplateProps>(
               </div>
               {brief.priorities.unverified && (
                 <div
+                  data-testid="ref-brief-unverified"
                   style={{
                     fontSize: '7pt',
                     fontWeight: 700,
                     color: '#78350f',
-                    marginBottom: '0.8mm',
+                    background: '#fffbeb',
+                    border: `0.3mm solid ${AMBER}`,
+                    padding: '0.8mm 2mm',
+                    margin: '0.8mm 0',
                   }}
                 >
                   {brief.priorities.unverified}
@@ -409,14 +424,21 @@ const REFPDFTemplate = forwardRef<HTMLDivElement, REFPDFTemplateProps>(
                   }}
                 >
                   <span
+                    data-testid="ref-brief-level"
+                    data-unverified={brief.priorities.unverified ? 'true' : undefined}
                     style={{
                       minWidth: '13mm',
                       textAlign: 'center',
                       fontWeight: 800,
                       fontSize: '7pt',
                       padding: '0.3mm 1mm',
-                      background: LEVEL_STYLE[row.level].bg,
-                      color: LEVEL_STYLE[row.level].fg,
+                      whiteSpace: 'nowrap',
+                      ...(brief.priorities.unverified
+                        ? UNVERIFIED_BADGE
+                        : {
+                            background: LEVEL_STYLE[row.level].bg,
+                            color: LEVEL_STYLE[row.level].fg,
+                          }),
                     }}
                   >
                     {LEVEL_WORD[row.level]}
