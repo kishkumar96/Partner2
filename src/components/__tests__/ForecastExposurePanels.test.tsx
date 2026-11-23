@@ -113,12 +113,33 @@ describe('Forecast run (track issue time) selector', () => {
     },
   ];
 
+  it('says "Last received", not "Latest", once the newest advisory has been quiet for days', () => {
+    render(
+      <ForecastRunSelector
+        runs={runs}
+        activeRunId="131"
+        onSelect={jest.fn()}
+        now={Date.parse('2026-10-23T00:00:00Z')}
+      />
+    );
+    expect(screen.getByTestId('forecast-run-selector')).toHaveTextContent('Last received');
+    expect(screen.getByTestId('forecast-run-selector')).not.toHaveTextContent('Latest');
+  });
+
   it('lists each issue time, marks the active and latest runs, and reports a pick', () => {
     const onSelect = jest.fn();
-    render(<ForecastRunSelector runs={runs} activeRunId="131" onSelect={onSelect} />);
+    render(
+      <ForecastRunSelector
+        runs={runs}
+        activeRunId="131"
+        onSelect={onSelect}
+        now={Date.parse('2026-10-18T00:00:00Z')}
+      />
+    );
     const selector = screen.getByTestId('forecast-run-selector');
     expect(selector).toHaveTextContent('2026-10-17 18:00 UTC');
     expect(selector).toHaveTextContent('Latest');
+    expect(selector).not.toHaveTextContent('Last received');
     const buttons = screen.getAllByRole('button', { pressed: true });
     expect(buttons).toHaveLength(1);
     expect(buttons[0]).toHaveTextContent('18:00');

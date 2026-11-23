@@ -39,7 +39,13 @@ describe('EventPicker', () => {
     expect(storms).toHaveTextContent('Wati');
     expect(storms).toHaveTextContent('2 advisories');
     expect(within(storms).getAllByRole('button')).toHaveLength(2);
-    expect(within(storms).getByRole('button', { current: true })).toHaveTextContent('Latest');
+    // The group's clock is 2 Nov, two weeks after the newest advisory: the storm is past, so the picker says
+    // "Last received" beside it, never "Latest" next to "past"
+    expect(storms).toHaveTextContent('past');
+    expect(within(storms).getByRole('button', { current: true })).toHaveTextContent(
+      'Last received'
+    );
+    expect(within(storms).queryByText('Latest')).toBeNull();
     const events = within(dialog).getByRole('region', { name: 'Observed events' });
     expect(events).toHaveTextContent('Cyclone Meena');
     expect(events).toHaveTextContent('1 Feb 2005');

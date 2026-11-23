@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, SkipForward } from 'lucide-react';
+import { newestBadgeLabel } from '@/utils/advisoryWording';
+import { advisoryAge } from '@/utils/forecastBriefing';
 import type { ReleaseStep } from '@/utils/advisoryReleases';
 
 /** How long the slider rests before the dashboard switches advisory, so a drag across several
@@ -94,7 +96,9 @@ export default function ReleaseScrubber({
         <span className="font-semibold">{shown.label}</span>
         <span className="ml-1 text-slate-400">
           {shownIndex + 1}/{steps.length}
-          {shown.isLatest ? ' · latest' : ''}
+          {shown.isLatest
+            ? ` · ${newestBadgeLabel(advisoryAge(shown.issuedAt)?.hours).toLowerCase()}`
+            : ''}
           {pending ? ' …' : ''}
         </span>
       </span>

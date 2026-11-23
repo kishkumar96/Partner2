@@ -10,7 +10,7 @@ import {
 export const FORECAST_SIGNAL = 'Planning signal — exposure, not a damage estimate';
 
 /** REF advisories are issued about every six hours; beyond this one may be superseded. */
-const STALE_AFTER_HOURS = 12;
+export const STALE_AFTER_HOURS = 12;
 
 export interface AdvisoryAge {
   hours: number;

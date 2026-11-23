@@ -194,7 +194,7 @@ export default function EventPicker({
                           <span>Issued {utcStamp(run.issuedAt)}</span>
                           {run.isLatest && (
                             <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
-                              Latest
+                              {group.active ? 'Latest' : 'Last received'}
                             </span>
                           )}
                           {run.status && run.status !== 'complete' && (
