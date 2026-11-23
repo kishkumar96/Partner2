@@ -84,7 +84,7 @@ export default function ForecastSetupPanel({
               <Layers className="w-3.5 h-3.5 text-sky-300 flex-shrink-0" aria-hidden="true" />
               Forecast layers
               <span className="ml-auto text-[10px] font-normal text-slate-400">
-                track, wind swaths, distance
+                choose what is drawn
               </span>
             </button>
           </div>
