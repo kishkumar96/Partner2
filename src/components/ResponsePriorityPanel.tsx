@@ -25,8 +25,16 @@ function Row({ result }: { result: PriorityResult }) {
     <li className="rounded border border-slate-700/50 bg-slate-900/50 p-2">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-slate-100">{result.name}</span>
-        <span className="tabular-nums text-slate-300">{formatNumber(m.people)} people</span>
+        <span className="tabular-nums text-slate-300">
+          {formatNumber(m.people)} in forecast wind zones
+        </span>
       </div>
+      {m.peopleInTrackUncertainty > 0 && (
+        <p className="text-xs text-slate-300">
+          {formatNumber(m.peopleInTrackUncertainty)} in the track-uncertainty area (where the storm
+          could pass, not forecast winds)
+        </p>
+      )}
       <p className="text-xs text-slate-400">
         {formatNumber(m.healthFacilities)} health · {formatNumber(m.evacuationCentres)} evacuation
         centres · {formatNumber(m.peopleInFloodplains)} in floodplains
@@ -70,6 +78,26 @@ export default function ResponsePriorityPanel({
       .map(result => result.name)
       .join(', ') + (amber.length > 3 ? ` and ${amber.length - 3} more` : '');
 
+  const levelChips = (
+    <div className="flex flex-wrap gap-1.5" aria-label="Areas by priority">
+      {(['red', 'amber', 'green'] as const).map(level => {
+        const style = PRIORITY_STYLE[level];
+        const count = priority.results.filter(r => r.underlyingLevel === level).length;
+        return (
+          <span
+            key={level}
+            className={`inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold ${style.text}`}
+            data-testid={`priority-count-${level}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden="true" />
+            {style.label} {count}
+            <span className="font-normal text-slate-400">· {style.meaning}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+
   return (
     <section
       className="space-y-2 rounded-lg border border-slate-600/60 bg-slate-800/60 p-3"
@@ -111,32 +139,25 @@ export default function ResponsePriorityPanel({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-1.5" aria-label="Areas by priority">
-        {(['red', 'amber', 'green'] as const).map(level => {
-          const style = PRIORITY_STYLE[level];
-          const count = priority.results.filter(r => r.underlyingLevel === level).length;
-          return (
-            <span
-              key={level}
-              className={`inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold ${style.text}`}
-              data-testid={`priority-count-${level}`}
-            >
-              <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden="true" />
-              {style.label} {count}
-              <span className="font-normal text-slate-400">· {style.meaning}</span>
-            </span>
-          );
-        })}
-        {stale && (
-          <span
-            className="inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold text-slate-300"
-            data-testid="priority-count-grey"
-          >
-            <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
-            GREY {priority.counts.grey} · Unverified
-          </span>
-        )}
-      </div>
+      {stale && (
+        <p
+          className="inline-flex items-center gap-1 rounded-full border border-slate-600/60 px-2 py-0.5 text-xs font-semibold text-slate-300"
+          data-testid="priority-count-grey"
+        >
+          <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
+          GREY {priority.counts.grey} · Unverified
+        </p>
+      )}
+      {stale ? (
+        <details className="text-xs text-slate-300" data-testid="priority-rules-reading">
+          <summary className="cursor-pointer text-sky-300">
+            What the rules read (for reference, not current)
+          </summary>
+          <div className="mt-1">{levelChips}</div>
+        </details>
+      ) : (
+        levelChips
+      )}
 
       {red.length > 0 && (
         <div>

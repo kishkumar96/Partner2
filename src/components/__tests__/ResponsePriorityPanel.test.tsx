@@ -91,6 +91,34 @@ describe('ResponsePriorityPanel', () => {
     expect(screen.queryByTestId('priority-stale')).not.toBeInTheDocument();
   });
 
+  it('leads with one Unverified count for a stale advisory and tucks the rules’ reading away', () => {
+    renderPanel(make(72).priority);
+    const reading = screen.getByTestId('priority-rules-reading');
+    expect(reading).toHaveTextContent(/what the rules read/i);
+    expect(within(reading).getByTestId('priority-count-red')).toBeInTheDocument();
+    expect(within(reading).queryByTestId('priority-count-grey')).not.toBeInTheDocument();
+    expect(screen.getByTestId('priority-count-grey')).toBeInTheDocument();
+  });
+
+  it('keeps the rule counts at the top, with no tucked-away block, for a fresh advisory', () => {
+    renderPanel(make(2).priority);
+    expect(screen.queryByTestId('priority-rules-reading')).not.toBeInTheDocument();
+  });
+
+  it('labels people in wind zones apart from people in the track-uncertainty area', () => {
+    const uncertain = { ...area('Track Uncertainty', {}), populationInTrackUncertainty: 24687 };
+    const results = prioritise(
+      [{ name: 'Vaimauga West', area: uncertain }],
+      defaultThresholds(),
+      2
+    );
+    const priority = { ...make(2).priority, results, counts: countByLevel(results) };
+    renderPanel(priority);
+    const text = screen.getByTestId('response-priority').textContent ?? '';
+    expect(text).toContain('0 in forecast wind zones');
+    expect(text).toContain('24.69K in the track-uncertainty area');
+  });
+
   it('shows grey and a warning for a stale advisory, keeping the rules’ reading', () => {
     renderPanel(make(72).priority);
     expect(screen.getByTestId('priority-stale')).toHaveTextContent(/older than 24 h/i);

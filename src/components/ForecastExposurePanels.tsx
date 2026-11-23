@@ -583,9 +583,17 @@ function OperationalPriorities({ exposure }: { exposure: ForecastExposure }) {
           {formatQuantity(p.roadKm)} km of road under forecast winds
         </li>
       </ul>
-      {p.topAreas.length > 0 && (
+      {p.topAreas.length > 0 && p.topAreas.every(area => area.people === 0) && (
+        <p className="mt-1 text-xs text-slate-300" data-testid="no-wind-exposure">
+          No people are inside forecast wind zones in this run. Areas the track could still reach
+          are listed under track uncertainty.
+        </p>
+      )}
+      {p.topAreas.some(area => area.people > 0) && (
         <div>
-          <p className="mt-1 text-xs font-medium text-slate-400">Most people exposed</p>
+          <p className="mt-1 text-xs font-medium text-slate-400">
+            Most people in forecast wind zones
+          </p>
           <ol className="mt-1 space-y-0.5 text-xs text-slate-300">
             {p.topAreas.map(area => (
               <li key={area.name} className="flex justify-between gap-2">
