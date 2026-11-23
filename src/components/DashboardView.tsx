@@ -62,6 +62,7 @@ import {
 } from '@/components/ForecastExposurePanels';
 import ForecastLayers from '@/components/ForecastLayers';
 import { featuresForRegion, forecastFocusCollection } from '@/utils/forecastExposure';
+import { advisoryPin, findPinnedAdvisory } from '@/utils/advisoryLink';
 import { filtersShownFor } from '@/utils/forecastFilters';
 import type { ForecastExposure } from '@/utils/forecastExposure';
 import type { RealDataLoadResult } from '@/types/realData';
@@ -243,6 +244,7 @@ export default function DashboardView({
 
   // Restore URL state synchronously to prevent flash of unfiltered data
   const urlState = deserializeMapState(searchParams);
+  const pendingAdvisoryRef = useRef<string | undefined>(urlState.advisory);
   const normalizedUrlHazards = normalizeHazardIds(urlState.hazards || []);
 
   const [filters, setFilters] = useState<FilterState>({
@@ -703,6 +705,8 @@ export default function DashboardView({
           hazards: filters.selectedHazards,
           sectors: filters.selectedSectors,
           events: effectiveEventIds,
+          // The newest advisory has no id of its own that stays put, so name its run as well
+          advisory: pendingAdvisoryRef.current ?? advisoryPin(activeEventRecord),
           dateStart: filters.dateRange.start || undefined,
           dateEnd: filters.dateRange.end || undefined,
           aggregation:
@@ -726,10 +730,15 @@ export default function DashboardView({
 
         const params = serializeMapState(fullState);
         const newUrl = `${pathname}?${params.toString()}`;
+        const newSearch = `?${params.toString()}`;
         const currentUrl = `${window.location.pathname}${window.location.search}`;
 
         // Skip redundant replaces; these can trigger unnecessary route work and log spam.
-        if (newUrl === currentUrl || newUrl === lastReplacedUrlRef.current) {
+        if (
+          newUrl === currentUrl ||
+          newSearch === window.location.search ||
+          newUrl === lastReplacedUrlRef.current
+        ) {
           return;
         }
 
@@ -751,8 +760,10 @@ export default function DashboardView({
           userNavigatedRef.current = false;
           router.push(newUrl, { scroll: false });
         } else {
-          // Map moves, panels and defaults: no history entry for those
-          router.replace(newUrl, { scroll: false });
+          // Map moves, panels and defaults: no history entry for those. The browser's own replaceState,
+          // not router.replace: that one is a navigation, so every settled pan or zoom asked the server
+          // for the page again. A query-only address keeps the path as it is, base path included.
+          window.history.replaceState(window.history.state, '', newSearch);
         }
       }, 300);
     },
@@ -761,6 +772,7 @@ export default function DashboardView({
       selectedRegion,
       filters,
       effectiveEventIds,
+      activeEventRecord,
       mapStyle,
       basemapStyle,
       currentCycloneIndex,
@@ -1636,6 +1648,31 @@ export default function DashboardView({
       ),
     [countryEventRecords, selectedCountry]
   );
+  // A link made with `advisory=<run id>` opens that advisory even when newer ones have arrived since, so a
+  // situation report or a printed brief's QR code keeps showing the forecast it was made with (the newest
+  // advisory's own id moves on). It waits until the advisories are known; if that run is gone, say so.
+  useEffect(() => {
+    const pin = pendingAdvisoryRef.current;
+    if (!pin || !countryEventRecords.some(record => record.isForecast && record.forecastRunId)) {
+      return;
+    }
+    pendingAdvisoryRef.current = undefined;
+    const target = findPinnedAdvisory(countryEventRecords, pin);
+    if (!target) {
+      setToastMessage(
+        'The advisory in this link is no longer available, so the latest is shown instead.'
+      );
+      setToastType('warning');
+      setToastAction(undefined);
+      setShowToast(true);
+      return;
+    }
+    // The default view already shows the newest advisory
+    if (target.id === forecastRecord?.id) return;
+    setModeEventId(target.id);
+    setFilters(prev => ({ ...prev, selectedEvents: [] }));
+  }, [countryEventRecords, forecastRecord]);
+
   const forecastRuns = useMemo(
     () => listForecastRuns(countryEventRecords, selectedCountry),
     [countryEventRecords, selectedCountry]
