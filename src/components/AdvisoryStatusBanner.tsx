@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { utcStamp, type AdvisoryStatus } from '@/utils/forecastInsight';
+import { newestAdvisoryState, noNewerParts, noNewerSentence } from '@/utils/advisoryWording';
 
 /**
  * Whether the forecast on screen is the newest, said where it cannot be missed.
@@ -22,6 +23,8 @@ export default function AdvisoryStatusBanner({
 }) {
   const issued = status.issuedAt ? utcStamp(status.issuedAt) : null;
   const age = status.age?.label;
+  const hours = status.age?.hours;
+  const quiet = newestAdvisoryState(hours) === 'quiet';
 
   if (variant === 'pill' && (status.kind === 'older' || status.kind === 'latest-aging')) {
     // Amber, in the header's one row, beside the advisory it is about: no row of its own
@@ -35,7 +38,7 @@ export default function AdvisoryStatusBanner({
         title={
           older
             ? `Not the latest forecast: ${status.newer!.count} newer, latest ${utcStamp(status.newer!.issuedAt)}`
-            : `Latest advisory, but issued ${issued}${age ? ` (${age})` : ''}. Check for a newer forecast before acting on it.`
+            : noNewerSentence(hours, issued, age)
         }
         className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold leading-snug text-amber-100"
       >
@@ -47,7 +50,7 @@ export default function AdvisoryStatusBanner({
         <span className="truncate">
           {older
             ? `Not the latest · ${status.newer!.count} newer`
-            : `Issued ${age ?? issued} · check for newer`}
+            : `${quiet ? 'Last advisory' : 'No newer advisory'} · issued ${age ?? issued}`}
         </span>
         {older && onSwitchToLatest && (
           // The negative margin keeps a 44px tap target without making the row taller
@@ -143,8 +146,8 @@ export default function AdvisoryStatusBanner({
         >
           <Clock className="h-4 w-4 flex-shrink-0 text-amber-300" aria-hidden="true" />
           <p className="min-w-0">
-            <span className="font-semibold">Latest advisory, but issued {issued}</span>
-            {age ? ` (${age})` : ''}. Check for a newer forecast before acting on it.
+            <span className="font-semibold">{noNewerParts(hours, issued, age).headline}.</span>{' '}
+            {noNewerParts(hours, issued, age).detail}
           </p>
         </div>
       );
@@ -158,10 +161,7 @@ export default function AdvisoryStatusBanner({
       >
         <p className="flex items-start gap-2">
           <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" aria-hidden="true" />
-          <span>
-            Latest advisory we have, but it was issued {issued}
-            {age ? ` (${age})` : ''}. Check for a newer forecast before acting on it.
-          </span>
+          <span>{noNewerSentence(hours, issued, age)}</span>
         </p>
       </div>
     );

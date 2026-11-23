@@ -72,7 +72,12 @@ describe('AdvisoryStatusBanner', () => {
 
     const banner = screen.getByTestId('advisory-banner');
     expect(banner).toHaveAttribute('data-state', 'aging');
-    expect(banner).toHaveTextContent('Check for a newer forecast before acting on it');
+    // What the dashboard knows, not an errand for the reader
+    expect(banner).toHaveTextContent('No newer advisory received since 18 Oct 12:00 UTC');
+    expect(banner).toHaveTextContent('Confirm with the issuing agency before acting');
+    expect(banner).not.toHaveTextContent(/check for (a )?newer/i);
+    // Two days quiet is overdue, not yet "the storm may be over"
+    expect(banner).not.toHaveTextContent('may be over');
   });
 
   it('is a quiet line when this is the latest, recent advisory', () => {
@@ -102,8 +107,11 @@ describe('AdvisoryStatusBanner', () => {
     const banner = screen.getByTestId('advisory-banner');
     expect(banner).toHaveAttribute('data-variant', 'bar');
     expect(banner).toHaveAttribute('data-state', 'aging');
-    expect(banner).toHaveTextContent('Latest advisory, but issued 19 Oct 12:00 UTC (14 days ago)');
-    expect(banner).toHaveTextContent('Check for a newer forecast before acting on it');
+    expect(banner).toHaveTextContent(
+      'No newer advisory received since 19 Oct 12:00 UTC (14 days ago)'
+    );
+    expect(banner).toHaveTextContent('The storm may be over');
+    expect(banner).toHaveTextContent('Confirm with the issuing agency before acting');
   });
 
   it('fits beside the event picker as a pill, with a way to the latest', () => {
@@ -121,5 +129,31 @@ describe('AdvisoryStatusBanner', () => {
     expect(pill).toHaveAttribute('title', expect.stringContaining('latest 19 Oct 12:00 UTC'));
     fireEvent.click(screen.getByRole('button', { name: 'Switch to latest' }));
     expect(onSwitch).toHaveBeenCalledTimes(1);
+  });
+
+  it('the header pill says "Last advisory" once the quiet is long, and not "latest" or "check for newer"', () => {
+    const quiet: AdvisoryStatus = {
+      kind: 'latest-aging',
+      issuedAt: '2026-10-14T12:00:00Z',
+      age: { hours: 120, label: '5 days ago', stale: true },
+      newer: null,
+    };
+    const { unmount } = render(<AdvisoryStatusBanner variant="pill" status={quiet} />);
+    expect(screen.getByTestId('advisory-banner')).toHaveTextContent(
+      'Last advisory · issued 5 days ago'
+    );
+    expect(screen.getByTestId('advisory-banner').getAttribute('title')).toMatch(/may be over/);
+    unmount();
+
+    render(
+      <AdvisoryStatusBanner
+        variant="pill"
+        status={{ ...quiet, age: { hours: 30, label: '1 day ago', stale: true } }}
+      />
+    );
+    expect(screen.getByTestId('advisory-banner')).toHaveTextContent(
+      'No newer advisory · issued 1 day ago'
+    );
+    expect(screen.getByTestId('advisory-banner')).not.toHaveTextContent(/check for newer/i);
   });
 });

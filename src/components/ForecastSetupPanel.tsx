@@ -54,6 +54,11 @@ export default function ForecastSetupPanel({
                   Each advisory is a separate model run. Choosing one changes every figure and the
                   map.
                 </p>
+                <p className="text-[10px] text-slate-400" data-testid="advisory-list-scope">
+                  An advisory is listed here only when the model found results for this country, so
+                  a country the storm has not reached yet, or has passed, lists fewer advisories
+                  than a neighbour. A gap is not a missing forecast.
+                </p>
                 <ForecastRunSelector
                   runs={runs}
                   activeRunId={activeRunId}

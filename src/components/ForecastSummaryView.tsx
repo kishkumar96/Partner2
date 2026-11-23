@@ -9,6 +9,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import { noNewerParts } from '@/utils/advisoryWording';
 import AdvisoryStatusBanner from './AdvisoryStatusBanner';
 import ForecastTrendChart from './ForecastTrendChart';
 import { windAreaLabel } from '@/utils/windScale';
@@ -145,11 +146,21 @@ export default function ForecastSummaryView({
             data-testid="summary-advisory-age"
             className="mt-1 text-sm font-semibold leading-snug text-amber-200"
           >
-            {insight.status.kind === 'older'
-              ? 'Not the latest advisory'
-              : 'Latest advisory we have'}
-            {insight.status.issuedAt ? `, issued ${utcStamp(insight.status.issuedAt)}` : ''}
-            {insight.status.age?.label ? ` (${insight.status.age.label})` : ''}.
+            {insight.status.kind === 'older' ? (
+              <>
+                Not the latest advisory
+                {insight.status.issuedAt ? `, issued ${utcStamp(insight.status.issuedAt)}` : ''}
+                {insight.status.age?.label ? ` (${insight.status.age.label})` : ''}.
+              </>
+            ) : (
+              `${
+                noNewerParts(
+                  insight.status.age?.hours,
+                  insight.status.issuedAt ? utcStamp(insight.status.issuedAt) : null,
+                  insight.status.age?.label
+                ).headline
+              }.`
+            )}
           </p>
         )}
         <p data-testid="summary-detail" className="mt-2 text-sm leading-relaxed text-slate-300">

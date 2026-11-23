@@ -30,6 +30,17 @@ describe('MapPanel forecast advisory section', () => {
     expect(onForecastRunSelect).toHaveBeenCalledWith('14');
   });
 
+  it('says why a country can list fewer advisories than its neighbour, so a gap is not read as missing', () => {
+    render(
+      <MapPanel forecastRuns={runs} activeForecastRunId="15" onForecastRunSelect={jest.fn()} />
+    );
+    const note = screen.getByTestId('advisory-list-scope');
+    expect(note).toHaveTextContent(
+      'listed here only when the model found results for this country'
+    );
+    expect(note).toHaveTextContent('A gap is not a missing forecast');
+  });
+
   it('summarises the active advisory when collapsed', () => {
     render(
       <MapPanel forecastRuns={runs} activeForecastRunId="14" onForecastRunSelect={jest.fn()} />

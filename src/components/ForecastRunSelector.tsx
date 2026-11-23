@@ -1,5 +1,7 @@
 'use client';
 
+import { newestBadgeLabel } from '@/utils/advisoryWording';
+import { advisoryAge } from '@/utils/forecastBriefing';
 import { useState } from 'react';
 import {
   NO_STORM_FILTER,
@@ -297,7 +299,11 @@ export default function ForecastRunSelector({
                 }`}
               >
                 <span className="font-medium">{formatIssued(run.issuedAt)}</span>
-                {run.isLatest && <span className="ml-2 text-sky-300">Latest</span>}
+                {run.isLatest && (
+                  <span className="ml-2 text-sky-300">
+                    {newestBadgeLabel(advisoryAge(run.issuedAt, now)?.hours)}
+                  </span>
+                )}
                 {run.status && run.status !== 'complete' && (
                   <span className="ml-2 text-amber-300">{run.status}</span>
                 )}

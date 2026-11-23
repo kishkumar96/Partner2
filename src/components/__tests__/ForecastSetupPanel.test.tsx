@@ -34,6 +34,13 @@ describe('ForecastSetupPanel', () => {
     expect(onRunSelect).toHaveBeenCalledWith(runs[1].id);
   });
 
+  it('says an advisory is listed only when the model found results for the country', () => {
+    render(<ForecastSetupPanel runs={runs} activeRunId={runs[0].id} onRunSelect={jest.fn()} />);
+    expect(screen.getByTestId('advisory-list-scope')).toHaveTextContent(
+      'A gap is not a missing forecast'
+    );
+  });
+
   it('shows none of the observed-event filters, which a forecast ignores', () => {
     render(<ForecastSetupPanel runs={runs} activeRunId={runs[0].id} onRunSelect={jest.fn()} />);
 
