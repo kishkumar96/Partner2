@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react';
 import REFPDFTemplate from '../REFPDFTemplate';
 import { buildForecastBrief } from '@/utils/forecastBrief';
 import { exposureFixture } from '@/utils/testing/forecastFixtures';
+import { defaultThresholds, prioritise } from '@/utils/responsePriority';
+import { PRIORITY_COLORS } from '@/utils/forecastColors';
 
 const brief = (over: Record<string, unknown> = {}) =>
   buildForecastBrief({
@@ -102,5 +104,72 @@ describe('forecast brief area table', () => {
     expect(brief().areaTable.rows.find(row => row[0] === 'Nassau')![1]).toBe(
       'Core (radius of max. winds)'
     );
+  });
+});
+
+describe('forecast brief priorities for an old advisory', () => {
+  const exposure = exposureFixture({
+    regions: [
+      { name: 'Pukapuka', winds: 'Possible Storm Winds', people: 463 },
+      { name: 'Nassau', winds: 'Radius of Maximum Winds', people: 70, maxWindKmph: 120 },
+      { name: 'Atiu', winds: '', people: 0 },
+    ],
+  });
+  const withAge = (ageHours: number) => {
+    const results = prioritise(
+      exposure.regions.map(a => ({ name: a.name, area: a })),
+      defaultThresholds(),
+      ageHours
+    );
+    const counts = { red: 0, amber: 0, green: 0, grey: 0 };
+    results.forEach(r => (counts[r.level] += 1));
+    return buildForecastBrief({
+      exposure,
+      countryName: 'Cook Islands',
+      eventName: 'Tropical Cyclone Xavier',
+      issuedAt: '2026-11-18T12:00:00Z',
+      layerSummary: 'Track',
+      areaLabel: 'islands',
+      regionLabel: 'islands',
+      generatedAt: new Date('2026-11-22T22:58:00Z'),
+      priority: { results, counts, isCustom: false, staleAfterHours: 24, ageHours },
+    } as never);
+  };
+  const badges = () => screen.getAllByTestId('ref-brief-level');
+  const rgb = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`;
+  };
+
+  it('draws the levels of a fresh advisory in their alert colours', () => {
+    render(<REFPDFTemplate brief={withAge(2)} activeLayers={['track']} />);
+    expect(badges().length).toBeGreaterThan(0);
+    const colours = badges().map(b => b.style.background || b.style.backgroundColor);
+    expect(colours).toEqual(
+      expect.arrayContaining([rgb(PRIORITY_COLORS.amber), rgb(PRIORITY_COLORS.green)])
+    );
+    expect(badges().every(b => !b.hasAttribute('data-unverified'))).toBe(true);
+    expect(screen.queryByTestId('ref-brief-unverified')).toBeNull();
+  });
+
+  it('greys them out, dashed and without an alert colour, once the advisory is too old to act on', () => {
+    render(<REFPDFTemplate brief={withAge(100)} activeLayers={['track']} />);
+    const alertColours = [PRIORITY_COLORS.red, PRIORITY_COLORS.amber, PRIORITY_COLORS.green].map(
+      rgb
+    );
+    for (const badge of badges()) {
+      expect(alertColours).not.toContain(badge.style.backgroundColor);
+      expect(badge.style.border).toMatch(/dashed/);
+      expect(badge.getAttribute('data-unverified')).toBe('true');
+      expect(badge.style.whiteSpace).toBe('nowrap');
+    }
+  });
+
+  it('still names each level, since the rules’ reading is kept for reference, and says why in a box', () => {
+    render(<REFPDFTemplate brief={withAge(100)} activeLayers={['track']} />);
+    expect(badges().map(b => b.textContent)).toEqual(['AMBER', 'GREEN']);
+    const note = screen.getByTestId('ref-brief-unverified');
+    expect(note).toHaveTextContent(/too old to act on/i);
+    expect(note.style.border).toMatch(/solid/);
   });
 });
