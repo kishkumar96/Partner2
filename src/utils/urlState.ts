@@ -10,6 +10,7 @@
 
 import { BASEMAP_STYLES } from '@/utils/basemaps';
 import { SHARED_MOBILE_PANELS, type SharedMobilePanel } from '@/utils/mobilePanel';
+import { parseAdvisoryPin } from '@/utils/advisoryLink';
 
 /**
  * Map state that can be persisted in URL
@@ -26,6 +27,11 @@ export interface MapURLState {
   hazards?: string[];
   sectors?: string[];
   events?: string[];
+  /**
+   * The run (advisory) on screen, by the id of its model run. `events` can only say "the newest" for the
+   * newest advisory, so a link that must keep showing one forecast needs this as well (see advisoryLink).
+   */
+  advisory?: string;
   dateStart?: string;
   dateEnd?: string;
   aggregation?: 'district' | 'province';
@@ -87,6 +93,7 @@ export function serializeMapState(state: MapURLState): URLSearchParams {
   if (state.hazards?.length) params.set('hazards', state.hazards.join(','));
   if (state.sectors?.length) params.set('sectors', state.sectors.join(','));
   if (state.events?.length) params.set('events', state.events.join(','));
+  if (state.advisory) params.set('advisory', state.advisory);
   if (state.dateStart) params.set('dateStart', state.dateStart);
   if (state.dateEnd) params.set('dateEnd', state.dateEnd);
   if (state.aggregation && state.aggregation !== 'district') params.set('agg', state.aggregation);
@@ -150,6 +157,9 @@ export function deserializeMapState(params: URLSearchParams): Partial<MapURLStat
 
   const events = params.get('events');
   if (events) state.events = events.split(',').filter(Boolean);
+
+  const advisory = parseAdvisoryPin(params.get('advisory'));
+  if (advisory) state.advisory = advisory;
 
   const dateStart = params.get('dateStart');
   if (dateStart) state.dateStart = dateStart;
