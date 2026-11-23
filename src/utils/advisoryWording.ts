@@ -1,5 +1,8 @@
 import { STALE_AFTER_HOURS } from '@/utils/forecastBriefing';
 import { STORM_ACTIVE_WITHIN_HOURS } from '@/utils/forecastRuns';
+import type { AdvisoryStatus } from '@/utils/forecastInsight';
+import { utcStamp } from '@/utils/forecastInsight';
+import { defaultThresholds } from '@/utils/responsePriority';
 
 /**
  * What to call the newest advisory of a storm, from how old it is: one rule, so the storm picker, the
@@ -57,4 +60,31 @@ export function noNewerSentence(
 ): string {
   const { headline, detail } = noNewerParts(hours, issued, age);
   return `${headline}. ${detail}`;
+}
+
+/**
+ * One line for the map saying which advisory is drawn and whether to rely on its priorities, so a screenshot
+ * of the map alone cannot pass an old advisory off as current. Null when there is no status to report.
+ */
+export function mapStatusLine(status: AdvisoryStatus | null | undefined): string | null {
+  if (!status || !status.issuedAt) return null;
+  const issued = utcStamp(status.issuedAt);
+  const age = status.age?.label;
+  const when = `issued ${issued}${age ? ` (${age})` : ''}`;
+  if (status.kind === 'older') {
+    const newer = status.newer ? `, ${status.newer.count} newer` : '';
+    return `Older advisory · ${when}${newer}`;
+  }
+  const unverified =
+    status.age !== null && status.age.hours > defaultThresholds().staleAfterHours
+      ? ' · priorities unverified'
+      : '';
+  if (status.kind === 'latest-aging') {
+    const label =
+      newestAdvisoryState(status.age?.hours) === 'quiet'
+        ? 'Latest received advisory'
+        : 'No newer advisory';
+    return `${label} · ${when}${unverified}`;
+  }
+  return `Advisory ${when}`;
 }

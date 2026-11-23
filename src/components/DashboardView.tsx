@@ -30,6 +30,7 @@ import GuidedTour, { type GuidedTourStep } from '@/components/GuidedTour';
 import TopInsightsCards from '@/components/TopInsightsCards';
 import ViewStatusLine from '@/components/ViewStatusLine';
 import AdvisoryStatusBanner from '@/components/AdvisoryStatusBanner';
+import { mapStatusLine } from '@/utils/advisoryWording';
 import { buildAdvisoryStatus, utcStamp } from '@/utils/forecastInsight';
 import { MULTI_HAZARD_ID } from '@/utils/hazardLossScope';
 import { resolveHazard } from '@/data/vanuatuHazards';
@@ -4019,6 +4020,7 @@ export default function DashboardView({
               <ForecastLayers
                 map={mapInstance}
                 controls={forecastLayerControls}
+                status={mapStatusLine(advisoryStatus)}
                 onSelectAdvisory={setModeEventId}
                 // The animation draws the same track; two copies would only thicken the line
                 hiddenOverlays={

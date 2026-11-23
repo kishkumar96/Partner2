@@ -4,6 +4,8 @@ import {
   noNewerParts,
   noNewerSentence,
 } from '../advisoryWording';
+import type { AdvisoryStatus } from '../forecastInsight';
+import { mapStatusLine } from '../advisoryWording';
 import { STORM_ACTIVE_WITHIN_HOURS, groupForecastRuns } from '../forecastRuns';
 import { STALE_AFTER_HOURS } from '../forecastBriefing';
 
@@ -74,4 +76,42 @@ describe('the storm picker, the badge and the wording cannot disagree', () => {
       expect(past).toBe(newestAdvisoryState(hours) === 'quiet');
     }
   );
+});
+
+describe('mapStatusLine', () => {
+  const at = (kind: AdvisoryStatus['kind'], hours: number, newer: AdvisoryStatus['newer'] = null) =>
+    ({
+      kind,
+      issuedAt: '2026-11-18T18:00:00Z',
+      age: { hours, label: `${hours} hours ago`, stale: hours > 12 },
+      newer,
+    }) as AdvisoryStatus;
+
+  it('says nothing without an issue time', () => {
+    expect(mapStatusLine(null)).toBeNull();
+    expect(mapStatusLine({ ...at('latest', 1), issuedAt: null })).toBeNull();
+  });
+
+  it('calls a fresh newest advisory just an advisory', () => {
+    expect(mapStatusLine(at('latest', 3))).toBe('Advisory issued 18 Nov 18:00 UTC (3 hours ago)');
+  });
+
+  it('says no newer advisory between 12 and 24 h, without the unverified note', () => {
+    expect(mapStatusLine(at('latest-aging', 14))).toBe(
+      'No newer advisory · issued 18 Nov 18:00 UTC (14 hours ago)'
+    );
+  });
+
+  it('says "Latest received" and that priorities are unverified once the quiet is long', () => {
+    expect(mapStatusLine(at('latest-aging', 96))).toBe(
+      'Latest received advisory · issued 18 Nov 18:00 UTC (96 hours ago) · priorities unverified'
+    );
+    expect(mapStatusLine(at('latest-aging', 30))).toContain('priorities unverified');
+  });
+
+  it('names an older advisory and how many are newer', () => {
+    expect(mapStatusLine(at('older', 100, { issuedAt: '2026-11-19T00:00:00Z', count: 2 }))).toBe(
+      'Older advisory · issued 18 Nov 18:00 UTC (100 hours ago), 2 newer'
+    );
+  });
 });

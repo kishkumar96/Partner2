@@ -207,13 +207,31 @@ describe('ForecastLegend', () => {
       'aria-expanded',
       'false'
     );
-    expect(legend).toHaveTextContent(
-      'Strongest forecast winds over 18 Nov 18:00 – 24 Nov 00:00 UTC'
-    );
+    expect(legend).toHaveTextContent('Peak forecast winds over 18 Nov 18:00 – 24 Nov 00:00 UTC');
     // Without a timed track there is nothing to claim
     rerender(<ForecastLegend active={active} period={null} />);
     expect(screen.getByRole('region', { name: 'Forecast legend' })).not.toHaveTextContent(
-      'Strongest forecast winds over'
+      'Peak forecast winds over'
+    );
+  });
+
+  it('keeps the advisory status on the map, even while collapsed', () => {
+    render(
+      <ForecastLegend
+        active={active}
+        status="Latest received advisory · issued 18 Nov 18:00 UTC (4 days ago) · priorities unverified"
+      />
+    );
+    expect(screen.getByTestId('map-advisory-status')).toHaveTextContent(
+      'Latest received advisory · issued 18 Nov 18:00 UTC (4 days ago) · priorities unverified'
+    );
+  });
+
+  it('names the radii as an extent at one time, apart from the peak winds', () => {
+    render(<ForecastLegend active={{ ...active, radii: true }} />);
+    openLegend();
+    expect(screen.getByRole('region', { name: 'Forecast legend' })).toHaveTextContent(
+      'Wind extent at the selected time (not the peak above)'
     );
   });
 

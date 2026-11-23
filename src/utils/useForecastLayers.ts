@@ -96,10 +96,12 @@ const DEFAULT_SHOWN: Record<ForecastOverlayId, boolean> = {
   facilities: true,
   floodplain: false,
   priority: false,
-  origins: true,
-  releases: true,
-  times: true,
-  radii: true,
+  // The comparison and detail layers start off: the first screen is the selected track and its wind
+  // swaths, and the rest are one switch away under Map Controls
+  origins: false,
+  releases: false,
+  times: false,
+  radii: false,
 };
 
 /**
@@ -212,7 +214,7 @@ export function useForecastLayers(
       },
       {
         id: 'swaths',
-        label: 'Forecast wind swaths',
+        label: 'Peak winds over the forecast window (swaths)',
         short: 'Wind swaths',
         available: !!layers.windSwaths,
       },
@@ -275,7 +277,7 @@ export function useForecastLayers(
       },
       {
         id: 'radii',
-        label: 'Wind radii by quadrant',
+        label: 'Wind extent at the selected time (radii by quadrant)',
         short: 'Wind radii',
         available: !!extras?.trackPoints?.length,
         disabled: radiiPoints.length === 0,

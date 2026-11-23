@@ -574,9 +574,12 @@ export default function ForecastLayers({
   onOpenControls,
   hiddenOverlays = [],
   onSelectAdvisory,
+  status,
 }: {
   map: MapLibreMap | null;
   controls: ForecastLayerControls;
+  /** Which advisory is drawn and how far to rely on it, from `mapStatusLine`; kept on the map */
+  status?: string | null;
   onOpenControls: () => void;
   /** Overlays left undrawn for now without changing the user's switches, e.g. the static
    * track while the cyclone animation draws the same track */
@@ -626,7 +629,12 @@ export default function ForecastLayers({
       {controls.releaseSteps?.length >= 2 && (
         <ReleaseScrubber steps={controls.releaseSteps} onSelect={onSelectAdvisory} />
       )}
-      <ForecastLegend active={active} timeZone={controls.timeZoneName} period={controls.period} />
+      <ForecastLegend
+        active={active}
+        timeZone={controls.timeZoneName}
+        period={controls.period}
+        status={status}
+      />
     </>
   );
 }
@@ -636,7 +644,10 @@ export function ForecastLegend({
   active,
   timeZone,
   period,
+  status,
 }: {
+  /** Which advisory this is, e.g. "Latest received advisory · issued ... · priorities unverified" */
+  status?: string | null;
   active: Partial<Record<OverlayId, boolean>>;
   /** Name of the zone the time labels use, e.g. "UTC" */
   timeZone?: string;
@@ -665,9 +676,17 @@ export function ForecastLegend({
         Forecast legend
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
       </button>
+      {status && (
+        <p
+          className="px-2.5 pb-1 text-[10px] font-semibold leading-snug text-amber-100"
+          data-testid="map-advisory-status"
+        >
+          {status}
+        </p>
+      )}
       {period && (
         <p className="px-2.5 pb-1.5 text-[10px] leading-snug text-slate-300">
-          Strongest forecast winds over {period}
+          Peak forecast winds over {period}
         </p>
       )}
       {open && (
@@ -804,6 +823,9 @@ export function ForecastLegend({
               )}
               {active.radii && (
                 <li className="space-y-0.5">
+                  <span className="block text-slate-400">
+                    Wind extent at the selected time (not the peak above)
+                  </span>
                   {(
                     [
                       ['gale', 'Gale (34 kt) reach'],
